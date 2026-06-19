@@ -1,0 +1,32 @@
+package phucuong.ht.common.model;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.MappedSuperclass;
+import lombok.Getter;
+import lombok.Setter;
+
+import java.time.LocalDate;
+
+@Getter
+@Setter
+@MappedSuperclass
+public class OrganizationUnit extends BaseModel {
+
+    @Column(name = "name", nullable = false, length = 100)
+    private String name;
+
+    @Column(name = "patron_saint_day")
+    private LocalDate patronSaintDay;
+
+    @Column(name = "establishment_date")
+    private LocalDate establishmentDate;
+
+    @Column(name = "chaplain", length = 100)
+    private String chaplain;
+
+    @Column(name = "phone_number", length = 15)
+    private String phoneNumber;
+
+    @Column(name = "email", length = 100)
+    private String email;
+}
