@@ -6,11 +6,9 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
-import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import phucuong.ht.common.dto.apiResponse;
 import phucuong.ht.modules.auth.model.request.LoginRequest;
-import phucuong.ht.modules.auth.model.request.RefreshTokenRequest;
 import phucuong.ht.modules.auth.model.response.AuthTokenResponse;
 import phucuong.ht.modules.auth.model.response.AuthenticatedUserResponse;
 import phucuong.ht.modules.auth.service.AuthCookieService;
@@ -40,15 +38,11 @@ public class AuthController {
 
     @PostMapping("/refresh")
     public apiResponse<AuthTokenResponse> refresh(
-            @RequestBody(required = false) RefreshTokenRequest request,
             HttpServletRequest httpServletRequest,
             HttpServletResponse httpServletResponse
     ) {
-        RefreshTokenRequest resolvedRequest = request == null ? new RefreshTokenRequest() : request;
-        if (!StringUtils.hasText(resolvedRequest.getRefreshToken())) {
-            resolvedRequest.setRefreshToken(authCookieService.resolveRefreshToken(httpServletRequest));
-        }
-        AuthTokenResponse tokens = authService.refresh(resolvedRequest);
+        String refreshToken = authCookieService.resolveRefreshToken(httpServletRequest);
+        AuthTokenResponse tokens = authService.refresh(refreshToken);
         authCookieService.writeAuthCookies(httpServletResponse, tokens);
         return apiResponse.success("Token refresh successful", tokens);
     }
