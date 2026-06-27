@@ -17,7 +17,6 @@ import phucuong.ht.modules.auth.config.AuthProperties;
 import phucuong.ht.modules.auth.exception.ApiException;
 import phucuong.ht.modules.auth.model.AuthUserDetails;
 import phucuong.ht.modules.auth.model.request.LoginRequest;
-import phucuong.ht.modules.auth.model.request.RefreshTokenRequest;
 import phucuong.ht.modules.auth.model.response.AuthTokenResponse;
 import phucuong.ht.modules.auth.model.response.AuthenticatedUserResponse;
 import phucuong.ht.modules.auth.model.response.BootstrapSuperAdminResponse;
@@ -97,11 +96,11 @@ public class AuthService {
         return issueTokens(principal);
     }
 
-    public AuthTokenResponse refresh(RefreshTokenRequest request) {
-        if (!StringUtils.hasText(request.getRefreshToken())) {
+    public AuthTokenResponse refresh(String refreshToken) {
+        if (!StringUtils.hasText(refreshToken)) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, errorCode.INVALID_TOKEN, "Refresh token is required");
         }
-        AuthUserDetails tokenPrincipal = jwtUtils.parseRefreshToken(request.getRefreshToken());
+        AuthUserDetails tokenPrincipal = jwtUtils.parseRefreshToken(refreshToken);
         AuthUserDetails currentPrincipal = authUserDetailsService.loadUserByUsername(tokenPrincipal.getUsername());
         return issueTokens(currentPrincipal);
     }

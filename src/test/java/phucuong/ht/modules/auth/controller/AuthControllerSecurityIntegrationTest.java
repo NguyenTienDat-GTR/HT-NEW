@@ -9,6 +9,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import phucuong.ht.common.utils.jwtUtils;
+import phucuong.ht.modules.auth.exception.ApiException;
 import phucuong.ht.modules.auth.model.AuthUserDetails;
 import phucuong.ht.modules.auth.model.request.LoginRequest;
 import phucuong.ht.modules.auth.model.response.AuthTokenResponse;
@@ -17,11 +18,16 @@ import phucuong.ht.modules.auth.service.AuthService;
 
 import java.util.List;
 
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -113,6 +119,17 @@ class AuthControllerSecurityIntegrationTest {
                 .andExpect(cookie().exists("accessToken"))
                 .andExpect(cookie().exists("refreshToken"))
                 .andExpect(jsonPath("$.success").value(true));
+
+        verify(authService).refresh(eq("refresh-token-cookie"));
+    }
+
+    @Test
+    void shouldRejectRefreshWithoutCookie() throws Exception {
+        when(authService.refresh(isNull())).thenThrow(new ApiException(UNAUTHORIZED, phucuong.ht.common.exception.errorCode.INVALID_TOKEN, "Refresh token is required"));
+
+        mockMvc.perform(post("/api/auth/refresh"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.errorCode").value("INVALID_TOKEN"));
     }
 
     @Test
@@ -120,6 +137,13 @@ class AuthControllerSecurityIntegrationTest {
         mockMvc.perform(get("/swagger-ui/index.html")
                         .cookie(new jakarta.servlet.http.Cookie("accessToken", "invalid-token")))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void shouldServeSwaggerInitializerWithCookieCredentialsEnabled() throws Exception {
+        mockMvc.perform(get("/swagger-ui/swagger-initializer.js"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("\"withCredentials\" : true")));
     }
 
     private AuthTokenResponse sampleTokenResponse() {
