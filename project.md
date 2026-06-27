@@ -1,12 +1,22 @@
 # HT Management New
 
-## Mục tiêu dữ liệu
+## Overview
 
-Project này đang dùng một `BaseRepo` dùng chung để thao tác DB theo kiểu CRUD, đọc trang, search, filter và toggle `status` cho mọi entity.
+This project manages organization data, leaders, training, certificates, and system access for HT Management.
 
-## Base model
+The backend currently relies on:
 
-`BaseModel` là lớp nền cho hầu hết entity:
+- Spring Boot 3
+- Spring Data JPA
+- PostgreSQL
+- Flyway
+- Spring Security
+- Redis / Spring Session
+- JWT for stateless authentication
+
+## Core Model
+
+Most entities inherit from `BaseModel` and share:
 
 - `createdAt`
 - `createdBy`
@@ -14,64 +24,63 @@ Project này đang dùng một `BaseRepo` dùng chung để thao tác DB theo ki
 - `updatedBy`
 - `status`
 
-Quy ước hiện tại:
+Current status rules:
 
-- `status = true` nghĩa là active
-- `status = false` nghĩa là inactive
-- `toggleStatus(id)` chỉ đổi qua lại giữa hai trạng thái này
-- `status` không nhận trực tiếp từ DTO CRUD
+- `status = true` means active
+- `status = false` means inactive
+- `toggleStatus(id)` flips active/inactive
+- CRUD request DTOs do not write `status` directly
 
-## Nhóm thực thể
+## Domain Groups
 
-### Khối tổ chức
+### Organization
 
 - `Diocese`
 - `Deanery`
 - `Parish`
 
-Quan hệ:
+Relationships:
 
 - `Diocese` 1 - N `Deanery`
 - `Deanery` 1 - N `Parish`
 - `Parish` 1 - N `Leader`
 
-### Khối nhân sự
+### Personnel
 
 - `Leader`
 - `Position`
 - `RankHistory`
 - `ExecutiveBoardAssignment`
 
-Quan hệ:
+Relationships:
 
-- `Leader` thuộc một `Parish`
-- `RankHistory` thuộc một `Leader`
-- `ExecutiveBoardAssignment` thuộc một `Leader`
-- `ExecutiveBoardAssignment` gắn với `Position`
+- `Leader` belongs to one `Parish`
+- `RankHistory` belongs to one `Leader`
+- `ExecutiveBoardAssignment` belongs to one `Leader`
+- `ExecutiveBoardAssignment` references one `Position`
 
-### Khối đào tạo
+### Training
 
 - `CourseRequirement`
 - `TrainingCourse`
 - `CourseParticipation`
 
-Quan hệ:
+Relationships:
 
-- `TrainingCourse` thuộc một `CourseRequirement`
-- `CourseParticipation` thuộc một `Leader`
-- `CourseParticipation` thuộc một `TrainingCourse`
-- `Certificate` cũng liên kết tới `Leader` và `TrainingCourse`
+- `TrainingCourse` belongs to one `CourseRequirement`
+- `CourseParticipation` belongs to one `Leader`
+- `CourseParticipation` belongs to one `TrainingCourse`
 
-### Khối chứng nhận
+### Certification
 
 - `Certificate`
 
-Quan hệ:
+Relationships:
 
-- `Certificate` thuộc một `Leader`
-- `Certificate` thuộc một `TrainingCourse`
+- `Certificate` belongs to one `Leader`
+- `Certificate` belongs to one `TrainingCourse`
 
-### Khối hệ thống
+### System
 
 - `Account`
 - `Role`
@@ -85,47 +94,45 @@ Quan hệ:
 - `RolePermission`
 - `SystemLog`
 
-Quan hệ:
+Relationships:
 
-- `Account` 1 - 1 `Leader`
+- `Account` may reference one `Leader`
 - `Account` 1 - N `AccountRole`
 - `Account` 1 - N `AccountPermissionOverride`
 - `Account` 1 - N `SystemLog`
 - `Role` 1 - N `AccountRole`
 - `Role` 1 - N `RolePermission`
-- `PermissionModule` 1 - N `PermissionResource`
-- `PermissionModule` 1 - N `Permission`
-- `PermissionResource` 1 - N `Permission`
-- `PermissionAction` 1 - N `Permission`
-- `PermissionScope` 1 - N `Permission`
 - `Permission` 1 - N `RolePermission`
 - `Permission` 1 - N `AccountPermissionOverride`
 
-## Convention request
+## Request DTO Convention
 
-Mỗi module có thư mục `model/request` với bộ DTO riêng:
+Each module keeps request DTOs under `model/request` and follows:
 
 - `XCreateRequest`
 - `XUpdateRequest`
 
-Quy ước đặt tên field:
+Field naming rules:
 
-- field thường giữ nguyên tên entity
-- field quan hệ nhận id của entity liên quan, ví dụ:
-  - `leaderCode`
-  - `parishCode`
-  - `deaneryCode`
-  - `courseCode`
-  - `roleCode`
-  - `moduleCode`
-  - `resourceCode`
-  - `actionCode`
-  - `scopeCode`
-  - `username`
+- normal fields keep the entity property name
+- relation fields receive related IDs instead of nested objects
+
+Examples:
+
+- `leaderCode`
+- `parishCode`
+- `deaneryCode`
+- `courseCode`
+- `roleCode`
+- `moduleCode`
+- `resourceCode`
+- `actionCode`
+- `scopeCode`
+- `username`
 
 ## BaseRepo
 
-`BaseRepo` ở `common/repository` xử lý:
+`BaseRepo` in `common/repository` provides generic data access:
 
 - `create(request)`
 - `update(id, request)`
@@ -134,11 +141,9 @@ Quy ước đặt tên field:
 - `delete(id)`
 - `toggleStatus(id)`
 
-### Search request
+`BaseSearchRequest` supports:
 
-`BaseSearchRequest` hỗ trợ:
-
-- phân trang
+- paging
 - `search`
 - `searchFields`
 - `filters`
@@ -146,20 +151,142 @@ Quy ước đặt tên field:
 - `sortBy`
 - `sortDirection`
 
-### Search/filter động
+Dynamic search/filter supports nested paths such as:
 
-- `searchFields` là danh sách field path để search
-- `filters` là map động theo field path
-- hỗ trợ path lồng nhau, ví dụ:
-  - `parish.parishCode`
-  - `leader.parish.deanery.dioceseCode`
-  - `course.requirement.requirementCode`
+- `parish.parishCode`
+- `leader.parish.deanery.dioceseCode`
+- `course.requirement.requirementCode`
 
-DTO request vẫn dùng id của relation, ví dụ `parishCode`, `leaderCode`, `courseCode`, `roleCode`, còn `BaseSearchRequest` dùng path của entity.
+Request DTOs still use relation IDs like `parishCode` or `leaderCode`, while `BaseSearchRequest` uses entity paths.
 
-## Ghi chú kỹ thuật
+## Authentication And Authorization
 
-- `Account` và `Role` không còn shadow `status` của `BaseModel`
-- `RankHistory` không còn shadow `updatedBy`
-- CU trong `BaseRepo` đọc DTO động, nên module chỉ cần validate dữ liệu ở request
-- Các DTO relation chỉ cần truyền id của entity liên quan, không cần nested object
+The project now includes JWT-based authentication and RBAC-based authorization.
+
+### JWT
+
+Implemented flow:
+
+- `POST /api/auth/login`
+- `POST /api/auth/refresh`
+- `GET /api/auth/me`
+- `GET /api/auth/admin/summary`
+
+Token behavior:
+
+- stateless JWT
+- separate `accessToken` and `refreshToken`
+- token contains `username`
+- token contains `leaderId`
+- token contains role list
+- token contains effective permission list
+- token contains `tokenType` and `jti`
+
+Configured properties:
+
+- `app.security.jwt.access-secret`
+- `app.security.jwt.refresh-secret`
+- `app.security.jwt.access-token-expiration-ms`
+- `app.security.jwt.refresh-token-expiration-ms`
+- `app.security.jwt.issuer`
+- `app.security.jwt.audience`
+
+Environment variables:
+
+- `JWT_ACCESS_SECRET`
+- `JWT_REFRESH_SECRET`
+- `JWT_ACCESS_EXPIRATION`
+- `JWT_REFRESH_EXPIRATION`
+- `JWT_ISSUER`
+- `JWT_AUDIENCE`
+
+### Super Admin Provisioning
+
+RBAC seed and account bootstrap are separate concerns.
+
+RBAC seed behavior:
+
+- Flyway seeds `SUPER_ADMIN`
+- Flyway seeds the related auth/system permissions needed for administration
+- Flyway grants all currently active permissions to `SUPER_ADMIN`
+- Flyway does not create records in `account`
+- Flyway does not create records in `account_role`
+
+Optional account bootstrap endpoint:
+
+- `POST /api/auth/bootstrap/super-admin`
+
+Bootstrap behavior:
+
+- public endpoint for first-time setup
+- creates account without linking to `Leader`
+- creates primary role assignment with `SUPER_ADMIN`
+- fails with conflict if the account already exists
+
+Bootstrap configuration comes from environment-backed properties:
+
+- `app.security.bootstrap.super-admin.username`
+- `app.security.bootstrap.super-admin.password`
+- `app.security.bootstrap.super-admin.role-code`
+
+Environment variables:
+
+- `SUPER_ADMIN_USERNAME`
+- `SUPER_ADMIN_PASSWORD`
+- `SUPER_ADMIN_ROLE_CODE`
+
+### RBAC
+
+Authorization is based on:
+
+- `account`
+- `account_role`
+- `role_permission`
+- `permission`
+- `account_permission_override`
+
+Authority strategy:
+
+- roles are exposed as `ROLE_<ROLE_CODE>`
+- permissions are exposed as raw permission codes
+
+Current seeded administrative permissions include:
+
+- `auth.session.manage.all`
+- `system.role.manage.all`
+- `system.permission.manage.all`
+- `system.account.manage.all`
+- `system.audit_log.read.all`
+
+Current seeded system role:
+
+- `SUPER_ADMIN`
+
+Current `SUPER_ADMIN` seed behavior:
+
+- receives all active permissions in `permission` through `role_permission`
+- remains data-only until an account is created and assigned later
+
+Protected sample endpoint:
+
+- `GET /api/auth/admin/summary`
+- requires authority `auth.session.manage.all`
+
+## Recent Work
+
+The following work was added in this iteration:
+
+1. Added JWT authentication with access and refresh token support.
+2. Added security filter chain and method-level authorization.
+3. Added RBAC authority resolution from active roles and effective permissions.
+4. Added one-time super admin bootstrap service and API.
+5. Added Flyway seed migration for `SUPER_ADMIN` and auth permission bootstrap data.
+6. Added tests for JWT parsing and protected endpoint behavior.
+
+## Technical Notes
+
+- `Account` and `Role` do not shadow `status` from `BaseModel`.
+- `RankHistory` does not shadow `updatedBy`.
+- `BaseRepo` handles relation mapping from ID-based request DTOs.
+- Relation request DTOs should keep using IDs instead of nested payloads.
+- JWT authorization is stateless, so permission changes apply immediately on next login or refresh, while existing access tokens remain valid until expiration.
