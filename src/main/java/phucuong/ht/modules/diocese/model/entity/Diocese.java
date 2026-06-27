@@ -18,8 +18,7 @@ import java.time.LocalDate;
 public class Diocese extends OrganizationUnit {
 
     @Id
-    @Column(name = "diocese_code", length = 20)
-    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "diocese_code", length = 50)
     private String dioceseCode;
 
     @Column(name = "union_name", nullable = false, length = 100)

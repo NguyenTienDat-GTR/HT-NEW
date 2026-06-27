@@ -15,8 +15,7 @@ import phucuong.ht.modules.diocese.model.entity.Diocese;
 public class Deanery extends OrganizationUnit {
 
     @Id
-    @Column(name = "deanery_code", length = 20)
-    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "deanery_code", length = 50)
     private String deaneryCode;
 
     @ManyToOne(fetch = FetchType.LAZY)

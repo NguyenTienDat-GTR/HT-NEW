@@ -62,12 +62,21 @@ public abstract class BaseRepo<T extends BaseModel, ID> {
      */
     @Transactional
     public <R> T create(R request) {
+        return create(request, null);
+    }
+
+    @Transactional
+    public <R> T create(R request, String actor) {
         T entity = newEntity();
         applyRequest(entity, request, true);
 
         OffsetDateTime now = OffsetDateTime.now();
         entity.setCreatedAt(now);
         entity.setUpdatedAt(now);
+        if (StringUtils.hasText(actor)) {
+            entity.setCreatedBy(actor);
+            entity.setUpdatedBy(actor);
+        }
         if (entity.getStatus() == null) {
             entity.setStatus(Boolean.TRUE);
         }
@@ -82,9 +91,17 @@ public abstract class BaseRepo<T extends BaseModel, ID> {
      */
     @Transactional
     public <R> T update(ID id, R request) {
+        return update(id, request, null);
+    }
+
+    @Transactional
+    public <R> T update(ID id, R request, String actor) {
         T entity = getRequired(id);
         applyRequest(entity, request, false);
         entity.setUpdatedAt(OffsetDateTime.now());
+        if (StringUtils.hasText(actor)) {
+            entity.setUpdatedBy(actor);
+        }
         return entity;
     }
 
@@ -202,7 +219,7 @@ public abstract class BaseRepo<T extends BaseModel, ID> {
 
         Map<String, Object> filters = request.getFilters() == null ? Map.of() : request.getFilters();
         for (Map.Entry<String, Object> entry : filters.entrySet()) {
-            String fieldPath = entry.getKey();
+            String fieldPath = normalizeFieldPath(entry.getKey());
             Object filterValue = entry.getValue();
             if (!StringUtils.hasText(fieldPath) || filterValue == null) {
                 continue;
@@ -225,6 +242,7 @@ public abstract class BaseRepo<T extends BaseModel, ID> {
             String keyword = "%" + request.getSearch().toLowerCase() + "%";
             List<Predicate> searchPredicates = new ArrayList<>();
             for (String field : request.getSearchFields()) {
+                field = normalizeFieldPath(field);
                 if (!StringUtils.hasText(field)) {
                     continue;
                 }
@@ -243,11 +261,12 @@ public abstract class BaseRepo<T extends BaseModel, ID> {
      * Applies runtime sorting if the request supplies a sort field.
      */
     private void applySort(BaseSearchRequest request, CriteriaBuilder cb, CriteriaQuery<T> query, Root<T> root) {
-        if (!StringUtils.hasText(request.getSortBy())) {
+        String sortBy = normalizeFieldPath(request.getSortBy());
+        if (!StringUtils.hasText(sortBy)) {
             return;
         }
 
-        Path<?> path = resolvePath(root, request.getSortBy());
+        Path<?> path = resolvePath(root, sortBy);
         if ("DESC".equalsIgnoreCase(request.getSortDirection())) {
             query.orderBy(cb.desc(path));
             return;
@@ -264,6 +283,30 @@ public abstract class BaseRepo<T extends BaseModel, ID> {
             current = current.get(field);
         }
         return current;
+    }
+
+    /**
+     * Normalizes field paths coming from query-string style map keys such as
+     * ["name"], ['name'], [name], or ordinary dotted paths.
+     */
+    private String normalizeFieldPath(String fieldPath) {
+        if (!StringUtils.hasText(fieldPath)) {
+            return fieldPath;
+        }
+
+        String normalized = fieldPath.trim();
+        if (normalized.startsWith("[")) {
+            normalized = normalized.substring(1);
+        }
+        if (normalized.endsWith("]")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        if ((normalized.startsWith("\"") && normalized.endsWith("\""))
+                || (normalized.startsWith("'") && normalized.endsWith("'"))) {
+            normalized = normalized.substring(1, normalized.length() - 1);
+        }
+
+        return normalized.trim();
     }
 
     /**

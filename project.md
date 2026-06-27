@@ -45,6 +45,12 @@ Relationships:
 - `Deanery` 1 - N `Parish`
 - `Parish` 1 - N `Leader`
 
+Organization unit code strategy:
+
+- `dioceseCode` is generated from a slug of `unionName` instead of UUID
+- shared code generation is intended for `Deanery` and `Parish` as well
+- child unit codes should include parent scope in the generated code to reduce collisions across different dioceses
+
 ### Personnel
 
 - `Leader`
@@ -253,6 +259,12 @@ Authority strategy:
 Current seeded administrative permissions include:
 
 - `auth.session.manage.all`
+- `organization.diocese.create.all`
+- `organization.diocese.read.all`
+- `organization.diocese.update.all`
+- `organization.diocese.delete.all`
+- `organization.diocese.read.diocese`
+- `organization.diocese.update.diocese`
 - `system.role.manage.all`
 - `system.permission.manage.all`
 - `system.account.manage.all`
@@ -272,6 +284,25 @@ Protected sample endpoint:
 - `GET /api/auth/admin/summary`
 - requires authority `auth.session.manage.all`
 
+### Diocese CRUD And Scope Rules
+
+Diocese API endpoints:
+
+- `POST /api/dioceses`
+- `GET /api/dioceses`
+- `GET /api/dioceses/{dioceseCode}`
+- `PUT /api/dioceses/{dioceseCode}`
+- `DELETE /api/dioceses/{dioceseCode}`
+
+Diocese authorization behavior:
+
+- `SUPER_ADMIN` has full CRUD access across all dioceses through `organization.diocese.*.all`
+- diocese-scoped admins use `organization.diocese.read.diocese` and `organization.diocese.update.diocese`
+- diocese-scoped admins cannot call `GET /api/dioceses`
+- diocese-scoped admins cannot create or delete dioceses
+- diocese-scoped access is resolved from `account.leader.parish.deanery.diocese`
+- if the current account has no linked leader or no resolvable diocese, diocese-scoped access is denied
+
 ## Recent Work
 
 The following work was added in this iteration:
@@ -282,6 +313,7 @@ The following work was added in this iteration:
 4. Added one-time super admin bootstrap service and API.
 5. Added Flyway seed migration for `SUPER_ADMIN` and auth permission bootstrap data.
 6. Added tests for JWT parsing and protected endpoint behavior.
+7. Added CRUD API for `Diocese` with RBAC-based diocese scope enforcement.
 
 ## Technical Notes
 
