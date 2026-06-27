@@ -35,6 +35,4 @@ public class RankHistory extends BaseModel {
     private LocalDate promotionDate;
 
     private String note;
-
-    private String updatedBy;
 }

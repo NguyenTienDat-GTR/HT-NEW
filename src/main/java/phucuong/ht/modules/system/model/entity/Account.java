@@ -20,8 +20,6 @@ public class Account extends BaseModel {
 
     private String password;
 
-    private Boolean status;
-
     @OneToOne
     @JoinColumn(name = "leader_id")
     private Leader leader;
