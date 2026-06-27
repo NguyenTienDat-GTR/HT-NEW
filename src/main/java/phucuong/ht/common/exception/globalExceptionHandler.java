@@ -4,6 +4,7 @@ import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
@@ -63,6 +64,12 @@ public class globalExceptionHandler {
     public ResponseEntity<apiResponse<Void>> handleConstraintViolation(ConstraintViolationException exception) {
         return ResponseEntity.badRequest()
                 .body(apiResponse.error(exception.getMessage(), errorCode.VALIDATION_ERROR.name()));
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<apiResponse<Void>> handleDataIntegrityViolation(DataIntegrityViolationException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(apiResponse.error("Operation conflicts with existing data", errorCode.CONFLICT.name()));
     }
 
     @ExceptionHandler(Exception.class)

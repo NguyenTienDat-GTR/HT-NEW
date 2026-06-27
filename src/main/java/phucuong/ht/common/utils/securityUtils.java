@@ -2,11 +2,15 @@ package phucuong.ht.common.utils;
 
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.util.StringUtils;
 import org.springframework.stereotype.Component;
 import phucuong.ht.modules.auth.model.AuthUserDetails;
 
 @Component("securityUtils")
 public class securityUtils {
+
+    private static final String SUPER_ADMIN_ROLE = "ROLE_SUPER_ADMIN";
+    private static final String SUPER_ADMIN_AUDIT_ACTOR = "super-admin";
 
     public boolean hasAuthority(Authentication authentication, String authority) {
         if (authentication == null || authority == null || authority.isBlank()) {
@@ -30,5 +34,18 @@ public class securityUtils {
             return null;
         }
         return principal.getLeaderId();
+    }
+
+    public String currentAuditActor(Authentication authentication) {
+        if (hasAuthority(authentication, SUPER_ADMIN_ROLE)) {
+            return SUPER_ADMIN_AUDIT_ACTOR;
+        }
+
+        String leaderId = currentLeaderId(authentication);
+        if (StringUtils.hasText(leaderId)) {
+            return leaderId;
+        }
+
+        return null;
     }
 }
