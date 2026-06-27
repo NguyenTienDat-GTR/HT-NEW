@@ -27,7 +27,5 @@ public class Role extends BaseModel {
 
     private Boolean isSystem;
 
-    private Boolean status;
-
     private Integer displayOrder;
 }
