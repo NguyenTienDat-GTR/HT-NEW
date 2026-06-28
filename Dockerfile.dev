@@ -1,0 +1,9 @@
+FROM eclipse-temurin:21-jdk-alpine
+
+WORKDIR /app
+
+# Cai mot vai goi can thiet cho wrapper va debug co ban.
+RUN apk add --no-cache bash libc6-compat
+
+# Gradle wrapper se duoc bind mount tu source code cua may host vao /app.
+ENTRYPOINT ["sh", "./gradlew"]

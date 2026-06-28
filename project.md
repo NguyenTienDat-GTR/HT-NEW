@@ -265,6 +265,16 @@ Current seeded administrative permissions include:
 - `organization.diocese.delete.all`
 - `organization.diocese.read.diocese`
 - `organization.diocese.update.diocese`
+- `organization.deanery.create.all`
+- `organization.deanery.read.all`
+- `organization.deanery.update.all`
+- `organization.deanery.delete.all`
+- `organization.deanery.create.diocese`
+- `organization.deanery.read.diocese`
+- `organization.deanery.update.diocese`
+- `organization.deanery.delete.diocese`
+- `organization.deanery.read.deanery`
+- `organization.deanery.update.deanery`
 - `system.role.manage.all`
 - `system.permission.manage.all`
 - `system.account.manage.all`
@@ -303,6 +313,60 @@ Diocese authorization behavior:
 - diocese-scoped access is resolved from `account.leader.parish.deanery.diocese`
 - if the current account has no linked leader or no resolvable diocese, diocese-scoped access is denied
 
+### Deanery CRUD And Scope Rules
+
+Deanery API endpoints:
+
+- `POST /api/deaneries`
+- `GET /api/deaneries`
+- `GET /api/deaneries/{deaneryCode}`
+- `PUT /api/deaneries/{deaneryCode}`
+- `DELETE /api/deaneries/{deaneryCode}`
+
+Deanery authorization behavior:
+
+- `SUPER_ADMIN` has full CRUD access across all deaneries through `organization.deanery.*.all`
+- diocese-scoped admins use `organization.deanery.create.diocese`, `organization.deanery.read.diocese`, `organization.deanery.update.diocese`, and `organization.deanery.delete.diocese`
+- deanery-scoped admins use `organization.deanery.read.deanery` and `organization.deanery.update.deanery`
+- diocese-scoped admins can create, read, update, delete, and list deaneries only inside their own diocese
+- deanery-scoped admins can read, update, and list only their own deanery
+- deanery-scoped admins cannot create or delete deaneries
+- `GET /api/deaneries` is scope-filtered:
+- `SUPER_ADMIN` sees all deaneries
+- diocese-scoped admins see deaneries in their own diocese
+- deanery-scoped admins see only their own deanery
+- diocese-scoped access is resolved from `account.leader.parish.deanery.diocese`
+- deanery-scoped access is resolved from `account.leader.parish.deanery`
+- if the current account has no linked leader or no resolvable scope for the granted permission, access is denied
+
+Deanery response behavior:
+
+- `POST /api/deaneries`, `GET /api/deaneries`, `GET /api/deaneries/{deaneryCode}`, and `PUT /api/deaneries/{deaneryCode}` return `DeaneryResponse`
+- the response contains deanery scalar fields and `dioceseCode`
+- the response does not expose nested `diocese` objects
+- service mapping loads `dioceseCode` from the relation and reuses the same mapper for create, list, detail, and update
+
+Deanery update behavior:
+
+- `PUT /api/deaneries/{deaneryCode}` does not allow changing `dioceseCode`
+- deanery update only changes deanery-owned fields such as `name`, `associationName`, contact information, and organization dates
+- Swagger/OpenAPI for deanery update follows `DeaneryUpdateRequest`, so `dioceseCode` is no longer part of the update request schema
+
+### Docker Development Workflow
+
+Development container behavior:
+
+- `Dockerfile.dev` runs the application through `./gradlew bootRun --continuous`
+- `compose.override.yaml` mounts the project source into `/app`
+- when code is changed and saved locally, the mounted source is immediately visible inside the container
+- Gradle continuous build reloads the app automatically for supported changes during development
+
+Production container behavior:
+
+- `Dockerfile` builds the application jar with `./gradlew bootJar -x test`
+- the runtime image starts the packaged jar with `java -jar app.jar`
+- the production image no longer depends on a system-installed `gradle` executable inside the runtime container
+
 ## Recent Work
 
 The following work was added in this iteration:
@@ -314,6 +378,11 @@ The following work was added in this iteration:
 5. Added Flyway seed migration for `SUPER_ADMIN` and auth permission bootstrap data.
 6. Added tests for JWT parsing and protected endpoint behavior.
 7. Added CRUD API for `Diocese` with RBAC-based diocese scope enforcement.
+8. Added CRUD API for `Deanery` with RBAC-based super-admin, diocese-admin, and deanery-admin scope enforcement.
+9. Changed `Deanery` API responses to use `DeaneryResponse` so list and detail endpoints return `dioceseCode` instead of nested `diocese`.
+10. Updated deanery create/update/detail/list flows to use Vietnamese messages and shared DTO mapping.
+11. Removed `dioceseCode` from `DeaneryUpdateRequest`, so deanery update cannot move a deanery to another diocese.
+12. Updated Docker development setup so local code changes are mounted into the container and the app can reload during development, while the production image builds and runs from the Gradle wrapper.
 
 ## Technical Notes
 

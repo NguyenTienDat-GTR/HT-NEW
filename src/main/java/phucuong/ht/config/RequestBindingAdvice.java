@@ -41,7 +41,7 @@ public class RequestBindingAdvice {
                     throw new ApiException(
                             HttpStatus.BAD_REQUEST,
                             errorCode.VALIDATION_ERROR,
-                            "Invalid filters format. Expected a JSON object string"
+                            "Định dạng filters không hợp lệ, vui lòng truyền chuỗi JSON object"
                     );
                 }
             }

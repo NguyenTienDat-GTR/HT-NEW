@@ -29,13 +29,13 @@ public class globalExceptionHandler {
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<apiResponse<Void>> handleBadCredentials(BadCredentialsException exception) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(apiResponse.error("Invalid username or password", errorCode.AUTHENTICATION_FAILED.name()));
+                .body(apiResponse.error("Tên đăng nhập hoặc mật khẩu không đúng", errorCode.AUTHENTICATION_FAILED.name()));
     }
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<apiResponse<Void>> handleAccessDenied(AccessDeniedException exception) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(apiResponse.error("You do not have permission to access this resource", errorCode.ACCESS_DENIED.name()));
+                .body(apiResponse.error("Bạn không có quyền truy cập tài nguyên này", errorCode.ACCESS_DENIED.name()));
     }
 
     @ExceptionHandler(EntityNotFoundException.class)
@@ -53,7 +53,7 @@ public class globalExceptionHandler {
         return ResponseEntity.badRequest()
                 .body(apiResponse.<Map<String, String>>builder()
                         .success(false)
-                        .message("Validation failed")
+                        .message("Dữ liệu không hợp lệ")
                         .errorCode(errorCode.VALIDATION_ERROR.name())
                         .data(errors)
                         .timestamp(java.time.OffsetDateTime.now())
@@ -69,7 +69,7 @@ public class globalExceptionHandler {
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<apiResponse<Void>> handleDataIntegrityViolation(DataIntegrityViolationException exception) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(apiResponse.error("Operation conflicts with existing data", errorCode.CONFLICT.name()));
+                .body(apiResponse.error("Thao tác xung đột với dữ liệu hiện có", errorCode.CONFLICT.name()));
     }
 
     @ExceptionHandler(Exception.class)

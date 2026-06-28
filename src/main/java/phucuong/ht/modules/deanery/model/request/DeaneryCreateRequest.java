@@ -9,9 +9,9 @@ import phucuong.ht.common.model.request.OrganizationUnitCreateRequest;
 @Setter
 public class DeaneryCreateRequest extends OrganizationUnitCreateRequest {
 
-    @NotBlank
+    @NotBlank(message = "Mã giáo phận là bắt buộc")
     private String dioceseCode;
 
-    @NotBlank
+    @NotBlank(message = "Tên hiệp đoàn là bắt buộc")
     private String associationName;
 }

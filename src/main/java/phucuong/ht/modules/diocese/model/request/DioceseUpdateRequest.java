@@ -9,6 +9,6 @@ import phucuong.ht.common.model.request.OrganizationUnitUpdateRequest;
 @Setter
 public class DioceseUpdateRequest extends OrganizationUnitUpdateRequest {
 
-    @Size(max = 100)
+    @Size(max = 100, message = "Tên hiệp đoàn không được vượt quá 100 ký tự")
     private String unionName;
 }

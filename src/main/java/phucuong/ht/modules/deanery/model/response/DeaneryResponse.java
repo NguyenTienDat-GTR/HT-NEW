@@ -1,0 +1,27 @@
+package phucuong.ht.modules.deanery.model.response;
+
+import lombok.Builder;
+import lombok.Getter;
+
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+
+@Getter
+@Builder
+public class DeaneryResponse {
+
+    private final OffsetDateTime createdAt;
+    private final String createdBy;
+    private final OffsetDateTime updatedAt;
+    private final String updatedBy;
+    private final Boolean status;
+    private final String name;
+    private final LocalDate patronSaintDay;
+    private final LocalDate establishmentDate;
+    private final String chaplain;
+    private final String phoneNumber;
+    private final String email;
+    private final String deaneryCode;
+    private final String associationName;
+    private final String dioceseCode;
+}

@@ -23,19 +23,19 @@ public class DioceseController {
     @PostMapping
     @PreAuthorize("@dioceseAccessEvaluator.canCreate(authentication)")
     public apiResponse<Diocese> create(@Valid @RequestBody DioceseCreateRequest request, Authentication authentication) {
-        return apiResponse.success("Diocese created successfully", dioceseService.create(request, authentication));
+        return apiResponse.success("Tạo giáo phận thành công", dioceseService.create(request, authentication));
     }
 
     @GetMapping
     @PreAuthorize("@dioceseAccessEvaluator.canList(authentication)")
     public apiResponse<Page<Diocese>> findAll(@ModelAttribute BaseSearchRequest request) {
-        return apiResponse.success("Diocese list loaded", dioceseService.findAll(request));
+        return apiResponse.success("Lấy danh sách giáo phận thành công", dioceseService.findAll(request));
     }
 
     @GetMapping("/{dioceseCode}")
     @PreAuthorize("@dioceseAccessEvaluator.canRead(authentication, #dioceseCode)")
     public apiResponse<Diocese> findById(@PathVariable String dioceseCode) {
-        return apiResponse.success("Diocese loaded", dioceseService.findById(dioceseCode));
+        return apiResponse.success("Lấy thông tin giáo phận thành công", dioceseService.findById(dioceseCode));
     }
 
     @PutMapping("/{dioceseCode}")
@@ -45,13 +45,13 @@ public class DioceseController {
             @Valid @RequestBody DioceseUpdateRequest request,
             Authentication authentication
     ) {
-        return apiResponse.success("Diocese updated successfully", dioceseService.update(dioceseCode, request, authentication));
+        return apiResponse.success("Cập nhật giáo phận thành công", dioceseService.update(dioceseCode, request, authentication));
     }
 
     @DeleteMapping("/{dioceseCode}")
     @PreAuthorize("@dioceseAccessEvaluator.canDelete(authentication)")
     public apiResponse<Void> delete(@PathVariable String dioceseCode) {
         dioceseService.delete(dioceseCode);
-        return apiResponse.success("Diocese deleted successfully", null);
+        return apiResponse.success("Xóa giáo phận thành công", null);
     }
 }
