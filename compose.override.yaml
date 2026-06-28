@@ -39,7 +39,10 @@ services:
   # BACKEND APPLICATION SERVICE (HOT-RELOAD DEV)
   # ----------------------------------------------------
   app:
-    image: gradle:8.12-jdk21-alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    image: ht-management-app-dev
     environment:
       SERVER_PORT: ${SERVER_PORT}
       DB_URL: ${DB_URL}
@@ -59,11 +62,12 @@ services:
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
       JWT_ACCESS_EXPIRATION: ${JWT_ACCESS_EXPIRATION}
       JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION}
+      GRADLE_USER_HOME: /root/.gradle
     volumes:
       - .:/app
-      - gradle_cache:/home/gradle/.gradle
+      - gradle_cache:/root/.gradle
     working_dir: /app
-    command: gradle bootRun --no-daemon --console=plain --stacktrace
+    command: ["-Dorg.gradle.wrapper.network.timeout=60000", "bootRun", "--continuous", "--no-daemon", "--console=plain", "--stacktrace"]
     ports:
       - "${SERVER_PORT}:${SERVER_PORT}"
     depends_on:

@@ -12,21 +12,21 @@ import java.time.LocalDate;
 @Setter
 public class OrganizationUnitCreateRequest {
 
-    @NotBlank
-    @Size(max = 100)
+    @NotBlank(message = "Tên là bắt buộc")
+    @Size(max = 100, message = "Tên không được vượt quá 100 ký tự")
     private String name;
 
     private LocalDate patronSaintDay;
 
     private LocalDate establishmentDate;
 
-    @Size(max = 100)
+    @Size(max = 100, message = "Tên tuyên úy không được vượt quá 100 ký tự")
     private String chaplain;
 
-    @Size(max = 15)
+    @Size(max = 15, message = "Số điện thoại không được vượt quá 15 ký tự")
     private String phoneNumber;
 
-    @Email
-    @Size(max = 100)
+    @Email(message = "Email không đúng định dạng")
+    @Size(max = 100, message = "Email không được vượt quá 100 ký tự")
     private String email;
 }

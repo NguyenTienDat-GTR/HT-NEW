@@ -65,7 +65,7 @@ public class securityConfig {
                             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
                             objectMapper.writeValue(
                                     response.getWriter(),
-                                    apiResponse.error("Authentication is required", errorCode.AUTHENTICATION_FAILED.name())
+                                    apiResponse.error("Yêu cầu đăng nhập", errorCode.AUTHENTICATION_FAILED.name())
                             );
                         })
                         .accessDeniedHandler((request, response, accessDeniedException) -> {
@@ -73,7 +73,7 @@ public class securityConfig {
                             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
                             objectMapper.writeValue(
                                     response.getWriter(),
-                                    apiResponse.error("You do not have permission to access this resource", errorCode.ACCESS_DENIED.name())
+                                    apiResponse.error("Bạn không có quyền truy cập tài nguyên này", errorCode.ACCESS_DENIED.name())
                             );
                         })
                 )

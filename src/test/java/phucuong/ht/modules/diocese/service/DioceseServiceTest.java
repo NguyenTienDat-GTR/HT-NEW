@@ -126,14 +126,14 @@ class DioceseServiceTest {
 
         ApiException exception = assertThrows(ApiException.class, () -> dioceseService.findById("DIO1"));
 
-        assertEquals("Diocese not found: DIO1", exception.getMessage());
+        assertEquals("Không tìm thấy giáo phận: DIO1", exception.getMessage());
     }
 
     @Test
     void updateShouldThrowValidationErrorWhenCodeBlank() {
         ApiException exception = assertThrows(ApiException.class, () -> dioceseService.update(" ", new DioceseUpdateRequest(), null));
 
-        assertEquals("Diocese code is required", exception.getMessage());
+        assertEquals("Mã giáo phận là bắt buộc", exception.getMessage());
     }
 
     @Test
@@ -151,7 +151,7 @@ class DioceseServiceTest {
 
         ApiException exception = assertThrows(ApiException.class, () -> dioceseService.create(request, authentication));
 
-        assertEquals("Diocese data conflicts with existing records", exception.getMessage());
+        assertEquals("Dữ liệu giáo phận bị trùng hoặc xung đột với dữ liệu hiện có", exception.getMessage());
     }
 
     @Test
@@ -163,6 +163,6 @@ class DioceseServiceTest {
 
         ApiException exception = assertThrows(ApiException.class, () -> dioceseService.delete("DIO1"));
 
-        assertEquals("Cannot delete diocese because it is referenced by other records", exception.getMessage());
+        assertEquals("Không thể xóa giáo phận vì đang được dữ liệu khác tham chiếu", exception.getMessage());
     }
 }

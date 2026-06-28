@@ -49,7 +49,7 @@ public class DioceseService {
             diocese.setUpdatedBy(auditActor);
             return dioceseRepository.save(diocese);
         } catch (DataIntegrityViolationException exception) {
-            throw new ApiException(HttpStatus.CONFLICT, errorCode.CONFLICT, "Diocese data conflicts with existing records");
+            throw new ApiException(HttpStatus.CONFLICT, errorCode.CONFLICT, "Dữ liệu giáo phận bị trùng hoặc xung đột với dữ liệu hiện có");
         }
     }
 
@@ -68,7 +68,7 @@ public class DioceseService {
         try {
             return dioceseRepository.update(dioceseCode, request, auditActor);
         } catch (DataIntegrityViolationException exception) {
-            throw new ApiException(HttpStatus.CONFLICT, errorCode.CONFLICT, "Diocese data conflicts with existing records");
+            throw new ApiException(HttpStatus.CONFLICT, errorCode.CONFLICT, "Dữ liệu giáo phận bị trùng hoặc xung đột với dữ liệu hiện có");
         }
     }
 
@@ -78,7 +78,7 @@ public class DioceseService {
         try {
             dioceseRepository.delete(dioceseCode);
         } catch (DataIntegrityViolationException exception) {
-            throw new ApiException(HttpStatus.CONFLICT, errorCode.CONFLICT, "Cannot delete diocese because it is referenced by other records");
+            throw new ApiException(HttpStatus.CONFLICT, errorCode.CONFLICT, "Không thể xóa giáo phận vì đang được dữ liệu khác tham chiếu");
         }
     }
 
@@ -88,20 +88,20 @@ public class DioceseService {
                 .orElseThrow(() -> new ApiException(
                         HttpStatus.NOT_FOUND,
                         errorCode.RESOURCE_NOT_FOUND,
-                        "Diocese not found: " + dioceseCode
+                        "Không tìm thấy giáo phận: " + dioceseCode
                 ));
     }
 
     private void validateDioceseCode(String dioceseCode) {
         if (!StringUtils.hasText(dioceseCode)) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, errorCode.VALIDATION_ERROR, "Diocese code is required");
+            throw new ApiException(HttpStatus.BAD_REQUEST, errorCode.VALIDATION_ERROR, "Mã giáo phận là bắt buộc");
         }
     }
 
     private String getRequiredAuditActor(Authentication authentication) {
         String auditActor = securityUtils.currentAuditActor(authentication);
         if (!StringUtils.hasText(auditActor)) {
-            throw new ApiException(HttpStatus.FORBIDDEN, errorCode.ACCESS_DENIED, "Current account does not have an audit actor");
+            throw new ApiException(HttpStatus.FORBIDDEN, errorCode.ACCESS_DENIED, "Tài khoản hiện tại không có thông tin người thực hiện để ghi nhận lịch sử");
         }
         return auditActor;
     }

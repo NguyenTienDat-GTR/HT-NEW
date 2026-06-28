@@ -8,7 +8,5 @@ import phucuong.ht.common.model.request.OrganizationUnitUpdateRequest;
 @Setter
 public class DeaneryUpdateRequest extends OrganizationUnitUpdateRequest {
 
-    private String dioceseCode;
-
     private String associationName;
 }
