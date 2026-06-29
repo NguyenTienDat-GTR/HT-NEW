@@ -1,0 +1,188 @@
+package phucuong.ht.modules.parish.service;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.stereotype.Service;
+import phucuong.ht.common.exception.errorCode;
+import phucuong.ht.common.repository.BaseSearchRequest;
+import phucuong.ht.common.utils.securityUtils;
+import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.modules.deanery.model.entity.Deanery;
+import phucuong.ht.modules.parish.helper.ParishScopeHelper;
+import phucuong.ht.modules.parish.helper.ParishValidationHelper;
+import phucuong.ht.modules.parish.model.entity.Parish;
+import phucuong.ht.modules.parish.model.request.ParishCreateRequest;
+import phucuong.ht.modules.parish.model.request.ParishUpdateRequest;
+import phucuong.ht.modules.parish.model.response.ParishResponse;
+import phucuong.ht.modules.parish.repository.ParishRepository;
+import phucuong.ht.modules.parish.security.ParishAccessEvaluator;
+
+import java.time.OffsetDateTime;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
+@Service
+@RequiredArgsConstructor
+public class ParishService {
+
+    private static final String DIOCESE_FILTER_FIELD = "deanery.diocese.id";
+    private static final String DEANERY_FILTER_FIELD = "deanery.id";
+    private static final String PARISH_FILTER_FIELD = "id";
+
+    private final ParishRepository parishRepository;
+    private final ParishValidationHelper parishValidationHelper;
+    private final ParishScopeHelper parishScopeHelper;
+    private final securityUtils securityUtils;
+
+    public ParishResponse create(ParishCreateRequest request, Authentication authentication) {
+        parishValidationHelper.validateCreateInput(request);
+        parishScopeHelper.enforceCreateScope(request, authentication);
+        String auditActor = parishValidationHelper.getRequiredAuditActor(authentication);
+        try {
+            Deanery deanery = parishValidationHelper.requireExistingDeanery(request.getDeaneryId());
+            parishValidationHelper.validateCreateNameUniqueness(request.getName(), deanery.getId());
+            Parish parish = new Parish();
+            parish.setDeanery(deanery);
+            parish.setName(request.getName());
+            parish.setPatronSaintDay(request.getPatronSaintDay());
+            parish.setEstablishmentDate(request.getEstablishmentDate());
+            parish.setChaplain(request.getChaplain());
+            parish.setPhoneNumber(request.getPhoneNumber());
+            parish.setEmail(request.getEmail());
+            parish.setChapterName(request.getChapterName());
+            parish.setStatus(Boolean.TRUE);
+            parish.setCreatedAt(OffsetDateTime.now());
+            parish.setUpdatedAt(parish.getCreatedAt());
+            parish.setCreatedBy(auditActor);
+            parish.setUpdatedBy(auditActor);
+            parishRepository.save(parish);
+            return toParishResponse(parishValidationHelper.requireExistingParishWithDeaneryAndDiocese(parish.getId()));
+        } catch (DataIntegrityViolationException exception) {
+            throw new ApiException(HttpStatus.CONFLICT, errorCode.CONFLICT, "Dữ liệu giáo xứ bị trùng hoặc xung đột với dữ liệu hiện có");
+        }
+    }
+
+    public Page<ParishResponse> findAll(BaseSearchRequest request, Authentication authentication) {
+        BaseSearchRequest scopedRequest = copyRequest(request);
+
+        if (securityUtils.hasAuthority(authentication, ParishAccessEvaluator.READ_ALL)) {
+            return loadParishPageWithDeanery(scopedRequest);
+        }
+
+        if (securityUtils.hasAuthority(authentication, ParishAccessEvaluator.READ_DIOCESE)) {
+            UUID dioceseId = parishScopeHelper.getRequiredActiveDioceseId(authentication, ParishAccessEvaluator.READ_DIOCESE);
+            scopedRequest.getFilters().put(DIOCESE_FILTER_FIELD, dioceseId);
+            return loadParishPageWithDeanery(scopedRequest);
+        }
+
+        if (securityUtils.hasAuthority(authentication, ParishAccessEvaluator.READ_DEANERY)) {
+            UUID deaneryId = parishScopeHelper.getRequiredActiveDeaneryId(authentication, ParishAccessEvaluator.READ_DEANERY);
+            scopedRequest.getFilters().put(DEANERY_FILTER_FIELD, deaneryId);
+            return loadParishPageWithDeanery(scopedRequest);
+        }
+
+        if (securityUtils.hasAuthority(authentication, ParishAccessEvaluator.READ_PARISH)) {
+            UUID parishId = parishScopeHelper.getRequiredActiveParishId(authentication, ParishAccessEvaluator.READ_PARISH);
+            scopedRequest.getFilters().put(PARISH_FILTER_FIELD, parishId);
+            return loadParishPageWithDeanery(scopedRequest);
+        }
+
+        throw new ApiException(HttpStatus.FORBIDDEN, errorCode.ACCESS_DENIED, "Tài khoản hiện tại không có quyền xem danh sách giáo xứ");
+    }
+
+    public ParishResponse findById(UUID id) {
+        return toParishResponse(parishValidationHelper.requireExistingParishWithDeaneryAndDiocese(id));
+    }
+
+    public ParishResponse update(UUID id, ParishUpdateRequest request, Authentication authentication) {
+        parishValidationHelper.validateUpdateInput(request);
+        Parish existingParish = parishValidationHelper.requireExistingParishWithDeaneryAndDiocese(id);
+        String auditActor = parishValidationHelper.getRequiredAuditActor(authentication);
+        parishValidationHelper.validateUpdateNameUniqueness(id, request.getName(), existingParish);
+
+        if (request.getDeaneryId() != null) {
+            Deanery targetDeanery = parishValidationHelper.requireExistingDeaneryWithDiocese(request.getDeaneryId());
+            parishScopeHelper.enforceDeaneryChangeScope(authentication, existingParish, targetDeanery);
+        }
+
+        try {
+            parishRepository.update(id, request, auditActor);
+            return toParishResponse(parishValidationHelper.requireExistingParishWithDeaneryAndDiocese(id));
+        } catch (DataIntegrityViolationException exception) {
+            throw new ApiException(HttpStatus.CONFLICT, errorCode.CONFLICT, "Dữ liệu giáo xứ bị trùng hoặc xung đột với dữ liệu hiện có");
+        }
+    }
+
+    public void delete(UUID id, Authentication authentication) {
+        Parish parish = parishValidationHelper.requireExistingParish(id);
+        parishScopeHelper.enforceDeleteScope(authentication, parish);
+        try {
+            parishRepository.delete(id);
+        } catch (DataIntegrityViolationException exception) {
+            throw new ApiException(HttpStatus.CONFLICT, errorCode.CONFLICT, "Không thể xóa giáo xứ vì đang được dữ liệu khác tham chiếu");
+        }
+    }
+
+    private BaseSearchRequest copyRequest(BaseSearchRequest request) {
+        BaseSearchRequest source = request == null ? new BaseSearchRequest() : request;
+        BaseSearchRequest copy = new BaseSearchRequest();
+        copy.setPage(source.getPage());
+        copy.setSize(source.getSize());
+        copy.setSearch(source.getSearch());
+        copy.setSearchFields(source.getSearchFields() == null ? List.of() : List.copyOf(source.getSearchFields()));
+        copy.setFilters(source.getFilters() == null ? new LinkedHashMap<>() : new LinkedHashMap<>(source.getFilters()));
+        copy.setStatus(source.getStatus());
+        copy.setSortBy(source.getSortBy());
+        copy.setSortDirection(source.getSortDirection());
+        return copy;
+    }
+
+    private Page<ParishResponse> loadParishPageWithDeanery(BaseSearchRequest request) {
+        Page<Parish> page = parishRepository.findAll(request);
+        if (page.isEmpty()) {
+            return new PageImpl<>(List.of(), page.getPageable(), page.getTotalElements());
+        }
+
+        List<UUID> parishIds = page.getContent().stream()
+                .map(Parish::getId)
+                .toList();
+
+        Map<UUID, Parish> parishById = parishRepository.findAllByIdsWithDeaneryAndDiocese(parishIds).stream()
+                .collect(Collectors.toMap(Parish::getId, Function.identity()));
+
+        List<ParishResponse> hydratedContent = parishIds.stream()
+                .map(parishById::get)
+                .filter(java.util.Objects::nonNull)
+                .map(this::toParishResponse)
+                .toList();
+
+        return new PageImpl<>(hydratedContent, page.getPageable(), page.getTotalElements());
+    }
+
+    private ParishResponse toParishResponse(Parish parish) {
+        return ParishResponse.builder()
+                .id(parish.getId())
+                .createdAt(parish.getCreatedAt())
+                .createdBy(parish.getCreatedBy())
+                .updatedAt(parish.getUpdatedAt())
+                .updatedBy(parish.getUpdatedBy())
+                .status(parish.getStatus())
+                .name(parish.getName())
+                .patronSaintDay(parish.getPatronSaintDay())
+                .establishmentDate(parish.getEstablishmentDate())
+                .chaplain(parish.getChaplain())
+                .phoneNumber(parish.getPhoneNumber())
+                .email(parish.getEmail())
+                .deaneryId(parish.getDeanery() == null ? null : parish.getDeanery().getId())
+                .chapterName(parish.getChapterName())
+                .build();
+    }
+}

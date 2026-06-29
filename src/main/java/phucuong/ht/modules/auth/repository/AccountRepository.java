@@ -49,5 +49,17 @@ public interface AccountRepository extends JpaRepository<Account, String> {
             """)
     Optional<UUID> findActiveDeaneryIdByUsername(@Param("username") String username);
 
+    @Query("""
+            select p.id
+            from Account a
+            join a.leader l
+            join l.parish p
+            where a.username = :username
+              and a.status = true
+              and l.status = true
+              and p.status = true
+            """)
+    Optional<UUID> findActiveParishIdByUsername(@Param("username") String username);
+
     boolean existsByUsername(String username);
 }
