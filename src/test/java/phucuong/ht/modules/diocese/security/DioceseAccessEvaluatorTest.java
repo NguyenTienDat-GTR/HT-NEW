@@ -1,7 +1,7 @@
 package phucuong.ht.modules.diocese.security;
 
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -13,6 +13,7 @@ import phucuong.ht.modules.auth.repository.AccountRepository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -34,53 +35,58 @@ class DioceseAccessEvaluatorTest {
 
     @Test
     void canReadShouldAllowSystemWidePermissionWithoutScopeLookup() {
+        UUID dioceseId = UUID.randomUUID();
         Authentication authentication = authentication(
                 "superadmin",
                 List.of("SUPER_ADMIN"),
                 List.of(DioceseAccessEvaluator.READ_ALL)
         );
 
-        assertTrue(dioceseAccessEvaluator.canRead(authentication, "DIO1"));
+        assertTrue(dioceseAccessEvaluator.canRead(authentication, dioceseId));
         verifyNoInteractions(accountRepository);
     }
 
     @Test
     void canReadShouldAllowScopedPermissionForMatchingDiocese() {
+        UUID dioceseId = UUID.randomUUID();
         Authentication authentication = authentication(
                 "admin-dio",
                 "LEADER1",
                 List.of("ADMIN_DIOCESE"),
                 List.of(DioceseAccessEvaluator.READ_DIOCESE)
         );
-        when(accountRepository.findActiveDioceseCodeByUsername("admin-dio")).thenReturn(Optional.of("DIO1"));
+        when(accountRepository.findActiveDioceseIdByUsername("admin-dio")).thenReturn(Optional.of(dioceseId));
 
-        assertTrue(dioceseAccessEvaluator.canRead(authentication, "DIO1"));
+        assertTrue(dioceseAccessEvaluator.canRead(authentication, dioceseId));
     }
 
     @Test
     void canReadShouldDenyScopedPermissionForDifferentDiocese() {
+        UUID requestedId = UUID.randomUUID();
+        UUID activeId = UUID.randomUUID();
         Authentication authentication = authentication(
                 "admin-dio",
                 "LEADER1",
                 List.of("ADMIN_DIOCESE"),
                 List.of(DioceseAccessEvaluator.READ_DIOCESE)
         );
-        when(accountRepository.findActiveDioceseCodeByUsername("admin-dio")).thenReturn(Optional.of("DIO2"));
+        when(accountRepository.findActiveDioceseIdByUsername("admin-dio")).thenReturn(Optional.of(activeId));
 
-        assertFalse(dioceseAccessEvaluator.canRead(authentication, "DIO1"));
+        assertFalse(dioceseAccessEvaluator.canRead(authentication, requestedId));
     }
 
     @Test
     void canUpdateShouldDenyWhenAccountHasNoResolvableDiocese() {
+        UUID dioceseId = UUID.randomUUID();
         Authentication authentication = authentication(
                 "admin-dio",
                 "LEADER1",
                 List.of("ADMIN_DIOCESE"),
                 List.of(DioceseAccessEvaluator.UPDATE_DIOCESE)
         );
-        when(accountRepository.findActiveDioceseCodeByUsername("admin-dio")).thenReturn(Optional.empty());
+        when(accountRepository.findActiveDioceseIdByUsername("admin-dio")).thenReturn(Optional.empty());
 
-        assertFalse(dioceseAccessEvaluator.canUpdate(authentication, "DIO1"));
+        assertFalse(dioceseAccessEvaluator.canUpdate(authentication, dioceseId));
     }
 
     @Test

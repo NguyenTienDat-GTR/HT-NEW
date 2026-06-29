@@ -6,8 +6,10 @@ import org.springframework.stereotype.Repository;
 import phucuong.ht.common.repository.BaseRepo;
 import phucuong.ht.modules.diocese.model.entity.Diocese;
 
+import java.util.UUID;
+
 @Repository
-public class DioceseRepository extends BaseRepo<Diocese, String> {
+public class DioceseRepository extends BaseRepo<Diocese, UUID> {
 
     public DioceseRepository(EntityManager entityManager) {
         super(entityManager, Diocese.class);
@@ -19,7 +21,13 @@ public class DioceseRepository extends BaseRepo<Diocese, String> {
         return diocese;
     }
 
-    public boolean existsByDioceseCode(String dioceseCode) {
-        return findById(dioceseCode).isPresent();
+    public boolean existsByName(String name) {
+        return existsByField("name", name);
+    }
+
+    public boolean existsByNameAndIdNot(String name, UUID id) {
+        return findOneByField("name", name)
+                .map(diocese -> !diocese.getId().equals(id))
+                .orElse(false);
     }
 }

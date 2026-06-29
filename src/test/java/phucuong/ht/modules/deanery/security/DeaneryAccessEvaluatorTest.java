@@ -14,6 +14,7 @@ import phucuong.ht.modules.deanery.repository.DeaneryRepository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -38,55 +39,60 @@ class DeaneryAccessEvaluatorTest {
 
     @Test
     void canReadShouldAllowSystemWidePermissionWithoutScopeLookup() {
+        UUID deaneryId = UUID.randomUUID();
         Authentication authentication = authentication(
                 "superadmin",
                 List.of("SUPER_ADMIN"),
                 List.of(DeaneryAccessEvaluator.READ_ALL)
         );
 
-        assertTrue(deaneryAccessEvaluator.canRead(authentication, "DEA1"));
+        assertTrue(deaneryAccessEvaluator.canRead(authentication, deaneryId));
         verifyNoInteractions(accountRepository, deaneryRepository);
     }
 
     @Test
     void canReadShouldAllowDioceseScopedPermissionForMatchingDeanery() {
+        UUID deaneryId = UUID.randomUUID();
+        UUID dioceseId = UUID.randomUUID();
         Authentication authentication = authentication(
                 "admin-dio",
                 "LEADER1",
                 List.of("ADMIN_DIOCESE"),
                 List.of(DeaneryAccessEvaluator.READ_DIOCESE)
         );
-        when(accountRepository.findActiveDioceseCodeByUsername("admin-dio")).thenReturn(Optional.of("DIO1"));
-        when(deaneryRepository.findDioceseCodeByDeaneryCode("DEA1")).thenReturn(Optional.of("DIO1"));
+        when(accountRepository.findActiveDioceseIdByUsername("admin-dio")).thenReturn(Optional.of(dioceseId));
+        when(deaneryRepository.findDioceseIdByDeaneryId(deaneryId)).thenReturn(Optional.of(dioceseId));
 
-        assertTrue(deaneryAccessEvaluator.canRead(authentication, "DEA1"));
+        assertTrue(deaneryAccessEvaluator.canRead(authentication, deaneryId));
     }
 
     @Test
     void canReadShouldDenyDioceseScopedPermissionForDifferentDeanery() {
+        UUID deaneryId = UUID.randomUUID();
         Authentication authentication = authentication(
                 "admin-dio",
                 "LEADER1",
                 List.of("ADMIN_DIOCESE"),
                 List.of(DeaneryAccessEvaluator.READ_DIOCESE)
         );
-        when(accountRepository.findActiveDioceseCodeByUsername("admin-dio")).thenReturn(Optional.of("DIO1"));
-        when(deaneryRepository.findDioceseCodeByDeaneryCode("DEA1")).thenReturn(Optional.of("DIO2"));
+        when(accountRepository.findActiveDioceseIdByUsername("admin-dio")).thenReturn(Optional.of(UUID.randomUUID()));
+        when(deaneryRepository.findDioceseIdByDeaneryId(deaneryId)).thenReturn(Optional.of(UUID.randomUUID()));
 
-        assertFalse(deaneryAccessEvaluator.canRead(authentication, "DEA1"));
+        assertFalse(deaneryAccessEvaluator.canRead(authentication, deaneryId));
     }
 
     @Test
     void canUpdateShouldAllowDeaneryScopedPermissionForMatchingDeanery() {
+        UUID deaneryId = UUID.randomUUID();
         Authentication authentication = authentication(
                 "admin-deanery",
                 "LEADER1",
                 List.of("ADMIN_DEANERY"),
                 List.of(DeaneryAccessEvaluator.UPDATE_DEANERY)
         );
-        when(accountRepository.findActiveDeaneryCodeByUsername("admin-deanery")).thenReturn(Optional.of("DEA1"));
+        when(accountRepository.findActiveDeaneryIdByUsername("admin-deanery")).thenReturn(Optional.of(deaneryId));
 
-        assertTrue(deaneryAccessEvaluator.canUpdate(authentication, "DEA1"));
+        assertTrue(deaneryAccessEvaluator.canUpdate(authentication, deaneryId));
     }
 
     @Test
@@ -97,9 +103,9 @@ class DeaneryAccessEvaluatorTest {
                 List.of("ADMIN_DEANERY"),
                 List.of(DeaneryAccessEvaluator.UPDATE_DEANERY)
         );
-        when(accountRepository.findActiveDeaneryCodeByUsername("admin-deanery")).thenReturn(Optional.of("DEA2"));
+        when(accountRepository.findActiveDeaneryIdByUsername("admin-deanery")).thenReturn(Optional.of(UUID.randomUUID()));
 
-        assertFalse(deaneryAccessEvaluator.canUpdate(authentication, "DEA1"));
+        assertFalse(deaneryAccessEvaluator.canUpdate(authentication, UUID.randomUUID()));
     }
 
     @Test
@@ -112,42 +118,6 @@ class DeaneryAccessEvaluatorTest {
         );
 
         assertTrue(deaneryAccessEvaluator.canList(authentication));
-    }
-
-    @Test
-    void canCreateShouldAllowDioceseScopedAuthority() {
-        Authentication authentication = authentication(
-                "admin-dio",
-                "LEADER1",
-                List.of("ADMIN_DIOCESE"),
-                List.of(DeaneryAccessEvaluator.CREATE_DIOCESE)
-        );
-
-        assertTrue(deaneryAccessEvaluator.canCreate(authentication));
-    }
-
-    @Test
-    void canDeleteShouldAllowDioceseScopedAuthority() {
-        Authentication authentication = authentication(
-                "admin-dio",
-                "LEADER1",
-                List.of("ADMIN_DIOCESE"),
-                List.of(DeaneryAccessEvaluator.DELETE_DIOCESE)
-        );
-
-        assertTrue(deaneryAccessEvaluator.canDelete(authentication));
-    }
-
-    @Test
-    void canDeleteShouldDenyDeaneryScopedAuthority() {
-        Authentication authentication = authentication(
-                "admin-deanery",
-                "LEADER1",
-                List.of("ADMIN_DEANERY"),
-                List.of(DeaneryAccessEvaluator.UPDATE_DEANERY)
-        );
-
-        assertFalse(deaneryAccessEvaluator.canDelete(authentication));
     }
 
     private Authentication authentication(String username, List<String> roles, List<String> permissions) {

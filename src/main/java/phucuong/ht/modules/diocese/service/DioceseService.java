@@ -1,40 +1,36 @@
 package phucuong.ht.modules.diocese.service;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
 import phucuong.ht.common.exception.errorCode;
 import phucuong.ht.common.repository.BaseSearchRequest;
-import phucuong.ht.common.utils.OrganizationUnitCodeGenerator;
-import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.modules.diocese.helper.DioceseValidationHelper;
 import phucuong.ht.modules.diocese.model.entity.Diocese;
 import phucuong.ht.modules.diocese.model.request.DioceseCreateRequest;
 import phucuong.ht.modules.diocese.model.request.DioceseUpdateRequest;
 import phucuong.ht.modules.diocese.repository.DioceseRepository;
 
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class DioceseService {
 
     private final DioceseRepository dioceseRepository;
-    private final OrganizationUnitCodeGenerator organizationUnitCodeGenerator;
-    private final securityUtils securityUtils;
+    private final DioceseValidationHelper dioceseValidationHelper;
 
     public Diocese create(DioceseCreateRequest request, Authentication authentication) {
-        String auditActor = getRequiredAuditActor(authentication);
+        dioceseValidationHelper.validateCreateInput(request);
+        String auditActor = dioceseValidationHelper.getRequiredAuditActor(authentication);
+        dioceseValidationHelper.validateCreateNameUniqueness(request.getName());
         try {
             Diocese diocese = new Diocese();
-            diocese.setDioceseCode(organizationUnitCodeGenerator.generateDioceseCode(
-                    request.getUnionName(),
-                    dioceseRepository::existsByDioceseCode
-            ));
             diocese.setName(request.getName());
             diocese.setPatronSaintDay(request.getPatronSaintDay());
             diocese.setEstablishmentDate(request.getEstablishmentDate());
@@ -57,52 +53,28 @@ public class DioceseService {
         return dioceseRepository.findAll(request == null ? new BaseSearchRequest() : request);
     }
 
-    public Diocese findById(String dioceseCode) {
-        return getExistingDiocese(dioceseCode);
+    public Diocese findById(UUID id) {
+        return dioceseValidationHelper.requireExistingDiocese(id);
     }
 
-    public Diocese update(String dioceseCode, DioceseUpdateRequest request, Authentication authentication) {
-        validateDioceseCode(dioceseCode);
-        getExistingDiocese(dioceseCode);
-        String auditActor = getRequiredAuditActor(authentication);
+    public Diocese update(UUID id, DioceseUpdateRequest request, Authentication authentication) {
+        dioceseValidationHelper.validateUpdateInput(request);
+        Diocese existingDiocese = dioceseValidationHelper.requireExistingDiocese(id);
+        String auditActor = dioceseValidationHelper.getRequiredAuditActor(authentication);
+        dioceseValidationHelper.validateUpdateNameUniqueness(id, request.getName(), existingDiocese.getName());
         try {
-            return dioceseRepository.update(dioceseCode, request, auditActor);
+            return dioceseRepository.update(id, request, auditActor);
         } catch (DataIntegrityViolationException exception) {
             throw new ApiException(HttpStatus.CONFLICT, errorCode.CONFLICT, "Dữ liệu giáo phận bị trùng hoặc xung đột với dữ liệu hiện có");
         }
     }
 
-    public void delete(String dioceseCode) {
-        validateDioceseCode(dioceseCode);
-        getExistingDiocese(dioceseCode);
+    public void delete(UUID id) {
+        dioceseValidationHelper.requireExistingDiocese(id);
         try {
-            dioceseRepository.delete(dioceseCode);
+            dioceseRepository.delete(id);
         } catch (DataIntegrityViolationException exception) {
             throw new ApiException(HttpStatus.CONFLICT, errorCode.CONFLICT, "Không thể xóa giáo phận vì đang được dữ liệu khác tham chiếu");
         }
-    }
-
-    private Diocese getExistingDiocese(String dioceseCode) {
-        validateDioceseCode(dioceseCode);
-        return dioceseRepository.findById(dioceseCode)
-                .orElseThrow(() -> new ApiException(
-                        HttpStatus.NOT_FOUND,
-                        errorCode.RESOURCE_NOT_FOUND,
-                        "Không tìm thấy giáo phận: " + dioceseCode
-                ));
-    }
-
-    private void validateDioceseCode(String dioceseCode) {
-        if (!StringUtils.hasText(dioceseCode)) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, errorCode.VALIDATION_ERROR, "Mã giáo phận là bắt buộc");
-        }
-    }
-
-    private String getRequiredAuditActor(Authentication authentication) {
-        String auditActor = securityUtils.currentAuditActor(authentication);
-        if (!StringUtils.hasText(auditActor)) {
-            throw new ApiException(HttpStatus.FORBIDDEN, errorCode.ACCESS_DENIED, "Tài khoản hiện tại không có thông tin người thực hiện để ghi nhận lịch sử");
-        }
-        return auditActor;
     }
 }

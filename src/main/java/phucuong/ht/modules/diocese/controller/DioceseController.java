@@ -13,6 +13,8 @@ import phucuong.ht.modules.diocese.model.request.DioceseCreateRequest;
 import phucuong.ht.modules.diocese.model.request.DioceseUpdateRequest;
 import phucuong.ht.modules.diocese.service.DioceseService;
 
+import java.util.UUID;
+
 @RestController
 @RequestMapping("/api/dioceses")
 @RequiredArgsConstructor
@@ -32,26 +34,26 @@ public class DioceseController {
         return apiResponse.success("Lấy danh sách giáo phận thành công", dioceseService.findAll(request));
     }
 
-    @GetMapping("/{dioceseCode}")
-    @PreAuthorize("@dioceseAccessEvaluator.canRead(authentication, #dioceseCode)")
-    public apiResponse<Diocese> findById(@PathVariable String dioceseCode) {
-        return apiResponse.success("Lấy thông tin giáo phận thành công", dioceseService.findById(dioceseCode));
+    @GetMapping("/{id}")
+    @PreAuthorize("@dioceseAccessEvaluator.canRead(authentication, #id)")
+    public apiResponse<Diocese> findById(@PathVariable UUID id) {
+        return apiResponse.success("Lấy thông tin giáo phận thành công", dioceseService.findById(id));
     }
 
-    @PutMapping("/{dioceseCode}")
-    @PreAuthorize("@dioceseAccessEvaluator.canUpdate(authentication, #dioceseCode)")
+    @PutMapping("/{id}")
+    @PreAuthorize("@dioceseAccessEvaluator.canUpdate(authentication, #id)")
     public apiResponse<Diocese> update(
-            @PathVariable String dioceseCode,
+            @PathVariable UUID id,
             @Valid @RequestBody DioceseUpdateRequest request,
             Authentication authentication
     ) {
-        return apiResponse.success("Cập nhật giáo phận thành công", dioceseService.update(dioceseCode, request, authentication));
+        return apiResponse.success("Cập nhật giáo phận thành công", dioceseService.update(id, request, authentication));
     }
 
-    @DeleteMapping("/{dioceseCode}")
+    @DeleteMapping("/{id}")
     @PreAuthorize("@dioceseAccessEvaluator.canDelete(authentication)")
-    public apiResponse<Void> delete(@PathVariable String dioceseCode) {
-        dioceseService.delete(dioceseCode);
+    public apiResponse<Void> delete(@PathVariable UUID id) {
+        dioceseService.delete(id);
         return apiResponse.success("Xóa giáo phận thành công", null);
     }
 }
