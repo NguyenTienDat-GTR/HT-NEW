@@ -7,6 +7,7 @@ import lombok.Setter;
 import phucuong.ht.modules.leader.model.enums.LeaderLevel;
 
 import java.time.LocalDate;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -32,5 +33,5 @@ public class LeaderUpdateRequest {
 
     private LeaderLevel leaderLevel;
 
-    private String parishCode;
+    private UUID parishId;
 }

@@ -113,6 +113,27 @@ public abstract class BaseRepo<T extends BaseModel, ID> {
         return Optional.ofNullable(entityManager.find(entityClass, id));
     }
 
+    @Transactional(readOnly = true)
+    public Optional<T> findOneByField(String fieldName, Object value) {
+        if (!StringUtils.hasText(fieldName) || value == null) {
+            return Optional.empty();
+        }
+
+        String normalizedField = normalizeFieldPath(fieldName);
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<T> query = cb.createQuery(entityClass);
+        Root<T> root = query.from(entityClass);
+        Path<?> path = resolvePath(root, normalizedField);
+
+        query.select(root).where(cb.equal(path, convertValue(value, path.getJavaType())));
+        return findFirst(entityManager.createQuery(query).setMaxResults(1).getResultList());
+    }
+
+    @Transactional(readOnly = true)
+    public boolean existsByField(String fieldName, Object value) {
+        return findOneByField(fieldName, value).isPresent();
+    }
+
     /**
      * Reads one entity by primary key and throws when the row does not exist.
      */
@@ -325,14 +346,18 @@ public abstract class BaseRepo<T extends BaseModel, ID> {
             }
 
             String relationIdProperty = getIdPropertyName(field.getType());
-            if (!relationIdProperty.equals(requestProperty)) {
-                continue;
+            if (relationIdProperty.equals(requestProperty)) {
+                Object convertedId = convertValue(requestValue, getIdPropertyType(field.getType()));
+                Object reference = entityManager.getReference(field.getType(), convertedId);
+                target.setPropertyValue(field.getName(), reference);
+                return;
             }
 
-            Object convertedId = convertValue(requestValue, getIdPropertyType(field.getType()));
-            Object reference = entityManager.getReference(field.getType(), convertedId);
-            target.setPropertyValue(field.getName(), reference);
-            return;
+            if (hasPersistentField(field.getType(), requestProperty)) {
+                Object relationEntity = findRelationByField(field.getType(), requestProperty, requestValue);
+                target.setPropertyValue(field.getName(), relationEntity);
+                return;
+            }
         }
     }
 
@@ -341,6 +366,36 @@ public abstract class BaseRepo<T extends BaseModel, ID> {
      */
     private boolean isRelationField(Field field) {
         return field.isAnnotationPresent(ManyToOne.class) || field.isAnnotationPresent(OneToOne.class);
+    }
+
+    private boolean hasPersistentField(Class<?> type, String fieldName) {
+        return getAllFields(type).stream().anyMatch(field -> field.getName().equals(fieldName));
+    }
+
+    private Object findRelationByField(Class<?> relationType, String fieldName, Object value) {
+        Class<?> fieldType = getAllFields(relationType).stream()
+                .filter(field -> field.getName().equals(fieldName))
+                .findFirst()
+                .map(Field::getType)
+                .orElseThrow(() -> new IllegalStateException(relationType.getSimpleName() + " does not define field " + fieldName));
+
+        return entityManager.createQuery(
+                        "select entity from " + relationType.getSimpleName() + " entity where entity." + fieldName + " = :value",
+                        relationType
+                )
+                .setParameter("value", convertValue(value, fieldType))
+                .setMaxResults(1)
+                .getResultList()
+                .stream()
+                .findFirst()
+                .orElseThrow(() -> new EntityNotFoundException(relationType.getSimpleName() + " not found by " + fieldName + ": " + value));
+    }
+
+    private <E> Optional<E> findFirst(List<E> results) {
+        if (results == null || results.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(results.get(0));
     }
 
     /**

@@ -6,7 +6,12 @@ import phucuong.ht.common.model.OrganizationUnit;
 import phucuong.ht.modules.diocese.model.entity.Diocese;
 
 @Entity
-@Table(name = "deanery")
+@Table(
+        name = "deanery",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_deanery_diocese_name", columnNames = {"diocese_id", "name"})
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -14,12 +19,8 @@ import phucuong.ht.modules.diocese.model.entity.Diocese;
 @EqualsAndHashCode(callSuper = true)
 public class Deanery extends OrganizationUnit {
 
-    @Id
-    @Column(name = "deanery_code", length = 50)
-    private String deaneryCode;
-
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "diocese_code", nullable = false)
+    @JoinColumn(name = "diocese_id", nullable = false)
     private Diocese diocese;
 
     @Column(name = "association_name", nullable = false)

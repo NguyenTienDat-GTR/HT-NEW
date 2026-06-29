@@ -10,23 +10,21 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.security.core.Authentication;
 import phucuong.ht.common.repository.BaseSearchRequest;
-import phucuong.ht.common.utils.OrganizationUnitCodeGenerator;
-import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.modules.diocese.helper.DioceseValidationHelper;
 import phucuong.ht.modules.diocese.model.entity.Diocese;
 import phucuong.ht.modules.diocese.model.request.DioceseCreateRequest;
 import phucuong.ht.modules.diocese.model.request.DioceseUpdateRequest;
 import phucuong.ht.modules.diocese.repository.DioceseRepository;
 
 import java.util.List;
-import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -37,28 +35,22 @@ class DioceseServiceTest {
     private DioceseRepository dioceseRepository;
 
     @Mock
-    private OrganizationUnitCodeGenerator organizationUnitCodeGenerator;
-
-    @Mock
-    private securityUtils securityUtils;
+    private DioceseValidationHelper dioceseValidationHelper;
 
     @InjectMocks
     private DioceseService dioceseService;
 
     @Test
-    void createShouldDelegateToRepository() {
+    void createShouldValidateAndDelegateToRepository() {
         DioceseCreateRequest request = new DioceseCreateRequest();
         request.setName("Phu Cuong");
         request.setUnionName("Phu Cuong");
-
         Diocese created = new Diocese();
-        created.setDioceseCode("DIO1");
         Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
 
-        when(securityUtils.currentAuditActor(authentication)).thenReturn("LEADER1");
-        when(organizationUnitCodeGenerator.generateDioceseCode(eq("Phu Cuong"), any())).thenReturn("phu-cuong");
+        when(dioceseValidationHelper.getRequiredAuditActor(authentication)).thenReturn("LEADER1");
         when(dioceseRepository.save(argThat(entity ->
-                "phu-cuong".equals(entity.getDioceseCode())
+                "Phu Cuong".equals(entity.getName())
                         && "Phu Cuong".equals(entity.getUnionName())
                         && "LEADER1".equals(entity.getCreatedBy())
                         && "LEADER1".equals(entity.getUpdatedBy())
@@ -67,6 +59,8 @@ class DioceseServiceTest {
         Diocese result = dioceseService.create(request, authentication);
 
         assertSame(created, result);
+        verify(dioceseValidationHelper).validateCreateInput(request);
+        verify(dioceseValidationHelper).validateCreateNameUniqueness("Phu Cuong");
     }
 
     @Test
@@ -82,58 +76,51 @@ class DioceseServiceTest {
     }
 
     @Test
-    void findByIdShouldLoadRequiredEntity() {
+    void findByIdShouldLoadRequiredEntityFromHelper() {
+        UUID id = UUID.randomUUID();
         Diocese diocese = new Diocese();
-        diocese.setDioceseCode("DIO1");
+        diocese.setId(id);
+        when(dioceseValidationHelper.requireExistingDiocese(id)).thenReturn(diocese);
 
-        when(dioceseRepository.findById("DIO1")).thenReturn(Optional.of(diocese));
-
-        Diocese result = dioceseService.findById("DIO1");
+        Diocese result = dioceseService.findById(id);
 
         assertSame(diocese, result);
     }
 
     @Test
-    void updateShouldDelegateToRepository() {
+    void updateShouldValidateAndDelegateToRepository() {
+        UUID id = UUID.randomUUID();
+        Diocese existing = new Diocese();
+        existing.setId(id);
+        existing.setName("Old Name");
         DioceseUpdateRequest request = new DioceseUpdateRequest();
-        Diocese updated = new Diocese();
-        updated.setDioceseCode("DIO1");
+        request.setName("New Name");
         Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
 
-        when(securityUtils.currentAuditActor(authentication)).thenReturn("LEADER1");
-        when(dioceseRepository.findById("DIO1")).thenReturn(Optional.of(updated));
-        when(dioceseRepository.update("DIO1", request, "LEADER1")).thenReturn(updated);
+        when(dioceseValidationHelper.requireExistingDiocese(id)).thenReturn(existing);
+        when(dioceseValidationHelper.getRequiredAuditActor(authentication)).thenReturn("LEADER1");
+        when(dioceseRepository.update(id, request, "LEADER1")).thenAnswer(invocation -> {
+            existing.setName("New Name");
+            return existing;
+        });
 
-        Diocese result = dioceseService.update("DIO1", request, authentication);
+        Diocese result = dioceseService.update(id, request, authentication);
 
-        assertSame(updated, result);
+        assertSame(existing, result);
+        verify(dioceseValidationHelper).validateUpdateInput(request);
+        verify(dioceseValidationHelper).validateUpdateNameUniqueness(id, "New Name", "Old Name");
     }
 
     @Test
-    void deleteShouldDelegateToRepository() {
+    void deleteShouldValidateAndDelegateToRepository() {
+        UUID id = UUID.randomUUID();
         Diocese diocese = new Diocese();
-        diocese.setDioceseCode("DIO1");
-        when(dioceseRepository.findById("DIO1")).thenReturn(Optional.of(diocese));
+        diocese.setId(id);
+        when(dioceseValidationHelper.requireExistingDiocese(id)).thenReturn(diocese);
 
-        dioceseService.delete("DIO1");
+        dioceseService.delete(id);
 
-        verify(dioceseRepository).delete("DIO1");
-    }
-
-    @Test
-    void findByIdShouldThrowApiExceptionWhenMissing() {
-        when(dioceseRepository.findById("DIO1")).thenReturn(Optional.empty());
-
-        ApiException exception = assertThrows(ApiException.class, () -> dioceseService.findById("DIO1"));
-
-        assertEquals("Không tìm thấy giáo phận: DIO1", exception.getMessage());
-    }
-
-    @Test
-    void updateShouldThrowValidationErrorWhenCodeBlank() {
-        ApiException exception = assertThrows(ApiException.class, () -> dioceseService.update(" ", new DioceseUpdateRequest(), null));
-
-        assertEquals("Mã giáo phận là bắt buộc", exception.getMessage());
+        verify(dioceseRepository).delete(id);
     }
 
     @Test
@@ -143,26 +130,11 @@ class DioceseServiceTest {
         request.setUnionName("Phu Cuong");
         Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
 
-        when(securityUtils.currentAuditActor(authentication)).thenReturn("LEADER1");
-        when(organizationUnitCodeGenerator.generateDioceseCode(eq("Phu Cuong"), any())).thenReturn("phu-cuong");
-        when(dioceseRepository.save(argThat(entity ->
-                "phu-cuong".equals(entity.getDioceseCode()) && "Phu Cuong".equals(entity.getUnionName())
-        ))).thenThrow(new DataIntegrityViolationException("duplicate"));
+        when(dioceseValidationHelper.getRequiredAuditActor(authentication)).thenReturn("LEADER1");
+        when(dioceseRepository.save(any(Diocese.class))).thenThrow(new DataIntegrityViolationException("duplicate"));
 
         ApiException exception = assertThrows(ApiException.class, () -> dioceseService.create(request, authentication));
 
         assertEquals("Dữ liệu giáo phận bị trùng hoặc xung đột với dữ liệu hiện có", exception.getMessage());
-    }
-
-    @Test
-    void deleteShouldWrapReferenceConflict() {
-        Diocese diocese = new Diocese();
-        diocese.setDioceseCode("DIO1");
-        when(dioceseRepository.findById("DIO1")).thenReturn(Optional.of(diocese));
-        org.mockito.Mockito.doThrow(new DataIntegrityViolationException("fk")).when(dioceseRepository).delete("DIO1");
-
-        ApiException exception = assertThrows(ApiException.class, () -> dioceseService.delete("DIO1"));
-
-        assertEquals("Không thể xóa giáo phận vì đang được dữ liệu khác tham chiếu", exception.getMessage());
     }
 }

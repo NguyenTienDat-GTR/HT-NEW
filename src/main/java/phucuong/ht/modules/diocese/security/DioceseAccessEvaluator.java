@@ -7,6 +7,8 @@ import org.springframework.stereotype.Component;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.modules.auth.repository.AccountRepository;
 
+import java.util.UUID;
+
 @Component("dioceseAccessEvaluator")
 @RequiredArgsConstructor
 public class DioceseAccessEvaluator {
@@ -29,22 +31,22 @@ public class DioceseAccessEvaluator {
         return hasAuthority(authentication, READ_ALL);
     }
 
-    public boolean canRead(Authentication authentication, String dioceseCode) {
+    public boolean canRead(Authentication authentication, UUID dioceseId) {
         return hasAuthority(authentication, READ_ALL)
-                || hasScopedAccess(authentication, dioceseCode, READ_DIOCESE);
+                || hasScopedAccess(authentication, dioceseId, READ_DIOCESE);
     }
 
-    public boolean canUpdate(Authentication authentication, String dioceseCode) {
+    public boolean canUpdate(Authentication authentication, UUID dioceseId) {
         return hasAuthority(authentication, UPDATE_ALL)
-                || hasScopedAccess(authentication, dioceseCode, UPDATE_DIOCESE);
+                || hasScopedAccess(authentication, dioceseId, UPDATE_DIOCESE);
     }
 
     public boolean canDelete(Authentication authentication) {
         return hasAuthority(authentication, DELETE_ALL);
     }
 
-    private boolean hasScopedAccess(Authentication authentication, String dioceseCode, String scopedAuthority) {
-        if (!hasAuthority(authentication, scopedAuthority) || dioceseCode == null || dioceseCode.isBlank()) {
+    private boolean hasScopedAccess(Authentication authentication, UUID dioceseId, String scopedAuthority) {
+        if (!hasAuthority(authentication, scopedAuthority) || dioceseId == null) {
             return false;
         }
 
@@ -53,8 +55,8 @@ public class DioceseAccessEvaluator {
             return false;
         }
 
-        return accountRepository.findActiveDioceseCodeByUsername(username)
-                .map(dioceseCode::equals)
+        return accountRepository.findActiveDioceseIdByUsername(username)
+                .map(dioceseId::equals)
                 .orElse(false);
     }
 

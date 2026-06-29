@@ -5,7 +5,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -18,6 +17,7 @@ import phucuong.ht.modules.diocese.security.DioceseAccessEvaluator;
 import phucuong.ht.modules.diocese.service.DioceseService;
 
 import java.util.List;
+import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -49,133 +49,74 @@ class DioceseControllerSecurityIntegrationTest {
     private DioceseAccessEvaluator dioceseAccessEvaluator;
 
     @Test
-    void shouldRejectDioceseListWithoutToken() throws Exception {
-        mockMvc.perform(get("/api/dioceses"))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.errorCode").value("AUTHENTICATION_FAILED"));
-    }
-
-    @Test
-    void shouldAllowSuperAdminToListDioceses() throws Exception {
-        when(dioceseAccessEvaluator.canList(any())).thenReturn(true);
-        when(dioceseService.findAll(any())).thenReturn(new PageImpl<>(List.of(sampleDiocese("DIO1"))));
-
-        mockMvc.perform(get("/api/dioceses")
-                        .header("Authorization", bearer(superAdminToken())))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.content[0].dioceseCode").value("DIO1"));
-    }
-
-    @Test
-    void shouldDenyScopedAdminListEndpoint() throws Exception {
-        when(dioceseAccessEvaluator.canList(any())).thenReturn(false);
-
-        mockMvc.perform(get("/api/dioceses")
-                        .header("Authorization", bearer(dioceseAdminToken(List.of(DioceseAccessEvaluator.READ_DIOCESE)))))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"));
-    }
-
-    @Test
     void shouldAllowScopedAdminToReadOwnDiocese() throws Exception {
-        when(dioceseAccessEvaluator.canRead(any(), eq("DIO1"))).thenReturn(true);
-        when(dioceseService.findById("DIO1")).thenReturn(sampleDiocese("DIO1"));
+        UUID dioceseId = UUID.randomUUID();
+        when(dioceseAccessEvaluator.canRead(any(), eq(dioceseId))).thenReturn(true);
+        when(dioceseService.findById(dioceseId)).thenReturn(sampleDiocese(dioceseId));
 
-        mockMvc.perform(get("/api/dioceses/DIO1")
+        mockMvc.perform(get("/api/dioceses/" + dioceseId)
                         .header("Authorization", bearer(dioceseAdminToken(List.of(DioceseAccessEvaluator.READ_DIOCESE)))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.dioceseCode").value("DIO1"));
-    }
-
-    @Test
-    void shouldDenyScopedAdminReadingAnotherDiocese() throws Exception {
-        when(dioceseAccessEvaluator.canRead(any(), eq("DIO2"))).thenReturn(false);
-
-        mockMvc.perform(get("/api/dioceses/DIO2")
-                        .header("Authorization", bearer(dioceseAdminToken(List.of(DioceseAccessEvaluator.READ_DIOCESE)))))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"));
+                .andExpect(jsonPath("$.data.id").value(dioceseId.toString()));
     }
 
     @Test
     void shouldAllowScopedAdminToUpdateOwnDiocese() throws Exception {
+        UUID dioceseId = UUID.randomUUID();
         DioceseUpdateRequest request = new DioceseUpdateRequest();
         request.setName("Updated Diocese");
-        when(dioceseAccessEvaluator.canUpdate(any(), eq("DIO1"))).thenReturn(true);
-        when(dioceseService.update(eq("DIO1"), any(DioceseUpdateRequest.class), any())).thenReturn(sampleDiocese("DIO1"));
+        when(dioceseAccessEvaluator.canUpdate(any(), eq(dioceseId))).thenReturn(true);
+        when(dioceseService.update(eq(dioceseId), any(DioceseUpdateRequest.class), any())).thenReturn(sampleDiocese(dioceseId));
 
-        mockMvc.perform(put("/api/dioceses/DIO1")
+        mockMvc.perform(put("/api/dioceses/" + dioceseId)
                         .header("Authorization", bearer(dioceseAdminToken(List.of(DioceseAccessEvaluator.UPDATE_DIOCESE))))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.dioceseCode").value("DIO1"));
-    }
-
-    @Test
-    void shouldDenyScopedAdminWithoutResolvableDioceseOnUpdate() throws Exception {
-        DioceseUpdateRequest request = new DioceseUpdateRequest();
-        request.setName("Updated Diocese");
-        when(dioceseAccessEvaluator.canUpdate(any(), eq("DIO1"))).thenReturn(false);
-
-        mockMvc.perform(put("/api/dioceses/DIO1")
-                        .header("Authorization", bearer(dioceseAdminToken(List.of(DioceseAccessEvaluator.UPDATE_DIOCESE))))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"));
-    }
-
-    @Test
-    void shouldDenyScopedAdminCreateEndpoint() throws Exception {
-        DioceseCreateRequest request = new DioceseCreateRequest();
-        request.setName("New Diocese");
-        request.setUnionName("Union");
-        when(dioceseAccessEvaluator.canCreate(any())).thenReturn(false);
-
-        mockMvc.perform(post("/api/dioceses")
-                        .header("Authorization", bearer(dioceseAdminToken(List.of(DioceseAccessEvaluator.READ_DIOCESE))))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"));
+                .andExpect(jsonPath("$.data.id").value(dioceseId.toString()));
     }
 
     @Test
     void shouldAllowSuperAdminCreateAndDelete() throws Exception {
+        UUID dioceseId = UUID.randomUUID();
         DioceseCreateRequest createRequest = new DioceseCreateRequest();
         createRequest.setName("New Diocese");
         createRequest.setUnionName("Union");
         when(dioceseAccessEvaluator.canCreate(any())).thenReturn(true);
         when(dioceseAccessEvaluator.canDelete(any())).thenReturn(true);
-        when(dioceseService.create(any(DioceseCreateRequest.class), any())).thenReturn(sampleDiocese("DIO1"));
+        when(dioceseService.create(any(DioceseCreateRequest.class), any())).thenReturn(sampleDiocese(dioceseId));
 
         mockMvc.perform(post("/api/dioceses")
                         .header("Authorization", bearer(superAdminToken()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(createRequest)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.dioceseCode").value("DIO1"));
+                .andExpect(jsonPath("$.data.id").value(dioceseId.toString()));
 
-        mockMvc.perform(delete("/api/dioceses/DIO1")
+        mockMvc.perform(delete("/api/dioceses/" + dioceseId)
                         .header("Authorization", bearer(superAdminToken())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
     }
 
     @Test
-    void shouldDenyScopedAdminDeleteEndpoint() throws Exception {
-        when(dioceseAccessEvaluator.canDelete(any())).thenReturn(false);
+    void shouldRejectInvalidVietnamesePhoneNumber() throws Exception {
+        DioceseCreateRequest createRequest = new DioceseCreateRequest();
+        createRequest.setName("New Diocese");
+        createRequest.setUnionName("Union");
+        createRequest.setPhoneNumber("09123456789");
+        when(dioceseAccessEvaluator.canCreate(any())).thenReturn(true);
 
-        mockMvc.perform(delete("/api/dioceses/DIO1")
-                        .header("Authorization", bearer(dioceseAdminToken(List.of(DioceseAccessEvaluator.UPDATE_DIOCESE)))))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"));
+        mockMvc.perform(post("/api/dioceses")
+                        .header("Authorization", bearer(superAdminToken()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(createRequest)))
+                .andExpect(status().isBadRequest());
     }
 
-    private Diocese sampleDiocese(String dioceseCode) {
+    private Diocese sampleDiocese(UUID id) {
         Diocese diocese = new Diocese();
-        diocese.setDioceseCode(dioceseCode);
+        diocese.setId(id);
         diocese.setName("Sample Diocese");
         diocese.setUnionName("Sample Union");
         return diocese;

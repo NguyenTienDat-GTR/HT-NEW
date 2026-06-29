@@ -46,6 +46,6 @@ public class Leader extends BaseModel {
     private LeaderLevel leaderLevel;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "parish_code", nullable = false)
+    @JoinColumn(name = "parish_id", nullable = false)
     private Parish parish;
 }

@@ -11,10 +11,10 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.security.core.Authentication;
 import phucuong.ht.common.repository.BaseSearchRequest;
-import phucuong.ht.common.utils.OrganizationUnitCodeGenerator;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.modules.auth.exception.ApiException;
-import phucuong.ht.modules.auth.repository.AccountRepository;
+import phucuong.ht.modules.deanery.helper.DeaneryScopeHelper;
+import phucuong.ht.modules.deanery.helper.DeaneryValidationHelper;
 import phucuong.ht.modules.deanery.model.entity.Deanery;
 import phucuong.ht.modules.deanery.model.request.DeaneryCreateRequest;
 import phucuong.ht.modules.deanery.model.request.DeaneryUpdateRequest;
@@ -25,14 +25,12 @@ import phucuong.ht.modules.diocese.model.entity.Diocese;
 
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -43,205 +41,155 @@ class DeaneryServiceTest {
     private DeaneryRepository deaneryRepository;
 
     @Mock
-    private OrganizationUnitCodeGenerator organizationUnitCodeGenerator;
+    private DeaneryValidationHelper deaneryValidationHelper;
+
+    @Mock
+    private DeaneryScopeHelper deaneryScopeHelper;
 
     @Mock
     private securityUtils securityUtils;
-
-    @Mock
-    private AccountRepository accountRepository;
 
     @InjectMocks
     private DeaneryService deaneryService;
 
     @Test
-    void createShouldDelegateToRepository() {
+    void createShouldValidateScopeAndDelegateToRepository() {
+        UUID dioceseId = UUID.randomUUID();
+        UUID deaneryId = UUID.randomUUID();
         DeaneryCreateRequest request = new DeaneryCreateRequest();
         request.setName("Deanery");
         request.setAssociationName("Association");
-        request.setDioceseCode("DIO1");
-
-        Diocese diocese = diocese("DIO1");
-        Deanery created = new Deanery();
-        created.setDeaneryCode("dio1-association");
-        created.setAssociationName("Association");
-        created.setDiocese(diocese);
+        request.setDioceseId(dioceseId);
+        Diocese diocese = diocese(dioceseId);
+        Deanery created = deanery(deaneryId, diocese);
         Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
 
-        when(securityUtils.hasAuthority(authentication, DeaneryAccessEvaluator.CREATE_ALL)).thenReturn(true);
-        when(securityUtils.currentAuditActor(authentication)).thenReturn("LEADER1");
-        when(organizationUnitCodeGenerator.generateDeaneryCode(eq("DIO1"), eq("Association"), any())).thenReturn("dio1-association");
-        when(deaneryRepository.getDioceseReference("DIO1")).thenReturn(diocese);
+        when(deaneryValidationHelper.getRequiredAuditActor(authentication)).thenReturn("LEADER1");
+        when(deaneryValidationHelper.requireExistingDiocese(dioceseId)).thenReturn(diocese);
         when(deaneryRepository.save(argThat(entity ->
-                "dio1-association".equals(entity.getDeaneryCode())
+                "Deanery".equals(entity.getName())
                         && "Association".equals(entity.getAssociationName())
-                        && "DIO1".equals(entity.getDiocese().getDioceseCode())
+                        && dioceseId.equals(entity.getDiocese().getId())
                         && "LEADER1".equals(entity.getCreatedBy())
-                        && "LEADER1".equals(entity.getUpdatedBy())
-        ))).thenReturn(created);
-        when(deaneryRepository.findByIdWithDiocese("dio1-association")).thenReturn(Optional.of(created));
+        ))).thenAnswer(invocation -> {
+            Deanery entity = invocation.getArgument(0);
+            entity.setId(deaneryId);
+            return entity;
+        });
+        when(deaneryValidationHelper.requireExistingDeaneryWithDiocese(deaneryId)).thenReturn(created);
 
         DeaneryResponse result = deaneryService.create(request, authentication);
 
-        assertEquals("dio1-association", result.getDeaneryCode());
-        assertEquals("DIO1", result.getDioceseCode());
+        assertEquals(dioceseId, result.getDioceseId());
+        verify(deaneryValidationHelper).validateCreateInput(request);
+        verify(deaneryScopeHelper).enforceCreateScope(request, authentication);
+        verify(deaneryValidationHelper).validateCreateNameUniqueness("Deanery", dioceseId);
     }
 
     @Test
     void findAllShouldApplyDioceseScopeFilter() {
+        UUID dioceseId = UUID.randomUUID();
+        UUID deaneryId = UUID.randomUUID();
         BaseSearchRequest request = new BaseSearchRequest();
         request.setFilters(new LinkedHashMap<>(java.util.Map.of("name", "ignored")));
-
         Deanery summary = new Deanery();
-        summary.setDeaneryCode("DEA1");
-        Deanery hydrated = new Deanery();
-        hydrated.setDeaneryCode("DEA1");
-        hydrated.setDiocese(diocese("DIO1"));
+        summary.setId(deaneryId);
+        Deanery hydrated = deanery(deaneryId, diocese(dioceseId));
         Page<Deanery> page = new PageImpl<>(List.of(summary));
         Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
 
         when(securityUtils.hasAuthority(authentication, DeaneryAccessEvaluator.READ_ALL)).thenReturn(false);
         when(securityUtils.hasAuthority(authentication, DeaneryAccessEvaluator.READ_DIOCESE)).thenReturn(true);
-        when(securityUtils.currentUsername(authentication)).thenReturn("admin-dio");
-        when(accountRepository.findActiveDioceseCodeByUsername("admin-dio")).thenReturn(Optional.of("DIO1"));
+        when(deaneryScopeHelper.getRequiredActiveDioceseId(authentication, DeaneryAccessEvaluator.READ_DIOCESE)).thenReturn(dioceseId);
         when(deaneryRepository.findAll(any(BaseSearchRequest.class))).thenReturn(page);
-        when(deaneryRepository.findAllByDeaneryCodesWithDiocese(List.of("DEA1"))).thenReturn(List.of(hydrated));
+        when(deaneryRepository.findAllByIdsWithDiocese(List.of(deaneryId))).thenReturn(List.of(hydrated));
 
         Page<DeaneryResponse> result = deaneryService.findAll(request, authentication);
 
-        assertEquals("DEA1", result.getContent().getFirst().getDeaneryCode());
-        assertEquals("DIO1", result.getContent().getFirst().getDioceseCode());
+        assertEquals(dioceseId, result.getContent().getFirst().getDioceseId());
         ArgumentCaptor<BaseSearchRequest> captor = ArgumentCaptor.forClass(BaseSearchRequest.class);
         verify(deaneryRepository).findAll(captor.capture());
-        assertEquals("DIO1", captor.getValue().getFilters().get("diocese.dioceseCode"));
+        assertEquals(dioceseId, captor.getValue().getFilters().get("diocese.id"));
         assertEquals("ignored", captor.getValue().getFilters().get("name"));
     }
 
     @Test
     void findAllShouldApplyDeaneryScopeFilter() {
+        UUID deaneryId = UUID.randomUUID();
+        UUID dioceseId = UUID.randomUUID();
         BaseSearchRequest request = new BaseSearchRequest();
-
         Deanery summary = new Deanery();
-        summary.setDeaneryCode("DEA1");
-        Deanery hydrated = new Deanery();
-        hydrated.setDeaneryCode("DEA1");
-        hydrated.setDiocese(diocese("DIO1"));
+        summary.setId(deaneryId);
+        Deanery hydrated = deanery(deaneryId, diocese(dioceseId));
         Page<Deanery> page = new PageImpl<>(List.of(summary));
         Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
 
         when(securityUtils.hasAuthority(authentication, DeaneryAccessEvaluator.READ_ALL)).thenReturn(false);
         when(securityUtils.hasAuthority(authentication, DeaneryAccessEvaluator.READ_DIOCESE)).thenReturn(false);
         when(securityUtils.hasAuthority(authentication, DeaneryAccessEvaluator.READ_DEANERY)).thenReturn(true);
-        when(securityUtils.currentUsername(authentication)).thenReturn("admin-deanery");
-        when(accountRepository.findActiveDeaneryCodeByUsername("admin-deanery")).thenReturn(Optional.of("DEA1"));
+        when(deaneryScopeHelper.getRequiredActiveDeaneryId(authentication, DeaneryAccessEvaluator.READ_DEANERY)).thenReturn(deaneryId);
         when(deaneryRepository.findAll(any(BaseSearchRequest.class))).thenReturn(page);
-        when(deaneryRepository.findAllByDeaneryCodesWithDiocese(List.of("DEA1"))).thenReturn(List.of(hydrated));
+        when(deaneryRepository.findAllByIdsWithDiocese(List.of(deaneryId))).thenReturn(List.of(hydrated));
 
         Page<DeaneryResponse> result = deaneryService.findAll(request, authentication);
 
-        assertEquals("DEA1", result.getContent().getFirst().getDeaneryCode());
-        assertEquals("DIO1", result.getContent().getFirst().getDioceseCode());
+        assertEquals(deaneryId, result.getContent().getFirst().getId());
         ArgumentCaptor<BaseSearchRequest> captor = ArgumentCaptor.forClass(BaseSearchRequest.class);
         verify(deaneryRepository).findAll(captor.capture());
-        assertEquals("DEA1", captor.getValue().getFilters().get("deaneryCode"));
+        assertEquals(deaneryId, captor.getValue().getFilters().get("id"));
     }
 
     @Test
-    void findByIdShouldLoadRequiredEntity() {
-        Deanery deanery = new Deanery();
-        deanery.setDeaneryCode("DEA1");
-        deanery.setDiocese(diocese("DIO1"));
-
-        when(deaneryRepository.findByIdWithDiocese("DEA1")).thenReturn(Optional.of(deanery));
-
-        DeaneryResponse result = deaneryService.findById("DEA1");
-
-        assertEquals("DEA1", result.getDeaneryCode());
-        assertEquals("DIO1", result.getDioceseCode());
-    }
-
-    @Test
-    void updateShouldDelegateToRepository() {
+    void updateShouldValidateAndDelegateToRepository() {
+        UUID deaneryId = UUID.randomUUID();
+        UUID dioceseId = UUID.randomUUID();
         DeaneryUpdateRequest request = new DeaneryUpdateRequest();
         request.setName("Updated");
-        Deanery existing = new Deanery();
-        existing.setDeaneryCode("DEA1");
-        Deanery updated = new Deanery();
-        updated.setDeaneryCode("DEA1");
-        updated.setDiocese(diocese("DIO1"));
+        Deanery existing = deanery(deaneryId, diocese(dioceseId));
+        existing.setName("Old");
         Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
 
-        when(deaneryRepository.findById("DEA1")).thenReturn(Optional.of(existing));
-        when(securityUtils.currentAuditActor(authentication)).thenReturn("LEADER1");
-        when(deaneryRepository.update("DEA1", request, "LEADER1")).thenReturn(updated);
-        when(deaneryRepository.findByIdWithDiocese("DEA1")).thenReturn(Optional.of(updated));
+        when(deaneryValidationHelper.requireExistingDeaneryWithDiocese(deaneryId)).thenReturn(existing, existing);
+        when(deaneryValidationHelper.getRequiredAuditActor(authentication)).thenReturn("LEADER1");
+        when(deaneryRepository.update(deaneryId, request, "LEADER1")).thenAnswer(invocation -> {
+            existing.setName("Updated");
+            return existing;
+        });
 
-        DeaneryResponse result = deaneryService.update("DEA1", request, authentication);
+        DeaneryResponse result = deaneryService.update(deaneryId, request, authentication);
 
-        assertEquals("DEA1", result.getDeaneryCode());
-        assertEquals("DIO1", result.getDioceseCode());
+        assertEquals("Updated", existing.getName());
+        assertEquals(deaneryId, result.getId());
+        verify(deaneryValidationHelper).validateUpdateInput(request);
+        verify(deaneryValidationHelper).validateUpdateNameUniqueness(deaneryId, "Updated", existing);
     }
 
     @Test
-    void deleteShouldDelegateToRepositoryForSystemWidePermission() {
+    void deleteShouldValidateScopeAndDelegateToRepository() {
+        UUID deaneryId = UUID.randomUUID();
         Deanery deanery = new Deanery();
-        deanery.setDeaneryCode("DEA1");
+        deanery.setId(deaneryId);
         Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
 
-        when(deaneryRepository.findById("DEA1")).thenReturn(Optional.of(deanery));
-        when(securityUtils.hasAuthority(authentication, DeaneryAccessEvaluator.DELETE_ALL)).thenReturn(true);
+        when(deaneryValidationHelper.requireExistingDeanery(deaneryId)).thenReturn(deanery);
 
-        deaneryService.delete("DEA1", authentication);
+        deaneryService.delete(deaneryId, authentication);
 
-        verify(deaneryRepository).delete("DEA1");
-    }
-
-    @Test
-    void deleteShouldEnforceDioceseScope() {
-        Deanery deanery = new Deanery();
-        deanery.setDeaneryCode("DEA1");
-        Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
-
-        when(deaneryRepository.findById("DEA1")).thenReturn(Optional.of(deanery));
-        when(securityUtils.hasAuthority(authentication, DeaneryAccessEvaluator.DELETE_ALL)).thenReturn(false);
-        when(securityUtils.hasAuthority(authentication, DeaneryAccessEvaluator.DELETE_DIOCESE)).thenReturn(true);
-        when(securityUtils.currentUsername(authentication)).thenReturn("admin-dio");
-        when(accountRepository.findActiveDioceseCodeByUsername("admin-dio")).thenReturn(Optional.of("DIO1"));
-        when(deaneryRepository.findDioceseCodeByDeaneryCode("DEA1")).thenReturn(Optional.of("DIO2"));
-
-        ApiException exception = assertThrows(ApiException.class, () -> deaneryService.delete("DEA1", authentication));
-
-        assertEquals("Không thể xóa giáo hạt ngoài phạm vi giáo phận hiện tại", exception.getMessage());
-    }
-
-    @Test
-    void findByIdShouldThrowApiExceptionWhenMissing() {
-        when(deaneryRepository.findByIdWithDiocese("DEA1")).thenReturn(Optional.empty());
-
-        ApiException exception = assertThrows(ApiException.class, () -> deaneryService.findById("DEA1"));
-
-        assertEquals("Không tìm thấy giáo hạt: DEA1", exception.getMessage());
-    }
-
-    @Test
-    void updateShouldThrowValidationErrorWhenCodeBlank() {
-        ApiException exception = assertThrows(ApiException.class, () -> deaneryService.update(" ", new DeaneryUpdateRequest(), null));
-
-        assertEquals("Mã giáo hạt là bắt buộc", exception.getMessage());
+        verify(deaneryScopeHelper).enforceDeleteScope(authentication, deanery);
+        verify(deaneryRepository).delete(deaneryId);
     }
 
     @Test
     void createShouldWrapDataConflict() {
+        UUID dioceseId = UUID.randomUUID();
         DeaneryCreateRequest request = new DeaneryCreateRequest();
         request.setName("Deanery");
         request.setAssociationName("Association");
-        request.setDioceseCode("DIO1");
+        request.setDioceseId(dioceseId);
         Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
 
-        when(securityUtils.hasAuthority(authentication, DeaneryAccessEvaluator.CREATE_ALL)).thenReturn(true);
-        when(securityUtils.currentAuditActor(authentication)).thenReturn("LEADER1");
-        when(organizationUnitCodeGenerator.generateDeaneryCode(eq("DIO1"), eq("Association"), any())).thenReturn("dio1-association");
-        when(deaneryRepository.getDioceseReference("DIO1")).thenReturn(new Diocese());
+        when(deaneryValidationHelper.getRequiredAuditActor(authentication)).thenReturn("LEADER1");
+        when(deaneryValidationHelper.requireExistingDiocese(dioceseId)).thenReturn(diocese(dioceseId));
         when(deaneryRepository.save(any(Deanery.class))).thenThrow(new DataIntegrityViolationException("duplicate"));
 
         ApiException exception = assertThrows(ApiException.class, () -> deaneryService.create(request, authentication));
@@ -249,24 +197,18 @@ class DeaneryServiceTest {
         assertEquals("Dữ liệu giáo hạt bị trùng hoặc xung đột với dữ liệu hiện có", exception.getMessage());
     }
 
-    @Test
-    void deleteShouldWrapReferenceConflict() {
-        Deanery deanery = new Deanery();
-        deanery.setDeaneryCode("DEA1");
-        Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
-
-        when(deaneryRepository.findById("DEA1")).thenReturn(Optional.of(deanery));
-        when(securityUtils.hasAuthority(authentication, DeaneryAccessEvaluator.DELETE_ALL)).thenReturn(true);
-        doThrow(new DataIntegrityViolationException("fk")).when(deaneryRepository).delete("DEA1");
-
-        ApiException exception = assertThrows(ApiException.class, () -> deaneryService.delete("DEA1", authentication));
-
-        assertEquals("Không thể xóa giáo hạt vì đang được dữ liệu khác tham chiếu", exception.getMessage());
+    private Diocese diocese(UUID dioceseId) {
+        Diocese diocese = new Diocese();
+        diocese.setId(dioceseId);
+        return diocese;
     }
 
-    private Diocese diocese(String dioceseCode) {
-        Diocese diocese = new Diocese();
-        diocese.setDioceseCode(dioceseCode);
-        return diocese;
+    private Deanery deanery(UUID deaneryId, Diocese diocese) {
+        Deanery deanery = new Deanery();
+        deanery.setId(deaneryId);
+        deanery.setName("Sample Deanery");
+        deanery.setAssociationName("Sample Association");
+        deanery.setDiocese(diocese);
+        return deanery;
     }
 }

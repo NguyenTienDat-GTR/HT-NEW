@@ -5,11 +5,13 @@ import lombok.Getter;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 @Getter
 @Builder
 public class DeaneryResponse {
 
+    private final UUID id;
     private final OffsetDateTime createdAt;
     private final String createdBy;
     private final OffsetDateTime updatedAt;
@@ -21,7 +23,6 @@ public class DeaneryResponse {
     private final String chaplain;
     private final String phoneNumber;
     private final String email;
-    private final String deaneryCode;
     private final String associationName;
-    private final String dioceseCode;
+    private final UUID dioceseId;
 }

@@ -13,6 +13,8 @@ import phucuong.ht.modules.deanery.model.request.DeaneryUpdateRequest;
 import phucuong.ht.modules.deanery.model.response.DeaneryResponse;
 import phucuong.ht.modules.deanery.service.DeaneryService;
 
+import java.util.UUID;
+
 @RestController
 @RequestMapping("/api/deaneries")
 @RequiredArgsConstructor
@@ -32,26 +34,26 @@ public class DeaneryController {
         return apiResponse.success("Lấy danh sách giáo hạt thành công", deaneryService.findAll(request, authentication));
     }
 
-    @GetMapping("/{deaneryCode}")
-    @PreAuthorize("@deaneryAccessEvaluator.canRead(authentication, #deaneryCode)")
-    public apiResponse<DeaneryResponse> findById(@PathVariable String deaneryCode) {
-        return apiResponse.success("Lấy thông tin giáo hạt thành công", deaneryService.findById(deaneryCode));
+    @GetMapping("/{id}")
+    @PreAuthorize("@deaneryAccessEvaluator.canRead(authentication, #id)")
+    public apiResponse<DeaneryResponse> findById(@PathVariable UUID id) {
+        return apiResponse.success("Lấy thông tin giáo hạt thành công", deaneryService.findById(id));
     }
 
-    @PutMapping("/{deaneryCode}")
-    @PreAuthorize("@deaneryAccessEvaluator.canUpdate(authentication, #deaneryCode)")
+    @PutMapping("/{id}")
+    @PreAuthorize("@deaneryAccessEvaluator.canUpdate(authentication, #id)")
     public apiResponse<DeaneryResponse> update(
-            @PathVariable String deaneryCode,
+            @PathVariable UUID id,
             @Valid @RequestBody DeaneryUpdateRequest request,
             Authentication authentication
     ) {
-        return apiResponse.success("Cập nhật giáo hạt thành công", deaneryService.update(deaneryCode, request, authentication));
+        return apiResponse.success("Cập nhật giáo hạt thành công", deaneryService.update(id, request, authentication));
     }
 
-    @DeleteMapping("/{deaneryCode}")
+    @DeleteMapping("/{id}")
     @PreAuthorize("@deaneryAccessEvaluator.canDelete(authentication)")
-    public apiResponse<Void> delete(@PathVariable String deaneryCode, Authentication authentication) {
-        deaneryService.delete(deaneryCode, authentication);
+    public apiResponse<Void> delete(@PathVariable UUID id, Authentication authentication) {
+        deaneryService.delete(id, authentication);
         return apiResponse.success("Xóa giáo hạt thành công", null);
     }
 }

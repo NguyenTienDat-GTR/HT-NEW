@@ -2,6 +2,7 @@ package phucuong.ht.common.model.request;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
@@ -23,7 +24,7 @@ public class OrganizationUnitCreateRequest {
     @Size(max = 100, message = "Tên tuyên úy không được vượt quá 100 ký tự")
     private String chaplain;
 
-    @Size(max = 15, message = "Số điện thoại không được vượt quá 15 ký tự")
+    @Pattern(regexp = "^$|^0[1-9]\\d{8}$", message = "Số điện thoại phải là số điện thoại Việt Nam gồm 10 chữ số và bắt đầu bằng 0")
     private String phoneNumber;
 
     @Email(message = "Email không đúng định dạng")

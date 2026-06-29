@@ -8,6 +8,8 @@ import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.modules.auth.repository.AccountRepository;
 import phucuong.ht.modules.deanery.repository.DeaneryRepository;
 
+import java.util.UUID;
+
 @Component("deaneryAccessEvaluator")
 @RequiredArgsConstructor
 public class DeaneryAccessEvaluator {
@@ -38,16 +40,16 @@ public class DeaneryAccessEvaluator {
                 || hasAuthority(authentication, READ_DEANERY);
     }
 
-    public boolean canRead(Authentication authentication, String deaneryCode) {
+    public boolean canRead(Authentication authentication, UUID deaneryId) {
         return hasAuthority(authentication, READ_ALL)
-                || hasDioceseScopedAccess(authentication, deaneryCode, READ_DIOCESE)
-                || hasDeaneryScopedAccess(authentication, deaneryCode, READ_DEANERY);
+                || hasDioceseScopedAccess(authentication, deaneryId, READ_DIOCESE)
+                || hasDeaneryScopedAccess(authentication, deaneryId, READ_DEANERY);
     }
 
-    public boolean canUpdate(Authentication authentication, String deaneryCode) {
+    public boolean canUpdate(Authentication authentication, UUID deaneryId) {
         return hasAuthority(authentication, UPDATE_ALL)
-                || hasDioceseScopedAccess(authentication, deaneryCode, UPDATE_DIOCESE)
-                || hasDeaneryScopedAccess(authentication, deaneryCode, UPDATE_DEANERY);
+                || hasDioceseScopedAccess(authentication, deaneryId, UPDATE_DIOCESE)
+                || hasDeaneryScopedAccess(authentication, deaneryId, UPDATE_DEANERY);
     }
 
     public boolean canDelete(Authentication authentication) {
@@ -55,8 +57,8 @@ public class DeaneryAccessEvaluator {
                 || hasAuthority(authentication, DELETE_DIOCESE);
     }
 
-    private boolean hasDioceseScopedAccess(Authentication authentication, String deaneryCode, String scopedAuthority) {
-        if (!hasAuthority(authentication, scopedAuthority) || deaneryCode == null || deaneryCode.isBlank()) {
+    private boolean hasDioceseScopedAccess(Authentication authentication, UUID deaneryId, String scopedAuthority) {
+        if (!hasAuthority(authentication, scopedAuthority) || deaneryId == null) {
             return false;
         }
 
@@ -65,14 +67,14 @@ public class DeaneryAccessEvaluator {
             return false;
         }
 
-        return accountRepository.findActiveDioceseCodeByUsername(username)
-                .flatMap(activeDioceseCode -> deaneryRepository.findDioceseCodeByDeaneryCode(deaneryCode)
-                        .map(activeDioceseCode::equals))
+        return accountRepository.findActiveDioceseIdByUsername(username)
+                .flatMap(activeDioceseId -> deaneryRepository.findDioceseIdByDeaneryId(deaneryId)
+                        .map(activeDioceseId::equals))
                 .orElse(false);
     }
 
-    private boolean hasDeaneryScopedAccess(Authentication authentication, String deaneryCode, String scopedAuthority) {
-        if (!hasAuthority(authentication, scopedAuthority) || deaneryCode == null || deaneryCode.isBlank()) {
+    private boolean hasDeaneryScopedAccess(Authentication authentication, UUID deaneryId, String scopedAuthority) {
+        if (!hasAuthority(authentication, scopedAuthority) || deaneryId == null) {
             return false;
         }
 
@@ -81,8 +83,8 @@ public class DeaneryAccessEvaluator {
             return false;
         }
 
-        return accountRepository.findActiveDeaneryCodeByUsername(username)
-                .map(deaneryCode::equals)
+        return accountRepository.findActiveDeaneryIdByUsername(username)
+                .map(deaneryId::equals)
                 .orElse(false);
     }
 

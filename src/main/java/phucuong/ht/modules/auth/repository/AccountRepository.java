@@ -6,6 +6,7 @@ import org.springframework.data.repository.query.Param;
 import phucuong.ht.modules.system.model.entity.Account;
 
 import java.util.Optional;
+import java.util.UUID;
 
 public interface AccountRepository extends JpaRepository<Account, String> {
 
@@ -19,7 +20,7 @@ public interface AccountRepository extends JpaRepository<Account, String> {
     Optional<Account> findActiveByUsername(@Param("username") String username);
 
     @Query("""
-            select d.dioceseCode
+            select d.id
             from Account a
             join a.leader l
             join l.parish p
@@ -32,10 +33,10 @@ public interface AccountRepository extends JpaRepository<Account, String> {
               and de.status = true
               and d.status = true
             """)
-    Optional<String> findActiveDioceseCodeByUsername(@Param("username") String username);
+    Optional<UUID> findActiveDioceseIdByUsername(@Param("username") String username);
 
     @Query("""
-            select de.deaneryCode
+            select de.id
             from Account a
             join a.leader l
             join l.parish p
@@ -46,7 +47,7 @@ public interface AccountRepository extends JpaRepository<Account, String> {
               and p.status = true
               and de.status = true
             """)
-    Optional<String> findActiveDeaneryCodeByUsername(@Param("username") String username);
+    Optional<UUID> findActiveDeaneryIdByUsername(@Param("username") String username);
 
     boolean existsByUsername(String username);
 }

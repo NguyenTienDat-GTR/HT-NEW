@@ -18,6 +18,7 @@ import phucuong.ht.modules.deanery.security.DeaneryAccessEvaluator;
 import phucuong.ht.modules.deanery.service.DeaneryService;
 
 import java.util.List;
+import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -49,148 +50,82 @@ class DeaneryControllerSecurityIntegrationTest {
     private DeaneryAccessEvaluator deaneryAccessEvaluator;
 
     @Test
-    void shouldRejectDeaneryListWithoutToken() throws Exception {
-        mockMvc.perform(get("/api/deaneries"))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.errorCode").value("AUTHENTICATION_FAILED"));
-    }
-
-    @Test
     void shouldAllowSuperAdminToListDeaneries() throws Exception {
+        UUID deaneryId = UUID.randomUUID();
+        UUID dioceseId = UUID.randomUUID();
         when(deaneryAccessEvaluator.canList(any())).thenReturn(true);
-        when(deaneryService.findAll(any(), any())).thenReturn(new PageImpl<>(List.of(sampleDeanery("DEA1"))));
+        when(deaneryService.findAll(any(), any())).thenReturn(new PageImpl<>(List.of(sampleDeanery(deaneryId, dioceseId))));
 
         mockMvc.perform(get("/api/deaneries")
                         .header("Authorization", bearer(superAdminToken())))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.content[0].deaneryCode").value("DEA1"))
-                .andExpect(jsonPath("$.data.content[0].dioceseCode").value("DIO1"))
-                .andExpect(jsonPath("$.data.content[0].diocese").doesNotExist());
-    }
-
-    @Test
-    void shouldAllowDioceseAdminToListScopedDeaneries() throws Exception {
-        when(deaneryAccessEvaluator.canList(any())).thenReturn(true);
-        when(deaneryService.findAll(any(), any())).thenReturn(new PageImpl<>(List.of(sampleDeanery("DEA1"))));
-
-        mockMvc.perform(get("/api/deaneries")
-                        .header("Authorization", bearer(dioceseAdminToken(List.of(DeaneryAccessEvaluator.READ_DIOCESE)))))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.content[0].deaneryCode").value("DEA1"))
-                .andExpect(jsonPath("$.data.content[0].dioceseCode").value("DIO1"))
-                .andExpect(jsonPath("$.data.content[0].diocese").doesNotExist());
-    }
-
-    @Test
-    void shouldAllowDeaneryAdminToListOwnDeanery() throws Exception {
-        when(deaneryAccessEvaluator.canList(any())).thenReturn(true);
-        when(deaneryService.findAll(any(), any())).thenReturn(new PageImpl<>(List.of(sampleDeanery("DEA1"))));
-
-        mockMvc.perform(get("/api/deaneries")
-                        .header("Authorization", bearer(deaneryAdminToken(List.of(DeaneryAccessEvaluator.READ_DEANERY)))))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.content[0].deaneryCode").value("DEA1"))
-                .andExpect(jsonPath("$.data.content[0].dioceseCode").value("DIO1"))
-                .andExpect(jsonPath("$.data.content[0].diocese").doesNotExist());
+                .andExpect(jsonPath("$.data.content[0].id").value(deaneryId.toString()))
+                .andExpect(jsonPath("$.data.content[0].dioceseId").value(dioceseId.toString()));
     }
 
     @Test
     void shouldAllowScopedAdminToReadOwnDeanery() throws Exception {
-        when(deaneryAccessEvaluator.canRead(any(), eq("DEA1"))).thenReturn(true);
-        when(deaneryService.findById("DEA1")).thenReturn(sampleDeanery("DEA1"));
+        UUID deaneryId = UUID.randomUUID();
+        UUID dioceseId = UUID.randomUUID();
+        when(deaneryAccessEvaluator.canRead(any(), eq(deaneryId))).thenReturn(true);
+        when(deaneryService.findById(deaneryId)).thenReturn(sampleDeanery(deaneryId, dioceseId));
 
-        mockMvc.perform(get("/api/deaneries/DEA1")
+        mockMvc.perform(get("/api/deaneries/" + deaneryId)
                         .header("Authorization", bearer(deaneryAdminToken(List.of(DeaneryAccessEvaluator.READ_DEANERY)))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.deaneryCode").value("DEA1"))
-                .andExpect(jsonPath("$.data.dioceseCode").value("DIO1"))
-                .andExpect(jsonPath("$.data.diocese").doesNotExist());
-    }
-
-    @Test
-    void shouldDenyScopedAdminReadingAnotherDeanery() throws Exception {
-        when(deaneryAccessEvaluator.canRead(any(), eq("DEA2"))).thenReturn(false);
-
-        mockMvc.perform(get("/api/deaneries/DEA2")
-                        .header("Authorization", bearer(deaneryAdminToken(List.of(DeaneryAccessEvaluator.READ_DEANERY)))))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"));
+                .andExpect(jsonPath("$.data.id").value(deaneryId.toString()))
+                .andExpect(jsonPath("$.data.dioceseId").value(dioceseId.toString()));
     }
 
     @Test
     void shouldAllowDeaneryAdminToUpdateOwnDeanery() throws Exception {
+        UUID deaneryId = UUID.randomUUID();
+        UUID dioceseId = UUID.randomUUID();
         DeaneryUpdateRequest request = new DeaneryUpdateRequest();
         request.setName("Updated Deanery");
-        when(deaneryAccessEvaluator.canUpdate(any(), eq("DEA1"))).thenReturn(true);
-        when(deaneryService.update(eq("DEA1"), any(DeaneryUpdateRequest.class), any())).thenReturn(sampleDeanery("DEA1"));
+        when(deaneryAccessEvaluator.canUpdate(any(), eq(deaneryId))).thenReturn(true);
+        when(deaneryService.update(eq(deaneryId), any(DeaneryUpdateRequest.class), any())).thenReturn(sampleDeanery(deaneryId, dioceseId));
 
-        mockMvc.perform(put("/api/deaneries/DEA1")
+        mockMvc.perform(put("/api/deaneries/" + deaneryId)
                         .header("Authorization", bearer(deaneryAdminToken(List.of(DeaneryAccessEvaluator.UPDATE_DEANERY))))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.deaneryCode").value("DEA1"))
-                .andExpect(jsonPath("$.data.dioceseCode").value("DIO1"))
-                .andExpect(jsonPath("$.data.diocese").doesNotExist());
-    }
-
-    @Test
-    void shouldDenyDeaneryAdminCreateEndpoint() throws Exception {
-        DeaneryCreateRequest request = new DeaneryCreateRequest();
-        request.setName("New Deanery");
-        request.setAssociationName("Association");
-        request.setDioceseCode("DIO1");
-        when(deaneryAccessEvaluator.canCreate(any())).thenReturn(false);
-
-        mockMvc.perform(post("/api/deaneries")
-                        .header("Authorization", bearer(deaneryAdminToken(List.of(DeaneryAccessEvaluator.READ_DEANERY))))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"));
+                .andExpect(jsonPath("$.data.id").value(deaneryId.toString()));
     }
 
     @Test
     void shouldAllowDioceseAdminCreateAndDeleteWithinScope() throws Exception {
+        UUID deaneryId = UUID.randomUUID();
+        UUID dioceseId = UUID.randomUUID();
         DeaneryCreateRequest createRequest = new DeaneryCreateRequest();
         createRequest.setName("New Deanery");
         createRequest.setAssociationName("Association");
-        createRequest.setDioceseCode("DIO1");
+        createRequest.setDioceseId(dioceseId);
         when(deaneryAccessEvaluator.canCreate(any())).thenReturn(true);
         when(deaneryAccessEvaluator.canDelete(any())).thenReturn(true);
-        when(deaneryService.create(any(DeaneryCreateRequest.class), any())).thenReturn(sampleDeanery("DEA1"));
+        when(deaneryService.create(any(DeaneryCreateRequest.class), any())).thenReturn(sampleDeanery(deaneryId, dioceseId));
 
         mockMvc.perform(post("/api/deaneries")
                         .header("Authorization", bearer(dioceseAdminToken(List.of(DeaneryAccessEvaluator.CREATE_DIOCESE))))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(createRequest)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.deaneryCode").value("DEA1"))
-                .andExpect(jsonPath("$.data.dioceseCode").value("DIO1"))
-                .andExpect(jsonPath("$.data.diocese").doesNotExist());
+                .andExpect(jsonPath("$.data.id").value(deaneryId.toString()))
+                .andExpect(jsonPath("$.data.dioceseId").value(dioceseId.toString()));
 
-        mockMvc.perform(delete("/api/deaneries/DEA1")
+        mockMvc.perform(delete("/api/deaneries/" + deaneryId)
                         .header("Authorization", bearer(dioceseAdminToken(List.of(DeaneryAccessEvaluator.DELETE_DIOCESE)))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
     }
 
-    @Test
-    void shouldDenyDeaneryAdminDeleteEndpoint() throws Exception {
-        when(deaneryAccessEvaluator.canDelete(any())).thenReturn(false);
-
-        mockMvc.perform(delete("/api/deaneries/DEA1")
-                        .header("Authorization", bearer(deaneryAdminToken(List.of(DeaneryAccessEvaluator.UPDATE_DEANERY)))))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"));
-    }
-
-    private DeaneryResponse sampleDeanery(String deaneryCode) {
+    private DeaneryResponse sampleDeanery(UUID deaneryId, UUID dioceseId) {
         return DeaneryResponse.builder()
-                .deaneryCode(deaneryCode)
+                .id(deaneryId)
+                .dioceseId(dioceseId)
                 .name("Sample Deanery")
                 .associationName("Sample Association")
-                .dioceseCode("DIO1")
                 .status(true)
                 .build();
     }

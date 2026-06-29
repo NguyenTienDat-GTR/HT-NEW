@@ -45,11 +45,26 @@ Relationships:
 - `Deanery` 1 - N `Parish`
 - `Parish` 1 - N `Leader`
 
-Organization unit code strategy:
+Organization unit identity:
 
-- `dioceseCode` is generated from a slug of `unionName` instead of UUID
-- shared code generation is intended for `Deanery` and `Parish` as well
-- child unit codes should include parent scope in the generated code to reduce collisions across different dioceses
+- `Diocese`, `Deanery`, and `Parish` use UUID `id` as the primary key
+- organization-unit relations reference `*_id`
+- organization units no longer use business `code` fields
+- diocese must keep unique `name` across the whole table
+- deanery must keep unique `name` inside the same `diocese`
+- parish must keep unique `name` inside the same `deanery`
+
+Current org-unit relation chain:
+
+- `Deanery.diocese -> Diocese.id`
+- `Parish.deanery -> Deanery.id`
+- `Leader.parish -> Parish.id`
+
+Flyway migrations already added for the organization-unit refactor:
+
+- `V013__migrate_org_unit_primary_keys_to_uuid.sql`
+- `V014__scope_unique_constraints_for_org_units.sql`
+- `V015__drop_org_unit_code_columns.sql`
 
 ### Personnel
 
@@ -125,9 +140,10 @@ Field naming rules:
 
 Examples:
 
-- `leaderCode`
-- `parishCode`
-- `deaneryCode`
+- `leaderId`
+- `dioceseId`
+- `deaneryId`
+- `parishId`
 - `courseCode`
 - `roleCode`
 - `moduleCode`
@@ -135,6 +151,13 @@ Examples:
 - `actionCode`
 - `scopeCode`
 - `username`
+
+Current org-unit contract notes:
+
+- `Diocese` public API uses UUID `id`
+- `Deanery` public API uses UUID `id`
+- `Parish` and `Leader` now store org-unit relations by UUID internally
+- further public API reshaping for `Parish` and `Leader` should follow the UUID model already in storage
 
 ## BaseRepo
 
@@ -159,11 +182,62 @@ Examples:
 
 Dynamic search/filter supports nested paths such as:
 
-- `parish.parishCode`
-- `leader.parish.deanery.dioceseCode`
+- `parish.id`
+- `leader.parish.deanery.diocese.id`
 - `course.requirement.requirementCode`
 
-Request DTOs still use relation IDs like `parishCode` or `leaderCode`, while `BaseSearchRequest` uses entity paths.
+Request DTOs use relation IDs like `parishId`, `deaneryId`, or `leaderCode`, while `BaseSearchRequest` uses entity paths.
+
+Current behavior notes:
+
+- `BaseRepo` now maps organization-unit relations against UUID-backed entities
+- organization-unit code lookup support has been removed together with the dropped `code` columns
+- search and filter paths for organization modules should use UUID-backed fields such as `id`, `diocese.id`, and `parish.id`
+
+## Validation Structure
+
+Validation is now split into reusable helpers so services stay focused on orchestration.
+
+Shared helpers:
+
+- `CommonValidationHelper`
+- `OrganizationUnitValidationHelper`
+
+`CommonValidationHelper` currently contains:
+
+- required UUID validation
+- shared `ApiException` factories for bad request, forbidden, conflict, and not found
+- audit-actor extraction from `Authentication`
+- generic string normalization
+- changed-value detection
+
+`OrganizationUnitValidationHelper` is now org-unit specific and currently only normalizes shared org-unit request fields:
+
+- `name`
+- `chaplain`
+- `phoneNumber`
+- `email`
+
+Module-level helpers:
+
+- `DioceseValidationHelper`
+- `DeaneryValidationHelper`
+- `DeaneryScopeHelper`
+- `ParishValidationHelper`
+
+Current helper responsibilities:
+
+- `DioceseValidationHelper` handles existence checks, input normalization, name uniqueness, and audit-actor resolution
+- `DeaneryValidationHelper` handles existence checks for deanery and diocese, input normalization, deanery-name uniqueness inside a diocese, and audit-actor resolution
+- `DeaneryScopeHelper` handles create/delete scope enforcement and active diocese/deanery resolution
+- `ParishValidationHelper` is prepared for the same pattern so the parish module can follow the same structure in a later pass
+
+Current shared input validation rules for org-unit requests:
+
+- `phoneNumber` must be a Vietnamese phone number with exactly 10 digits and leading `0`
+- `email` keeps `@Email` validation and max length rules
+- blank optional text values are normalized to `null`
+- `patronSaintDay` and `establishmentDate` do not enforce any relationship with each other
 
 ## Authentication And Authorization
 
@@ -300,9 +374,9 @@ Diocese API endpoints:
 
 - `POST /api/dioceses`
 - `GET /api/dioceses`
-- `GET /api/dioceses/{dioceseCode}`
-- `PUT /api/dioceses/{dioceseCode}`
-- `DELETE /api/dioceses/{dioceseCode}`
+- `GET /api/dioceses/{id}`
+- `PUT /api/dioceses/{id}`
+- `DELETE /api/dioceses/{id}`
 
 Diocese authorization behavior:
 
@@ -313,15 +387,22 @@ Diocese authorization behavior:
 - diocese-scoped access is resolved from `account.leader.parish.deanery.diocese`
 - if the current account has no linked leader or no resolvable diocese, diocese-scoped access is denied
 
+Diocese behavior notes:
+
+- `name` is required and unique across all dioceses
+- create, read, update, and delete identify the target diocese by UUID `id`
+- the old organization-unit code flow has been removed
+- create/update validation is delegated to `DioceseValidationHelper`
+
 ### Deanery CRUD And Scope Rules
 
 Deanery API endpoints:
 
 - `POST /api/deaneries`
 - `GET /api/deaneries`
-- `GET /api/deaneries/{deaneryCode}`
-- `PUT /api/deaneries/{deaneryCode}`
-- `DELETE /api/deaneries/{deaneryCode}`
+- `GET /api/deaneries/{id}`
+- `PUT /api/deaneries/{id}`
+- `DELETE /api/deaneries/{id}`
 
 Deanery authorization behavior:
 
@@ -341,16 +422,39 @@ Deanery authorization behavior:
 
 Deanery response behavior:
 
-- `POST /api/deaneries`, `GET /api/deaneries`, `GET /api/deaneries/{deaneryCode}`, and `PUT /api/deaneries/{deaneryCode}` return `DeaneryResponse`
-- the response contains deanery scalar fields and `dioceseCode`
+- `POST /api/deaneries`, `GET /api/deaneries`, `GET /api/deaneries/{id}`, and `PUT /api/deaneries/{id}` return `DeaneryResponse`
+- the response contains deanery scalar fields plus `id` and `dioceseId`
 - the response does not expose nested `diocese` objects
-- service mapping loads `dioceseCode` from the relation and reuses the same mapper for create, list, detail, and update
+- service mapping reuses the same DTO shape for create, list, detail, and update
 
 Deanery update behavior:
 
-- `PUT /api/deaneries/{deaneryCode}` does not allow changing `dioceseCode`
+- `PUT /api/deaneries/{id}` does not allow changing `dioceseId`
 - deanery update only changes deanery-owned fields such as `name`, `associationName`, contact information, and organization dates
-- Swagger/OpenAPI for deanery update follows `DeaneryUpdateRequest`, so `dioceseCode` is no longer part of the update request schema
+- Swagger/OpenAPI for deanery update follows `DeaneryUpdateRequest`, so `dioceseId` is not part of the update request schema
+
+Pending scope rules for future implementation:
+
+- parish may update `deaneryId` only when the target deanery stays inside the same diocese
+- leader may update `parishId` only when the target parish stays inside the same diocese
+- these scope rules are documented here but are not enforced yet in this pass
+
+Deanery behavior notes:
+
+- `name` is unique only inside the same `dioceseId`
+- create request uses `dioceseId`
+- update request does not allow changing `dioceseId`
+- list/search/filter internals now operate on UUID-backed relations
+- create/update validation is delegated to `DeaneryValidationHelper`
+- create/delete scope checks are delegated to `DeaneryScopeHelper`
+
+Parish and leader follow-up notes:
+
+- `Parish` relation storage already points to `Deanery.id`
+- `Leader` relation storage already points to `Parish.id`
+- the future rule remains: parish may move to another deanery only within the same diocese
+- the future rule remains: leader may move to another parish only within the same diocese
+- these move rules are documented here but not enforced yet
 
 ### Docker Development Workflow
 
@@ -379,10 +483,17 @@ The following work was added in this iteration:
 6. Added tests for JWT parsing and protected endpoint behavior.
 7. Added CRUD API for `Diocese` with RBAC-based diocese scope enforcement.
 8. Added CRUD API for `Deanery` with RBAC-based super-admin, diocese-admin, and deanery-admin scope enforcement.
-9. Changed `Deanery` API responses to use `DeaneryResponse` so list and detail endpoints return `dioceseCode` instead of nested `diocese`.
+9. Changed `Deanery` API responses to use `DeaneryResponse` with UUID-based relation fields instead of organization codes.
 10. Updated deanery create/update/detail/list flows to use Vietnamese messages and shared DTO mapping.
-11. Removed `dioceseCode` from `DeaneryUpdateRequest`, so deanery update cannot move a deanery to another diocese.
+11. Removed public organization-unit code usage from `diocese`, `deanery`, and `parish`; relations now rely on UUID IDs only.
 12. Updated Docker development setup so local code changes are mounted into the container and the app can reload during development, while the production image builds and runs from the Gradle wrapper.
+13. Migrated `Diocese`, `Deanery`, and `Parish` to UUID primary keys with UUID-based foreign keys in related organization tables.
+14. Added unique-name constraints by scope: diocese globally, deanery within diocese, parish within deanery.
+15. Removed the old organization-unit code generator and dropped organization-unit `code` columns from the data model.
+16. Updated `Diocese` and `Deanery` APIs, repositories, services, and security evaluators to use UUID identifiers.
+17. Refactored org-unit validation out of services into dedicated helpers and added a reusable `CommonValidationHelper`.
+18. Standardized org-unit input validation for Vietnamese phone numbers, email, and blank optional-field normalization.
+19. Added helper-focused tests for shared validation, diocese validation, and deanery validation/scope handling.
 
 ## Technical Notes
 
@@ -391,3 +502,6 @@ The following work was added in this iteration:
 - `BaseRepo` handles relation mapping from ID-based request DTOs.
 - Relation request DTOs should keep using IDs instead of nested payloads.
 - JWT authorization is stateless, so permission changes apply immediately on next login or refresh, while existing access tokens remain valid until expiration.
+- Organization modules no longer rely on generated slug codes or business `code` values.
+- If a later session continues organization work, start from the helper structure under `common/validation`, `modules/diocese/helper`, `modules/deanery/helper`, and `modules/parish/helper` instead of moving validation back into services.
+- If a later session extends parish or leader update flows, preserve the UUID-based storage model and implement same-diocese move validation rather than reintroducing code-based relations.

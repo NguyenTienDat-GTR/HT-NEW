@@ -1,14 +1,19 @@
 package phucuong.ht.modules.diocese.model.entity;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.*;
-import phucuong.ht.common.model.BaseModel;
 import phucuong.ht.common.model.OrganizationUnit;
 
-import java.time.LocalDate;
-
 @Entity
-@Table(name = "diocese")
+@Table(
+        name = "diocese",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_diocese_name", columnNames = "name")
+        }
+)
 @Getter
 @Setter
 @AllArgsConstructor
@@ -16,10 +21,6 @@ import java.time.LocalDate;
 @ToString
 @EqualsAndHashCode(callSuper = true)
 public class Diocese extends OrganizationUnit {
-
-    @Id
-    @Column(name = "diocese_code", length = 50)
-    private String dioceseCode;
 
     @Column(name = "union_name", nullable = false, length = 100)
     private String unionName;
