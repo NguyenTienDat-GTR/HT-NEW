@@ -1,0 +1,125 @@
+package phucuong.ht.modules.parish.security;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.stereotype.Component;
+import phucuong.ht.common.utils.securityUtils;
+import phucuong.ht.modules.auth.repository.AccountRepository;
+import phucuong.ht.modules.parish.repository.ParishRepository;
+
+import java.util.UUID;
+
+@Component("parishAccessEvaluator")
+@RequiredArgsConstructor
+public class ParishAccessEvaluator {
+
+    public static final String CREATE_ALL = "organization.parish.create.all";
+    public static final String READ_ALL = "organization.parish.read.all";
+    public static final String UPDATE_ALL = "organization.parish.update.all";
+    public static final String DELETE_ALL = "organization.parish.delete.all";
+    public static final String CREATE_DIOCESE = "organization.parish.create.diocese";
+    public static final String READ_DIOCESE = "organization.parish.read.diocese";
+    public static final String UPDATE_DIOCESE = "organization.parish.update.diocese";
+    public static final String DELETE_DIOCESE = "organization.parish.delete.diocese";
+    public static final String CREATE_DEANERY = "organization.parish.create.deanery";
+    public static final String READ_DEANERY = "organization.parish.read.deanery";
+    public static final String UPDATE_DEANERY = "organization.parish.update.deanery";
+    public static final String DELETE_DEANERY = "organization.parish.delete.deanery";
+    public static final String READ_PARISH = "organization.parish.read.parish";
+    public static final String UPDATE_PARISH = "organization.parish.update.parish";
+
+    private final AccountRepository accountRepository;
+    private final ParishRepository parishRepository;
+    private final securityUtils securityUtils;
+
+    public boolean canCreate(Authentication authentication) {
+        return hasAuthority(authentication, CREATE_ALL)
+                || hasAuthority(authentication, CREATE_DIOCESE)
+                || hasAuthority(authentication, CREATE_DEANERY);
+    }
+
+    public boolean canList(Authentication authentication) {
+        return hasAuthority(authentication, READ_ALL)
+                || hasAuthority(authentication, READ_DIOCESE)
+                || hasAuthority(authentication, READ_DEANERY)
+                || hasAuthority(authentication, READ_PARISH);
+    }
+
+    public boolean canRead(Authentication authentication, UUID parishId) {
+        return hasAuthority(authentication, READ_ALL)
+                || hasDioceseScopedAccess(authentication, parishId, READ_DIOCESE)
+                || hasDeaneryScopedAccess(authentication, parishId, READ_DEANERY)
+                || hasParishScopedAccess(authentication, parishId, READ_PARISH);
+    }
+
+    public boolean canUpdate(Authentication authentication, UUID parishId) {
+        return hasAuthority(authentication, UPDATE_ALL)
+                || hasDioceseScopedAccess(authentication, parishId, UPDATE_DIOCESE)
+                || hasDeaneryScopedAccess(authentication, parishId, UPDATE_DEANERY)
+                || hasParishScopedAccess(authentication, parishId, UPDATE_PARISH);
+    }
+
+    public boolean canDelete(Authentication authentication) {
+        return hasAuthority(authentication, DELETE_ALL)
+                || hasAuthority(authentication, DELETE_DIOCESE)
+                || hasAuthority(authentication, DELETE_DEANERY);
+    }
+
+    private boolean hasDioceseScopedAccess(Authentication authentication, UUID parishId, String scopedAuthority) {
+        if (!hasAuthority(authentication, scopedAuthority) || parishId == null) {
+            return false;
+        }
+
+        String username = securityUtils.currentUsername(authentication);
+        if (username == null || username.isBlank()) {
+            return false;
+        }
+
+        return accountRepository.findActiveDioceseIdByUsername(username)
+                .flatMap(activeDioceseId -> parishRepository.findDioceseIdByParishId(parishId)
+                        .map(activeDioceseId::equals))
+                .orElse(false);
+    }
+
+    private boolean hasDeaneryScopedAccess(Authentication authentication, UUID parishId, String scopedAuthority) {
+        if (!hasAuthority(authentication, scopedAuthority) || parishId == null) {
+            return false;
+        }
+
+        String username = securityUtils.currentUsername(authentication);
+        if (username == null || username.isBlank()) {
+            return false;
+        }
+
+        return accountRepository.findActiveDeaneryIdByUsername(username)
+                .flatMap(activeDeaneryId -> parishRepository.findDeaneryIdByParishId(parishId)
+                        .map(activeDeaneryId::equals))
+                .orElse(false);
+    }
+
+    private boolean hasParishScopedAccess(Authentication authentication, UUID parishId, String scopedAuthority) {
+        if (!hasAuthority(authentication, scopedAuthority) || parishId == null) {
+            return false;
+        }
+
+        String username = securityUtils.currentUsername(authentication);
+        if (username == null || username.isBlank()) {
+            return false;
+        }
+
+        return accountRepository.findActiveParishIdByUsername(username)
+                .map(parishId::equals)
+                .orElse(false);
+    }
+
+    private boolean hasAuthority(Authentication authentication, String authority) {
+        if (authentication == null || authority == null || authority.isBlank()) {
+            return false;
+        }
+
+        return authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .anyMatch(authority::equals);
+    }
+}

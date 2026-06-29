@@ -1,4 +1,4 @@
-# HT Management New
+﻿# HT Management New
 
 ## Overview
 
@@ -230,7 +230,7 @@ Current helper responsibilities:
 - `DioceseValidationHelper` handles existence checks, input normalization, name uniqueness, and audit-actor resolution
 - `DeaneryValidationHelper` handles existence checks for deanery and diocese, input normalization, deanery-name uniqueness inside a diocese, and audit-actor resolution
 - `DeaneryScopeHelper` handles create/delete scope enforcement and active diocese/deanery resolution
-- `ParishValidationHelper` is prepared for the same pattern so the parish module can follow the same structure in a later pass
+- `ParishValidationHelper` handles existence checks for parish and deanery, input normalization, parish-name uniqueness inside a deanery, and audit-actor resolution
 
 Current shared input validation rules for org-unit requests:
 
@@ -349,6 +349,20 @@ Current seeded administrative permissions include:
 - `organization.deanery.delete.diocese`
 - `organization.deanery.read.deanery`
 - `organization.deanery.update.deanery`
+- `organization.parish.create.all`
+- `organization.parish.read.all`
+- `organization.parish.update.all`
+- `organization.parish.delete.all`
+- `organization.parish.create.diocese`
+- `organization.parish.read.diocese`
+- `organization.parish.update.diocese`
+- `organization.parish.delete.diocese`
+- `organization.parish.create.deanery`
+- `organization.parish.read.deanery`
+- `organization.parish.update.deanery`
+- `organization.parish.delete.deanery`
+- `organization.parish.read.parish`
+- `organization.parish.update.parish`
 - `system.role.manage.all`
 - `system.permission.manage.all`
 - `system.account.manage.all`
@@ -435,9 +449,8 @@ Deanery update behavior:
 
 Pending scope rules for future implementation:
 
-- parish may update `deaneryId` only when the target deanery stays inside the same diocese
 - leader may update `parishId` only when the target parish stays inside the same diocese
-- these scope rules are documented here but are not enforced yet in this pass
+- the leader move rule is documented here but is not enforced yet in this pass
 
 Deanery behavior notes:
 
@@ -448,13 +461,66 @@ Deanery behavior notes:
 - create/update validation is delegated to `DeaneryValidationHelper`
 - create/delete scope checks are delegated to `DeaneryScopeHelper`
 
-Parish and leader follow-up notes:
+### Parish CRUD And Scope Rules
+
+Parish API endpoints:
+
+- `POST /api/parishes`
+- `GET /api/parishes`
+- `GET /api/parishes/{id}`
+- `PUT /api/parishes/{id}`
+- `DELETE /api/parishes/{id}`
+
+Parish authorization behavior:
+
+- `SUPER_ADMIN` has full CRUD access across all parishes through `organization.parish.*.all`
+- diocese-scoped admins use `organization.parish.create.diocese`, `organization.parish.read.diocese`, `organization.parish.update.diocese`, and `organization.parish.delete.diocese`
+- deanery-scoped admins use `organization.parish.create.deanery`, `organization.parish.read.deanery`, `organization.parish.update.deanery`, and `organization.parish.delete.deanery`
+- parish-scoped admins use `organization.parish.read.parish` and `organization.parish.update.parish`
+- diocese-scoped admins can create, read, update, delete, and list parishes only inside their own diocese
+- deanery-scoped admins can create, read, update, delete, and list only parishes inside their own deanery
+- parish-scoped admins can read, update, and list only their own parish
+- parish-scoped admins cannot create or delete parishes
+- `GET /api/parishes` is scope-filtered:
+- `SUPER_ADMIN` sees all parishes
+- diocese-scoped admins see parishes in their own diocese
+- deanery-scoped admins see parishes in their own deanery
+- parish-scoped admins see only their own parish
+- diocese-scoped access is resolved from `account.leader.parish.deanery.diocese`
+- deanery-scoped access is resolved from `account.leader.parish.deanery`
+- parish-scoped access is resolved from `account.leader.parish`
+- if the current account has no linked leader or no resolvable scope for the granted permission, access is denied
+
+Parish response behavior:
+
+- `POST /api/parishes`, `GET /api/parishes`, `GET /api/parishes/{id}`, and `PUT /api/parishes/{id}` return `ParishResponse`
+- the response contains parish scalar fields plus `id`, `deaneryId`, and `chapterName`
+- the response does not expose nested `deanery` objects
+- service mapping reuses the same DTO shape for create, list, detail, and update
+
+Parish update behavior:
+
+- `PUT /api/parishes/{id}` keeps `deaneryId` in `ParishUpdateRequest`
+- parish update may change `deaneryId` only when the target deanery stays inside the same diocese
+- parish-scoped admins cannot change `deaneryId`
+- deanery-scoped admins cannot move a parish outside their current deanery
+- diocese-scoped admins and higher scopes may move a parish only within the current diocese
+
+Parish behavior notes:
 
 - `Parish` relation storage already points to `Deanery.id`
+- `name` is unique only inside the same `deaneryId`
+- create request uses `deaneryId`
+- update request keeps `deaneryId` and enforces same-diocese move validation
+- list/search/filter internals now operate on UUID-backed relations such as `deanery.id` and `deanery.diocese.id`
+- create/update validation is delegated to `ParishValidationHelper`
+- create/delete/deanery-change scope checks are delegated to `ParishScopeHelper`
+
+Leader follow-up notes:
+
 - `Leader` relation storage already points to `Parish.id`
-- the future rule remains: parish may move to another deanery only within the same diocese
 - the future rule remains: leader may move to another parish only within the same diocese
-- these move rules are documented here but not enforced yet
+- the leader move rule is documented here but not enforced yet
 
 ### Docker Development Workflow
 
@@ -494,6 +560,17 @@ The following work was added in this iteration:
 17. Refactored org-unit validation out of services into dedicated helpers and added a reusable `CommonValidationHelper`.
 18. Standardized org-unit input validation for Vietnamese phone numbers, email, and blank optional-field normalization.
 19. Added helper-focused tests for shared validation, diocese validation, and deanery validation/scope handling.
+20. Added CRUD API for `Parish` with RBAC-based super-admin, diocese-admin, deanery-admin, and parish-admin scope enforcement.
+21. Added `ParishResponse` and UUID-based parish list/detail/create/update mapping without nested deanery objects.
+22. Added parish permission seed migration for all, diocese, deanery, and parish scopes and extended account scope resolution down to the active parish.
+23. Enforced parish `deaneryId` update rules so moves stay inside the same diocese and parish admins cannot change deanery scope.
+24. Added parish-focused service, helper, security, and controller integration tests.
+25. Implemented the parish feature on branch `feature/parish-crud-rbac` so the next session can continue from the feature branch instead of `main`.
+26. Added the missing parish backend layers: `ParishController`, `ParishService`, `ParishRepository`, `ParishScopeHelper`, `ParishAccessEvaluator`, and `ParishResponse`.
+27. Added `V016__seed_parish_permissions.sql` and granted the new parish permissions to `SUPER_ADMIN`.
+28. Extended account scope resolution with active parish lookup to support parish-scoped read/update authorization.
+29. Added scope-filtered parish list behavior using UUID-backed fields `deanery.diocese.id`, `deanery.id`, and `id`.
+30. Fixed mojibake introduced during the first parish implementation pass and normalized all newly added Vietnamese messages/assertions back to UTF-8.
 
 ## Technical Notes
 
@@ -501,7 +578,9 @@ The following work was added in this iteration:
 - `RankHistory` does not shadow `updatedBy`.
 - `BaseRepo` handles relation mapping from ID-based request DTOs.
 - Relation request DTOs should keep using IDs instead of nested payloads.
+- Bắt buộc sử dụng UTF-8 cho mọi dòng code, string literal, và comment bằng tiếng Việt; không được để phát sinh mojibake trong source.
 - JWT authorization is stateless, so permission changes apply immediately on next login or refresh, while existing access tokens remain valid until expiration.
 - Organization modules no longer rely on generated slug codes or business `code` values.
 - If a later session continues organization work, start from the helper structure under `common/validation`, `modules/diocese/helper`, `modules/deanery/helper`, and `modules/parish/helper` instead of moving validation back into services.
 - If a later session extends parish or leader update flows, preserve the UUID-based storage model and implement same-diocese move validation rather than reintroducing code-based relations.
+
