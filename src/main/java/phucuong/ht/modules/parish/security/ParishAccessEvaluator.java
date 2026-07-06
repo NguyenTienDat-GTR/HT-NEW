@@ -66,6 +66,12 @@ public class ParishAccessEvaluator {
                 || hasAuthority(authentication, DELETE_DEANERY);
     }
 
+    public boolean canToggle(Authentication authentication, UUID parishId) {
+        return hasAuthority(authentication, UPDATE_ALL)
+                || hasDioceseScopedAccess(authentication, parishId, UPDATE_DIOCESE)
+                || hasDeaneryScopedAccess(authentication, parishId, UPDATE_DEANERY);
+    }
+
     private boolean hasDioceseScopedAccess(Authentication authentication, UUID parishId, String scopedAuthority) {
         if (!hasAuthority(authentication, scopedAuthority) || parishId == null) {
             return false;

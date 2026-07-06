@@ -8,7 +8,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
+import phucuong.ht.common.exception.errorCode;
+import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.modules.auth.exception.ApiException;
 import phucuong.ht.modules.diocese.helper.DioceseValidationHelper;
@@ -25,6 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -136,5 +140,42 @@ class DioceseServiceTest {
         ApiException exception = assertThrows(ApiException.class, () -> dioceseService.create(request, authentication));
 
         assertEquals("Dữ liệu giáo phận bị trùng hoặc xung đột với dữ liệu hiện có", exception.getMessage());
+    }
+
+    @Test
+    void toggleStatusShouldValidateConfirmationAndDelegateToRepository() {
+        UUID id = UUID.randomUUID();
+        Diocese diocese = new Diocese();
+        diocese.setId(id);
+        StatusToggleRequest request = new StatusToggleRequest();
+        request.setConfirmationText("Xác nhận");
+        Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
+
+        when(dioceseValidationHelper.requireExistingDiocese(id)).thenReturn(diocese);
+        when(dioceseValidationHelper.getRequiredAuditActor(authentication)).thenReturn("LEADER1");
+        when(dioceseRepository.toggleStatus(id, "LEADER1")).thenReturn(diocese);
+
+        Diocese result = dioceseService.toggleStatus(id, request, authentication);
+
+        assertSame(diocese, result);
+        verify(dioceseValidationHelper).validateToggleConfirmation("Xác nhận");
+        verify(dioceseRepository).toggleStatus(id, "LEADER1");
+    }
+
+    @Test
+    void toggleStatusShouldPropagateConfirmationFailure() {
+        UUID id = UUID.randomUUID();
+        StatusToggleRequest request = new StatusToggleRequest();
+        request.setConfirmationText("Sai");
+        Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
+
+        when(dioceseValidationHelper.requireExistingDiocese(id)).thenReturn(new Diocese());
+        doThrow(new ApiException(HttpStatus.BAD_REQUEST, errorCode.VALIDATION_ERROR, "invalid"))
+                .when(dioceseValidationHelper)
+                .validateToggleConfirmation("Sai");
+
+        ApiException exception = assertThrows(ApiException.class, () -> dioceseService.toggleStatus(id, request, authentication));
+
+        assertEquals("invalid", exception.getMessage());
     }
 }

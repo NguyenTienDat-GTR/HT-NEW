@@ -105,6 +105,35 @@ class ParishAccessEvaluatorTest {
         assertTrue(parishAccessEvaluator.canList(authentication));
     }
 
+    @Test
+    void canToggleShouldAllowDeaneryScopedPermissionForMatchingParish() {
+        UUID parishId = UUID.randomUUID();
+        UUID deaneryId = UUID.randomUUID();
+        Authentication authentication = authentication(
+                "admin-deanery",
+                "LEADER1",
+                List.of("ADMIN_DEANERY"),
+                List.of(ParishAccessEvaluator.UPDATE_DEANERY)
+        );
+        when(accountRepository.findActiveDeaneryIdByUsername("admin-deanery")).thenReturn(Optional.of(deaneryId));
+        when(parishRepository.findDeaneryIdByParishId(parishId)).thenReturn(Optional.of(deaneryId));
+
+        assertTrue(parishAccessEvaluator.canToggle(authentication, parishId));
+    }
+
+    @Test
+    void canToggleShouldDenyParishScopedPermissionForOwnParish() {
+        UUID parishId = UUID.randomUUID();
+        Authentication authentication = authentication(
+                "admin-parish",
+                "LEADER1",
+                List.of("ADMIN_PARISH"),
+                List.of(ParishAccessEvaluator.UPDATE_PARISH)
+        );
+
+        assertFalse(parishAccessEvaluator.canToggle(authentication, parishId));
+    }
+
     private Authentication authentication(String username, List<String> roles, List<String> permissions) {
         return authentication(username, null, roles, permissions);
     }

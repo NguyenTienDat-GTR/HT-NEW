@@ -9,6 +9,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.utils.jwtUtils;
 import phucuong.ht.modules.auth.model.AuthUserDetails;
 import phucuong.ht.modules.deanery.model.request.DeaneryCreateRequest;
@@ -25,6 +26,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -118,6 +120,23 @@ class DeaneryControllerSecurityIntegrationTest {
                         .header("Authorization", bearer(dioceseAdminToken(List.of(DeaneryAccessEvaluator.DELETE_DIOCESE)))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
+    }
+
+    @Test
+    void shouldAllowDioceseAdminToToggleDeaneryStatus() throws Exception {
+        UUID deaneryId = UUID.randomUUID();
+        UUID dioceseId = UUID.randomUUID();
+        StatusToggleRequest request = new StatusToggleRequest();
+        request.setConfirmationText("Xác nhận");
+        when(deaneryAccessEvaluator.canToggle(any(), eq(deaneryId))).thenReturn(true);
+        when(deaneryService.toggleStatus(eq(deaneryId), any(StatusToggleRequest.class), any())).thenReturn(sampleDeanery(deaneryId, dioceseId));
+
+        mockMvc.perform(patch("/api/deaneries/" + deaneryId + "/toggle-status")
+                        .header("Authorization", bearer(dioceseAdminToken(List.of(DeaneryAccessEvaluator.UPDATE_DIOCESE))))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value(deaneryId.toString()));
     }
 
     private DeaneryResponse sampleDeanery(UUID deaneryId, UUID dioceseId) {

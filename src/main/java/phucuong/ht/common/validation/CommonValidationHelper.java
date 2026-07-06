@@ -47,6 +47,12 @@ public class CommonValidationHelper {
         return value.trim();
     }
 
+    public void requireStatusToggleConfirmation(String confirmationText) {
+        if (!"Xác nhận".equals(normalizeRequiredText(confirmationText))) {
+            throw validationError("Vui lòng nhập chính xác \"Xác nhận\" để đổi trạng thái");
+        }
+    }
+
     public ApiException validationError(String message) {
         return new ApiException(HttpStatus.BAD_REQUEST, errorCode.VALIDATION_ERROR, message);
     }

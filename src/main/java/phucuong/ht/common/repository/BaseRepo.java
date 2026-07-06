@@ -187,9 +187,17 @@ public abstract class BaseRepo<T extends BaseModel, ID> {
      */
     @Transactional
     public T toggleStatus(ID id) {
+        return toggleStatus(id, null);
+    }
+
+    @Transactional
+    public T toggleStatus(ID id, String actor) {
         T entity = getRequired(id);
         entity.setStatus(!Boolean.TRUE.equals(entity.getStatus()));
         entity.setUpdatedAt(OffsetDateTime.now());
+        if (StringUtils.hasText(actor)) {
+            entity.setUpdatedBy(actor);
+        }
         return entity;
     }
 

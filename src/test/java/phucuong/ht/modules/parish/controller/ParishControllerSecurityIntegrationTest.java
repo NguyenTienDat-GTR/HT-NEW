@@ -9,6 +9,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.utils.jwtUtils;
 import phucuong.ht.modules.auth.model.AuthUserDetails;
 import phucuong.ht.modules.parish.model.request.ParishCreateRequest;
@@ -25,6 +26,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -144,6 +146,23 @@ class ParishControllerSecurityIntegrationTest {
         mockMvc.perform(get("/api/parishes/" + parishId)
                         .header("Authorization", bearer(parishAdminToken(List.of(ParishAccessEvaluator.READ_PARISH)))))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void shouldAllowDeaneryAdminToToggleParishStatus() throws Exception {
+        UUID parishId = UUID.randomUUID();
+        UUID deaneryId = UUID.randomUUID();
+        StatusToggleRequest request = new StatusToggleRequest();
+        request.setConfirmationText("Xác nhận");
+        when(parishAccessEvaluator.canToggle(any(), eq(parishId))).thenReturn(true);
+        when(parishService.toggleStatus(eq(parishId), any(StatusToggleRequest.class), any())).thenReturn(sampleParish(parishId, deaneryId));
+
+        mockMvc.perform(patch("/api/parishes/" + parishId + "/toggle-status")
+                        .header("Authorization", bearer(deaneryAdminToken(List.of(ParishAccessEvaluator.UPDATE_DEANERY))))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value(parishId.toString()));
     }
 
     private ParishResponse sampleParish(UUID parishId, UUID deaneryId) {

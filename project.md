@@ -29,6 +29,8 @@ Current status rules:
 - `status = true` means active
 - `status = false` means inactive
 - `toggleStatus(id)` flips active/inactive
+- every toggle-status request must include the exact confirmation text `Xác nhận`
+- toggle-status requests fail when the confirmation text is missing or does not match exactly
 - CRUD request DTOs do not write `status` directly
 
 ## Domain Groups
@@ -210,6 +212,7 @@ Shared helpers:
 - audit-actor extraction from `Authentication`
 - generic string normalization
 - changed-value detection
+- exact confirmation-text validation for status toggle requests
 
 `OrganizationUnitValidationHelper` is now org-unit specific and currently only normalizes shared org-unit request fields:
 
@@ -391,13 +394,16 @@ Diocese API endpoints:
 - `GET /api/dioceses/{id}`
 - `PUT /api/dioceses/{id}`
 - `DELETE /api/dioceses/{id}`
+- `PATCH /api/dioceses/{id}/toggle-status`
 
 Diocese authorization behavior:
 
 - `SUPER_ADMIN` has full CRUD access across all dioceses through `organization.diocese.*.all`
+- only `SUPER_ADMIN` may call `PATCH /api/dioceses/{id}/toggle-status`
 - diocese-scoped admins use `organization.diocese.read.diocese` and `organization.diocese.update.diocese`
 - diocese-scoped admins cannot call `GET /api/dioceses`
 - diocese-scoped admins cannot create or delete dioceses
+- diocese-scoped admins cannot toggle their own diocese status
 - diocese-scoped access is resolved from `account.leader.parish.deanery.diocese`
 - if the current account has no linked leader or no resolvable diocese, diocese-scoped access is denied
 
@@ -405,6 +411,7 @@ Diocese behavior notes:
 
 - `name` is required and unique across all dioceses
 - create, read, update, and delete identify the target diocese by UUID `id`
+- `PATCH /api/dioceses/{id}/toggle-status` requires confirmation text `Xác nhận`
 - the old organization-unit code flow has been removed
 - create/update validation is delegated to `DioceseValidationHelper`
 
@@ -417,6 +424,7 @@ Deanery API endpoints:
 - `GET /api/deaneries/{id}`
 - `PUT /api/deaneries/{id}`
 - `DELETE /api/deaneries/{id}`
+- `PATCH /api/deaneries/{id}/toggle-status`
 
 Deanery authorization behavior:
 
@@ -424,8 +432,10 @@ Deanery authorization behavior:
 - diocese-scoped admins use `organization.deanery.create.diocese`, `organization.deanery.read.diocese`, `organization.deanery.update.diocese`, and `organization.deanery.delete.diocese`
 - deanery-scoped admins use `organization.deanery.read.deanery` and `organization.deanery.update.deanery`
 - diocese-scoped admins can create, read, update, delete, and list deaneries only inside their own diocese
+- diocese-scoped admins can toggle deaneries inside their own diocese
 - deanery-scoped admins can read, update, and list only their own deanery
 - deanery-scoped admins cannot create or delete deaneries
+- deanery-scoped admins cannot toggle their own deanery status
 - `GET /api/deaneries` is scope-filtered:
 - `SUPER_ADMIN` sees all deaneries
 - diocese-scoped admins see deaneries in their own diocese
@@ -457,6 +467,7 @@ Deanery behavior notes:
 - `name` is unique only inside the same `dioceseId`
 - create request uses `dioceseId`
 - update request does not allow changing `dioceseId`
+- `PATCH /api/deaneries/{id}/toggle-status` requires confirmation text `Xác nhận`
 - list/search/filter internals now operate on UUID-backed relations
 - create/update validation is delegated to `DeaneryValidationHelper`
 - create/delete scope checks are delegated to `DeaneryScopeHelper`
@@ -470,6 +481,7 @@ Parish API endpoints:
 - `GET /api/parishes/{id}`
 - `PUT /api/parishes/{id}`
 - `DELETE /api/parishes/{id}`
+- `PATCH /api/parishes/{id}/toggle-status`
 
 Parish authorization behavior:
 
@@ -478,9 +490,12 @@ Parish authorization behavior:
 - deanery-scoped admins use `organization.parish.create.deanery`, `organization.parish.read.deanery`, `organization.parish.update.deanery`, and `organization.parish.delete.deanery`
 - parish-scoped admins use `organization.parish.read.parish` and `organization.parish.update.parish`
 - diocese-scoped admins can create, read, update, delete, and list parishes only inside their own diocese
+- diocese-scoped admins can toggle parishes inside their own diocese
 - deanery-scoped admins can create, read, update, delete, and list only parishes inside their own deanery
+- deanery-scoped admins can toggle parishes inside their own deanery
 - parish-scoped admins can read, update, and list only their own parish
 - parish-scoped admins cannot create or delete parishes
+- parish-scoped admins cannot toggle their own parish status
 - `GET /api/parishes` is scope-filtered:
 - `SUPER_ADMIN` sees all parishes
 - diocese-scoped admins see parishes in their own diocese
@@ -512,6 +527,7 @@ Parish behavior notes:
 - `name` is unique only inside the same `deaneryId`
 - create request uses `deaneryId`
 - update request keeps `deaneryId` and enforces same-diocese move validation
+- `PATCH /api/parishes/{id}/toggle-status` requires confirmation text `Xác nhận`
 - list/search/filter internals now operate on UUID-backed relations such as `deanery.id` and `deanery.diocese.id`
 - create/update validation is delegated to `ParishValidationHelper`
 - create/delete/deanery-change scope checks are delegated to `ParishScopeHelper`
@@ -571,6 +587,10 @@ The following work was added in this iteration:
 28. Extended account scope resolution with active parish lookup to support parish-scoped read/update authorization.
 29. Added scope-filtered parish list behavior using UUID-backed fields `deanery.diocese.id`, `deanery.id`, and `id`.
 30. Fixed mojibake introduced during the first parish implementation pass and normalized all newly added Vietnamese messages/assertions back to UTF-8.
+31. Added `PATCH /api/dioceses/{id}/toggle-status`, `PATCH /api/deaneries/{id}/toggle-status`, and `PATCH /api/parishes/{id}/toggle-status` on branch `feature/org-unit-toggle-status`.
+32. Enforced exact confirmation text `Xác nhận` for every toggle-status request through a shared `StatusToggleRequest` contract and common validation helper.
+33. Added scoped toggle-status RBAC so `SUPER_ADMIN` can toggle all, diocese admins can toggle child deaneries and descendant parishes, deanery admins can toggle child parishes, and no scoped admin can toggle its own org unit.
+34. Extended toggle-status persistence to write audit actor data through `BaseRepo.toggleStatus(id, actor)` and added service, evaluator, and controller security tests for the new endpoints.
 
 ## Technical Notes
 

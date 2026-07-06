@@ -7,6 +7,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import phucuong.ht.common.dto.apiResponse;
+import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.modules.parish.model.request.ParishCreateRequest;
 import phucuong.ht.modules.parish.model.request.ParishUpdateRequest;
@@ -55,5 +56,15 @@ public class ParishController {
     public apiResponse<Void> delete(@PathVariable UUID id, Authentication authentication) {
         parishService.delete(id, authentication);
         return apiResponse.success("Xóa giáo xứ thành công", null);
+    }
+
+    @PatchMapping("/{id}/toggle-status")
+    @PreAuthorize("@parishAccessEvaluator.canToggle(authentication, #id)")
+    public apiResponse<ParishResponse> toggleStatus(
+            @PathVariable UUID id,
+            @Valid @RequestBody StatusToggleRequest request,
+            Authentication authentication
+    ) {
+        return apiResponse.success("Đổi trạng thái giáo xứ thành công", parishService.toggleStatus(id, request, authentication));
     }
 }
