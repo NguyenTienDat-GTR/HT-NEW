@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import phucuong.ht.common.exception.errorCode;
+import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.modules.auth.exception.ApiException;
 import phucuong.ht.modules.diocese.helper.DioceseValidationHelper;
@@ -58,8 +59,8 @@ public class DioceseService {
     }
 
     public Diocese update(UUID id, DioceseUpdateRequest request, Authentication authentication) {
-        dioceseValidationHelper.validateUpdateInput(request);
         Diocese existingDiocese = dioceseValidationHelper.requireExistingDiocese(id);
+        dioceseValidationHelper.validateUpdateInput(request);
         String auditActor = dioceseValidationHelper.getRequiredAuditActor(authentication);
         dioceseValidationHelper.validateUpdateNameUniqueness(id, request.getName(), existingDiocese.getName());
         try {
@@ -76,5 +77,12 @@ public class DioceseService {
         } catch (DataIntegrityViolationException exception) {
             throw new ApiException(HttpStatus.CONFLICT, errorCode.CONFLICT, "Không thể xóa giáo phận vì đang được dữ liệu khác tham chiếu");
         }
+    }
+
+    public Diocese toggleStatus(UUID id, StatusToggleRequest request, Authentication authentication) {
+        dioceseValidationHelper.requireExistingDiocese(id);
+        dioceseValidationHelper.validateToggleConfirmation(request == null ? null : request.getConfirmationText());
+        String auditActor = dioceseValidationHelper.getRequiredAuditActor(authentication);
+        return dioceseRepository.toggleStatus(id, auditActor);
     }
 }

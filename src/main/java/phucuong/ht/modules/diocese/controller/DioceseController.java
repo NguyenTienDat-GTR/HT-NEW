@@ -7,6 +7,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import phucuong.ht.common.dto.apiResponse;
+import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.modules.diocese.model.entity.Diocese;
 import phucuong.ht.modules.diocese.model.request.DioceseCreateRequest;
@@ -55,5 +56,15 @@ public class DioceseController {
     public apiResponse<Void> delete(@PathVariable UUID id) {
         dioceseService.delete(id);
         return apiResponse.success("Xóa giáo phận thành công", null);
+    }
+
+    @PatchMapping("/{id}/toggle-status")
+    @PreAuthorize("@dioceseAccessEvaluator.canToggle(authentication, #id)")
+    public apiResponse<Diocese> toggleStatus(
+            @PathVariable UUID id,
+            @Valid @RequestBody StatusToggleRequest request,
+            Authentication authentication
+    ) {
+        return apiResponse.success("Đổi trạng thái giáo phận thành công", dioceseService.toggleStatus(id, request, authentication));
     }
 }

@@ -8,6 +8,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.utils.jwtUtils;
 import phucuong.ht.modules.auth.model.AuthUserDetails;
 import phucuong.ht.modules.diocese.model.entity.Diocese;
@@ -24,6 +25,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -111,6 +113,34 @@ class DioceseControllerSecurityIntegrationTest {
                         .header("Authorization", bearer(superAdminToken()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(createRequest)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void shouldAllowSuperAdminToToggleDioceseStatusWithConfirmation() throws Exception {
+        UUID dioceseId = UUID.randomUUID();
+        StatusToggleRequest request = new StatusToggleRequest();
+        request.setConfirmationText("Xác nhận");
+        when(dioceseAccessEvaluator.canToggle(any(), eq(dioceseId))).thenReturn(true);
+        when(dioceseService.toggleStatus(eq(dioceseId), any(StatusToggleRequest.class), any())).thenReturn(sampleDiocese(dioceseId));
+
+        mockMvc.perform(patch("/api/dioceses/" + dioceseId + "/toggle-status")
+                        .header("Authorization", bearer(superAdminToken()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value(dioceseId.toString()));
+    }
+
+    @Test
+    void shouldRejectToggleWithoutConfirmation() throws Exception {
+        UUID dioceseId = UUID.randomUUID();
+        when(dioceseAccessEvaluator.canToggle(any(), eq(dioceseId))).thenReturn(true);
+
+        mockMvc.perform(patch("/api/dioceses/" + dioceseId + "/toggle-status")
+                        .header("Authorization", bearer(superAdminToken()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
                 .andExpect(status().isBadRequest());
     }
 

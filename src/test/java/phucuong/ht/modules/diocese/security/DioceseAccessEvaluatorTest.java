@@ -101,6 +101,25 @@ class DioceseAccessEvaluatorTest {
         assertFalse(dioceseAccessEvaluator.canList(authentication));
     }
 
+    @Test
+    void canToggleShouldAllowOnlySuperAdmin() {
+        UUID dioceseId = UUID.randomUUID();
+        Authentication superAdmin = authentication(
+                "superadmin",
+                List.of("SUPER_ADMIN"),
+                List.of(DioceseAccessEvaluator.UPDATE_ALL)
+        );
+        Authentication dioceseAdmin = authentication(
+                "admin-dio",
+                "LEADER1",
+                List.of("ADMIN_DIOCESE"),
+                List.of(DioceseAccessEvaluator.UPDATE_DIOCESE)
+        );
+
+        assertTrue(dioceseAccessEvaluator.canToggle(superAdmin, dioceseId));
+        assertFalse(dioceseAccessEvaluator.canToggle(dioceseAdmin, dioceseId));
+    }
+
     private Authentication authentication(String username, List<String> roles, List<String> permissions) {
         return authentication(username, null, roles, permissions);
     }

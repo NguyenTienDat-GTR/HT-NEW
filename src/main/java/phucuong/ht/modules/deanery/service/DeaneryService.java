@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import phucuong.ht.common.exception.errorCode;
+import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.modules.auth.exception.ApiException;
@@ -116,6 +117,14 @@ public class DeaneryService {
         } catch (DataIntegrityViolationException exception) {
             throw new ApiException(HttpStatus.CONFLICT, errorCode.CONFLICT, "Không thể xóa giáo hạt vì đang được dữ liệu khác tham chiếu");
         }
+    }
+
+    public DeaneryResponse toggleStatus(UUID id, StatusToggleRequest request, Authentication authentication) {
+        deaneryValidationHelper.requireExistingDeaneryWithDiocese(id);
+        deaneryValidationHelper.validateToggleConfirmation(request == null ? null : request.getConfirmationText());
+        String auditActor = deaneryValidationHelper.getRequiredAuditActor(authentication);
+        deaneryRepository.toggleStatus(id, auditActor);
+        return toDeaneryResponse(deaneryValidationHelper.requireExistingDeaneryWithDiocese(id));
     }
 
     private BaseSearchRequest copyRequest(BaseSearchRequest request) {

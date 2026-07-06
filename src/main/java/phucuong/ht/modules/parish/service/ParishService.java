@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import phucuong.ht.common.exception.errorCode;
+import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.modules.auth.exception.ApiException;
@@ -129,6 +130,14 @@ public class ParishService {
         } catch (DataIntegrityViolationException exception) {
             throw new ApiException(HttpStatus.CONFLICT, errorCode.CONFLICT, "Không thể xóa giáo xứ vì đang được dữ liệu khác tham chiếu");
         }
+    }
+
+    public ParishResponse toggleStatus(UUID id, StatusToggleRequest request, Authentication authentication) {
+        parishValidationHelper.requireExistingParishWithDeaneryAndDiocese(id);
+        parishValidationHelper.validateToggleConfirmation(request == null ? null : request.getConfirmationText());
+        String auditActor = parishValidationHelper.getRequiredAuditActor(authentication);
+        parishRepository.toggleStatus(id, auditActor);
+        return toParishResponse(parishValidationHelper.requireExistingParishWithDeaneryAndDiocese(id));
     }
 
     private BaseSearchRequest copyRequest(BaseSearchRequest request) {

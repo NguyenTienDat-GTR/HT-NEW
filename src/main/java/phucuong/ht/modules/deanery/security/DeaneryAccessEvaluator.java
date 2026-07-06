@@ -57,6 +57,11 @@ public class DeaneryAccessEvaluator {
                 || hasAuthority(authentication, DELETE_DIOCESE);
     }
 
+    public boolean canToggle(Authentication authentication, UUID deaneryId) {
+        return hasAuthority(authentication, UPDATE_ALL)
+                || hasDioceseScopedAccess(authentication, deaneryId, UPDATE_DIOCESE);
+    }
+
     private boolean hasDioceseScopedAccess(Authentication authentication, UUID deaneryId, String scopedAuthority) {
         if (!hasAuthority(authentication, scopedAuthority) || deaneryId == null) {
             return false;

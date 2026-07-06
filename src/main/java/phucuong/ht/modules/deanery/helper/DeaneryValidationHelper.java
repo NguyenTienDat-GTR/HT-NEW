@@ -85,4 +85,8 @@ public class DeaneryValidationHelper {
                 "Tài khoản hiện tại không có thông tin người thực hiện để ghi nhận lịch sử"
         );
     }
+
+    public void validateToggleConfirmation(String confirmationText) {
+        commonValidationHelper.requireStatusToggleConfirmation(confirmationText);
+    }
 }

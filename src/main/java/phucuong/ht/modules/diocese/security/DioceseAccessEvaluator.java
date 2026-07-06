@@ -45,6 +45,10 @@ public class DioceseAccessEvaluator {
         return hasAuthority(authentication, DELETE_ALL);
     }
 
+    public boolean canToggle(Authentication authentication, UUID dioceseId) {
+        return hasAuthority(authentication, UPDATE_ALL);
+    }
+
     private boolean hasScopedAccess(Authentication authentication, UUID dioceseId, String scopedAuthority) {
         if (!hasAuthority(authentication, scopedAuthority) || dioceseId == null) {
             return false;
