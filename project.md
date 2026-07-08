@@ -646,6 +646,18 @@ The following work was added in this iteration:
 42. Changed Leader primary key from legacy `leader_code` string to UUID `id` and added `V018__migrate_leader_primary_key_to_uuid.sql` to migrate dependent foreign keys.
 43. Changed Leader API contract so requests now send `fullName`; the backend splits it into `lastName` and `firstName`, with the final token treated as `firstName`.
 44. Extended `LeaderLevel` with `NONE` and `HT_XU`.
+45. Added Redis-backed API rate limiting with tiered auth/write/read/workflow limits and wired the filter into the Spring Security chain.
+46. Enabled RabbitMQ AMQP support, completed `rabbitMQConfig`, and added post-commit domain-event publishing plus an audit consumer hook.
+47. Added `V019__account_direct_scope_and_training_permissions.sql` to seed `ADMIN_DIOCESE`, `ADMIN_DEANERY`, `ADMIN_PARISH`, direct account scope columns, and training/position/account-role permissions.
+48. Extended `Account` with optional direct `diocese`, `deanery`, and `parish` scope references, and updated account scope resolution to prefer direct scope before falling back through `Leader`.
+49. Added `POST /api/system/account-roles` with scoped assignment rules so only `SUPER_ADMIN` can assign `ADMIN_DIOCESE`, while diocese and deanery admins can assign equal-or-lower roles inside their own scope.
+50. Added CRUD API for `TrainingCourse` under `/api/training/courses` with deanery-only handling for `SMTL_DT` and `SMKN_DT`, and diocese-only handling for the remaining `CourseType` values.
+51. Added CRUD API for `CourseRequirement` under `/api/training/requirements`, scoped by course ownership so DT requirements belong to deaneries and the remaining requirements belong to dioceses.
+52. Added workflow APIs for training registration, deanery submission, deanery approval, diocese approval, and score updates under `/api/training`.
+53. Added registration workflow state to `CourseParticipation`, including eligibility, exception reason, parish submit time, deanery submit time, multi-level approval status, and certificate request state.
+54. Added CRUD API for `Certificate` under `/api/certificates` plus an approval endpoint that requires a passing score, updates `Leader.leaderLevel`, and appends `RankHistory`.
+55. Added CRUD API for `Position` under `/api/positions` with permission checks mapped to `UnitType.DIOCESE`, `UnitType.DEANERY`, and `UnitType.PARISH`.
+56. Added focused unit tests for scoped role assignment, training registration and scoring workflow, and certificate approval with leader promotion.
 
 ## Technical Notes
 
@@ -659,5 +671,7 @@ The following work was added in this iteration:
 - If a later session continues organization work, start from the helper structure under `common/validation`, `modules/diocese/helper`, `modules/deanery/helper`, and `modules/parish/helper` instead of moving validation back into services.
 - If a later session extends parish or leader update flows, preserve the UUID-based storage model and implement same-diocese move validation rather than reintroducing code-based relations.
 - `Leader` currently treats `leaderLevel` as create-only input; do not re-open direct update of this field from the normal Leader update API.
-- Planned follow-up: when Certificate CRUD/service and training completion lifecycle are implemented, valid training certificates should trigger recalculation of `leaderLevel` and append matching `RankHistory` records instead of relying on manual level edits.
+- Training scope resolution now prefers `account.diocese`, `account.deanery`, and `account.parish` before using the `Account -> Leader -> Parish -> Deanery -> Diocese` fallback chain.
+- Training and certificate approval currently assume the progression map encoded in `TrainingWorkflowSupport`; if `CourseType` expands, update that helper first.
+- Certificate approval now owns leader promotion and `RankHistory` creation, so normal `Leader` update APIs should continue treating `leaderLevel` as non-editable business state.
 

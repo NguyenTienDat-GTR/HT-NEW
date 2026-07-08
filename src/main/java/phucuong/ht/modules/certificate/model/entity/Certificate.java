@@ -4,9 +4,11 @@ import jakarta.persistence.*;
 import lombok.*;
 import phucuong.ht.common.model.BaseModel;
 import phucuong.ht.modules.leader.model.entity.Leader;
+import phucuong.ht.modules.training.enums.WorkflowApprovalStatus;
 import phucuong.ht.modules.training.trainingCourse.model.entity.TrainingCourse;
 
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 
 @Entity
 @Table(name = "certificate")
@@ -41,4 +43,11 @@ public class Certificate extends BaseModel {
     private LocalDate issueDate;
 
     private String imageUrl;
+
+    @Enumerated(EnumType.STRING)
+    private WorkflowApprovalStatus approvalStatus;
+
+    private OffsetDateTime approvedAt;
+
+    private String approvedBy;
 }

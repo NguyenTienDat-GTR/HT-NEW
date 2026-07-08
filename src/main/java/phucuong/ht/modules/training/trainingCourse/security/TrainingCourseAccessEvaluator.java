@@ -1,0 +1,90 @@
+package phucuong.ht.modules.training.trainingCourse.security;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
+import org.springframework.stereotype.Component;
+import phucuong.ht.common.validation.AccountScopeValidationHelper;
+import phucuong.ht.common.validation.CommonValidationHelper;
+import phucuong.ht.common.utils.securityUtils;
+import phucuong.ht.modules.auth.repository.AccountRepository;
+import phucuong.ht.modules.training.TrainingWorkflowSupport;
+import phucuong.ht.modules.training.enums.CourseType;
+import phucuong.ht.modules.training.trainingCourse.repository.TrainingCourseRepository;
+
+import java.util.UUID;
+
+@Component("trainingCourseAccessEvaluator")
+@RequiredArgsConstructor
+public class TrainingCourseAccessEvaluator {
+
+    public static final String CREATE_DIOCESE = "training.course.create.diocese";
+    public static final String READ_DIOCESE = "training.course.read.diocese";
+    public static final String UPDATE_DIOCESE = "training.course.update.diocese";
+    public static final String DELETE_DIOCESE = "training.course.delete.diocese";
+    public static final String CREATE_DEANERY = "training.course.create.deanery";
+    public static final String READ_DEANERY = "training.course.read.deanery";
+    public static final String UPDATE_DEANERY = "training.course.update.deanery";
+    public static final String DELETE_DEANERY = "training.course.delete.deanery";
+
+    private final securityUtils securityUtils;
+    private final AccountRepository accountRepository;
+    private final TrainingCourseRepository trainingCourseRepository;
+    private final TrainingWorkflowSupport trainingWorkflowSupport;
+
+    public boolean canCreate(Authentication authentication, CourseType courseType) {
+        return trainingWorkflowSupport.isDeaneryManaged(courseType)
+                ? securityUtils.hasAuthority(authentication, CREATE_DEANERY)
+                : securityUtils.hasAuthority(authentication, CREATE_DIOCESE);
+    }
+
+    public boolean canList(Authentication authentication) {
+        return securityUtils.hasAuthority(authentication, READ_DIOCESE)
+                || securityUtils.hasAuthority(authentication, READ_DEANERY);
+    }
+
+    public boolean canRead(Authentication authentication, String courseCode) {
+        return hasScopedAccess(authentication, courseCode, READ_DIOCESE, READ_DEANERY);
+    }
+
+    public boolean canUpdate(Authentication authentication, String courseCode) {
+        return hasScopedAccess(authentication, courseCode, UPDATE_DIOCESE, UPDATE_DEANERY);
+    }
+
+    public boolean canDelete(Authentication authentication, String courseCode) {
+        return hasScopedAccess(authentication, courseCode, DELETE_DIOCESE, DELETE_DEANERY);
+    }
+
+    private boolean hasScopedAccess(Authentication authentication, String courseCode, String dioceseAuthority, String deaneryAuthority) {
+        if (courseCode == null || courseCode.isBlank()) {
+            return false;
+        }
+
+        return trainingCourseRepository.findByCodeWithRequirement(courseCode)
+                .map(course -> {
+                    if (trainingWorkflowSupport.isDeaneryManaged(course.getCourseType())) {
+                        if (!securityUtils.hasAuthority(authentication, deaneryAuthority)) {
+                            return false;
+                        }
+                        String username = securityUtils.currentUsername(authentication);
+                        if (username == null || username.isBlank()) {
+                            return false;
+                        }
+                        return accountRepository.findActiveDeaneryIdByUsername(username)
+                                .flatMap(activeId -> trainingCourseRepository.findDeaneryIdByCourseCode(courseCode).map(activeId::equals))
+                                .orElse(false);
+                    }
+
+                    if (!securityUtils.hasAuthority(authentication, dioceseAuthority)) {
+                        return false;
+                    }
+                    String username = securityUtils.currentUsername(authentication);
+                    if (username == null || username.isBlank()) {
+                        return false;
+                    }
+                    return accountRepository.findActiveDioceseIdByUsername(username)
+                            .flatMap(activeId -> trainingCourseRepository.findDioceseIdByCourseCode(courseCode).map(activeId::equals))
+                            .orElse(false);
+                })
+                .orElse(false);
+    }
+}
