@@ -191,13 +191,13 @@ class ParishServiceTest {
         when(parishValidationHelper.requireExistingParishWithDeaneryAndDiocese(parishId)).thenReturn(existing);
         when(parishValidationHelper.getRequiredAuditActor(authentication)).thenReturn("LEADER1");
         when(parishValidationHelper.requireExistingDeaneryWithDiocese(targetDeaneryId)).thenReturn(targetDeanery);
-        doThrow(new ApiException(HttpStatus.FORBIDDEN, errorCode.ACCESS_DENIED, "forbidden"))
+        doThrow(new ApiException(HttpStatus.FORBIDDEN, errorCode.ACCESS_DENIED, "Bị cấm"))
                 .when(parishScopeHelper)
                 .enforceDeaneryChangeScope(authentication, existing, targetDeanery);
 
         ApiException exception = assertThrows(ApiException.class, () -> parishService.update(parishId, request, authentication));
 
-        assertEquals("forbidden", exception.getMessage());
+        assertEquals("Bị cấm", exception.getMessage());
     }
 
     @Test

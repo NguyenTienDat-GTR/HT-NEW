@@ -26,9 +26,9 @@ public class RoleManagementService {
 
     public RoleResponse create(RoleCreateRequest request, Authentication authentication) {
         if (systemRoleRepository.findById(request.getRoleCode()).isPresent()) {
-            throw commonValidationHelper.conflict("Role already exists: " + request.getRoleCode());
+            throw commonValidationHelper.conflict("Vai trò đã tồn tại: " + request.getRoleCode());
         }
-        String actor = commonValidationHelper.requireAuditActor(authentication, "Unable to resolve role creator");
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tạo vai trò");
         Role role = systemRoleRepository.create(request, actor);
         return toResponse(role);
     }
@@ -40,12 +40,12 @@ public class RoleManagementService {
 
     public RoleResponse findById(String roleCode) {
         return toResponse(systemRoleRepository.findById(roleCode)
-                .orElseThrow(() -> commonValidationHelper.notFound("Role not found: " + roleCode)));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy vai trò: " + roleCode)));
     }
 
     public RoleResponse update(String roleCode, RoleUpdateRequest request, Authentication authentication) {
         Role role = systemRoleRepository.findById(roleCode)
-                .orElseThrow(() -> commonValidationHelper.notFound("Role not found: " + roleCode));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy vai trò: " + roleCode));
         if (request.getRoleName() != null) {
             role.setRoleName(commonValidationHelper.normalizeRequiredText(request.getRoleName()));
         }
@@ -58,7 +58,7 @@ public class RoleManagementService {
         if (request.getDisplayOrder() != null) {
             role.setDisplayOrder(request.getDisplayOrder());
         }
-        role.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Unable to resolve role updater"));
+        role.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật vai trò"));
         return toResponse(role);
     }
 
@@ -68,7 +68,7 @@ public class RoleManagementService {
 
     public RoleResponse toggleStatus(String roleCode, StatusToggleRequest request, Authentication authentication) {
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
-        String actor = commonValidationHelper.requireAuditActor(authentication, "Unable to resolve role status updater");
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái vai trò");
         systemRoleRepository.toggleStatus(roleCode, actor);
         return findById(roleCode);
     }

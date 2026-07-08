@@ -26,9 +26,9 @@ public class PermissionManagementService {
 
     public PermissionResponse create(PermissionCreateRequest request, Authentication authentication) {
         if (systemPermissionRepository.findById(request.getPermissionCode()).isPresent()) {
-            throw commonValidationHelper.conflict("Permission already exists: " + request.getPermissionCode());
+            throw commonValidationHelper.conflict("Quyền đã tồn tại: " + request.getPermissionCode());
         }
-        String actor = commonValidationHelper.requireAuditActor(authentication, "Unable to resolve permission creator");
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tạo quyền");
         Permission permission = systemPermissionRepository.create(request, actor);
         return toResponse(permission);
     }
@@ -40,22 +40,22 @@ public class PermissionManagementService {
 
     public PermissionResponse findById(String permissionCode) {
         return toResponse(systemPermissionRepository.findById(permissionCode)
-                .orElseThrow(() -> commonValidationHelper.notFound("Permission not found: " + permissionCode)));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy quyền: " + permissionCode)));
     }
 
     public PermissionResponse update(String permissionCode, PermissionUpdateRequest request, Authentication authentication) {
         Permission permission = systemPermissionRepository.findById(permissionCode)
-                .orElseThrow(() -> commonValidationHelper.notFound("Permission not found: " + permissionCode));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy quyền: " + permissionCode));
         if (request.getPermissionName() != null) {
             permission.setPermissionName(commonValidationHelper.normalizeRequiredText(request.getPermissionName()));
         }
         if (request.getModuleCode() != null) {
-            systemPermissionRepository.update(permissionCode, request, commonValidationHelper.requireAuditActor(authentication, "Unable to resolve permission updater"));
+            systemPermissionRepository.update(permissionCode, request, commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật quyền"));
             permission = systemPermissionRepository.getRequired(permissionCode);
             return toResponse(permission);
         }
         if (request.getResourceCode() != null || request.getActionCode() != null || request.getScopeCode() != null) {
-            systemPermissionRepository.update(permissionCode, request, commonValidationHelper.requireAuditActor(authentication, "Unable to resolve permission updater"));
+            systemPermissionRepository.update(permissionCode, request, commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật quyền"));
             permission = systemPermissionRepository.getRequired(permissionCode);
             return toResponse(permission);
         }
@@ -68,7 +68,7 @@ public class PermissionManagementService {
         if (request.getDisplayOrder() != null) {
             permission.setDisplayOrder(request.getDisplayOrder());
         }
-        permission.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Unable to resolve permission updater"));
+        permission.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật quyền"));
         return toResponse(permission);
     }
 
@@ -78,7 +78,7 @@ public class PermissionManagementService {
 
     public PermissionResponse toggleStatus(String permissionCode, StatusToggleRequest request, Authentication authentication) {
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
-        String actor = commonValidationHelper.requireAuditActor(authentication, "Unable to resolve permission status updater");
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái quyền");
         systemPermissionRepository.toggleStatus(permissionCode, actor);
         return findById(permissionCode);
     }

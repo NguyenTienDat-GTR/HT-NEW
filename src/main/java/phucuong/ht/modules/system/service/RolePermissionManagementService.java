@@ -34,23 +34,23 @@ public class RolePermissionManagementService {
 
     public RolePermissionResponse create(RolePermissionCreateRequest request, Authentication authentication) {
         Role role = roleRepository.findById(request.getRoleCode())
-                .orElseThrow(() -> commonValidationHelper.notFound("Role not found: " + request.getRoleCode()));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy vai trò: " + request.getRoleCode()));
         Permission permission = systemPermissionRepository.findById(request.getPermissionCode())
-                .orElseThrow(() -> commonValidationHelper.notFound("Permission not found: " + request.getPermissionCode()));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy quyền: " + request.getPermissionCode()));
         if (!Boolean.TRUE.equals(role.getStatus())) {
-            throw commonValidationHelper.conflict("Cannot assign permission to inactive role");
+            throw commonValidationHelper.conflict("Không thể gán quyền cho vai trò đang ngừng hoạt động");
         }
         if (!Boolean.TRUE.equals(permission.getStatus())) {
-            throw commonValidationHelper.conflict("Cannot assign inactive permission");
+            throw commonValidationHelper.conflict("Không thể gán quyền đang ngừng hoạt động");
         }
 
         authorizationHelper.requireRolePermissionWriteAccess(authentication, role, permission, SystemAdminAuthorizationHelper.ROLE_PERMISSION_ASSIGN_DIOCESE);
 
         if (rolePermissionRepository.findByRoleCodeAndPermissionCode(request.getRoleCode(), request.getPermissionCode()).isPresent()) {
-            throw commonValidationHelper.conflict("Role permission already exists");
+            throw commonValidationHelper.conflict("Phân quyền cho vai trò đã tồn tại");
         }
 
-        String actor = commonValidationHelper.requireAuditActor(authentication, "Unable to resolve role-permission creator");
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tạo phân quyền cho vai trò");
         RolePermission rolePermission = rolePermissionRepository.create(request, actor);
         rolePermission.setAssignedBy(actor);
         rolePermission.setAssignedAt(request.getAssignedAt() == null ? OffsetDateTime.now() : request.getAssignedAt());
@@ -64,12 +64,12 @@ public class RolePermissionManagementService {
 
     public RolePermissionResponse findById(String id) {
         return toResponse(rolePermissionRepository.findById(id)
-                .orElseThrow(() -> commonValidationHelper.notFound("Role permission not found: " + id)));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy phân quyền cho vai trò: " + id)));
     }
 
     public RolePermissionResponse update(String id, RolePermissionUpdateRequest request, Authentication authentication) {
         RolePermission rolePermission = rolePermissionRepository.findById(id)
-                .orElseThrow(() -> commonValidationHelper.notFound("Role permission not found: " + id));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy phân quyền cho vai trò: " + id));
         authorizationHelper.requireRolePermissionWriteAccess(
                 authentication,
                 rolePermission.getRole(),
@@ -86,13 +86,13 @@ public class RolePermissionManagementService {
         if (request.getExpiresAt() != null) {
             rolePermission.setExpiresAt(request.getExpiresAt());
         }
-        rolePermission.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Unable to resolve role-permission updater"));
+        rolePermission.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật phân quyền cho vai trò"));
         return toResponse(rolePermission);
     }
 
     public void delete(String id, Authentication authentication) {
         RolePermission rolePermission = rolePermissionRepository.findById(id)
-                .orElseThrow(() -> commonValidationHelper.notFound("Role permission not found: " + id));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy phân quyền cho vai trò: " + id));
         authorizationHelper.requireRolePermissionWriteAccess(
                 authentication,
                 rolePermission.getRole(),
@@ -104,7 +104,7 @@ public class RolePermissionManagementService {
 
     public RolePermissionResponse toggleStatus(String id, StatusToggleRequest request, Authentication authentication) {
         RolePermission rolePermission = rolePermissionRepository.findById(id)
-                .orElseThrow(() -> commonValidationHelper.notFound("Role permission not found: " + id));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy phân quyền cho vai trò: " + id));
         authorizationHelper.requireRolePermissionWriteAccess(
                 authentication,
                 rolePermission.getRole(),
@@ -112,7 +112,7 @@ public class RolePermissionManagementService {
                 SystemAdminAuthorizationHelper.ROLE_PERMISSION_ASSIGN_DIOCESE
         );
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
-        String actor = commonValidationHelper.requireAuditActor(authentication, "Unable to resolve role-permission status updater");
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái phân quyền cho vai trò");
         rolePermissionRepository.toggleStatus(id, actor);
         return findById(id);
     }

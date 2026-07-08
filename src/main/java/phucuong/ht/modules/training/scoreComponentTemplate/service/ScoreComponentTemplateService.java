@@ -36,7 +36,7 @@ public class ScoreComponentTemplateService {
     private final CommonValidationHelper commonValidationHelper;
 
     public ScoreComponentTemplateResponse create(ScoreComponentTemplateCreateRequest request, Authentication authentication) {
-        String actor = commonValidationHelper.requireAuditActor(authentication, "Cannot determine score component creator");
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tạo thành phần điểm");
         ScoreComponentTemplate component = new ScoreComponentTemplate();
         component.setCode(commonValidationHelper.normalizeRequiredText(request.getCode()));
         component.setName(commonValidationHelper.normalizeRequiredText(request.getName()));
@@ -61,7 +61,7 @@ public class ScoreComponentTemplateService {
             UUID deaneryId = accountScopeValidationHelper.requireActiveDeaneryId(authentication, "training.score_component.read.deanery");
             scopedRequest.getFilters().put(DEANERY_FILTER_FIELD, deaneryId);
         } else {
-            throw commonValidationHelper.forbidden("Current account cannot read score components");
+            throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền xem thành phần điểm");
         }
         Page<ScoreComponentTemplate> page = repository.findAll(scopedRequest);
         return new PageImpl<>(page.getContent().stream().map(this::toResponse).toList(), page.getPageable(), page.getTotalElements());
@@ -69,12 +69,12 @@ public class ScoreComponentTemplateService {
 
     public ScoreComponentTemplateResponse findById(String id) {
         return toResponse(repository.findByIdWithScope(id)
-                .orElseThrow(() -> commonValidationHelper.notFound("Score component not found: " + id)));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy thành phần điểm: " + id)));
     }
 
     public ScoreComponentTemplateResponse update(String id, ScoreComponentTemplateUpdateRequest request, Authentication authentication) {
         ScoreComponentTemplate component = repository.findByIdWithScope(id)
-                .orElseThrow(() -> commonValidationHelper.notFound("Score component not found: " + id));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy thành phần điểm: " + id));
         if (request.getCode() != null) {
             component.setCode(commonValidationHelper.normalizeRequiredText(request.getCode()));
         }
@@ -90,7 +90,7 @@ public class ScoreComponentTemplateService {
         if (request.getDisplayOrder() != null) {
             component.setDisplayOrder(request.getDisplayOrder());
         }
-        component.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Cannot determine score component updater"));
+        component.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật thành phần điểm"));
         return toResponse(component);
     }
 
@@ -100,7 +100,7 @@ public class ScoreComponentTemplateService {
 
     public ScoreComponentTemplateResponse toggleStatus(String id, StatusToggleRequest request, Authentication authentication) {
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
-        repository.toggleStatus(id, commonValidationHelper.requireAuditActor(authentication, "Cannot determine score component actor"));
+        repository.toggleStatus(id, commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái thành phần điểm"));
         return findById(id);
     }
 
@@ -115,7 +115,7 @@ public class ScoreComponentTemplateService {
             component.setDiocese(null);
             return;
         }
-        throw commonValidationHelper.validationError("Score component unitType must be DIOCESE or DEANERY");
+        throw commonValidationHelper.validationError("unitType của thành phần điểm phải là DIOCESE hoặc DEANERY");
     }
 
     private BaseSearchRequest copyRequest(BaseSearchRequest request) {

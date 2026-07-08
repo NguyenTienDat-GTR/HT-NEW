@@ -25,7 +25,7 @@ public class AuthUserDetailsService implements UserDetailsService {
     @Override
     public AuthUserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         Account account = accountRepository.findActiveByUsername(username)
-                .orElseThrow(() -> new UsernameNotFoundException("Account not found: " + username));
+                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy tài khoản: " + username));
 
         List<String> roles = accountRoleRepository.findActiveRoleCodesByUsername(username);
         List<String> permissions = resolveAllowedPermissions(username);

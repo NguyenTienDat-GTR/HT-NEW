@@ -33,7 +33,7 @@ public class AuthController {
     public apiResponse<AuthTokenResponse> login(@Valid @RequestBody LoginRequest request, HttpServletResponse response) {
         AuthTokenResponse tokens = authService.login(request);
         authCookieService.writeAuthCookies(response, tokens);
-        return apiResponse.success("Login successful", tokens);
+        return apiResponse.success("Đăng nhập thành công", tokens);
     }
 
     @PostMapping("/refresh")
@@ -44,17 +44,17 @@ public class AuthController {
         String refreshToken = authCookieService.resolveRefreshToken(httpServletRequest);
         AuthTokenResponse tokens = authService.refresh(refreshToken);
         authCookieService.writeAuthCookies(httpServletResponse, tokens);
-        return apiResponse.success("Token refresh successful", tokens);
+        return apiResponse.success("Làm mới token thành công", tokens);
     }
 
     @GetMapping("/me")
     public apiResponse<AuthenticatedUserResponse> me(Authentication authentication) {
-        return apiResponse.success("Authenticated user loaded", authService.currentUser(authentication));
+        return apiResponse.success("Lấy thông tin người dùng đã xác thực thành công", authService.currentUser(authentication));
     }
 
     @GetMapping("/admin/summary")
     @PreAuthorize("@securityUtils.hasAuthority(authentication, 'auth.session.manage.all')")
     public apiResponse<AuthenticatedUserResponse> adminSummary(Authentication authentication) {
-        return apiResponse.success("Authorized admin summary loaded", authService.adminSummary(authentication));
+        return apiResponse.success("Lấy thông tin tổng quan quản trị thành công", authService.adminSummary(authentication));
     }
 }

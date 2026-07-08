@@ -48,7 +48,13 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.Period;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -80,22 +86,22 @@ public class CourseParticipationService {
 
         UUID activeParishId = accountScopeValidationHelper.requireActiveParishId(authentication, CourseParticipationAccessEvaluator.SUBMIT_PARISH);
         Parish parish = parishRepository.findByIdWithDeaneryAndDiocese(activeParishId)
-                .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay giao xu " + activeParishId));
-        String actor = commonValidationHelper.requireAuditActor(authentication, "Khong xac dinh duoc nguoi gui danh sach");
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy giáo xứ " + activeParishId));
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người gửi danh sách");
         OffsetDateTime submittedAt = OffsetDateTime.now();
 
         List<CourseParticipation> createdParticipations = new ArrayList<>();
         for (UUID leaderId : normalizeLeaderIds(request.getLeaderIds())) {
             Leader leader = leaderRepository.findByIdWithParish(leaderId)
-                    .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay leader " + leaderId));
+                    .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy leader " + leaderId));
             if (leader.getParish() == null || !activeParishId.equals(leader.getParish().getId())) {
-                throw commonValidationHelper.forbidden("Khong the dang ky leader ngoai giao xu hien tai");
+                throw commonValidationHelper.forbidden("Không thể đăng ký leader ngoài giáo xứ hiện tại");
             }
 
             boolean eligible = isEligible(leader, course);
             String exceptionReason = resolveExceptionReason(request.getExceptionReasonsByLeaderId(), leaderId);
             if (!eligible && (exceptionReason == null || exceptionReason.isBlank())) {
-                throw commonValidationHelper.validationError("Leader khong du dieu kien, can nhap exceptionReason");
+                throw commonValidationHelper.validationError("Leader không đủ điều kiện, cần nhập exceptionReason");
             }
 
             CourseParticipation participation = new CourseParticipation();
@@ -159,18 +165,18 @@ public class CourseParticipationService {
     public TrainingRegistrationBatchResponse deanerySubmit(String courseCode, TrainingSubmissionRecipientRequest request, Authentication authentication) {
         TrainingCourse course = requireCourse(courseCode);
         if (trainingWorkflowSupport.isDeaneryManaged(course.getCourseType())) {
-            throw commonValidationHelper.validationError("Khoa DT khong dung luong deanery-submit");
+            throw commonValidationHelper.validationError("Khóa DT không dùng luồng deanery-submit");
         }
 
         UUID activeDeaneryId = accountScopeValidationHelper.requireActiveDeaneryId(authentication, CourseParticipationAccessEvaluator.SUBMIT_DEANERY);
         Deanery deanery = deaneryRepository.findByIdWithDiocese(activeDeaneryId)
-                .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay giao hat " + activeDeaneryId));
-        String actor = commonValidationHelper.requireAuditActor(authentication, "Khong xac dinh duoc nguoi tong hop danh sach");
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy giáo hạt " + activeDeaneryId));
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tổng hợp danh sách");
         OffsetDateTime submittedAt = OffsetDateTime.now();
 
         List<CourseParticipation> participations = courseParticipationRepository.findAllByCourseCodeAndDeaneryId(courseCode, activeDeaneryId);
         if (participations.isEmpty()) {
-            throw commonValidationHelper.validationError("Khong co dang ky nao de tong hop");
+            throw commonValidationHelper.validationError("Không có đăng ký nào để tổng hợp");
         }
 
         participations.forEach(participation -> {
@@ -213,12 +219,12 @@ public class CourseParticipationService {
     @Transactional
     public CourseParticipationResponse deaneryApprove(String participationId, TrainingApprovalRequest request, Authentication authentication) {
         CourseParticipation participation = courseParticipationRepository.findByIdWithLeaderAndCourse(participationId)
-                .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay dang ky khoa huan luyen " + participationId));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy đăng ký khóa huấn luyện " + participationId));
         if (!trainingWorkflowSupport.isDeaneryManaged(participation.getCourse().getCourseType())) {
-            throw commonValidationHelper.validationError("Chi khoa DT moi duoc deanery approval");
+            throw commonValidationHelper.validationError("Chỉ khóa DT mới dùng deanery approval");
         }
 
-        String actor = commonValidationHelper.requireAuditActor(authentication, "Khong xac dinh duoc nguoi duyet giao hat");
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người duyệt giáo hạt");
         participation.setDeaneryApprovalStatus(Boolean.TRUE.equals(request.getApproved()) ? WorkflowApprovalStatus.APPROVED : WorkflowApprovalStatus.REJECTED);
         participation.setReview(request.getReview());
         participation.setApprovedBy(actor);
@@ -230,12 +236,12 @@ public class CourseParticipationService {
     @Transactional
     public CourseParticipationResponse dioceseApprove(String participationId, TrainingApprovalRequest request, Authentication authentication) {
         CourseParticipation participation = courseParticipationRepository.findByIdWithLeaderAndCourse(participationId)
-                .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay dang ky khoa huan luyen " + participationId));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy đăng ký khóa huấn luyện " + participationId));
         if (trainingWorkflowSupport.isDeaneryManaged(participation.getCourse().getCourseType())) {
-            throw commonValidationHelper.validationError("Khoa DT khong dung diocese approval");
+            throw commonValidationHelper.validationError("Khóa DT không dùng diocese approval");
         }
 
-        String actor = commonValidationHelper.requireAuditActor(authentication, "Khong xac dinh duoc nguoi duyet giao phan");
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người duyệt giáo phận");
         participation.setDioceseApprovalStatus(Boolean.TRUE.equals(request.getApproved()) ? WorkflowApprovalStatus.APPROVED : WorkflowApprovalStatus.REJECTED);
         participation.setReview(request.getReview());
         participation.setApprovedBy(actor);
@@ -247,8 +253,8 @@ public class CourseParticipationService {
     @Transactional
     public CourseParticipationResponse score(String participationId, TrainingScoreRequest request, Authentication authentication) {
         CourseParticipation participation = courseParticipationRepository.findByIdWithLeaderAndCourse(participationId)
-                .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay dang ky khoa huan luyen " + participationId));
-        String actor = commonValidationHelper.requireAuditActor(authentication, "Khong xac dinh duoc nguoi nhap diem");
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy đăng ký khóa huấn luyện " + participationId));
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người nhập điểm");
 
         ScoreFormulaTemplate scoreFormula = requireScoreFormula(participation);
         Map<String, ComponentScoreRequest> requestedScores = normalizeComponentScores(request.getComponentScores());
@@ -261,10 +267,10 @@ public class CourseParticipationService {
         for (ScoreFormulaComponent formulaComponent : formulaComponents) {
             ComponentScoreRequest componentRequest = requestedScores.remove(formulaComponent.getComponent().getId());
             if (componentRequest == null) {
-                throw commonValidationHelper.validationError("Missing score for required component " + formulaComponent.getComponent().getCode());
+                throw commonValidationHelper.validationError("Thiếu điểm cho thành phần bắt buộc " + formulaComponent.getComponent().getCode());
             }
             if (componentRequest.getScore().compareTo(formulaComponent.getComponent().getMaxScore()) > 0) {
-                throw commonValidationHelper.validationError("Score exceeds maxScore for component " + formulaComponent.getComponent().getCode());
+                throw commonValidationHelper.validationError("Điểm vượt quá maxScore của thành phần " + formulaComponent.getComponent().getCode());
             }
 
             CourseParticipationComponentScore persistedScore = new CourseParticipationComponentScore();
@@ -279,7 +285,7 @@ public class CourseParticipationService {
             formulaVariables.put(formulaComponent.getComponent().getCode(), componentRequest.getScore());
         }
         if (!requestedScores.isEmpty()) {
-            throw commonValidationHelper.validationError("Submitted componentScores contain components outside the course score formula");
+            throw commonValidationHelper.validationError("componentScores gửi lên có thành phần ngoài công thức điểm của khóa học");
         }
 
         BigDecimal totalScore = trainingScoreFormulaEvaluator.evaluate(scoreFormula.getExpression(), formulaVariables);
@@ -306,23 +312,23 @@ public class CourseParticipationService {
 
     private ScoreFormulaTemplate requireScoreFormula(CourseParticipation participation) {
         if (participation.getCourse() == null || participation.getCourse().getScoreFormula() == null) {
-            throw commonValidationHelper.validationError("Training course does not have a score formula");
+            throw commonValidationHelper.validationError("Khóa huấn luyện chưa có công thức tính điểm");
         }
         ScoreFormulaTemplate formula = participation.getCourse().getScoreFormula();
         if (formula.getComponents() == null || formula.getComponents().isEmpty()) {
-            throw commonValidationHelper.validationError("Training course score formula does not define any score components");
+            throw commonValidationHelper.validationError("Công thức tính điểm của khóa huấn luyện chưa có thành phần điểm nào");
         }
         return formula;
     }
 
     private Map<String, ComponentScoreRequest> normalizeComponentScores(List<ComponentScoreRequest> componentScores) {
         if (componentScores == null || componentScores.isEmpty()) {
-            throw commonValidationHelper.validationError("componentScores is required");
+            throw commonValidationHelper.validationError("componentScores là bắt buộc");
         }
         Map<String, ComponentScoreRequest> byComponentId = new LinkedHashMap<>();
         for (ComponentScoreRequest componentScore : componentScores) {
             if (byComponentId.put(componentScore.getComponentId(), componentScore) != null) {
-                throw commonValidationHelper.validationError("Duplicate component score for componentId " + componentScore.getComponentId());
+                throw commonValidationHelper.validationError("Trùng điểm thành phần cho componentId " + componentScore.getComponentId());
             }
         }
         return byComponentId;
@@ -359,31 +365,31 @@ public class CourseParticipationService {
     private String unitNameForCertificate(TrainingCourse course) {
         if (trainingWorkflowSupport.isDeaneryManaged(course.getCourseType())) {
             if (course.getDeanery() == null || course.getDeanery().getName() == null) {
-                throw commonValidationHelper.validationError("Deanery training course must resolve a deanery name to generate certificate code");
+                throw commonValidationHelper.validationError("Khóa huấn luyện cấp giáo hạt phải xác định được tên giáo hạt để tạo mã chứng chỉ");
             }
             return course.getDeanery().getName();
         }
         if (course.getDiocese() == null || course.getDiocese().getName() == null) {
-            throw commonValidationHelper.validationError("Diocese training course must resolve a diocese name to generate certificate code");
+            throw commonValidationHelper.validationError("Khóa huấn luyện cấp giáo phận phải xác định được tên giáo phận để tạo mã chứng chỉ");
         }
         return course.getDiocese().getName();
     }
 
     private TrainingCourse requireCourse(String courseCode) {
         return trainingCourseRepository.findByCodeWithRequirement(courseCode)
-                .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay khoa huan luyen " + courseCode));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy khóa huấn luyện " + courseCode));
     }
 
     private void requireRegistrationWindowOpen(TrainingCourse course) {
         OffsetDateTime now = OffsetDateTime.now();
         if (course.getRegistrationStartAt() == null || course.getRegistrationEndAt() == null) {
-            throw commonValidationHelper.validationError("Khoa huan luyen chua cau hinh thoi gian nhan dang ky");
+            throw commonValidationHelper.validationError("Khóa huấn luyện chưa cấu hình thời gian nhận đăng ký");
         }
         if (now.isBefore(course.getRegistrationStartAt())) {
-            throw commonValidationHelper.validationError("Chua den thoi gian nhan dang ky");
+            throw commonValidationHelper.validationError("Chưa đến thời gian nhận đăng ký");
         }
         if (now.isAfter(course.getRegistrationEndAt())) {
-            throw commonValidationHelper.validationError("Da het thoi gian nhan dang ky");
+            throw commonValidationHelper.validationError("Đã hết thời gian nhận đăng ký");
         }
     }
 
@@ -396,7 +402,7 @@ public class CourseParticipationService {
 
     private List<UUID> normalizeLeaderIds(List<UUID> leaderIds) {
         if (leaderIds == null || leaderIds.isEmpty()) {
-            throw commonValidationHelper.validationError("leaderIds la bat buoc");
+            throw commonValidationHelper.validationError("leaderIds là bắt buộc");
         }
         return new ArrayList<>(new LinkedHashSet<>(leaderIds));
     }
@@ -456,8 +462,8 @@ public class CourseParticipationService {
     ) {
         return TrainingNotificationCommand.builder()
                 .eventType(eventType)
-                .title("Danh sach dang ky moi")
-                .message(senderUnitName + " gui " + totalCount + " dang ky cho khoa " + courseCode)
+                .title("Danh sách đăng ký mới")
+                .message(senderUnitName + " gửi " + totalCount + " đăng ký cho khóa " + courseCode)
                 .senderUnitType(senderUnitType)
                 .senderUnitId(senderUnitId)
                 .courseCode(courseCode)

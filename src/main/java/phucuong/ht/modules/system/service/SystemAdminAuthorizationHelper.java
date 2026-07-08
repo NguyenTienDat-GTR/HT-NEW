@@ -39,27 +39,27 @@ public class SystemAdminAuthorizationHelper {
 
     public void requireRoleManageableByDioceseAdmin(Role role) {
         Role adminRole = roleRepository.findByRoleCodeAndStatusTrue(ROLE_ADMIN_DIOCESE)
-                .orElseThrow(() -> commonValidationHelper.notFound("Role ADMIN_DIOCESE not found"));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy vai trò ADMIN_DIOCESE"));
         Integer actorOrder = adminRole.getDisplayOrder();
         Integer targetOrder = role.getDisplayOrder();
         if (targetOrder == null || actorOrder == null || targetOrder < actorOrder) {
-            throw commonValidationHelper.forbidden("Current account cannot manage a higher role");
+            throw commonValidationHelper.forbidden("Tài khoản hiện tại không thể quản lý vai trò có cấp cao hơn");
         }
     }
 
     public void requirePermissionAssignableByDioceseAdmin(Permission permission) {
         String scopeCode = permission.getScope() == null ? null : permission.getScope().getScopeCode();
         if ("all".equalsIgnoreCase(scopeCode)) {
-            throw commonValidationHelper.forbidden("Current account cannot assign permission with all scope");
+            throw commonValidationHelper.forbidden("Tài khoản hiện tại không thể gán quyền có phạm vi all");
         }
     }
 
     public void requireSameDioceseTargetAccount(Authentication authentication, String username, String permissionCode) {
         UUID actorDioceseId = accountScopeValidationHelper.requireActiveDioceseId(authentication, permissionCode);
         UUID targetDioceseId = accountRepository.findActiveDioceseIdByUsername(username)
-                .orElseThrow(() -> commonValidationHelper.forbidden("Target account does not have a valid diocese scope"));
+                .orElseThrow(() -> commonValidationHelper.forbidden("Tài khoản đích không có phạm vi giáo phận hợp lệ"));
         if (!actorDioceseId.equals(targetDioceseId)) {
-            throw commonValidationHelper.forbidden("Target account is outside the current diocese");
+            throw commonValidationHelper.forbidden("Tài khoản đích nằm ngoài giáo phận hiện tại");
         }
     }
 
@@ -68,7 +68,7 @@ public class SystemAdminAuthorizationHelper {
             return;
         }
         if (!hasAuthority(authentication, authority)) {
-            throw commonValidationHelper.forbidden("Current account does not have role-permission management permission");
+            throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền quản lý phân quyền cho vai trò");
         }
         requireRoleManageableByDioceseAdmin(role);
         requirePermissionAssignableByDioceseAdmin(permission);
@@ -79,7 +79,7 @@ public class SystemAdminAuthorizationHelper {
             return;
         }
         if (!hasAuthority(authentication, ACCOUNT_PERMISSION_MANAGE_DIOCESE)) {
-            throw commonValidationHelper.forbidden("Current account does not have account-permission management permission");
+            throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền quản lý phân quyền cho tài khoản");
         }
         requireSameDioceseTargetAccount(authentication, username, ACCOUNT_PERMISSION_MANAGE_DIOCESE);
         requirePermissionAssignableByDioceseAdmin(permission);

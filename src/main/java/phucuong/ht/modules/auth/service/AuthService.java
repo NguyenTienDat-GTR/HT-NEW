@@ -48,11 +48,11 @@ public class AuthService {
     public BootstrapSuperAdminResponse bootstrapSuperAdmin() {
         String username = authProperties.getBootstrap().getSuperAdmin().getUsername();
         if (accountRepository.existsByUsername(username)) {
-            throw new ApiException(HttpStatus.CONFLICT, errorCode.CONFLICT, "Super admin account already exists");
+            throw new ApiException(HttpStatus.CONFLICT, errorCode.CONFLICT, "Tài khoản super admin đã tồn tại");
         }
 
         Role role = roleRepository.findByRoleCodeAndStatusTrue(authProperties.getBootstrap().getSuperAdmin().getRoleCode())
-                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, errorCode.RESOURCE_NOT_FOUND, "SUPER_ADMIN role is not available"));
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, errorCode.RESOURCE_NOT_FOUND, "Vai trò SUPER_ADMIN hiện không khả dụng"));
 
         OffsetDateTime now = OffsetDateTime.now();
         Account account = new Account();
@@ -98,7 +98,7 @@ public class AuthService {
 
     public AuthTokenResponse refresh(String refreshToken) {
         if (!StringUtils.hasText(refreshToken)) {
-            throw new ApiException(HttpStatus.UNAUTHORIZED, errorCode.INVALID_TOKEN, "Refresh token is required");
+            throw new ApiException(HttpStatus.UNAUTHORIZED, errorCode.INVALID_TOKEN, "Refresh token là bắt buộc");
         }
         AuthUserDetails tokenPrincipal = jwtUtils.parseRefreshToken(refreshToken);
         AuthUserDetails currentPrincipal = authUserDetailsService.loadUserByUsername(tokenPrincipal.getUsername());
@@ -107,7 +107,7 @@ public class AuthService {
 
     public AuthenticatedUserResponse currentUser(Authentication authentication) {
         if (authentication == null || !(authentication.getPrincipal() instanceof AuthUserDetails principal)) {
-            throw new ApiException(HttpStatus.UNAUTHORIZED, errorCode.AUTHENTICATION_FAILED, "Authentication is required");
+            throw new ApiException(HttpStatus.UNAUTHORIZED, errorCode.AUTHENTICATION_FAILED, "Yêu cầu xác thực");
         }
         return toUserResponse(principal);
     }

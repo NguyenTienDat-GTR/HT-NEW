@@ -6,7 +6,6 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,7 +14,6 @@ import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.validation.AccountScopeValidationHelper;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.config.CacheNames;
-import phucuong.ht.modules.auth.exception.ApiException;
 import phucuong.ht.modules.deanery.repository.DeaneryRepository;
 import phucuong.ht.modules.diocese.repository.DioceseRepository;
 import phucuong.ht.modules.training.TrainingWorkflowSupport;
@@ -197,22 +195,22 @@ public class TrainingCourseService {
 
     private void applyScoreFormula(TrainingCourse course, String scoreFormulaId, Authentication authentication) {
         if (scoreFormulaId == null || scoreFormulaId.isBlank()) {
-            throw commonValidationHelper.validationError("scoreFormulaId is required");
+            throw commonValidationHelper.validationError("scoreFormulaId là bắt buộc");
         }
         ScoreFormulaTemplate formula = scoreFormulaTemplateRepository.findByIdWithComponents(scoreFormulaId)
-                .orElseThrow(() -> commonValidationHelper.notFound("Score formula not found: " + scoreFormulaId));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy công thức tính điểm: " + scoreFormulaId));
         if (course.getCourseType() == null) {
-            throw commonValidationHelper.validationError("courseType is required before assigning scoreFormula");
+            throw commonValidationHelper.validationError("courseType là bắt buộc trước khi gán scoreFormula");
         }
         if (trainingWorkflowSupport.isDeaneryManaged(course.getCourseType())) {
             UUID deaneryId = accountScopeValidationHelper.requireActiveDeaneryId(authentication, TrainingCourseAccessEvaluator.CREATE_DEANERY);
             if (formula.getDeanery() == null || !deaneryId.equals(formula.getDeanery().getId())) {
-                throw commonValidationHelper.forbidden("Score formula is outside the current deanery scope");
+                throw commonValidationHelper.forbidden("Công thức tính điểm nằm ngoài phạm vi giáo hạt hiện tại");
             }
         } else {
             UUID dioceseId = accountScopeValidationHelper.requireActiveDioceseId(authentication, TrainingCourseAccessEvaluator.CREATE_DIOCESE);
             if (formula.getDiocese() == null || !dioceseId.equals(formula.getDiocese().getId())) {
-                throw commonValidationHelper.forbidden("Score formula is outside the current diocese scope");
+                throw commonValidationHelper.forbidden("Công thức tính điểm nằm ngoài phạm vi giáo phận hiện tại");
             }
         }
         course.setScoreFormula(formula);
@@ -223,7 +221,7 @@ public class TrainingCourseService {
             return null;
         }
         return courseRequirementRepository.findByCodeWithScope(requirementCode)
-                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy requirement " + requirementCode));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy yêu cầu khóa học " + requirementCode));
     }
 
     private BaseSearchRequest copyRequest(BaseSearchRequest request) {
@@ -250,7 +248,7 @@ public class TrainingCourseService {
             return;
         }
         if (registrationEndAt.isBefore(registrationStartAt)) {
-            throw commonValidationHelper.validationError("registrationEndAt khÃ´ng Ä‘Æ°á»£c nhá» hÆ¡n registrationStartAt");
+            throw commonValidationHelper.validationError("registrationEndAt không được nhỏ hơn registrationStartAt");
         }
     }
 

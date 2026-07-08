@@ -24,37 +24,37 @@ public class ScoreFormulaTemplateController {
     @PostMapping
     @PreAuthorize("@scoreFormulaTemplateAccessEvaluator.canCreate(authentication, #request.unitType)")
     public apiResponse<ScoreFormulaTemplateResponse> create(@Valid @RequestBody ScoreFormulaTemplateCreateRequest request, Authentication authentication) {
-        return apiResponse.success("Create score formula successfully", service.create(request, authentication));
+        return apiResponse.success("Tạo công thức tính điểm thành công", service.create(request, authentication));
     }
 
     @GetMapping
     @PreAuthorize("@scoreFormulaTemplateAccessEvaluator.canList(authentication)")
     public apiResponse<Page<ScoreFormulaTemplateResponse>> findAll(@ModelAttribute BaseSearchRequest request, Authentication authentication) {
-        return apiResponse.success("Get score formulas successfully", service.findAll(request, authentication));
+        return apiResponse.success("Lấy danh sách công thức tính điểm thành công", service.findAll(request, authentication));
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("@scoreFormulaTemplateAccessEvaluator.canRead(authentication, #id)")
     public apiResponse<ScoreFormulaTemplateResponse> findById(@PathVariable String id) {
-        return apiResponse.success("Get score formula successfully", service.findById(id));
+        return apiResponse.success("Lấy thông tin công thức tính điểm thành công", service.findById(id));
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("@scoreFormulaTemplateAccessEvaluator.canUpdate(authentication, #id)")
     public apiResponse<ScoreFormulaTemplateResponse> update(@PathVariable String id, @Valid @RequestBody ScoreFormulaTemplateUpdateRequest request, Authentication authentication) {
-        return apiResponse.success("Update score formula successfully", service.update(id, request, authentication));
+        return apiResponse.success("Cập nhật công thức tính điểm thành công", service.update(id, request, authentication));
     }
 
     @DeleteMapping("/{id}")
     @PreAuthorize("@scoreFormulaTemplateAccessEvaluator.canDelete(authentication, #id)")
     public apiResponse<Void> delete(@PathVariable String id) {
         service.delete(id);
-        return apiResponse.success("Delete score formula successfully", null);
+        return apiResponse.success("Xóa công thức tính điểm thành công", null);
     }
 
     @PatchMapping("/{id}/toggle-status")
     @PreAuthorize("@scoreFormulaTemplateAccessEvaluator.canUpdate(authentication, #id)")
     public apiResponse<ScoreFormulaTemplateResponse> toggleStatus(@PathVariable String id, @Valid @RequestBody StatusToggleRequest request, Authentication authentication) {
-        return apiResponse.success("Toggle score formula successfully", service.toggleStatus(id, request, authentication));
+        return apiResponse.success("Đổi trạng thái công thức tính điểm thành công", service.toggleStatus(id, request, authentication));
     }
 }

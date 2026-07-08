@@ -18,7 +18,7 @@
     try {
       window.localStorage.setItem(SWAGGER_ACCESS_TOKEN_KEY, token);
     } catch (error) {
-      console.warn("Unable to store Swagger access token", error);
+      console.warn("Không thể lưu access token của Swagger", error);
     }
   }
 
@@ -26,7 +26,7 @@
     try {
       window.localStorage.removeItem(SWAGGER_ACCESS_TOKEN_KEY);
     } catch (error) {
-      console.warn("Unable to clear Swagger access token", error);
+      console.warn("Không thể xóa access token của Swagger", error);
     }
   }
 
@@ -45,7 +45,7 @@
       const padded = normalized + "=".repeat((4 - normalized.length % 4) % 4);
       return JSON.parse(window.atob(padded));
     } catch (error) {
-      console.warn("Unable to decode Swagger access token", error);
+      console.warn("Không thể giải mã access token của Swagger", error);
       return null;
     }
   }
@@ -91,7 +91,7 @@
       const accessToken = payload && payload.data && payload.data.accessToken;
       storeToken(accessToken);
     } catch (error) {
-      console.warn("Unable to capture access token from auth response", error);
+      console.warn("Không thể lấy access token từ phản hồi xác thực", error);
     }
   }
 

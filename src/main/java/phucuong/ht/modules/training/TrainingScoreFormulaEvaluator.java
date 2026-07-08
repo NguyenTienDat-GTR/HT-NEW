@@ -23,13 +23,13 @@ public class TrainingScoreFormulaEvaluator {
 
     public BigDecimal evaluate(String expression, Map<String, BigDecimal> variables) {
         if (expression == null || expression.isBlank()) {
-            throw commonValidationHelper.validationError("Score formula expression is required");
+            throw commonValidationHelper.validationError("Biểu thức công thức tính điểm là bắt buộc");
         }
         Parser parser = new Parser(expression, variables);
         BigDecimal result = parser.parseExpression();
         parser.skipWhitespace();
         if (!parser.isEnd()) {
-            throw commonValidationHelper.validationError("Invalid score formula expression");
+            throw commonValidationHelper.validationError("Biểu thức công thức tính điểm không hợp lệ");
         }
         return result.stripTrailingZeros();
     }
@@ -100,7 +100,7 @@ public class TrainingScoreFormulaEvaluator {
                 if (match('/')) {
                     BigDecimal divisor = parseFactor();
                     if (BigDecimal.ZERO.compareTo(divisor) == 0) {
-                        throw commonValidationHelper.validationError("Score formula cannot divide by zero");
+                        throw commonValidationHelper.validationError("Công thức tính điểm không được chia cho 0");
                     }
                     value = value.divide(divisor, MATH_CONTEXT);
                     continue;
@@ -121,7 +121,7 @@ public class TrainingScoreFormulaEvaluator {
                 BigDecimal nested = parseExpression();
                 skipWhitespace();
                 if (!match(')')) {
-                    throw commonValidationHelper.validationError("Unclosed parentheses in score formula");
+                    throw commonValidationHelper.validationError("Biểu thức công thức tính điểm có dấu ngoặc chưa đóng");
                 }
                 return nested;
             }
@@ -129,7 +129,7 @@ public class TrainingScoreFormulaEvaluator {
                 String variable = readVariable();
                 BigDecimal value = variables.get(variable);
                 if (value == null) {
-                    throw commonValidationHelper.validationError("Unknown score component in formula: " + variable);
+                    throw commonValidationHelper.validationError("Công thức có thành phần điểm không xác định: " + variable);
                 }
                 return value;
             }
@@ -154,7 +154,7 @@ public class TrainingScoreFormulaEvaluator {
                 break;
             }
             if (start == position) {
-                throw commonValidationHelper.validationError("Invalid score formula expression");
+                throw commonValidationHelper.validationError("Biểu thức công thức tính điểm không hợp lệ");
             }
             return new BigDecimal(expression.substring(start, position), MATH_CONTEXT);
         }

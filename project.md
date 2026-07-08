@@ -1,5 +1,10 @@
 ﻿# HT Management New
 
+## Session Rules
+
+- Tất cả message trả về cho người dùng, message validation, message success hoặc failure, và message cảnh báo liên quan tới thao tác nghiệp vụ phải dùng tiếng Việt.
+- Mọi session sau khi thêm hoặc sửa message phải lưu file bằng UTF-8 và tự kiểm tra lại để tránh mojibake.
+
 ## Overview
 
 This project manages organization data, leaders, training, certificates, and system access for HT Management.

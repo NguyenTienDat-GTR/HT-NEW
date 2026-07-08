@@ -24,19 +24,19 @@ public class PermissionController {
     @PostMapping
     @PreAuthorize("@securityUtils.hasAuthority(authentication, 'system.permission.create.all')")
     public apiResponse<PermissionResponse> create(@Valid @RequestBody PermissionCreateRequest request, Authentication authentication) {
-        return apiResponse.success("Create permission successfully", permissionManagementService.create(request, authentication));
+        return apiResponse.success("Tạo quyền thành công", permissionManagementService.create(request, authentication));
     }
 
     @GetMapping
     @PreAuthorize("@securityUtils.hasAuthority(authentication, 'system.permission.read.all')")
     public apiResponse<Page<PermissionResponse>> findAll(@ModelAttribute BaseSearchRequest request) {
-        return apiResponse.success("Get permission list successfully", permissionManagementService.findAll(request));
+        return apiResponse.success("Lấy danh sách quyền thành công", permissionManagementService.findAll(request));
     }
 
     @GetMapping("/{permissionCode}")
     @PreAuthorize("@securityUtils.hasAuthority(authentication, 'system.permission.read.all')")
     public apiResponse<PermissionResponse> findById(@PathVariable String permissionCode) {
-        return apiResponse.success("Get permission successfully", permissionManagementService.findById(permissionCode));
+        return apiResponse.success("Lấy thông tin quyền thành công", permissionManagementService.findById(permissionCode));
     }
 
     @PutMapping("/{permissionCode}")
@@ -46,14 +46,14 @@ public class PermissionController {
             @Valid @RequestBody PermissionUpdateRequest request,
             Authentication authentication
     ) {
-        return apiResponse.success("Update permission successfully", permissionManagementService.update(permissionCode, request, authentication));
+        return apiResponse.success("Cập nhật quyền thành công", permissionManagementService.update(permissionCode, request, authentication));
     }
 
     @DeleteMapping("/{permissionCode}")
     @PreAuthorize("@securityUtils.hasAuthority(authentication, 'system.permission.delete.all')")
     public apiResponse<Void> delete(@PathVariable String permissionCode) {
         permissionManagementService.delete(permissionCode);
-        return apiResponse.success("Delete permission successfully", null);
+        return apiResponse.success("Xóa quyền thành công", null);
     }
 
     @PatchMapping("/{permissionCode}/toggle-status")
@@ -63,6 +63,6 @@ public class PermissionController {
             @Valid @RequestBody StatusToggleRequest request,
             Authentication authentication
     ) {
-        return apiResponse.success("Toggle permission status successfully", permissionManagementService.toggleStatus(permissionCode, request, authentication));
+        return apiResponse.success("Đổi trạng thái quyền thành công", permissionManagementService.toggleStatus(permissionCode, request, authentication));
     }
 }
