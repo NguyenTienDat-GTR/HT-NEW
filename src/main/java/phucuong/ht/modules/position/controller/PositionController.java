@@ -29,14 +29,14 @@ public class PositionController {
 
     @GetMapping
     @PreAuthorize("@positionAccessEvaluator.canList(authentication)")
-    public apiResponse<Page<PositionResponse>> findAll(@ModelAttribute BaseSearchRequest request) {
-        return apiResponse.success("Lấy danh sách chức vụ thành công", positionService.findAll(request));
+    public apiResponse<Page<PositionResponse>> findAll(@ModelAttribute BaseSearchRequest request, Authentication authentication) {
+        return apiResponse.success("Lấy danh sách chức vụ thành công", positionService.findAll(request, authentication));
     }
 
     @GetMapping("/{positionCode}")
     @PreAuthorize("@positionAccessEvaluator.canRead(authentication, #positionCode)")
-    public apiResponse<PositionResponse> findById(@PathVariable String positionCode) {
-        return apiResponse.success("Lấy chức vụ thành công", positionService.findById(positionCode));
+    public apiResponse<PositionResponse> findById(@PathVariable String positionCode, Authentication authentication) {
+        return apiResponse.success("Lấy chức vụ thành công", positionService.findById(positionCode, authentication));
     }
 
     @PutMapping("/{positionCode}")

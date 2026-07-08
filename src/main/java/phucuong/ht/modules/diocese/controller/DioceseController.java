@@ -31,14 +31,14 @@ public class DioceseController {
 
     @GetMapping
     @PreAuthorize("@dioceseAccessEvaluator.canList(authentication)")
-    public apiResponse<Page<Diocese>> findAll(@ModelAttribute BaseSearchRequest request) {
-        return apiResponse.success("Lấy danh sách giáo phận thành công", dioceseService.findAll(request));
+    public apiResponse<Page<Diocese>> findAll(@ModelAttribute BaseSearchRequest request, Authentication authentication) {
+        return apiResponse.success("Lấy danh sách giáo phận thành công", dioceseService.findAll(request, authentication));
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("@dioceseAccessEvaluator.canRead(authentication, #id)")
-    public apiResponse<Diocese> findById(@PathVariable UUID id) {
-        return apiResponse.success("Lấy thông tin giáo phận thành công", dioceseService.findById(id));
+    public apiResponse<Diocese> findById(@PathVariable UUID id, Authentication authentication) {
+        return apiResponse.success("Lấy thông tin giáo phận thành công", dioceseService.findById(id, authentication));
     }
 
     @PutMapping("/{id}")

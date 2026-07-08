@@ -1,6 +1,9 @@
 package phucuong.ht.modules.training.trainingCourse.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.http.HttpStatus;
@@ -10,6 +13,7 @@ import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.validation.AccountScopeValidationHelper;
 import phucuong.ht.common.validation.CommonValidationHelper;
+import phucuong.ht.config.CacheNames;
 import phucuong.ht.modules.auth.exception.ApiException;
 import phucuong.ht.modules.deanery.repository.DeaneryRepository;
 import phucuong.ht.modules.diocese.repository.DioceseRepository;
@@ -43,6 +47,10 @@ public class TrainingCourseService {
     private final AccountScopeValidationHelper accountScopeValidationHelper;
     private final CommonValidationHelper commonValidationHelper;
 
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, allEntries = true)
+    })
     public TrainingCourseResponse create(TrainingCourseCreateRequest request, Authentication authentication) {
         if (request.getCourseType() == null) {
             throw commonValidationHelper.validationError("courseType là bắt buộc");
@@ -69,6 +77,7 @@ public class TrainingCourseService {
         return toResponse(trainingCourseRepository.findByCodeWithRequirement(course.getCourseCode()).orElse(course));
     }
 
+    @Cacheable(cacheNames = CacheNames.TRAINING_COURSE_LIST, key = "@cacheScopeKeyHelper.listKey(#authentication, #request)")
     public Page<TrainingCourseResponse> findAll(BaseSearchRequest request, Authentication authentication) {
         BaseSearchRequest scopedRequest = copyRequest(request);
         if (hasAuthority(authentication, TrainingCourseAccessEvaluator.READ_DIOCESE)) {
@@ -88,11 +97,16 @@ public class TrainingCourseService {
         return new PageImpl<>(content, page.getPageable(), page.getTotalElements());
     }
 
-    public TrainingCourseResponse findById(String courseCode) {
+    @Cacheable(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, key = "@cacheScopeKeyHelper.detailKey(#authentication, #courseCode)")
+    public TrainingCourseResponse findById(String courseCode, Authentication authentication) {
         return toResponse(trainingCourseRepository.findByCodeWithRequirement(courseCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy khóa huấn luyện " + courseCode)));
     }
 
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, allEntries = true)
+    })
     public TrainingCourseResponse update(String courseCode, TrainingCourseUpdateRequest request, Authentication authentication) {
         TrainingCourse existing = trainingCourseRepository.findByCodeWithRequirement(courseCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy khóa huấn luyện " + courseCode));
@@ -126,15 +140,23 @@ public class TrainingCourseService {
         return toResponse(existing);
     }
 
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, allEntries = true)
+    })
     public void delete(String courseCode) {
         trainingCourseRepository.delete(courseCode);
     }
 
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, allEntries = true)
+    })
     public TrainingCourseResponse toggleStatus(String courseCode, StatusToggleRequest request, Authentication authentication) {
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái khóa huấn luyện");
         trainingCourseRepository.toggleStatus(courseCode, actor);
-        return findById(courseCode);
+        return findById(courseCode, authentication);
     }
 
     private void applyOwnerScope(TrainingCourse course, CourseType courseType, Authentication authentication) {

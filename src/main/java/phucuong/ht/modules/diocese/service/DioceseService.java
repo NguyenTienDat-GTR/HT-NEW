@@ -1,6 +1,9 @@
 package phucuong.ht.modules.diocese.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
@@ -9,6 +12,7 @@ import org.springframework.stereotype.Service;
 import phucuong.ht.common.exception.errorCode;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
+import phucuong.ht.config.CacheNames;
 import phucuong.ht.modules.auth.exception.ApiException;
 import phucuong.ht.modules.diocese.helper.DioceseValidationHelper;
 import phucuong.ht.modules.diocese.model.entity.Diocese;
@@ -26,6 +30,10 @@ public class DioceseService {
     private final DioceseRepository dioceseRepository;
     private final DioceseValidationHelper dioceseValidationHelper;
 
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true)
+    })
     public Diocese create(DioceseCreateRequest request, Authentication authentication) {
         dioceseValidationHelper.validateCreateInput(request);
         String auditActor = dioceseValidationHelper.getRequiredAuditActor(authentication);
@@ -50,14 +58,20 @@ public class DioceseService {
         }
     }
 
-    public Page<Diocese> findAll(BaseSearchRequest request) {
+    @Cacheable(cacheNames = CacheNames.DIOCESE_LIST, key = "@cacheScopeKeyHelper.listKey(#authentication, #request)")
+    public Page<Diocese> findAll(BaseSearchRequest request, Authentication authentication) {
         return dioceseRepository.findAll(request == null ? new BaseSearchRequest() : request);
     }
 
-    public Diocese findById(UUID id) {
+    @Cacheable(cacheNames = CacheNames.DIOCESE_DETAIL, key = "@cacheScopeKeyHelper.detailKey(#authentication, #id)")
+    public Diocese findById(UUID id, Authentication authentication) {
         return dioceseValidationHelper.requireExistingDiocese(id);
     }
 
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true)
+    })
     public Diocese update(UUID id, DioceseUpdateRequest request, Authentication authentication) {
         Diocese existingDiocese = dioceseValidationHelper.requireExistingDiocese(id);
         dioceseValidationHelper.validateUpdateInput(request);
@@ -70,6 +84,10 @@ public class DioceseService {
         }
     }
 
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true)
+    })
     public void delete(UUID id) {
         dioceseValidationHelper.requireExistingDiocese(id);
         try {
@@ -79,6 +97,10 @@ public class DioceseService {
         }
     }
 
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true)
+    })
     public Diocese toggleStatus(UUID id, StatusToggleRequest request, Authentication authentication) {
         dioceseValidationHelper.requireExistingDiocese(id);
         dioceseValidationHelper.validateToggleConfirmation(request == null ? null : request.getConfirmationText());

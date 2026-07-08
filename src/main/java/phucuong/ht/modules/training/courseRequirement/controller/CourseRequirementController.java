@@ -35,8 +35,8 @@ public class CourseRequirementController {
 
     @GetMapping("/{requirementCode}")
     @PreAuthorize("@courseRequirementAccessEvaluator.canRead(authentication, #requirementCode)")
-    public apiResponse<CourseRequirementResponse> findById(@PathVariable String requirementCode) {
-        return apiResponse.success("Lấy requirement thành công", courseRequirementService.findById(requirementCode));
+    public apiResponse<CourseRequirementResponse> findById(@PathVariable String requirementCode, Authentication authentication) {
+        return apiResponse.success("Lấy requirement thành công", courseRequirementService.findById(requirementCode, authentication));
     }
 
     @PutMapping("/{requirementCode}")

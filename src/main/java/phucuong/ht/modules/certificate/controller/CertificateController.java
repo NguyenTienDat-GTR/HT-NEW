@@ -35,8 +35,8 @@ public class CertificateController {
 
     @GetMapping("/{certificateCode}")
     @PreAuthorize("@certificateAccessEvaluator.canRead(authentication, #certificateCode)")
-    public apiResponse<CertificateResponse> findById(@PathVariable String certificateCode) {
-        return apiResponse.success("Lấy chứng chỉ thành công", certificateService.findById(certificateCode));
+    public apiResponse<CertificateResponse> findById(@PathVariable String certificateCode, Authentication authentication) {
+        return apiResponse.success("Lấy chứng chỉ thành công", certificateService.findById(certificateCode, authentication));
     }
 
     @PutMapping("/{certificateCode}")

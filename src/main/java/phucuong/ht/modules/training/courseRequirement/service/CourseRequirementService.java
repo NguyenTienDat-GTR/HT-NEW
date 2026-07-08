@@ -1,6 +1,9 @@
 package phucuong.ht.modules.training.courseRequirement.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.security.core.Authentication;
@@ -9,6 +12,7 @@ import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.validation.AccountScopeValidationHelper;
 import phucuong.ht.common.validation.CommonValidationHelper;
+import phucuong.ht.config.CacheNames;
 import phucuong.ht.modules.deanery.repository.DeaneryRepository;
 import phucuong.ht.modules.diocese.repository.DioceseRepository;
 import phucuong.ht.modules.training.TrainingWorkflowSupport;
@@ -38,6 +42,10 @@ public class CourseRequirementService {
     private final AccountScopeValidationHelper accountScopeValidationHelper;
     private final CommonValidationHelper commonValidationHelper;
 
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.COURSE_REQUIREMENT_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.COURSE_REQUIREMENT_DETAIL, allEntries = true)
+    })
     public CourseRequirementResponse create(CourseRequirementCreateRequest request, Authentication authentication) {
         if (request.getCourseType() == null) {
             throw commonValidationHelper.validationError("courseType là bắt buộc");
@@ -59,6 +67,7 @@ public class CourseRequirementService {
         return toResponse(requirement);
     }
 
+    @Cacheable(cacheNames = CacheNames.COURSE_REQUIREMENT_LIST, key = "@cacheScopeKeyHelper.listKey(#authentication, #request)")
     public Page<CourseRequirementResponse> findAll(BaseSearchRequest request, Authentication authentication) {
         BaseSearchRequest scopedRequest = copyRequest(request);
         if (hasAuthority(authentication, CourseRequirementAccessEvaluator.READ_DIOCESE)) {
@@ -78,11 +87,16 @@ public class CourseRequirementService {
         return new PageImpl<>(content, page.getPageable(), page.getTotalElements());
     }
 
-    public CourseRequirementResponse findById(String requirementCode) {
+    @Cacheable(cacheNames = CacheNames.COURSE_REQUIREMENT_DETAIL, key = "@cacheScopeKeyHelper.detailKey(#authentication, #requirementCode)")
+    public CourseRequirementResponse findById(String requirementCode, Authentication authentication) {
         return toResponse(courseRequirementRepository.findByCodeWithScope(requirementCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy requirement " + requirementCode)));
     }
 
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.COURSE_REQUIREMENT_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.COURSE_REQUIREMENT_DETAIL, allEntries = true)
+    })
     public CourseRequirementResponse update(String requirementCode, CourseRequirementUpdateRequest request, Authentication authentication) {
         CourseRequirement requirement = courseRequirementRepository.findByCodeWithScope(requirementCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy requirement " + requirementCode));
@@ -107,15 +121,23 @@ public class CourseRequirementService {
         return toResponse(requirement);
     }
 
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.COURSE_REQUIREMENT_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.COURSE_REQUIREMENT_DETAIL, allEntries = true)
+    })
     public void delete(String requirementCode) {
         courseRequirementRepository.delete(requirementCode);
     }
 
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.COURSE_REQUIREMENT_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.COURSE_REQUIREMENT_DETAIL, allEntries = true)
+    })
     public CourseRequirementResponse toggleStatus(String requirementCode, StatusToggleRequest request, Authentication authentication) {
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái requirement");
         courseRequirementRepository.toggleStatus(requirementCode, actor);
-        return findById(requirementCode);
+        return findById(requirementCode, authentication);
     }
 
     private void applyOwnerScope(CourseRequirement requirement, CourseType courseType, Authentication authentication) {

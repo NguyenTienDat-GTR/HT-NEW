@@ -37,8 +37,8 @@ public class DeaneryController {
 
     @GetMapping("/{id}")
     @PreAuthorize("@deaneryAccessEvaluator.canRead(authentication, #id)")
-    public apiResponse<DeaneryResponse> findById(@PathVariable UUID id) {
-        return apiResponse.success("Lấy thông tin giáo hạt thành công", deaneryService.findById(id));
+    public apiResponse<DeaneryResponse> findById(@PathVariable UUID id, Authentication authentication) {
+        return apiResponse.success("Lấy thông tin giáo hạt thành công", deaneryService.findById(id, authentication));
     }
 
     @PutMapping("/{id}")

@@ -35,8 +35,8 @@ public class TrainingCourseController {
 
     @GetMapping("/{courseCode}")
     @PreAuthorize("@trainingCourseAccessEvaluator.canRead(authentication, #courseCode)")
-    public apiResponse<TrainingCourseResponse> findById(@PathVariable String courseCode) {
-        return apiResponse.success("Lấy thông tin khóa huấn luyện thành công", trainingCourseService.findById(courseCode));
+    public apiResponse<TrainingCourseResponse> findById(@PathVariable String courseCode, Authentication authentication) {
+        return apiResponse.success("Lấy thông tin khóa huấn luyện thành công", trainingCourseService.findById(courseCode, authentication));
     }
 
     @PutMapping("/{courseCode}")

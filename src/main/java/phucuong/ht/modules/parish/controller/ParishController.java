@@ -37,8 +37,8 @@ public class ParishController {
 
     @GetMapping("/{id}")
     @PreAuthorize("@parishAccessEvaluator.canRead(authentication, #id)")
-    public apiResponse<ParishResponse> findById(@PathVariable UUID id) {
-        return apiResponse.success("Lấy thông tin giáo xứ thành công", parishService.findById(id));
+    public apiResponse<ParishResponse> findById(@PathVariable UUID id, Authentication authentication) {
+        return apiResponse.success("Lấy thông tin giáo xứ thành công", parishService.findById(id, authentication));
     }
 
     @PutMapping("/{id}")

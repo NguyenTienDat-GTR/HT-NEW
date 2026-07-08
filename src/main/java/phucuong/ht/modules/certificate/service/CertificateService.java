@@ -1,6 +1,9 @@
 package phucuong.ht.modules.certificate.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.security.core.Authentication;
@@ -9,6 +12,7 @@ import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.validation.AccountScopeValidationHelper;
 import phucuong.ht.common.validation.CommonValidationHelper;
+import phucuong.ht.config.CacheNames;
 import phucuong.ht.config.DomainEventMessage;
 import phucuong.ht.config.DomainEventPublisher;
 import phucuong.ht.modules.certificate.model.entity.Certificate;
@@ -53,6 +57,10 @@ public class CertificateService {
     private final CommonValidationHelper commonValidationHelper;
     private final DomainEventPublisher domainEventPublisher;
 
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_DETAIL, allEntries = true)
+    })
     public CertificateResponse create(CertificateCreateRequest request, Authentication authentication) {
         TrainingCourse course = requireCourse(request.getCourseCode());
         Leader leader = requireLeader(request.getLeaderId());
@@ -76,6 +84,7 @@ public class CertificateService {
         return toResponse(certificate);
     }
 
+    @Cacheable(cacheNames = CacheNames.CERTIFICATE_LIST, key = "@cacheScopeKeyHelper.listKey(#authentication, #request)")
     public Page<CertificateResponse> findAll(BaseSearchRequest request, Authentication authentication) {
         BaseSearchRequest scopedRequest = copyRequest(request);
         if (hasAuthority(authentication, "training.certificate.read.diocese")) {
@@ -91,11 +100,16 @@ public class CertificateService {
         return new PageImpl<>(page.getContent().stream().map(this::toResponse).toList(), page.getPageable(), page.getTotalElements());
     }
 
-    public CertificateResponse findById(String certificateCode) {
+    @Cacheable(cacheNames = CacheNames.CERTIFICATE_DETAIL, key = "@cacheScopeKeyHelper.detailKey(#authentication, #certificateCode)")
+    public CertificateResponse findById(String certificateCode, Authentication authentication) {
         return toResponse(certificateRepository.findByCodeWithLeaderAndCourse(certificateCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy chứng chỉ " + certificateCode)));
     }
 
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_DETAIL, allEntries = true)
+    })
     public CertificateResponse update(String certificateCode, CertificateUpdateRequest request, Authentication authentication) {
         Certificate certificate = certificateRepository.findByCodeWithLeaderAndCourse(certificateCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy chứng chỉ " + certificateCode));
@@ -127,16 +141,28 @@ public class CertificateService {
         return toResponse(certificate);
     }
 
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_DETAIL, allEntries = true)
+    })
     public void delete(String certificateCode) {
         certificateRepository.delete(certificateCode);
     }
 
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_DETAIL, allEntries = true)
+    })
     public CertificateResponse toggleStatus(String certificateCode, StatusToggleRequest request, Authentication authentication) {
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
         certificateRepository.toggleStatus(certificateCode, commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái chứng chỉ"));
-        return findById(certificateCode);
+        return findById(certificateCode, authentication);
     }
 
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_DETAIL, allEntries = true)
+    })
     public CertificateResponse approve(String certificateCode, Authentication authentication) {
         Certificate certificate = certificateRepository.findByCodeWithLeaderAndCourse(certificateCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy chứng chỉ " + certificateCode));
