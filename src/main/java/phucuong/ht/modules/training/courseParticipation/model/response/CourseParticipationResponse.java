@@ -10,6 +10,7 @@ import phucuong.ht.modules.training.enums.WorkflowApprovalStatus;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Getter
@@ -19,9 +20,12 @@ public class CourseParticipationResponse {
     private UUID leaderId;
     private String courseCode;
     private CourseType courseType;
+    private String scoreFormulaId;
     private LocalDate registrationDate;
     private ParticipationStatus participationStatus;
     private BigDecimal totalScore;
+    private BigDecimal passingScore;
+    private Boolean passed;
     private CourseResult result;
     private String review;
     private Boolean eligible;
@@ -34,5 +38,6 @@ public class CourseParticipationResponse {
     private OffsetDateTime certificateRequestedAt;
     private OffsetDateTime certificateApprovedAt;
     private String approvedBy;
+    private List<ComponentScoreResponse> componentScores;
     private Boolean status;
 }

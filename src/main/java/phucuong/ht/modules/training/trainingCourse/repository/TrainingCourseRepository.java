@@ -32,6 +32,8 @@ public class TrainingCourseRepository extends BaseRepo<TrainingCourse, String> {
                                 left join fetch tc.requirement
                                 left join fetch tc.diocese
                                 left join fetch tc.deanery
+                                left join fetch tc.scoreFormula scoreFormula
+                                left join fetch scoreFormula.components
                                 where tc.courseCode = :courseCode
                                 """,
                         TrainingCourse.class

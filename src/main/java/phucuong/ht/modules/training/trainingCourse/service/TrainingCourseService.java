@@ -22,6 +22,8 @@ import phucuong.ht.modules.training.TrainingWorkflowSupport;
 import phucuong.ht.modules.training.courseRequirement.model.entity.CourseRequirement;
 import phucuong.ht.modules.training.courseRequirement.repository.CourseRequirementRepository;
 import phucuong.ht.modules.training.enums.CourseType;
+import phucuong.ht.modules.training.scoreFormulaTemplate.model.entity.ScoreFormulaTemplate;
+import phucuong.ht.modules.training.scoreFormulaTemplate.repository.ScoreFormulaTemplateRepository;
 import phucuong.ht.modules.training.trainingCourse.model.entity.TrainingCourse;
 import phucuong.ht.modules.training.trainingCourse.model.request.TrainingCourseCreateRequest;
 import phucuong.ht.modules.training.trainingCourse.model.request.TrainingCourseUpdateRequest;
@@ -45,6 +47,7 @@ public class TrainingCourseService {
     private final CourseRequirementRepository courseRequirementRepository;
     private final DioceseRepository dioceseRepository;
     private final DeaneryRepository deaneryRepository;
+    private final ScoreFormulaTemplateRepository scoreFormulaTemplateRepository;
     private final TrainingWorkflowSupport trainingWorkflowSupport;
     private final AccountScopeValidationHelper accountScopeValidationHelper;
     private final CommonValidationHelper commonValidationHelper;
@@ -79,6 +82,7 @@ public class TrainingCourseService {
         course.setUpdatedBy(auditActor);
         validateRegistrationWindow(course.getRegistrationStartAt(), course.getRegistrationEndAt());
         applyOwnerScope(course, request.getCourseType(), authentication);
+        applyScoreFormula(course, request.getScoreFormulaId(), authentication);
         trainingCourseRepository.save(course);
         return toResponse(trainingCourseRepository.findByCodeWithRequirement(course.getCourseCode()).orElse(course));
     }
@@ -145,6 +149,9 @@ public class TrainingCourseService {
         if (request.getCourseType() != null) {
             existing.setCourseType(request.getCourseType());
         }
+        if (request.getScoreFormulaId() != null) {
+            applyScoreFormula(existing, request.getScoreFormulaId(), authentication);
+        }
         if (request.getAdditionalNotes() != null) {
             existing.setAdditionalNotes(request.getAdditionalNotes());
         }
@@ -186,6 +193,29 @@ public class TrainingCourseService {
         UUID dioceseId = accountScopeValidationHelper.requireActiveDioceseId(authentication, TrainingCourseAccessEvaluator.CREATE_DIOCESE);
         course.setDiocese(dioceseRepository.getRequired(dioceseId));
         course.setDeanery(null);
+    }
+
+    private void applyScoreFormula(TrainingCourse course, String scoreFormulaId, Authentication authentication) {
+        if (scoreFormulaId == null || scoreFormulaId.isBlank()) {
+            throw commonValidationHelper.validationError("scoreFormulaId is required");
+        }
+        ScoreFormulaTemplate formula = scoreFormulaTemplateRepository.findByIdWithComponents(scoreFormulaId)
+                .orElseThrow(() -> commonValidationHelper.notFound("Score formula not found: " + scoreFormulaId));
+        if (course.getCourseType() == null) {
+            throw commonValidationHelper.validationError("courseType is required before assigning scoreFormula");
+        }
+        if (trainingWorkflowSupport.isDeaneryManaged(course.getCourseType())) {
+            UUID deaneryId = accountScopeValidationHelper.requireActiveDeaneryId(authentication, TrainingCourseAccessEvaluator.CREATE_DEANERY);
+            if (formula.getDeanery() == null || !deaneryId.equals(formula.getDeanery().getId())) {
+                throw commonValidationHelper.forbidden("Score formula is outside the current deanery scope");
+            }
+        } else {
+            UUID dioceseId = accountScopeValidationHelper.requireActiveDioceseId(authentication, TrainingCourseAccessEvaluator.CREATE_DIOCESE);
+            if (formula.getDiocese() == null || !dioceseId.equals(formula.getDiocese().getId())) {
+                throw commonValidationHelper.forbidden("Score formula is outside the current diocese scope");
+            }
+        }
+        course.setScoreFormula(formula);
     }
 
     private CourseRequirement resolveRequirement(String requirementCode) {
@@ -238,6 +268,7 @@ public class TrainingCourseService {
                 .courseType(course.getCourseType())
                 .dioceseId(course.getDiocese() == null ? null : course.getDiocese().getId())
                 .deaneryId(course.getDeanery() == null ? null : course.getDeanery().getId())
+                .scoreFormulaId(course.getScoreFormula() == null ? null : course.getScoreFormula().getId())
                 .additionalNotes(course.getAdditionalNotes())
                 .status(course.getStatus())
                 .createdAt(course.getCreatedAt())

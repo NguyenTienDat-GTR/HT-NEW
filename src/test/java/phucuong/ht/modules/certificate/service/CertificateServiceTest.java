@@ -12,6 +12,7 @@ import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.config.DomainEventPublisher;
 import phucuong.ht.modules.auth.model.AuthUserDetails;
 import phucuong.ht.modules.certificate.model.entity.Certificate;
+import phucuong.ht.modules.certificate.model.request.CertificateApproveRequest;
 import phucuong.ht.modules.certificate.repository.CertificateRepository;
 import phucuong.ht.modules.leader.model.entity.Leader;
 import phucuong.ht.modules.leader.model.enums.LeaderLevel;
@@ -23,6 +24,7 @@ import phucuong.ht.modules.training.courseParticipation.repository.CoursePartici
 import phucuong.ht.modules.training.enums.CourseResult;
 import phucuong.ht.modules.training.enums.CourseType;
 import phucuong.ht.modules.training.enums.WorkflowApprovalStatus;
+import phucuong.ht.modules.training.scoreFormulaTemplate.model.entity.ScoreFormulaTemplate;
 import phucuong.ht.modules.training.trainingCourse.model.entity.TrainingCourse;
 import phucuong.ht.modules.training.trainingCourse.repository.TrainingCourseRepository;
 
@@ -86,6 +88,9 @@ class CertificateServiceTest {
         TrainingCourse course = new TrainingCourse();
         course.setCourseCode("SMKNI");
         course.setCourseType(CourseType.SMKN_I);
+        ScoreFormulaTemplate formula = new ScoreFormulaTemplate();
+        formula.setPassingScore(BigDecimal.valueOf(5));
+        course.setScoreFormula(formula);
 
         Certificate certificate = new Certificate();
         certificate.setCertificateCode("CERT-1");
@@ -104,7 +109,7 @@ class CertificateServiceTest {
         AuthUserDetails principal = AuthUserDetails.tokenPrincipal("admin-diocese", "leader-1", List.of("ADMIN_DIOCESE"), List.of("training.certificate.approve.diocese"));
         var authentication = new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
 
-        var response = certificateService.approve("CERT-1", authentication);
+        var response = certificateService.approve("CERT-1", new CertificateApproveRequest(), authentication);
 
         assertEquals(WorkflowApprovalStatus.APPROVED, response.getApprovalStatus());
         assertEquals(LeaderLevel.HT_I, leader.getLeaderLevel());

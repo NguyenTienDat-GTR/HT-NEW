@@ -12,6 +12,8 @@ import phucuong.ht.modules.training.trainingCourse.model.entity.TrainingCourse;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "course_participation")
@@ -69,4 +71,7 @@ public class CourseParticipation extends BaseModel {
     private OffsetDateTime certificateApprovedAt;
 
     private String approvedBy;
+
+    @OneToMany(mappedBy = "participation", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<CourseParticipationComponentScore> componentScores = new ArrayList<>();
 }

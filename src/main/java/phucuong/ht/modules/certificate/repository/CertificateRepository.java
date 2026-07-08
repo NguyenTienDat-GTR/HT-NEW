@@ -76,4 +76,53 @@ public class CertificateRepository extends BaseRepo<Certificate, String> {
                 .getResultList();
         return results.stream().findFirst();
     }
+
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public Optional<Certificate> findByLeaderIdAndCourseCode(UUID leaderId, String courseCode) {
+        List<Certificate> results = entityManager.createQuery(
+                        """
+                                select certificate
+                                from Certificate certificate
+                                left join fetch certificate.leader
+                                left join fetch certificate.course course
+                                where certificate.leader.id = :leaderId
+                                  and course.courseCode = :courseCode
+                                """,
+                        Certificate.class
+                )
+                .setParameter("leaderId", leaderId)
+                .setParameter("courseCode", courseCode)
+                .setMaxResults(1)
+                .getResultList();
+        return results.stream().findFirst();
+    }
+
+    public Optional<Long> findHighestSequenceByCodePrefix(String codePrefix) {
+        List<String> codes = entityManager.createQuery(
+                        """
+                                select certificate.certificateCode
+                                from Certificate certificate
+                                where certificate.certificateCode like :codePrefix
+                                """,
+                        String.class
+                )
+                .setParameter("codePrefix", codePrefix + "%")
+                .getResultList();
+        long highest = 0L;
+        for (String code : codes) {
+            if (code == null) {
+                continue;
+            }
+            int lastDash = code.lastIndexOf('-');
+            if (lastDash < 0 || lastDash >= code.length() - 1) {
+                continue;
+            }
+            try {
+                highest = Math.max(highest, Long.parseLong(code.substring(lastDash + 1)));
+            } catch (NumberFormatException ignored) {
+                // Ignore non-standard codes.
+            }
+        }
+        return highest == 0L ? Optional.empty() : Optional.of(highest);
+    }
 }
