@@ -83,6 +83,49 @@ public class CourseParticipationRepository extends BaseRepo<CourseParticipation,
                 .getResultList();
     }
 
+    public List<CourseParticipation> findAllByIdsWithLeaderAndCourse(List<String> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+
+        return entityManager.createQuery(
+                        """
+                                select cp
+                                from CourseParticipation cp
+                                join fetch cp.course c
+                                join fetch cp.leader l
+                                join fetch l.parish p
+                                join fetch p.deanery de
+                                join fetch de.diocese d
+                                left join fetch c.requirement
+                                where cp.id in :ids
+                                """,
+                        CourseParticipation.class
+                )
+                .setParameter("ids", ids)
+                .getResultList();
+    }
+
+    public List<CourseParticipation> findAllByCourseCodeAndDeaneryId(String courseCode, UUID deaneryId) {
+        return entityManager.createQuery(
+                        """
+                                select cp
+                                from CourseParticipation cp
+                                join fetch cp.course c
+                                join fetch cp.leader l
+                                join fetch l.parish p
+                                join fetch p.deanery de
+                                join fetch de.diocese d
+                                where c.courseCode = :courseCode
+                                  and de.id = :deaneryId
+                                """,
+                        CourseParticipation.class
+                )
+                .setParameter("courseCode", courseCode)
+                .setParameter("deaneryId", deaneryId)
+                .getResultList();
+    }
+
     public Optional<CourseParticipation> findByLeaderIdAndCourseCode(UUID leaderId, String courseCode) {
         List<CourseParticipation> results = entityManager.createQuery(
                         """

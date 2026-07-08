@@ -9,6 +9,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.validation.AccountScopeValidationHelper;
@@ -28,6 +29,7 @@ import phucuong.ht.modules.training.trainingCourse.model.response.TrainingCourse
 import phucuong.ht.modules.training.trainingCourse.repository.TrainingCourseRepository;
 import phucuong.ht.modules.training.trainingCourse.security.TrainingCourseAccessEvaluator;
 
+import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.UUID;
@@ -51,6 +53,7 @@ public class TrainingCourseService {
             @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, allEntries = true)
     })
+    @Transactional
     public TrainingCourseResponse create(TrainingCourseCreateRequest request, Authentication authentication) {
         if (request.getCourseType() == null) {
             throw commonValidationHelper.validationError("courseType là bắt buộc");
@@ -67,11 +70,14 @@ public class TrainingCourseService {
         course.setLocation(request.getLocation());
         course.setStartDate(request.getStartDate());
         course.setEndDate(request.getEndDate());
+        course.setRegistrationStartAt(request.getRegistrationStartAt());
+        course.setRegistrationEndAt(request.getRegistrationEndAt());
         course.setCourseType(request.getCourseType());
         course.setAdditionalNotes(request.getAdditionalNotes());
         course.setStatus(Boolean.TRUE);
         course.setCreatedBy(auditActor);
         course.setUpdatedBy(auditActor);
+        validateRegistrationWindow(course.getRegistrationStartAt(), course.getRegistrationEndAt());
         applyOwnerScope(course, request.getCourseType(), authentication);
         trainingCourseRepository.save(course);
         return toResponse(trainingCourseRepository.findByCodeWithRequirement(course.getCourseCode()).orElse(course));
@@ -107,6 +113,7 @@ public class TrainingCourseService {
             @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, allEntries = true)
     })
+    @Transactional
     public TrainingCourseResponse update(String courseCode, TrainingCourseUpdateRequest request, Authentication authentication) {
         TrainingCourse existing = trainingCourseRepository.findByCodeWithRequirement(courseCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy khóa huấn luyện " + courseCode));
@@ -129,6 +136,12 @@ public class TrainingCourseService {
         if (request.getEndDate() != null) {
             existing.setEndDate(request.getEndDate());
         }
+        if (request.getRegistrationStartAt() != null) {
+            existing.setRegistrationStartAt(request.getRegistrationStartAt());
+        }
+        if (request.getRegistrationEndAt() != null) {
+            existing.setRegistrationEndAt(request.getRegistrationEndAt());
+        }
         if (request.getCourseType() != null) {
             existing.setCourseType(request.getCourseType());
         }
@@ -136,6 +149,7 @@ public class TrainingCourseService {
             existing.setAdditionalNotes(request.getAdditionalNotes());
         }
         existing.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật khóa huấn luyện"));
+        validateRegistrationWindow(existing.getRegistrationStartAt(), existing.getRegistrationEndAt());
         applyOwnerScope(existing, targetCourseType, authentication);
         return toResponse(existing);
     }
@@ -144,6 +158,7 @@ public class TrainingCourseService {
             @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, allEntries = true)
     })
+    @Transactional
     public void delete(String courseCode) {
         trainingCourseRepository.delete(courseCode);
     }
@@ -152,6 +167,7 @@ public class TrainingCourseService {
             @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, allEntries = true)
     })
+    @Transactional
     public TrainingCourseResponse toggleStatus(String courseCode, StatusToggleRequest request, Authentication authentication) {
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái khóa huấn luyện");
@@ -199,6 +215,15 @@ public class TrainingCourseService {
                 .anyMatch(grantedAuthority -> authority.equals(grantedAuthority.getAuthority()));
     }
 
+    private void validateRegistrationWindow(OffsetDateTime registrationStartAt, OffsetDateTime registrationEndAt) {
+        if (registrationStartAt == null || registrationEndAt == null) {
+            return;
+        }
+        if (registrationEndAt.isBefore(registrationStartAt)) {
+            throw commonValidationHelper.validationError("registrationEndAt khÃ´ng Ä‘Æ°á»£c nhá» hÆ¡n registrationStartAt");
+        }
+    }
+
     private TrainingCourseResponse toResponse(TrainingCourse course) {
         return TrainingCourseResponse.builder()
                 .courseCode(course.getCourseCode())
@@ -208,6 +233,8 @@ public class TrainingCourseService {
                 .location(course.getLocation())
                 .startDate(course.getStartDate())
                 .endDate(course.getEndDate())
+                .registrationStartAt(course.getRegistrationStartAt())
+                .registrationEndAt(course.getRegistrationEndAt())
                 .courseType(course.getCourseType())
                 .dioceseId(course.getDiocese() == null ? null : course.getDiocese().getId())
                 .deaneryId(course.getDeanery() == null ? null : course.getDeanery().getId())

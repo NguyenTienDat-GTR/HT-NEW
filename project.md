@@ -691,6 +691,40 @@ Persistence and migration notes:
 - `ExecutiveBoardAssignment` now stores denormalized `diocese_id`, `deanery_id`, and `parish_id` for scope filtering and audit backfill
 - migration `V020__executive_board_assignment_cache_and_audit_scope.sql` adds scope columns, indexes, and partial uniqueness for active current assignments
 
+### Training Registration Batch Workflow
+
+Training course registration window:
+
+- `TrainingCourse` now stores `registrationStartAt` and `registrationEndAt`
+- create, update, and response contracts for `/api/training/courses` now expose both fields
+- batch registration is allowed only when `registrationStartAt <= now <= registrationEndAt`
+- if either field is missing, registration submission is rejected until the course is fully configured
+
+Training registration API contracts:
+
+- `POST /api/training/courses/{courseCode}/registrations` now accepts batch payload:
+- `leaderIds`
+- `recipientUsernames`
+- `exceptionReasonsByLeaderId`
+- the response returns batch summary fields: sender unit, total count, predicted auto-approved count, pending count, and the created registrations
+- `POST /api/training/courses/{courseCode}/deanery-submit` may optionally receive `recipientUsernames` and now returns the same batch-summary shape
+
+Submission and approval routing:
+
+- parish submission always uses the active parish scope from the current account
+- DT courses notify deanery approvers in the target deanery and RabbitMQ auto-approves eligible registrations at the deanery stage
+- non-DT courses submitted from parish to deanery notify deanery aggregators with `training.participation.submit.deanery` in the target deanery and do not auto-approve yet
+- when a deanery submits a non-DT course to diocese, the sender unit in the notification becomes the deanery, recipients must have `training.participation.approve.diocese` in the target diocese, and RabbitMQ auto-approves eligible registrations at the diocese stage
+- auto-approval is idempotent and skips records already approved or rejected for the target stage
+
+Notification delivery:
+
+- notifications are persisted in `training_notification`
+- inbox APIs live under `/api/system/notifications`
+- realtime delivery uses WebSocket/STOMP with endpoint `/ws/notifications` and per-user destination `/user/queue/notifications`
+- selected `recipientUsernames` are valid only when the target account is active, has the required effective permission, and resolves to the matching deanery or diocese scope
+- when `recipientUsernames` is omitted, the backend resolves all active accounts whose effective permissions and scopes match the submission or approval stage
+
 ### API Cache Policy
 
 Cache implementation notes:
@@ -835,6 +869,12 @@ The following work was added in this iteration:
 66. Added `V021__seed_role_permission_admin_permissions.sql` to seed role, permission, role-permission, and account-permission administration authorities.
 67. Tightened `v_role_permission_matrix` and `v_account_effective_permission` so inactive `role`, `permission`, `role_permission`, `account_role`, and `account_permission_override` records no longer produce effective permissions.
 68. Added automatic expiry revocation for `role_permission` and `account_permission_override`, driven by a scheduled background job that marks expired records inactive and preserves audit history with a system actor.
+69. Added `V022__training_registration_window_and_notifications.sql` to store registration windows on `training_course` and persist inbox notifications in `training_notification`.
+70. Changed `POST /api/training/courses/{courseCode}/registrations` from single registration to batch submission with `leaderIds`, optional `recipientUsernames`, and optional `exceptionReasonsByLeaderId`.
+71. Added registration-window enforcement so parish submissions are accepted only while the course is inside its configured registration period.
+72. Added inbox notification APIs under `/api/system/notifications` plus WebSocket/STOMP delivery through `/ws/notifications` and `/user/queue/notifications`.
+73. Added RabbitMQ workflow consumption for training batch submissions so DT courses auto-approve eligible registrations at deanery level, while non-DT courses auto-approve only after deanery submission to diocese.
+74. Added focused tests for batch registration flow, workflow auto-approval consumer behavior, and notification persistence plus realtime push, then re-verified the full suite with `./gradlew.bat test`.
 
 ## Technical Notes
 
@@ -849,6 +889,9 @@ The following work was added in this iteration:
 - If a later session extends parish or leader update flows, preserve the UUID-based storage model and implement same-diocese move validation rather than reintroducing code-based relations.
 - `Leader` currently treats `leaderLevel` as create-only input; do not re-open direct update of this field from the normal Leader update API.
 - Training scope resolution now prefers `account.diocese`, `account.deanery`, and `account.parish` before using the `Account -> Leader -> Parish -> Deanery -> Diocese` fallback chain.
+- Training registration now uses a two-step non-DT flow: parish -> deanery only aggregates and notifies deanery recipients, while deanery -> diocese is the first point where eligible non-DT registrations may auto-approve.
+- For DT courses, parish submission may auto-approve eligible registrations at deanery stage through RabbitMQ, but non-eligible records remain pending for manual deanery review.
+- Notification recipients are permission-driven rather than role-name-driven; custom roles such as `nghienhuan-liendoan` work as long as their effective permissions and resolved scopes match the current workflow step.
 - Training and certificate approval currently assume the progression map encoded in `TrainingWorkflowSupport`; if `CourseType` expands, update that helper first.
 - Certificate approval now owns leader promotion and `RankHistory` creation, so normal `Leader` update APIs should continue treating `leaderLevel` as non-editable business state.
 - `ExecutiveBoardAssignment` update now explicitly saves the entity after scope and uniqueness validation so changed leader/position/unit fields are persisted consistently.

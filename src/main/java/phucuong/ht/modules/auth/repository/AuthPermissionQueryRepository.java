@@ -27,6 +27,34 @@ public class AuthPermissionQueryRepository {
                 .toList();
     }
 
+    public boolean existsEffectivePermissionByUsername(String username, String permissionCode) {
+        Number result = (Number) entityManager.createNativeQuery("""
+                select count(1)
+                from v_account_effective_permission
+                where username = :username
+                  and permission_code = :permissionCode
+                """)
+                .setParameter("username", username)
+                .setParameter("permissionCode", permissionCode)
+                .getSingleResult();
+        return result != null && result.longValue() > 0;
+    }
+
+    public List<String> findUsernamesByPermissionCode(String permissionCode) {
+        @SuppressWarnings("unchecked")
+        List<Object> rows = entityManager.createNativeQuery("""
+                select distinct username
+                from v_account_effective_permission
+                where permission_code = :permissionCode
+                """)
+                .setParameter("permissionCode", permissionCode)
+                .getResultList();
+
+        return rows.stream()
+                .map(String::valueOf)
+                .toList();
+    }
+
     public record EffectivePermissionRow(String permissionCode, String effect) {
     }
 }

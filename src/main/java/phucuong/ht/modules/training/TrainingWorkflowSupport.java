@@ -55,4 +55,12 @@ public class TrainingWorkflowSupport {
     public boolean needsAutomaticEligibilityApproval(CourseType courseType) {
         return courseType != null;
     }
+
+    public boolean shouldAutoApproveAfterParishSubmission(CourseType courseType) {
+        return isDeaneryManaged(courseType);
+    }
+
+    public boolean shouldAutoApproveAfterDeanerySubmission(CourseType courseType) {
+        return courseType != null && !isDeaneryManaged(courseType);
+    }
 }
