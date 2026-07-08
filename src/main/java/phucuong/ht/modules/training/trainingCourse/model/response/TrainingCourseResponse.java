@@ -23,6 +23,7 @@ public class TrainingCourseResponse {
     private CourseType courseType;
     private UUID dioceseId;
     private UUID deaneryId;
+    private String scoreFormulaId;
     private String additionalNotes;
     private Boolean status;
     private OffsetDateTime createdAt;

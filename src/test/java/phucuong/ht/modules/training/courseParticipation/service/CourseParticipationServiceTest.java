@@ -9,10 +9,13 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.common.validation.AccountScopeValidationHelper;
 import phucuong.ht.common.validation.CommonValidationHelper;
+import phucuong.ht.modules.certificate.CertificateCodeGenerator;
+import phucuong.ht.modules.certificate.repository.CertificateRepository;
 import phucuong.ht.config.DomainEventPublisher;
 import phucuong.ht.modules.auth.model.AuthUserDetails;
 import phucuong.ht.modules.deanery.model.entity.Deanery;
 import phucuong.ht.modules.deanery.repository.DeaneryRepository;
+import phucuong.ht.modules.diocese.model.entity.Diocese;
 import phucuong.ht.modules.leader.model.entity.Leader;
 import phucuong.ht.modules.leader.model.enums.LeaderLevel;
 import phucuong.ht.modules.leader.repository.LeaderRepository;
@@ -21,13 +24,18 @@ import phucuong.ht.modules.notification.service.TrainingNotificationService;
 import phucuong.ht.modules.parish.model.entity.Parish;
 import phucuong.ht.modules.parish.repository.ParishRepository;
 import phucuong.ht.modules.training.TrainingWorkflowSupport;
+import phucuong.ht.modules.training.TrainingScoreFormulaEvaluator;
 import phucuong.ht.modules.training.courseParticipation.model.entity.CourseParticipation;
+import phucuong.ht.modules.training.courseParticipation.model.request.ComponentScoreRequest;
 import phucuong.ht.modules.training.courseParticipation.model.request.TrainingRegistrationRequest;
 import phucuong.ht.modules.training.courseParticipation.model.request.TrainingScoreRequest;
 import phucuong.ht.modules.training.courseParticipation.repository.CourseParticipationRepository;
 import phucuong.ht.modules.training.courseRequirement.model.entity.CourseRequirement;
 import phucuong.ht.modules.training.enums.CourseType;
 import phucuong.ht.modules.training.enums.WorkflowApprovalStatus;
+import phucuong.ht.modules.training.scoreComponentTemplate.model.entity.ScoreComponentTemplate;
+import phucuong.ht.modules.training.scoreFormulaTemplate.model.entity.ScoreFormulaComponent;
+import phucuong.ht.modules.training.scoreFormulaTemplate.model.entity.ScoreFormulaTemplate;
 import phucuong.ht.modules.training.trainingCourse.model.entity.TrainingCourse;
 import phucuong.ht.modules.training.trainingCourse.repository.TrainingCourseRepository;
 
@@ -67,6 +75,12 @@ class CourseParticipationServiceTest {
     private AccountScopeValidationHelper accountScopeValidationHelper;
 
     @Mock
+    private CertificateRepository certificateRepository;
+
+    @Mock
+    private CertificateCodeGenerator certificateCodeGenerator;
+
+    @Mock
     private DomainEventPublisher domainEventPublisher;
 
     @Mock
@@ -75,6 +89,7 @@ class CourseParticipationServiceTest {
     @Mock
     private TrainingNotificationService trainingNotificationService;
 
+    private final TrainingScoreFormulaEvaluator trainingScoreFormulaEvaluator = new TrainingScoreFormulaEvaluator(new CommonValidationHelper(new securityUtils()));
     private final CommonValidationHelper commonValidationHelper = new CommonValidationHelper(new securityUtils());
 
     @InjectMocks
@@ -156,18 +171,44 @@ class CourseParticipationServiceTest {
 
         CourseParticipation participation = new CourseParticipation();
         participation.setId("cp-1");
-        participation.setCourse(course(CourseType.SMKN_I));
+        TrainingCourse course = course(CourseType.SMKN_I);
+        course.setCourseName("SMKN I");
+        course.setHostYear(2026);
+        Diocese diocese = new Diocese();
+        diocese.setId(UUID.randomUUID());
+        diocese.setName("Phu Cuong");
+        course.setDiocese(diocese);
+        ScoreFormulaTemplate formula = new ScoreFormulaTemplate();
+        formula.setId("formula-1");
+        formula.setExpression("TINH_THAN + KY_NANG");
+        formula.setPassingScore(BigDecimal.valueOf(8));
+        ScoreComponentTemplate tinhThan = component("component-1", "TINH_THAN", BigDecimal.valueOf(10), 0);
+        ScoreComponentTemplate kyNang = component("component-2", "KY_NANG", BigDecimal.valueOf(10), 1);
+        formula.setComponents(List.of(link(formula, tinhThan, 0), link(formula, kyNang, 1)));
+        course.setScoreFormula(formula);
+        participation.setCourse(course);
         participation.setLeader(leader(UUID.randomUUID(), UUID.randomUUID(), LeaderLevel.HT_XU));
 
         when(courseParticipationRepository.findByIdWithLeaderAndCourse("cp-1")).thenReturn(Optional.of(participation));
+        when(certificateRepository.findByLeaderIdAndCourseCode(any(), any())).thenReturn(Optional.empty());
+        when(certificateCodeGenerator.buildPrefix(any(), any(), any())).thenReturn("PC-I-2026-");
+        when(certificateRepository.findHighestSequenceByCodePrefix("PC-I-2026-")).thenReturn(Optional.of(0L));
+        when(certificateCodeGenerator.buildCode(any(), any(), any(), any(Long.class))).thenReturn("PC-I-2026-1");
 
         TrainingScoreRequest request = new TrainingScoreRequest();
-        request.setTotalScore(BigDecimal.valueOf(8));
+        ComponentScoreRequest scoreOne = new ComponentScoreRequest();
+        scoreOne.setComponentId("component-1");
+        scoreOne.setScore(BigDecimal.valueOf(3));
+        ComponentScoreRequest scoreTwo = new ComponentScoreRequest();
+        scoreTwo.setComponentId("component-2");
+        scoreTwo.setScore(BigDecimal.valueOf(5));
+        request.setComponentScores(List.of(scoreOne, scoreTwo));
         request.setReview("pass");
 
         var response = courseParticipationService.score("cp-1", request, authentication("admin-diocese", "training.participation.score.diocese"));
 
         assertEquals(WorkflowApprovalStatus.PENDING, response.getCertificateApprovalStatus());
+        assertEquals(BigDecimal.valueOf(8), response.getTotalScore());
         verify(domainEventPublisher).publishAfterCommit(any());
     }
 
@@ -179,8 +220,11 @@ class CourseParticipationServiceTest {
                 parishRepository,
                 deaneryRepository,
                 new TrainingWorkflowSupport(),
+                trainingScoreFormulaEvaluator,
                 accountScopeValidationHelper,
                 commonValidationHelper,
+                certificateRepository,
+                certificateCodeGenerator,
                 domainEventPublisher,
                 trainingNotificationRecipientResolver,
                 trainingNotificationService
@@ -222,5 +266,23 @@ class CourseParticipationServiceTest {
         deanery.setName("Deanery A");
         parish.setDeanery(deanery);
         return parish;
+    }
+
+    private ScoreComponentTemplate component(String id, String code, BigDecimal maxScore, int displayOrder) {
+        ScoreComponentTemplate component = new ScoreComponentTemplate();
+        component.setId(id);
+        component.setCode(code);
+        component.setName(code);
+        component.setMaxScore(maxScore);
+        component.setDisplayOrder(displayOrder);
+        return component;
+    }
+
+    private ScoreFormulaComponent link(ScoreFormulaTemplate formula, ScoreComponentTemplate component, int displayOrder) {
+        ScoreFormulaComponent link = new ScoreFormulaComponent();
+        link.setFormula(formula);
+        link.setComponent(component);
+        link.setDisplayOrder(displayOrder);
+        return link;
     }
 }

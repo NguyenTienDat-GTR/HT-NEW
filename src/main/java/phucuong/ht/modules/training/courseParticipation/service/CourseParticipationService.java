@@ -9,6 +9,9 @@ import phucuong.ht.common.validation.AccountScopeValidationHelper;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.config.DomainEventMessage;
 import phucuong.ht.config.DomainEventPublisher;
+import phucuong.ht.modules.certificate.CertificateCodeGenerator;
+import phucuong.ht.modules.certificate.model.entity.Certificate;
+import phucuong.ht.modules.certificate.repository.CertificateRepository;
 import phucuong.ht.modules.deanery.model.entity.Deanery;
 import phucuong.ht.modules.deanery.repository.DeaneryRepository;
 import phucuong.ht.modules.leader.model.entity.Leader;
@@ -18,12 +21,16 @@ import phucuong.ht.modules.notification.service.TrainingNotificationRecipientRes
 import phucuong.ht.modules.notification.service.TrainingNotificationService;
 import phucuong.ht.modules.parish.model.entity.Parish;
 import phucuong.ht.modules.parish.repository.ParishRepository;
+import phucuong.ht.modules.training.TrainingScoreFormulaEvaluator;
 import phucuong.ht.modules.training.TrainingWorkflowSupport;
 import phucuong.ht.modules.training.courseParticipation.model.entity.CourseParticipation;
+import phucuong.ht.modules.training.courseParticipation.model.entity.CourseParticipationComponentScore;
+import phucuong.ht.modules.training.courseParticipation.model.request.ComponentScoreRequest;
 import phucuong.ht.modules.training.courseParticipation.model.request.TrainingApprovalRequest;
 import phucuong.ht.modules.training.courseParticipation.model.request.TrainingRegistrationRequest;
 import phucuong.ht.modules.training.courseParticipation.model.request.TrainingScoreRequest;
 import phucuong.ht.modules.training.courseParticipation.model.request.TrainingSubmissionRecipientRequest;
+import phucuong.ht.modules.training.courseParticipation.model.response.ComponentScoreResponse;
 import phucuong.ht.modules.training.courseParticipation.model.response.CourseParticipationResponse;
 import phucuong.ht.modules.training.courseParticipation.model.response.TrainingRegistrationBatchResponse;
 import phucuong.ht.modules.training.courseParticipation.repository.CourseParticipationRepository;
@@ -32,6 +39,8 @@ import phucuong.ht.modules.training.courseRequirement.model.entity.CourseRequire
 import phucuong.ht.modules.training.enums.CourseResult;
 import phucuong.ht.modules.training.enums.ParticipationStatus;
 import phucuong.ht.modules.training.enums.WorkflowApprovalStatus;
+import phucuong.ht.modules.training.scoreFormulaTemplate.model.entity.ScoreFormulaComponent;
+import phucuong.ht.modules.training.scoreFormulaTemplate.model.entity.ScoreFormulaTemplate;
 import phucuong.ht.modules.training.trainingCourse.model.entity.TrainingCourse;
 import phucuong.ht.modules.training.trainingCourse.repository.TrainingCourseRepository;
 
@@ -39,11 +48,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.Period;
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -59,8 +64,11 @@ public class CourseParticipationService {
     private final ParishRepository parishRepository;
     private final DeaneryRepository deaneryRepository;
     private final TrainingWorkflowSupport trainingWorkflowSupport;
+    private final TrainingScoreFormulaEvaluator trainingScoreFormulaEvaluator;
     private final AccountScopeValidationHelper accountScopeValidationHelper;
     private final CommonValidationHelper commonValidationHelper;
+    private final CertificateRepository certificateRepository;
+    private final CertificateCodeGenerator certificateCodeGenerator;
     private final DomainEventPublisher domainEventPublisher;
     private final TrainingNotificationRecipientResolver notificationRecipientResolver;
     private final TrainingNotificationService trainingNotificationService;
@@ -241,20 +249,124 @@ public class CourseParticipationService {
         CourseParticipation participation = courseParticipationRepository.findByIdWithLeaderAndCourse(participationId)
                 .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay dang ky khoa huan luyen " + participationId));
         String actor = commonValidationHelper.requireAuditActor(authentication, "Khong xac dinh duoc nguoi nhap diem");
-        participation.setTotalScore(request.getTotalScore());
+
+        ScoreFormulaTemplate scoreFormula = requireScoreFormula(participation);
+        Map<String, ComponentScoreRequest> requestedScores = normalizeComponentScores(request.getComponentScores());
+        Map<String, BigDecimal> formulaVariables = new LinkedHashMap<>();
+
+        participation.getComponentScores().clear();
+        List<ScoreFormulaComponent> formulaComponents = scoreFormula.getComponents().stream()
+                .sorted(Comparator.comparing(ScoreFormulaComponent::getDisplayOrder, Comparator.nullsLast(Integer::compareTo)))
+                .toList();
+        for (ScoreFormulaComponent formulaComponent : formulaComponents) {
+            ComponentScoreRequest componentRequest = requestedScores.remove(formulaComponent.getComponent().getId());
+            if (componentRequest == null) {
+                throw commonValidationHelper.validationError("Missing score for required component " + formulaComponent.getComponent().getCode());
+            }
+            if (componentRequest.getScore().compareTo(formulaComponent.getComponent().getMaxScore()) > 0) {
+                throw commonValidationHelper.validationError("Score exceeds maxScore for component " + formulaComponent.getComponent().getCode());
+            }
+
+            CourseParticipationComponentScore persistedScore = new CourseParticipationComponentScore();
+            persistedScore.setParticipation(participation);
+            persistedScore.setComponent(formulaComponent.getComponent());
+            persistedScore.setScore(componentRequest.getScore());
+            persistedScore.setNote(commonValidationHelper.normalizeOptionalText(componentRequest.getNote()));
+            persistedScore.setStatus(Boolean.TRUE);
+            persistedScore.setCreatedBy(actor);
+            persistedScore.setUpdatedBy(actor);
+            participation.getComponentScores().add(persistedScore);
+            formulaVariables.put(formulaComponent.getComponent().getCode(), componentRequest.getScore());
+        }
+        if (!requestedScores.isEmpty()) {
+            throw commonValidationHelper.validationError("Submitted componentScores contain components outside the course score formula");
+        }
+
+        BigDecimal totalScore = trainingScoreFormulaEvaluator.evaluate(scoreFormula.getExpression(), formulaVariables);
+        participation.setTotalScore(totalScore);
         participation.setReview(request.getReview());
         participation.setUpdatedBy(actor);
-        if (request.getTotalScore().compareTo(BigDecimal.valueOf(5)) >= 0) {
+        if (totalScore.compareTo(scoreFormula.getPassingScore()) >= 0) {
             participation.setResult(CourseResult.COMPLETED);
             participation.setParticipationStatus(ParticipationStatus.COMPLETED);
             participation.setCertificateApprovalStatus(WorkflowApprovalStatus.PENDING);
-            participation.setCertificateRequestedAt(OffsetDateTime.now());
+            if (participation.getCertificateRequestedAt() == null) {
+                participation.setCertificateRequestedAt(OffsetDateTime.now());
+            }
+            ensureSuggestedCertificateExists(participation, actor);
         } else {
             participation.setResult(CourseResult.UNCOMPLETED);
             participation.setParticipationStatus(ParticipationStatus.ATTENDED);
+            participation.setCertificateApprovalStatus(WorkflowApprovalStatus.NOT_REQUIRED);
+            participation.setCertificateRequestedAt(null);
         }
-        publishEvent("training.score.updated", "courseParticipation", participationId, actor, Map.of("score", request.getTotalScore()));
+        publishEvent("training.score.updated", "courseParticipation", participationId, actor, Map.of("score", totalScore));
         return toResponse(participation);
+    }
+
+    private ScoreFormulaTemplate requireScoreFormula(CourseParticipation participation) {
+        if (participation.getCourse() == null || participation.getCourse().getScoreFormula() == null) {
+            throw commonValidationHelper.validationError("Training course does not have a score formula");
+        }
+        ScoreFormulaTemplate formula = participation.getCourse().getScoreFormula();
+        if (formula.getComponents() == null || formula.getComponents().isEmpty()) {
+            throw commonValidationHelper.validationError("Training course score formula does not define any score components");
+        }
+        return formula;
+    }
+
+    private Map<String, ComponentScoreRequest> normalizeComponentScores(List<ComponentScoreRequest> componentScores) {
+        if (componentScores == null || componentScores.isEmpty()) {
+            throw commonValidationHelper.validationError("componentScores is required");
+        }
+        Map<String, ComponentScoreRequest> byComponentId = new LinkedHashMap<>();
+        for (ComponentScoreRequest componentScore : componentScores) {
+            if (byComponentId.put(componentScore.getComponentId(), componentScore) != null) {
+                throw commonValidationHelper.validationError("Duplicate component score for componentId " + componentScore.getComponentId());
+            }
+        }
+        return byComponentId;
+    }
+
+    private void ensureSuggestedCertificateExists(CourseParticipation participation, String actor) {
+        if (participation.getLeader() == null || participation.getCourse() == null) {
+            return;
+        }
+        if (certificateRepository.findByLeaderIdAndCourseCode(participation.getLeader().getId(), participation.getCourse().getCourseCode()).isPresent()) {
+            return;
+        }
+        Certificate certificate = new Certificate();
+        certificate.setCertificateCode(nextCertificateCode(participation));
+        certificate.setCertificateName(participation.getCourse().getCourseName());
+        certificate.setLeader(participation.getLeader());
+        certificate.setCourse(participation.getCourse());
+        certificate.setApprovalStatus(WorkflowApprovalStatus.PENDING);
+        certificate.setSystemSuggested(Boolean.TRUE);
+        certificate.setApprovedByException(Boolean.FALSE);
+        certificate.setStatus(Boolean.TRUE);
+        certificate.setCreatedBy(actor);
+        certificate.setUpdatedBy(actor);
+        certificateRepository.save(certificate);
+    }
+
+    private String nextCertificateCode(CourseParticipation participation) {
+        String unitName = unitNameForCertificate(participation.getCourse());
+        String prefix = certificateCodeGenerator.buildPrefix(unitName, participation.getCourse().getCourseType(), participation.getCourse().getHostYear());
+        long nextSequence = certificateRepository.findHighestSequenceByCodePrefix(prefix).orElse(0L) + 1L;
+        return certificateCodeGenerator.buildCode(unitName, participation.getCourse().getCourseType(), participation.getCourse().getHostYear(), nextSequence);
+    }
+
+    private String unitNameForCertificate(TrainingCourse course) {
+        if (trainingWorkflowSupport.isDeaneryManaged(course.getCourseType())) {
+            if (course.getDeanery() == null || course.getDeanery().getName() == null) {
+                throw commonValidationHelper.validationError("Deanery training course must resolve a deanery name to generate certificate code");
+            }
+            return course.getDeanery().getName();
+        }
+        if (course.getDiocese() == null || course.getDiocese().getName() == null) {
+            throw commonValidationHelper.validationError("Diocese training course must resolve a diocese name to generate certificate code");
+        }
+        return course.getDiocese().getName();
     }
 
     private TrainingCourse requireCourse(String courseCode) {
@@ -413,9 +525,15 @@ public class CourseParticipationService {
                 .leaderId(participation.getLeader() == null ? null : participation.getLeader().getId())
                 .courseCode(participation.getCourse() == null ? null : participation.getCourse().getCourseCode())
                 .courseType(participation.getCourse() == null ? null : participation.getCourse().getCourseType())
+                .scoreFormulaId(participation.getCourse() == null || participation.getCourse().getScoreFormula() == null ? null : participation.getCourse().getScoreFormula().getId())
                 .registrationDate(participation.getRegistrationDate())
                 .participationStatus(participation.getParticipationStatus())
                 .totalScore(participation.getTotalScore())
+                .passingScore(participation.getCourse() == null || participation.getCourse().getScoreFormula() == null ? null : participation.getCourse().getScoreFormula().getPassingScore())
+                .passed(participation.getCourse() != null
+                        && participation.getCourse().getScoreFormula() != null
+                        && participation.getTotalScore() != null
+                        && participation.getTotalScore().compareTo(participation.getCourse().getScoreFormula().getPassingScore()) >= 0)
                 .result(participation.getResult())
                 .review(participation.getReview())
                 .eligible(participation.getEligible())
@@ -428,6 +546,19 @@ public class CourseParticipationService {
                 .certificateRequestedAt(participation.getCertificateRequestedAt())
                 .certificateApprovedAt(participation.getCertificateApprovedAt())
                 .approvedBy(participation.getApprovedBy())
+                .componentScores(participation.getComponentScores().stream()
+                        .sorted(Comparator.comparing(score -> score.getComponent().getDisplayOrder(), Comparator.nullsLast(Integer::compareTo)))
+                        .map(score -> ComponentScoreResponse.builder()
+                                .id(score.getId())
+                                .componentId(score.getComponent() == null ? null : score.getComponent().getId())
+                                .componentCode(score.getComponent() == null ? null : score.getComponent().getCode())
+                                .componentName(score.getComponent() == null ? null : score.getComponent().getName())
+                                .maxScore(score.getComponent() == null ? null : score.getComponent().getMaxScore())
+                                .score(score.getScore())
+                                .note(score.getNote())
+                                .displayOrder(score.getComponent() == null ? null : score.getComponent().getDisplayOrder())
+                                .build())
+                        .toList())
                 .status(participation.getStatus())
                 .build();
     }

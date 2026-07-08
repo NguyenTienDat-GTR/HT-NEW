@@ -1,15 +1,17 @@
 package phucuong.ht.modules.training.courseParticipation.model.request;
 
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotEmpty;
 import lombok.Getter;
 import lombok.Setter;
-
-import java.math.BigDecimal;
+import java.util.List;
 
 @Getter
 @Setter
 public class TrainingScoreRequest {
-    @NotNull
-    private BigDecimal totalScore;
+    @Valid
+    @NotEmpty
+    private List<ComponentScoreRequest> componentScores;
+
     private String review;
 }

@@ -47,6 +47,15 @@ public class Certificate extends BaseModel {
     @Enumerated(EnumType.STRING)
     private WorkflowApprovalStatus approvalStatus;
 
+    @Column(name = "system_suggested")
+    private Boolean systemSuggested;
+
+    @Column(name = "approved_by_exception")
+    private Boolean approvedByException;
+
+    @Column(name = "exception_approval_reason")
+    private String exceptionApprovalReason;
+
     private OffsetDateTime approvedAt;
 
     private String approvedBy;

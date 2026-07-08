@@ -29,5 +29,7 @@ public class TrainingCourseUpdateRequest {
 
     private CourseType courseType;
 
+    private String scoreFormulaId;
+
     private String additionalNotes;
 }

@@ -34,5 +34,7 @@ public class TrainingCourseCreateRequest {
 
     private CourseType courseType;
 
+    private String scoreFormulaId;
+
     private String additionalNotes;
 }

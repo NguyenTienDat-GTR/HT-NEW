@@ -21,6 +21,9 @@ public class CertificateResponse {
     private LocalDate issueDate;
     private String imageUrl;
     private WorkflowApprovalStatus approvalStatus;
+    private Boolean systemSuggested;
+    private Boolean approvedByException;
+    private String exceptionApprovalReason;
     private OffsetDateTime approvedAt;
     private String approvedBy;
     private Boolean status;

@@ -7,6 +7,7 @@ import phucuong.ht.modules.deanery.model.entity.Deanery;
 import phucuong.ht.modules.diocese.model.entity.Diocese;
 import phucuong.ht.modules.training.courseRequirement.model.entity.CourseRequirement;
 import phucuong.ht.modules.training.enums.CourseType;
+import phucuong.ht.modules.training.scoreFormulaTemplate.model.entity.ScoreFormulaTemplate;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -53,6 +54,10 @@ public class TrainingCourse extends BaseModel {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "deanery_id")
     private Deanery deanery;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "score_formula_id")
+    private ScoreFormulaTemplate scoreFormula;
 
     private String additionalNotes;
 }

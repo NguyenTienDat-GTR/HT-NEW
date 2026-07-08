@@ -87,12 +87,21 @@ Relationships:
 - `CourseRequirement`
 - `TrainingCourse`
 - `CourseParticipation`
+- `ScoreComponentTemplate`
+- `ScoreFormulaTemplate`
+- `ScoreFormulaComponent`
+- `CourseParticipationComponentScore`
 
 Relationships:
 
 - `TrainingCourse` belongs to one `CourseRequirement`
+- `TrainingCourse` belongs to one `ScoreFormulaTemplate`
 - `CourseParticipation` belongs to one `Leader`
 - `CourseParticipation` belongs to one `TrainingCourse`
+- `ScoreFormulaTemplate` belongs to one scoped owner: `Diocese` or `Deanery`
+- `ScoreFormulaTemplate` references many `ScoreComponentTemplate` rows through `ScoreFormulaComponent`
+- `CourseParticipationComponentScore` belongs to one `CourseParticipation`
+- `CourseParticipationComponentScore` belongs to one `ScoreComponentTemplate`
 
 ### Certification
 
@@ -102,6 +111,12 @@ Relationships:
 
 - `Certificate` belongs to one `Leader`
 - `Certificate` belongs to one `TrainingCourse`
+
+Current certification workflow notes:
+
+- the system now auto-creates `PENDING` certificate proposals for leaders whose participation reaches the course passing score
+- certificate approval is still a user action and requires the existing scoped certificate approve permissions
+- approvers may still approve a certificate for a leader who did not reach the passing score, but they must provide an approval reason
 
 ### System
 
@@ -725,6 +740,33 @@ Notification delivery:
 - selected `recipientUsernames` are valid only when the target account is active, has the required effective permission, and resolves to the matching deanery or diocese scope
 - when `recipientUsernames` is omitted, the backend resolves all active accounts whose effective permissions and scopes match the submission or approval stage
 
+### Training Score Formula Workflow
+
+Training score templates:
+
+- score components are managed under `/api/training/score-components`
+- score formulas are managed under `/api/training/score-formulas`
+- each component and formula belongs to exactly one scope owner: a diocese or a deanery
+- each formula stores:
+- a reusable ordered component list
+- an arithmetic expression using component codes as variables
+- a `passingScore`
+
+Training course score configuration:
+
+- each `TrainingCourse` must reference exactly one `scoreFormulaId`
+- deanery-managed courses may only use deanery-owned formulas in the same deanery
+- diocese-managed courses may only use diocese-owned formulas in the same diocese
+
+Participation scoring behavior:
+
+- `PATCH /api/training/participations/{id}/score` now accepts `componentScores` instead of a direct `totalScore`
+- every participation in a course must be scored with the exact component set defined by that course's formula
+- the backend rejects missing, extra, duplicate, or over-max component scores
+- `totalScore` is calculated by the backend from the formula expression
+- pass or fail is determined by the formula `passingScore`
+- when a participation becomes passing and no certificate exists yet for the same leader and course, the system creates one `PENDING` certificate proposal automatically
+
 ### API Cache Policy
 
 Cache implementation notes:
@@ -876,6 +918,14 @@ The following work was added in this iteration:
 73. Added RabbitMQ workflow consumption for training batch submissions so DT courses auto-approve eligible registrations at deanery level, while non-DT courses auto-approve only after deanery submission to diocese.
 74. Added focused tests for batch registration flow, workflow auto-approval consumer behavior, and notification persistence plus realtime push, then re-verified the full suite with `./gradlew.bat test`.
 75. Added automatic `system_log` retention so audit logs older than 10 days are deleted by a scheduled cleanup job.
+76. Added reusable scoped score component templates and score formula templates for dioceses and deaneries, plus `V023__training_score_formula_and_certificate_proposals.sql` to persist them.
+77. Extended `TrainingCourse` so each course must reference one score formula, and restricted deanery or diocese courses to formulas in the same owning scope.
+78. Reworked `PATCH /api/training/participations/{id}/score` so the request now sends component scores, the backend validates them against the course formula, and `totalScore` is computed from the formula expression.
+79. Added automatic `PENDING` certificate proposal creation when a participation reaches the course passing score, while keeping final certificate approval as a scoped user action.
+80. Extended `Certificate` with `systemSuggested`, `approvedByException`, and `exceptionApprovalReason` so pending proposals and exception approvals are visible in the read model.
+81. Changed certificate approval so leaders below the passing score can still be approved manually when the approver supplies a reason.
+82. Added focused unit coverage for formula-based scoring and certificate approval with the new request shape.
+83. Updated the FE technical guides so training score templates, formula-based scoring, certificate proposals, and approval-exception flows are documented for frontend integration.
 
 ## Technical Notes
 
@@ -892,9 +942,13 @@ The following work was added in this iteration:
 - Training scope resolution now prefers `account.diocese`, `account.deanery`, and `account.parish` before using the `Account -> Leader -> Parish -> Deanery -> Diocese` fallback chain.
 - Training registration now uses a two-step non-DT flow: parish -> deanery only aggregates and notifies deanery recipients, while deanery -> diocese is the first point where eligible non-DT registrations may auto-approve.
 - For DT courses, parish submission may auto-approve eligible registrations at deanery stage through RabbitMQ, but non-eligible records remain pending for manual deanery review.
+- Training scoring now treats the course formula as the source of truth: every participation must send the exact component set from the course formula before the backend computes `totalScore`.
+- Score formulas use arithmetic expressions over component codes; if a formula changes, future scoring requests must follow the updated component set and variable names.
 - Notification recipients are permission-driven rather than role-name-driven; custom roles such as `nghienhuan-liendoan` work as long as their effective permissions and resolved scopes match the current workflow step.
 - Training and certificate approval currently assume the progression map encoded in `TrainingWorkflowSupport`; if `CourseType` expands, update that helper first.
 - Certificate approval now owns leader promotion and `RankHistory` creation, so normal `Leader` update APIs should continue treating `leaderLevel` as non-editable business state.
+- Certificate proposals may be auto-created by the system when a leader passes a course, but only a user with the scoped certificate approve permission can finalize the certificate.
+- Exception certificate approvals for non-passing leaders must always record `exceptionApprovalReason`.
 - `ExecutiveBoardAssignment` update now explicitly saves the entity after scope and uniqueness validation so changed leader/position/unit fields are persisted consistently.
 - `SystemLog` scope columns are now the source of truth for scoped audit-log reads; later resource modules should backfill these fields when they introduce new audit-visible resources.
 - `SystemLog` retention now deletes records whose `loggedAt` is older than 10 days through the `SystemLogRetentionScheduler` background job.
