@@ -74,7 +74,7 @@ class DioceseServiceTest {
 
         when(dioceseRepository.findAll(request)).thenReturn(page);
 
-        Page<Diocese> result = dioceseService.findAll(request);
+        Page<Diocese> result = dioceseService.findAll(request, null);
 
         assertSame(page, result);
     }
@@ -86,7 +86,7 @@ class DioceseServiceTest {
         diocese.setId(id);
         when(dioceseValidationHelper.requireExistingDiocese(id)).thenReturn(diocese);
 
-        Diocese result = dioceseService.findById(id);
+        Diocese result = dioceseService.findById(id, null);
 
         assertSame(diocese, result);
     }

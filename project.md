@@ -328,6 +328,14 @@ Authorization is based on:
 - `permission`
 - `account_permission_override`
 
+Effective permission behavior:
+
+- role-derived permissions are effective only when `account`, `account_role`, `role`, `role_permission`, and `permission` are all active
+- direct account overrides are effective only when `account`, `account_permission_override`, and `permission` are all active
+- expired `account_role`, `role_permission`, and `account_permission_override` records are excluded from effective permission resolution
+- a background scheduler now automatically flips expired `role_permission` and `account_permission_override` records to `status = false`
+- toggling any of the records above to `status = false` removes that grant or override from the next login or refresh result
+
 Authority strategy:
 
 - roles are exposed as `ROLE_<ROLE_CODE>`
@@ -384,6 +392,47 @@ Protected sample endpoint:
 
 - `GET /api/auth/admin/summary`
 - requires authority `auth.session.manage.all`
+
+### Role, Permission, And Override Administration
+
+System administration endpoints:
+
+- `POST /api/system/roles`
+- `GET /api/system/roles`
+- `GET /api/system/roles/{roleCode}`
+- `PUT /api/system/roles/{roleCode}`
+- `DELETE /api/system/roles/{roleCode}`
+- `PATCH /api/system/roles/{roleCode}/toggle-status`
+- `POST /api/system/permissions`
+- `GET /api/system/permissions`
+- `GET /api/system/permissions/{permissionCode}`
+- `PUT /api/system/permissions/{permissionCode}`
+- `DELETE /api/system/permissions/{permissionCode}`
+- `PATCH /api/system/permissions/{permissionCode}/toggle-status`
+- `POST /api/system/role-permissions`
+- `GET /api/system/role-permissions`
+- `GET /api/system/role-permissions/{id}`
+- `PUT /api/system/role-permissions/{id}`
+- `DELETE /api/system/role-permissions/{id}`
+- `PATCH /api/system/role-permissions/{id}/toggle-status`
+- `POST /api/system/account-permissions`
+- `GET /api/system/account-permissions`
+- `GET /api/system/account-permissions/{id}`
+- `PUT /api/system/account-permissions/{id}`
+- `DELETE /api/system/account-permissions/{id}`
+- `PATCH /api/system/account-permissions/{id}/toggle-status`
+
+Administration behavior:
+
+- `SUPER_ADMIN` may CRUD roles and permissions, assign or revoke permissions for any role, and manage direct account permission overrides system-wide
+- `ADMIN_DIOCESE` may also CRUD roles and permissions through the seeded role/permission admin authorities
+- `ADMIN_DIOCESE` may assign or revoke role permissions and account overrides only for non-`all` permission scopes
+- `ADMIN_DIOCESE` may not assign a permission whose `scopeCode` is `all`
+- `ADMIN_DIOCESE` may manage role-permission mappings only for roles whose `displayOrder` is equal to or lower than `ADMIN_DIOCESE`
+- `ADMIN_DIOCESE` may manage account-permission overrides only for accounts in the same active diocese
+- role and permission create or update requests do not write `status`; active or inactive state changes only through toggle-status
+- new business roles may be created through the role API and stay permission-empty until role-permission APIs assign explicit permissions
+- direct account overrides continue to use `ALLOW` and `DENY`, with optional `expiresAt`
 
 ### Diocese CRUD And Scope Rules
 
@@ -583,6 +632,156 @@ Leader permission seed notes:
 - Flyway migration `V017__add_leader_gender_and_permissions.sql` seeds the new `leader` permission resource and parish-scoped leader permissions
 - the current repo does not yet define a stable seed role code for parish-admin role assignment, so this pass seeds permissions only and documents the expected parish-admin usage here
 
+### Executive Board Assignment Scope Rules
+
+Executive board assignment API endpoints:
+
+- `POST /api/executive-board/assignments`
+- `GET /api/executive-board/assignments`
+- `GET /api/executive-board/assignments/{id}`
+- `PUT /api/executive-board/assignments/{id}`
+- `PATCH /api/executive-board/assignments/{id}/toggle-status`
+
+Assignment request contract:
+
+- `unitType`
+- `unitId`
+- `positionCode`
+- `leaderId`
+- `startDate`
+- `endDate`
+
+Assignment response behavior:
+
+- returns assignment `id` as UUID
+- returns `unitType`, `unitId`, `dioceseId`, `deaneryId`, and `parishId`
+- returns `leaderId`, `leaderFullName`, and `leaderParishId`
+- returns `positionCode` and `positionName`
+- returns audit timestamps and audit actors
+
+Assignment business rules:
+
+- `position.positionType` must match request `unitType`
+- `unitId` must resolve to an active real unit of that `unitType`
+- a leader may hold multiple different positions
+- the same `positionCode` may be assigned in many different concrete units
+- each concrete `unitType + unitId + positionCode` may have only one current active assignment
+- current active assignment means `status = true` and `endDate IS NULL`
+- ended historical assignments may coexist for the same concrete unit and position
+- leader membership must match the target scope exactly:
+- `DIOCESE`: leader parish -> deanery -> diocese must equal `unitId`
+- `DEANERY`: leader parish -> deanery must equal `unitId`
+- `PARISH`: leader parish must equal `unitId`
+
+Assignment authorization behavior:
+
+- `SUPER_ADMIN` inherits the seeded assignment permissions through its existing all-permission role grant
+- diocese-scoped admins use `organization.executive_board_assignment.create.read.update.diocese` for diocesan assignments
+- diocese-scoped admins may also manage descendant deanery and parish assignments inside their own diocese
+- deanery-scoped admins use `organization.executive_board_assignment.create.read.update.deanery`
+- deanery-scoped admins may also manage descendant parish assignments inside their own deanery
+- parish-scoped admins use `organization.executive_board_assignment.create.read.update.parish`
+- parish-scoped admins may manage only assignments in their own parish
+- `GET /api/executive-board/assignments` is scope-filtered by resolved `dioceseId`, `deaneryId`, or `parishId`
+- `PATCH /api/executive-board/assignments/{id}/toggle-status` requires confirmation text `Xác nhận`
+
+Persistence and migration notes:
+
+- `ExecutiveBoardAssignment.unitId` is now UUID-backed
+- `ExecutiveBoardAssignment` now stores denormalized `diocese_id`, `deanery_id`, and `parish_id` for scope filtering and audit backfill
+- migration `V020__executive_board_assignment_cache_and_audit_scope.sql` adds scope columns, indexes, and partial uniqueness for active current assignments
+
+### Training Registration Batch Workflow
+
+Training course registration window:
+
+- `TrainingCourse` now stores `registrationStartAt` and `registrationEndAt`
+- create, update, and response contracts for `/api/training/courses` now expose both fields
+- batch registration is allowed only when `registrationStartAt <= now <= registrationEndAt`
+- if either field is missing, registration submission is rejected until the course is fully configured
+
+Training registration API contracts:
+
+- `POST /api/training/courses/{courseCode}/registrations` now accepts batch payload:
+- `leaderIds`
+- `recipientUsernames`
+- `exceptionReasonsByLeaderId`
+- the response returns batch summary fields: sender unit, total count, predicted auto-approved count, pending count, and the created registrations
+- `POST /api/training/courses/{courseCode}/deanery-submit` may optionally receive `recipientUsernames` and now returns the same batch-summary shape
+
+Submission and approval routing:
+
+- parish submission always uses the active parish scope from the current account
+- DT courses notify deanery approvers in the target deanery and RabbitMQ auto-approves eligible registrations at the deanery stage
+- non-DT courses submitted from parish to deanery notify deanery aggregators with `training.participation.submit.deanery` in the target deanery and do not auto-approve yet
+- when a deanery submits a non-DT course to diocese, the sender unit in the notification becomes the deanery, recipients must have `training.participation.approve.diocese` in the target diocese, and RabbitMQ auto-approves eligible registrations at the diocese stage
+- auto-approval is idempotent and skips records already approved or rejected for the target stage
+
+Notification delivery:
+
+- notifications are persisted in `training_notification`
+- inbox APIs live under `/api/system/notifications`
+- realtime delivery uses WebSocket/STOMP with endpoint `/ws/notifications` and per-user destination `/user/queue/notifications`
+- selected `recipientUsernames` are valid only when the target account is active, has the required effective permission, and resolves to the matching deanery or diocese scope
+- when `recipientUsernames` is omitted, the backend resolves all active accounts whose effective permissions and scopes match the submission or approval stage
+
+### API Cache Policy
+
+Cache implementation notes:
+
+- API read caching now uses Redis with key prefix `ht:api-cache:`
+- cache keys include normalized request payload, current username, authority hash, and resolved scope ids
+- scope-aware keys prevent one admin from reading another scope's cached result
+- audit-log APIs are intentionally not cached
+
+Current cache groups and TTLs:
+
+- org-unit lists/details: 10 minutes
+- position lists/details: 10 minutes
+- leader lists/details: 5 minutes
+- executive-board assignment lists/details: 5 minutes
+- training-course, requirement, and certificate read models: 3 minutes
+
+Current cache invalidation behavior:
+
+- org-unit write and toggle-status flows evict their own list/detail caches
+- leader write and toggle-status flows evict leader caches
+- position write and toggle-status flows evict position caches
+- executive-board assignment create/update/toggle-status evicts assignment caches
+- training-course, requirement, certificate, and workflow mutations evict their related read-model caches
+- eviction is broad by cache group so in-flight stale scoped pages are not served after writes
+
+### Audit Log Read Scope Rules
+
+Audit log API endpoints:
+
+- `GET /api/system/audit-logs`
+- `GET /api/system/audit-logs/{id}`
+
+Audit log permission model:
+
+- `system.audit_log.read.all`
+- `system.audit_log.read.diocese`
+- `system.audit_log.read.deanery`
+- `system.audit_log.read.parish`
+
+Audit log scope behavior:
+
+- `system_log` now stores nullable `unit_type`, `unit_id`, `diocese_id`, `deanery_id`, and `parish_id`
+- existing logs are backfilled where scope can be derived from the resource type and resource id
+- logs that remain unscoped stay visible only to `system.audit_log.read.all`
+- diocese-scoped readers see logs in their own diocese plus descendant deanery/parish activity tied to that diocese
+- deanery-scoped readers see logs in their own deanery plus descendant parish activity tied to that deanery
+- parish-scoped readers see only logs in their own parish
+- detail access follows the same scope rules as list access
+
+Audit logging implementation notes:
+
+- `ApiAuditLoggingFilter` records API requests after the filter chain completes
+- resource scope is resolved from direct account scope first, then from the resource id when the target resource is scope-bound
+- `system_log.username` is written only when the username exists as a persisted `account`, which keeps security/integration tests and unauthenticated flows from violating the legacy foreign key
+- audit-log reads use `SystemLogAccessEvaluator` plus scope-filtered repository search instead of cache
+
 ### Docker Development Workflow
 
 Development container behavior:
@@ -646,6 +845,36 @@ The following work was added in this iteration:
 42. Changed Leader primary key from legacy `leader_code` string to UUID `id` and added `V018__migrate_leader_primary_key_to_uuid.sql` to migrate dependent foreign keys.
 43. Changed Leader API contract so requests now send `fullName`; the backend splits it into `lastName` and `firstName`, with the final token treated as `firstName`.
 44. Extended `LeaderLevel` with `NONE` and `HT_XU`.
+45. Added Redis-backed API rate limiting with tiered auth/write/read/workflow limits and wired the filter into the Spring Security chain.
+46. Enabled RabbitMQ AMQP support, completed `rabbitMQConfig`, and added post-commit domain-event publishing plus an audit consumer hook.
+47. Added `V019__account_direct_scope_and_training_permissions.sql` to seed `ADMIN_DIOCESE`, `ADMIN_DEANERY`, `ADMIN_PARISH`, direct account scope columns, and training/position/account-role permissions.
+48. Extended `Account` with optional direct `diocese`, `deanery`, and `parish` scope references, and updated account scope resolution to prefer direct scope before falling back through `Leader`.
+49. Added `POST /api/system/account-roles` with scoped assignment rules so only `SUPER_ADMIN` can assign `ADMIN_DIOCESE`, while diocese and deanery admins can assign equal-or-lower roles inside their own scope.
+50. Added CRUD API for `TrainingCourse` under `/api/training/courses` with deanery-only handling for `SMTL_DT` and `SMKN_DT`, and diocese-only handling for the remaining `CourseType` values.
+51. Added CRUD API for `CourseRequirement` under `/api/training/requirements`, scoped by course ownership so DT requirements belong to deaneries and the remaining requirements belong to dioceses.
+52. Added workflow APIs for training registration, deanery submission, deanery approval, diocese approval, and score updates under `/api/training`.
+53. Added registration workflow state to `CourseParticipation`, including eligibility, exception reason, parish submit time, deanery submit time, multi-level approval status, and certificate request state.
+54. Added CRUD API for `Certificate` under `/api/certificates` plus an approval endpoint that requires a passing score, updates `Leader.leaderLevel`, and appends `RankHistory`.
+55. Added CRUD API for `Position` under `/api/positions` with permission checks mapped to `UnitType.DIOCESE`, `UnitType.DEANERY`, and `UnitType.PARISH`.
+56. Added focused unit tests for scoped role assignment, training registration and scoring workflow, and certificate approval with leader promotion.
+57. Added scoped `ExecutiveBoardAssignment` CRUD and toggle-status APIs so one active current leader can hold a given position per concrete unit while the same position may exist across many different units.
+58. Added Redis-backed scope-safe caching for selected org-unit, leader, position, executive-board, training, requirement, and certificate read APIs, with write-side invalidation.
+59. Added `GET /api/system/audit-logs` and `GET /api/system/audit-logs/{id}` with scoped visibility for diocese, deanery, and parish admins.
+60. Added `V020__executive_board_assignment_cache_and_audit_scope.sql` to migrate assignment scope columns, backfill audit-log scope columns, add indexes, enforce active-current uniqueness, and seed assignment plus scoped audit-log permissions.
+61. Updated the API audit logging filter to derive scope from account/resource context and to persist `system_log.username` only when the actor exists as an `account`.
+62. Added assignment service tests, assignment controller security tests, and audit-log scope service tests, then verified the full suite with `./gradlew.bat test`.
+63. Added CRUD and toggle-status APIs for `Role` and `Permission` under `/api/system`.
+64. Added role-permission management APIs so permissions can be assigned to or revoked from both seeded and newly created roles.
+65. Added account-level permission override APIs for direct `ALLOW` and `DENY` grants with optional expiration.
+66. Added `V021__seed_role_permission_admin_permissions.sql` to seed role, permission, role-permission, and account-permission administration authorities.
+67. Tightened `v_role_permission_matrix` and `v_account_effective_permission` so inactive `role`, `permission`, `role_permission`, `account_role`, and `account_permission_override` records no longer produce effective permissions.
+68. Added automatic expiry revocation for `role_permission` and `account_permission_override`, driven by a scheduled background job that marks expired records inactive and preserves audit history with a system actor.
+69. Added `V022__training_registration_window_and_notifications.sql` to store registration windows on `training_course` and persist inbox notifications in `training_notification`.
+70. Changed `POST /api/training/courses/{courseCode}/registrations` from single registration to batch submission with `leaderIds`, optional `recipientUsernames`, and optional `exceptionReasonsByLeaderId`.
+71. Added registration-window enforcement so parish submissions are accepted only while the course is inside its configured registration period.
+72. Added inbox notification APIs under `/api/system/notifications` plus WebSocket/STOMP delivery through `/ws/notifications` and `/user/queue/notifications`.
+73. Added RabbitMQ workflow consumption for training batch submissions so DT courses auto-approve eligible registrations at deanery level, while non-DT courses auto-approve only after deanery submission to diocese.
+74. Added focused tests for batch registration flow, workflow auto-approval consumer behavior, and notification persistence plus realtime push, then re-verified the full suite with `./gradlew.bat test`.
 
 ## Technical Notes
 
@@ -659,5 +888,14 @@ The following work was added in this iteration:
 - If a later session continues organization work, start from the helper structure under `common/validation`, `modules/diocese/helper`, `modules/deanery/helper`, and `modules/parish/helper` instead of moving validation back into services.
 - If a later session extends parish or leader update flows, preserve the UUID-based storage model and implement same-diocese move validation rather than reintroducing code-based relations.
 - `Leader` currently treats `leaderLevel` as create-only input; do not re-open direct update of this field from the normal Leader update API.
-- Planned follow-up: when Certificate CRUD/service and training completion lifecycle are implemented, valid training certificates should trigger recalculation of `leaderLevel` and append matching `RankHistory` records instead of relying on manual level edits.
+- Training scope resolution now prefers `account.diocese`, `account.deanery`, and `account.parish` before using the `Account -> Leader -> Parish -> Deanery -> Diocese` fallback chain.
+- Training registration now uses a two-step non-DT flow: parish -> deanery only aggregates and notifies deanery recipients, while deanery -> diocese is the first point where eligible non-DT registrations may auto-approve.
+- For DT courses, parish submission may auto-approve eligible registrations at deanery stage through RabbitMQ, but non-eligible records remain pending for manual deanery review.
+- Notification recipients are permission-driven rather than role-name-driven; custom roles such as `nghienhuan-liendoan` work as long as their effective permissions and resolved scopes match the current workflow step.
+- Training and certificate approval currently assume the progression map encoded in `TrainingWorkflowSupport`; if `CourseType` expands, update that helper first.
+- Certificate approval now owns leader promotion and `RankHistory` creation, so normal `Leader` update APIs should continue treating `leaderLevel` as non-editable business state.
+- `ExecutiveBoardAssignment` update now explicitly saves the entity after scope and uniqueness validation so changed leader/position/unit fields are persisted consistently.
+- `SystemLog` scope columns are now the source of truth for scoped audit-log reads; later resource modules should backfill these fields when they introduce new audit-visible resources.
+- Role and permission administration now use `/api/system/roles`, `/api/system/permissions`, `/api/system/role-permissions`, and `/api/system/account-permissions` rather than folding everything into the original `system.role.manage.all` and `system.permission.manage.all` permissions.
+- The effective-permission SQL views are now part of the security contract: if a record with authorization impact is toggled to inactive, it must disappear from the next JWT login or refresh result without needing extra Java-side filtering.
 

@@ -85,7 +85,7 @@ class LeaderControllerSecurityIntegrationTest {
         when(leaderAccessEvaluator.canRead(any(), eq(leaderId))).thenReturn(true);
         when(leaderAccessEvaluator.canUpdate(any(), eq(leaderId))).thenReturn(true);
         when(leaderService.create(any(LeaderCreateRequest.class), any())).thenReturn(sampleLeader(leaderId));
-        when(leaderService.findById(leaderId)).thenReturn(sampleLeader(leaderId));
+        when(leaderService.findById(eq(leaderId), any())).thenReturn(sampleLeader(leaderId));
         when(leaderService.update(eq(leaderId), any(LeaderUpdateRequest.class), any())).thenReturn(sampleLeader(leaderId));
 
         mockMvc.perform(post("/api/leaders")

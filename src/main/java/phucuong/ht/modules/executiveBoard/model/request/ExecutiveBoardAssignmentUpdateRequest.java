@@ -13,7 +13,7 @@ public class ExecutiveBoardAssignmentUpdateRequest {
 
     private UnitType unitType;
 
-    private String unitId;
+    private UUID unitId;
 
     private UUID leaderId;
 

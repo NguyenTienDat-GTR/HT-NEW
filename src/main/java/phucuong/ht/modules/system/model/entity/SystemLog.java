@@ -2,9 +2,11 @@ package phucuong.ht.modules.system.model.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.common.model.BaseModel;
 
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "system_log")
@@ -21,9 +23,8 @@ public class SystemLog extends BaseModel {
     @Column(name = "id", nullable = false, updatable = false)
     private String id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "username")
-    private Account account;
+    @Column(name = "username")
+    private String username;
 
     @Column(name = "action", length = 100)
     private String action;
@@ -66,4 +67,20 @@ public class SystemLog extends BaseModel {
 
     @Column(name = "logged_at", nullable = false)
     private OffsetDateTime loggedAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "unit_type")
+    private UnitType unitType;
+
+    @Column(name = "unit_id")
+    private UUID unitId;
+
+    @Column(name = "diocese_id")
+    private UUID dioceseId;
+
+    @Column(name = "deanery_id")
+    private UUID deaneryId;
+
+    @Column(name = "parish_id")
+    private UUID parishId;
 }

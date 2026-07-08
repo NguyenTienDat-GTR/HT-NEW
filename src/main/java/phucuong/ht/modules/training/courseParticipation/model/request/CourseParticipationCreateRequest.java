@@ -1,6 +1,7 @@
 package phucuong.ht.modules.training.courseParticipation.model.request;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
 import phucuong.ht.modules.training.enums.CourseResult;
@@ -14,7 +15,7 @@ import java.util.UUID;
 @Setter
 public class CourseParticipationCreateRequest {
 
-    @NotBlank
+    @NotNull
     private UUID leaderId;
 
     @NotBlank

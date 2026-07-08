@@ -20,44 +20,60 @@ public interface AccountRepository extends JpaRepository<Account, String> {
     Optional<Account> findActiveByUsername(@Param("username") String username);
 
     @Query("""
-            select d.id
+            select coalesce(ad.id, addi.id, apdi.id, ld.id)
             from Account a
-            join a.leader l
-            join l.parish p
-            join p.deanery de
-            join de.diocese d
+            left join a.diocese ad
+            left join a.deanery ade
+            left join ade.diocese addi
+            left join a.parish ap
+            left join ap.deanery apde
+            left join apde.diocese apdi
+            left join a.leader l
+            left join l.parish p
+            left join p.deanery de
+            left join de.diocese ld
             where a.username = :username
               and a.status = true
-              and l.status = true
-              and p.status = true
-              and de.status = true
-              and d.status = true
+              and (
+                    (ad is not null and ad.status = true)
+                    or (ad is null and ade is not null and ade.status = true and addi.status = true)
+                    or (ad is null and ade is null and ap is not null and ap.status = true and apde.status = true and apdi.status = true)
+                    or (ad is null and ade is null and ap is null and l.status = true and p.status = true and de.status = true and ld.status = true)
+              )
             """)
     Optional<UUID> findActiveDioceseIdByUsername(@Param("username") String username);
 
     @Query("""
-            select de.id
+            select coalesce(ade.id, apde.id, de.id)
             from Account a
-            join a.leader l
-            join l.parish p
-            join p.deanery de
+            left join a.deanery ade
+            left join a.parish ap
+            left join ap.deanery apde
+            left join a.leader l
+            left join l.parish p
+            left join p.deanery de
             where a.username = :username
               and a.status = true
-              and l.status = true
-              and p.status = true
-              and de.status = true
+              and (
+                    (ade is not null and ade.status = true)
+                    or (ade is null and ap is not null and ap.status = true and apde.status = true)
+                    or (ade is null and ap is null and l.status = true and p.status = true and de.status = true)
+              )
             """)
     Optional<UUID> findActiveDeaneryIdByUsername(@Param("username") String username);
 
     @Query("""
-            select p.id
+            select coalesce(ap.id, p.id)
             from Account a
-            join a.leader l
-            join l.parish p
+            left join a.parish ap
+            left join a.leader l
+            left join l.parish p
             where a.username = :username
               and a.status = true
-              and l.status = true
-              and p.status = true
+              and (
+                    (ap is not null and ap.status = true)
+                    or (ap is null and l.status = true and p.status = true)
+              )
             """)
     Optional<UUID> findActiveParishIdByUsername(@Param("username") String username);
 

@@ -1,6 +1,9 @@
 package phucuong.ht.modules.deanery.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -11,6 +14,7 @@ import phucuong.ht.common.exception.errorCode;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.utils.securityUtils;
+import phucuong.ht.config.CacheNames;
 import phucuong.ht.modules.auth.exception.ApiException;
 import phucuong.ht.modules.deanery.helper.DeaneryScopeHelper;
 import phucuong.ht.modules.deanery.helper.DeaneryValidationHelper;
@@ -42,6 +46,10 @@ public class DeaneryService {
     private final DeaneryScopeHelper deaneryScopeHelper;
     private final securityUtils securityUtils;
 
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.DEANERY_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DEANERY_DETAIL, allEntries = true)
+    })
     public DeaneryResponse create(DeaneryCreateRequest request, Authentication authentication) {
         deaneryValidationHelper.validateCreateInput(request);
         deaneryScopeHelper.enforceCreateScope(request, authentication);
@@ -70,6 +78,7 @@ public class DeaneryService {
         }
     }
 
+    @Cacheable(cacheNames = CacheNames.DEANERY_LIST, key = "@cacheScopeKeyHelper.listKey(#authentication, #request)")
     public Page<DeaneryResponse> findAll(BaseSearchRequest request, Authentication authentication) {
         BaseSearchRequest scopedRequest = copyRequest(request);
 
@@ -92,10 +101,15 @@ public class DeaneryService {
         throw new ApiException(HttpStatus.FORBIDDEN, errorCode.ACCESS_DENIED, "Tài khoản hiện tại không có quyền xem danh sách giáo hạt");
     }
 
-    public DeaneryResponse findById(UUID id) {
+    @Cacheable(cacheNames = CacheNames.DEANERY_DETAIL, key = "@cacheScopeKeyHelper.detailKey(#authentication, #id)")
+    public DeaneryResponse findById(UUID id, Authentication authentication) {
         return toDeaneryResponse(deaneryValidationHelper.requireExistingDeaneryWithDiocese(id));
     }
 
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.DEANERY_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DEANERY_DETAIL, allEntries = true)
+    })
     public DeaneryResponse update(UUID id, DeaneryUpdateRequest request, Authentication authentication) {
         deaneryValidationHelper.validateUpdateInput(request);
         Deanery existingDeanery = deaneryValidationHelper.requireExistingDeaneryWithDiocese(id);
@@ -109,6 +123,10 @@ public class DeaneryService {
         }
     }
 
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.DEANERY_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DEANERY_DETAIL, allEntries = true)
+    })
     public void delete(UUID id, Authentication authentication) {
         Deanery deanery = deaneryValidationHelper.requireExistingDeanery(id);
         deaneryScopeHelper.enforceDeleteScope(authentication, deanery);
@@ -119,6 +137,10 @@ public class DeaneryService {
         }
     }
 
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.DEANERY_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DEANERY_DETAIL, allEntries = true)
+    })
     public DeaneryResponse toggleStatus(UUID id, StatusToggleRequest request, Authentication authentication) {
         deaneryValidationHelper.requireExistingDeaneryWithDiocese(id);
         deaneryValidationHelper.validateToggleConfirmation(request == null ? null : request.getConfirmationText());

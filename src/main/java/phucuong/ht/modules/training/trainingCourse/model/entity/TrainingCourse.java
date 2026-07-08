@@ -3,9 +3,13 @@ package phucuong.ht.modules.training.trainingCourse.model.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import phucuong.ht.common.model.BaseModel;
+import phucuong.ht.modules.deanery.model.entity.Deanery;
+import phucuong.ht.modules.diocese.model.entity.Diocese;
 import phucuong.ht.modules.training.courseRequirement.model.entity.CourseRequirement;
+import phucuong.ht.modules.training.enums.CourseType;
 
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 
 @Entity
 @Table(name = "training_course")
@@ -35,7 +39,20 @@ public class TrainingCourse extends BaseModel {
 
     private LocalDate endDate;
 
-    private String courseType;
+    private OffsetDateTime registrationStartAt;
+
+    private OffsetDateTime registrationEndAt;
+
+    @Enumerated(EnumType.STRING)
+    private CourseType courseType;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "diocese_id")
+    private Diocese diocese;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "deanery_id")
+    private Deanery deanery;
 
     private String additionalNotes;
 }

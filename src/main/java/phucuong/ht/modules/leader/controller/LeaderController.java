@@ -37,8 +37,8 @@ public class LeaderController {
 
     @GetMapping("/{id}")
     @PreAuthorize("@leaderAccessEvaluator.canRead(authentication, #id)")
-    public apiResponse<LeaderResponse> findById(@PathVariable UUID id) {
-        return apiResponse.success("Lấy thông tin leader thành công", leaderService.findById(id));
+    public apiResponse<LeaderResponse> findById(@PathVariable UUID id, Authentication authentication) {
+        return apiResponse.success("Lấy thông tin leader thành công", leaderService.findById(id, authentication));
     }
 
     @PutMapping("/{id}")

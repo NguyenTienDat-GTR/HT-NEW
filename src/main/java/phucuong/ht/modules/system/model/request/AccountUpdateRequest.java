@@ -13,6 +13,12 @@ public class AccountUpdateRequest {
 
     private UUID leaderId;
 
+    private UUID dioceseId;
+
+    private UUID deaneryId;
+
+    private UUID parishId;
+
     private String authProvider;
 
     private String providerId;
