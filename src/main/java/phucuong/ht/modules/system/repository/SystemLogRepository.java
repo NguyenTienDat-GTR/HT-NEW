@@ -10,6 +10,7 @@ import phucuong.ht.modules.system.model.entity.SystemLog;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.time.OffsetDateTime;
 
 @Repository
 public class SystemLogRepository extends BaseRepo<SystemLog, String> {
@@ -65,5 +66,17 @@ public class SystemLogRepository extends BaseRepo<SystemLog, String> {
                 .deaneryId(log.getDeaneryId())
                 .parishId(log.getParishId())
                 .build());
+    }
+
+    @Transactional
+    public int deleteByLoggedAtBefore(OffsetDateTime cutoff) {
+        return entityManager.createQuery(
+                        """
+                                delete from SystemLog sl
+                                where sl.loggedAt < :cutoff
+                                """
+                )
+                .setParameter("cutoff", cutoff)
+                .executeUpdate();
     }
 }
