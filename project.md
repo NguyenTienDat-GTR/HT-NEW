@@ -360,6 +360,7 @@ Authority strategy:
 
 - roles are exposed as `ROLE_<ROLE_CODE>`
 - permissions are exposed as raw permission codes
+- permission CRUD endpoints now require `ROLE_SUPER_ADMIN` directly, even if an account still carries legacy `system.permission.*.all` authorities
 
 Current seeded administrative permissions include:
 
@@ -445,7 +446,11 @@ System administration endpoints:
 Administration behavior:
 
 - `SUPER_ADMIN` may CRUD roles and permissions, assign or revoke permissions for any role, and manage direct account permission overrides system-wide
-- `ADMIN_DIOCESE` may also CRUD roles and permissions through the seeded role/permission admin authorities
+- `SUPER_ADMIN` is the only role allowed to call `/api/system/permissions`
+- permission create requests no longer accept `permissionCode` or `isSystem`; the backend derives `permissionCode` as `<module>.<resource>.<action>.<scope>` and saves user-created permissions with `isSystem = false`
+- permission update requests are metadata-only and currently allow `permissionName`, `description`, and `displayOrder`
+- system permissions (`isSystem = true`) may not be deleted through the permission API
+- `ADMIN_DIOCESE` may still manage roles through the seeded role admin authorities, but may not CRUD permissions
 - `ADMIN_DIOCESE` may assign or revoke role permissions and account overrides only for non-`all` permission scopes
 - `ADMIN_DIOCESE` may not assign a permission whose `scopeCode` is `all`
 - `ADMIN_DIOCESE` may manage role-permission mappings only for roles whose `displayOrder` is equal to or lower than `ADMIN_DIOCESE`
@@ -453,6 +458,7 @@ Administration behavior:
 - role and permission create or update requests do not write `status`; active or inactive state changes only through toggle-status
 - new business roles may be created through the role API and stay permission-empty until role-permission APIs assign explicit permissions
 - direct account overrides continue to use `ALLOW` and `DENY`, with optional `expiresAt`
+- `api_permission_policy` now records API-to-permission mappings for the direct system/auth endpoints that are still protected by fixed permission codes; scope-heavy business APIs continue to rely on their existing `AccessEvaluator` classes
 
 ### Diocese CRUD And Scope Rules
 

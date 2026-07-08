@@ -41,9 +41,8 @@ class PermissionControllerSecurityIntegrationTest {
     private PermissionManagementService permissionManagementService;
 
     @Test
-    void shouldAllowCreatePermissionWithAuthority() throws Exception {
+    void shouldAllowCreatePermissionForSuperAdminRole() throws Exception {
         PermissionCreateRequest request = new PermissionCreateRequest();
-        request.setPermissionCode("custom.permission.read.diocese");
         request.setPermissionName("Custom permission");
         request.setModuleCode("system");
         request.setResourceCode("permission");
@@ -51,27 +50,30 @@ class PermissionControllerSecurityIntegrationTest {
         request.setScopeCode("diocese");
 
         when(permissionManagementService.create(any(PermissionCreateRequest.class), any())).thenReturn(PermissionResponse.builder()
-                .permissionCode("custom.permission.read.diocese")
+                .permissionCode("system.permission.read.diocese")
                 .permissionName("Custom permission")
                 .status(true)
                 .build());
 
         mockMvc.perform(post("/api/system/permissions")
-                        .header("Authorization", bearer(token(List.of("SUPER_ADMIN"), List.of("system.permission.create.all"))))
+                        .header("Authorization", bearer(token(List.of("SUPER_ADMIN"), List.of())))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.permissionCode").value("custom.permission.read.diocese"));
+                .andExpect(jsonPath("$.data.permissionCode").value("system.permission.read.diocese"));
     }
 
     @Test
-    void shouldRejectCreatePermissionWithoutAuthority() throws Exception {
+    void shouldRejectCreatePermissionForNonSuperAdminEvenWithLegacyPermissionAuthority() throws Exception {
         PermissionCreateRequest request = new PermissionCreateRequest();
-        request.setPermissionCode("custom.permission.read.diocese");
         request.setPermissionName("Custom permission");
+        request.setModuleCode("system");
+        request.setResourceCode("permission");
+        request.setActionCode("read");
+        request.setScopeCode("diocese");
 
         mockMvc.perform(post("/api/system/permissions")
-                        .header("Authorization", bearer(token(List.of("SUPER_ADMIN"), List.of())))
+                        .header("Authorization", bearer(token(List.of("ADMIN_DIOCESE"), List.of("system.permission.create.all"))))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isForbidden());
