@@ -1,6 +1,8 @@
 package phucuong.ht.modules.leader.model.enums;
 
 public enum LeaderLevel {
+    NONE,
+    HT_XU,
     DU_TRUONG,
     HT_I,
     HT_II,

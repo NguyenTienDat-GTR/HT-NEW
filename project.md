@@ -188,7 +188,7 @@ Dynamic search/filter supports nested paths such as:
 - `leader.parish.deanery.diocese.id`
 - `course.requirement.requirementCode`
 
-Request DTOs use relation IDs like `parishId`, `deaneryId`, or `leaderCode`, while `BaseSearchRequest` uses entity paths.
+Request DTOs use relation IDs like `parishId`, `deaneryId`, or `leaderId`, while `BaseSearchRequest` uses entity paths.
 
 Current behavior notes:
 
@@ -538,6 +538,51 @@ Leader follow-up notes:
 - the future rule remains: leader may move to another parish only within the same diocese
 - the leader move rule is documented here but not enforced yet
 
+### Leader CRU And Scope Rules
+
+Leader API endpoints:
+
+- `POST /api/leaders`
+- `GET /api/leaders`
+- `GET /api/leaders/{id}`
+- `PUT /api/leaders/{id}`
+- `PATCH /api/leaders/{id}/toggle-status`
+
+Leader request/response behavior:
+
+- `Leader` now includes `gender` enum with values `NAM` and `NU`
+- `POST /api/leaders`, `GET /api/leaders`, `GET /api/leaders/{id}`, and `PUT /api/leaders/{id}` return `LeaderResponse`
+- the response contains leader scalar fields plus UUID `id`, `fullName`, and `parishId`
+- the response does not expose nested `parish` objects
+
+Leader authorization behavior:
+
+- only parish-scoped leader admins may call the current Leader endpoints
+- current leader permissions are `organization.leader.create.parish`, `organization.leader.read.parish`, and `organization.leader.update.parish`
+- `GET /api/leaders` is scope-filtered to the active parish resolved from `account.leader.parish`
+- read, update, and toggle-status are allowed only when the target leader belongs to the active parish of the current account
+- if the current account has no linked active leader or no resolvable active parish, access is denied
+- this pass does not grant Leader API access to `SUPER_ADMIN`
+
+Leader validation and update behavior:
+
+- create requires `holyName`, `fullName`, `birthDate`, `email`, `gender`, `leaderLevel`, and `parishId`
+- request `fullName` is split internally so the last token becomes `firstName` and the remaining prefix becomes `lastName`
+- `phoneNumber` must be a Vietnamese phone number with exactly 10 digits and leading `0`
+- optional blank text values are normalized to `null`
+- `email` must remain unique across leaders
+- update request no longer accepts `leaderLevel`
+- `leaderLevel` is only set during the initial create flow in this pass
+- `LeaderLevel` currently includes `NONE`, `HT_XU`, `DU_TRUONG`, `HT_I`, `HT_II`, `HT_III`, `HLV_I`, `HLV_II`, and `HLV_III`
+- update may change personal fields, `gender`, `email`, `phoneNumber`, and `parishId`
+- `parishId` may only remain the same active parish of the current parish-scoped admin; moving a leader to another parish is rejected
+- `PATCH /api/leaders/{id}/toggle-status` requires confirmation text `Xác nhận`
+
+Leader permission seed notes:
+
+- Flyway migration `V017__add_leader_gender_and_permissions.sql` seeds the new `leader` permission resource and parish-scoped leader permissions
+- the current repo does not yet define a stable seed role code for parish-admin role assignment, so this pass seeds permissions only and documents the expected parish-admin usage here
+
 ### Docker Development Workflow
 
 Development container behavior:
@@ -591,6 +636,16 @@ The following work was added in this iteration:
 32. Enforced exact confirmation text `Xác nhận` for every toggle-status request through a shared `StatusToggleRequest` contract and common validation helper.
 33. Added scoped toggle-status RBAC so `SUPER_ADMIN` can toggle all, diocese admins can toggle child deaneries and descendant parishes, deanery admins can toggle child parishes, and no scoped admin can toggle its own org unit.
 34. Extended toggle-status persistence to write audit actor data through `BaseRepo.toggleStatus(id, actor)` and added service, evaluator, and controller security tests for the new endpoints.
+35. Created branch `feature/leader-management` and added parish-scoped Leader CRU plus toggle-status endpoints.
+36. Added `LeaderGender` with values `NAM` and `NU`, exposed it in Leader create/update/response contracts, and kept the new source strings UTF-8 safe.
+37. Added `LeaderController`, `LeaderService`, `LeaderRepository`, `LeaderValidationHelper`, `LeaderScopeHelper`, `LeaderAccessEvaluator`, and `LeaderResponse`.
+38. Enforced parish-scoped Leader RBAC so only accounts with leader parish permissions can create, list, read, update, and toggle leaders inside their own parish.
+39. Removed manual `leaderLevel` updates from the Leader update request; level remains writable only during initial create in this pass.
+40. Added `V017__add_leader_gender_and_permissions.sql` to add the `gender` column and seed parish-scoped leader permissions.
+41. Added leader-focused helper, service, evaluator, and controller security tests.
+42. Changed Leader primary key from legacy `leader_code` string to UUID `id` and added `V018__migrate_leader_primary_key_to_uuid.sql` to migrate dependent foreign keys.
+43. Changed Leader API contract so requests now send `fullName`; the backend splits it into `lastName` and `firstName`, with the final token treated as `firstName`.
+44. Extended `LeaderLevel` with `NONE` and `HT_XU`.
 
 ## Technical Notes
 
@@ -603,4 +658,6 @@ The following work was added in this iteration:
 - Organization modules no longer rely on generated slug codes or business `code` values.
 - If a later session continues organization work, start from the helper structure under `common/validation`, `modules/diocese/helper`, `modules/deanery/helper`, and `modules/parish/helper` instead of moving validation back into services.
 - If a later session extends parish or leader update flows, preserve the UUID-based storage model and implement same-diocese move validation rather than reintroducing code-based relations.
+- `Leader` currently treats `leaderLevel` as create-only input; do not re-open direct update of this field from the normal Leader update API.
+- Planned follow-up: when Certificate CRUD/service and training completion lifecycle are implemented, valid training certificates should trigger recalculation of `leaderLevel` and append matching `RankHistory` records instead of relying on manual level edits.
 

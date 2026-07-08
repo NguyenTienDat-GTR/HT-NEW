@@ -5,12 +5,13 @@ import lombok.Setter;
 import phucuong.ht.modules.leader.model.enums.LeaderLevel;
 
 import java.time.LocalDate;
+import java.util.UUID;
 
 @Getter
 @Setter
 public class RankHistoryUpdateRequest {
 
-    private String leaderCode;
+    private UUID leaderId;
 
     private LeaderLevel oldLevel;
 

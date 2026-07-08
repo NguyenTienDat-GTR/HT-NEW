@@ -8,13 +8,14 @@ import phucuong.ht.modules.training.enums.ParticipationStatus;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.UUID;
 
 @Getter
 @Setter
 public class CourseParticipationCreateRequest {
 
     @NotBlank
-    private String leaderCode;
+    private UUID leaderId;
 
     @NotBlank
     private String courseCode;

@@ -5,6 +5,7 @@ import lombok.Setter;
 import phucuong.ht.common.enums.UnitType;
 
 import java.time.LocalDate;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -14,7 +15,7 @@ public class ExecutiveBoardAssignmentUpdateRequest {
 
     private String unitId;
 
-    private String leaderCode;
+    private UUID leaderId;
 
     private String positionCode;
 

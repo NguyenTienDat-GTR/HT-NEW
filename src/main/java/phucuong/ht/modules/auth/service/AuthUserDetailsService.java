@@ -33,7 +33,7 @@ public class AuthUserDetailsService implements UserDetailsService {
         return AuthUserDetails.databasePrincipal(
                 account.getUsername(),
                 account.getPassword(),
-                account.getLeader() != null ? account.getLeader().getLeaderCode() : null,
+                account.getLeader() != null && account.getLeader().getId() != null ? account.getLeader().getId().toString() : null,
                 roles,
                 permissions,
                 Boolean.TRUE.equals(account.getStatus())

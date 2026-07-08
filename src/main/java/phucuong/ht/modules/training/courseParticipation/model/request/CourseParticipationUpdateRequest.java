@@ -7,12 +7,13 @@ import phucuong.ht.modules.training.enums.ParticipationStatus;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.UUID;
 
 @Getter
 @Setter
 public class CourseParticipationUpdateRequest {
 
-    private String leaderCode;
+    private UUID leaderId;
 
     private String courseCode;
 

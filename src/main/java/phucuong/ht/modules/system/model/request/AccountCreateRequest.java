@@ -4,6 +4,8 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.util.UUID;
+
 @Getter
 @Setter
 public class AccountCreateRequest {
@@ -14,7 +16,7 @@ public class AccountCreateRequest {
     @NotBlank
     private String password;
 
-    private String leaderCode;
+    private UUID leaderId;
 
     private String authProvider;
 

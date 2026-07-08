@@ -7,6 +7,7 @@ import lombok.Setter;
 import phucuong.ht.common.enums.UnitType;
 
 import java.time.LocalDate;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -19,7 +20,7 @@ public class ExecutiveBoardAssignmentCreateRequest {
     private String unitId;
 
     @NotBlank
-    private String leaderCode;
+    private UUID leaderId;
 
     @NotBlank
     private String positionCode;

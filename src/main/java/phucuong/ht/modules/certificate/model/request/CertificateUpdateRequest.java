@@ -4,6 +4,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.time.LocalDate;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -13,7 +14,7 @@ public class CertificateUpdateRequest {
 
     private String certificateName;
 
-    private String leaderCode;
+    private UUID leaderId;
 
     private String courseCode;
 
