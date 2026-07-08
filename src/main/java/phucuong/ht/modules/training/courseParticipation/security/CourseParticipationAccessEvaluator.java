@@ -34,7 +34,7 @@ public class CourseParticipationAccessEvaluator {
     public boolean canDeanerySubmit(Authentication authentication, String courseCode) {
         return securityUtils.hasAuthority(authentication, SUBMIT_DEANERY)
                 && trainingCourseRepository.findByCodeWithRequirement(courseCode)
-                .map(course -> trainingWorkflowSupport.isDeaneryManaged(course.getCourseType()) ? false : scopedDeanery(authentication, courseCode))
+                .map(course -> trainingWorkflowSupport.isDeaneryManaged(course.getCourseType()) ? false : scopedDiocese(authentication, courseCode))
                 .orElse(false);
     }
 

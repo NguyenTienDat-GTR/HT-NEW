@@ -18,6 +18,8 @@ public class rabbitMQConfig {
     public static final String DOMAIN_ROUTING_KEY = "domain.event";
     public static final String DOMAIN_AUDIT_QUEUE = "ht.domain.events.audit";
     public static final String DOMAIN_AUDIT_DLQ = "ht.domain.events.audit.dlq";
+    public static final String DOMAIN_WORKFLOW_QUEUE = "ht.domain.events.workflow";
+    public static final String DOMAIN_WORKFLOW_DLQ = "ht.domain.events.workflow.dlq";
 
     @Bean
     public DirectExchange domainExchange() {
@@ -30,10 +32,23 @@ public class rabbitMQConfig {
     }
 
     @Bean
+    public Queue domainWorkflowDlq() {
+        return QueueBuilder.durable(DOMAIN_WORKFLOW_DLQ).build();
+    }
+
+    @Bean
     public Queue domainAuditQueue() {
         return QueueBuilder.durable(DOMAIN_AUDIT_QUEUE)
                 .withArgument("x-dead-letter-exchange", DOMAIN_EXCHANGE)
                 .withArgument("x-dead-letter-routing-key", DOMAIN_AUDIT_DLQ)
+                .build();
+    }
+
+    @Bean
+    public Queue domainWorkflowQueue() {
+        return QueueBuilder.durable(DOMAIN_WORKFLOW_QUEUE)
+                .withArgument("x-dead-letter-exchange", DOMAIN_EXCHANGE)
+                .withArgument("x-dead-letter-routing-key", DOMAIN_WORKFLOW_DLQ)
                 .build();
     }
 
@@ -45,6 +60,16 @@ public class rabbitMQConfig {
     @Bean
     public Binding domainAuditDlqBinding() {
         return BindingBuilder.bind(domainAuditDlq()).to(domainExchange()).with(DOMAIN_AUDIT_DLQ);
+    }
+
+    @Bean
+    public Binding domainWorkflowBinding() {
+        return BindingBuilder.bind(domainWorkflowQueue()).to(domainExchange()).with(DOMAIN_ROUTING_KEY);
+    }
+
+    @Bean
+    public Binding domainWorkflowDlqBinding() {
+        return BindingBuilder.bind(domainWorkflowDlq()).to(domainExchange()).with(DOMAIN_WORKFLOW_DLQ);
     }
 
     @Bean

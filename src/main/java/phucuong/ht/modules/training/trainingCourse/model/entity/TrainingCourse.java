@@ -9,6 +9,7 @@ import phucuong.ht.modules.training.courseRequirement.model.entity.CourseRequire
 import phucuong.ht.modules.training.enums.CourseType;
 
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 
 @Entity
 @Table(name = "training_course")
@@ -37,6 +38,10 @@ public class TrainingCourse extends BaseModel {
     private LocalDate startDate;
 
     private LocalDate endDate;
+
+    private OffsetDateTime registrationStartAt;
+
+    private OffsetDateTime registrationEndAt;
 
     @Enumerated(EnumType.STRING)
     private CourseType courseType;

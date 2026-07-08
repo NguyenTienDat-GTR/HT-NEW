@@ -18,6 +18,8 @@ public class TrainingCourseResponse {
     private String location;
     private LocalDate startDate;
     private LocalDate endDate;
+    private OffsetDateTime registrationStartAt;
+    private OffsetDateTime registrationEndAt;
     private CourseType courseType;
     private UUID dioceseId;
     private UUID deaneryId;
