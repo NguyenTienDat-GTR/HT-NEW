@@ -22,25 +22,25 @@ public class PermissionController {
     private final PermissionManagementService permissionManagementService;
 
     @PostMapping
-    @PreAuthorize("@securityUtils.hasAuthority(authentication, 'system.permission.create.all')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public apiResponse<PermissionResponse> create(@Valid @RequestBody PermissionCreateRequest request, Authentication authentication) {
         return apiResponse.success("Tạo quyền thành công", permissionManagementService.create(request, authentication));
     }
 
     @GetMapping
-    @PreAuthorize("@securityUtils.hasAuthority(authentication, 'system.permission.read.all')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public apiResponse<Page<PermissionResponse>> findAll(@ModelAttribute BaseSearchRequest request) {
         return apiResponse.success("Lấy danh sách quyền thành công", permissionManagementService.findAll(request));
     }
 
     @GetMapping("/{permissionCode}")
-    @PreAuthorize("@securityUtils.hasAuthority(authentication, 'system.permission.read.all')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public apiResponse<PermissionResponse> findById(@PathVariable String permissionCode) {
         return apiResponse.success("Lấy thông tin quyền thành công", permissionManagementService.findById(permissionCode));
     }
 
     @PutMapping("/{permissionCode}")
-    @PreAuthorize("@securityUtils.hasAuthority(authentication, 'system.permission.update.all')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public apiResponse<PermissionResponse> update(
             @PathVariable String permissionCode,
             @Valid @RequestBody PermissionUpdateRequest request,
@@ -50,14 +50,14 @@ public class PermissionController {
     }
 
     @DeleteMapping("/{permissionCode}")
-    @PreAuthorize("@securityUtils.hasAuthority(authentication, 'system.permission.delete.all')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public apiResponse<Void> delete(@PathVariable String permissionCode) {
         permissionManagementService.delete(permissionCode);
         return apiResponse.success("Xóa quyền thành công", null);
     }
 
     @PatchMapping("/{permissionCode}/toggle-status")
-    @PreAuthorize("@securityUtils.hasAuthority(authentication, 'system.permission.update.all')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public apiResponse<PermissionResponse> toggleStatus(
             @PathVariable String permissionCode,
             @Valid @RequestBody StatusToggleRequest request,

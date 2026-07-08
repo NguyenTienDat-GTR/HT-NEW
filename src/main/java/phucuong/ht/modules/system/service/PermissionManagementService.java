@@ -1,6 +1,8 @@
 package phucuong.ht.modules.system.service;
 
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.security.core.Authentication;
@@ -14,8 +16,10 @@ import phucuong.ht.modules.system.model.request.PermissionUpdateRequest;
 import phucuong.ht.modules.system.model.response.PermissionResponse;
 import phucuong.ht.modules.system.repository.SystemPermissionRepository;
 
+import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -25,11 +29,30 @@ public class PermissionManagementService {
     private final CommonValidationHelper commonValidationHelper;
 
     public PermissionResponse create(PermissionCreateRequest request, Authentication authentication) {
-        if (systemPermissionRepository.findById(request.getPermissionCode()).isPresent()) {
-            throw commonValidationHelper.conflict("Quyền đã tồn tại: " + request.getPermissionCode());
+        String moduleCode = normalizeCode(request.getModuleCode(), "Ma module khong duoc de trong");
+        String resourceCode = normalizeCode(request.getResourceCode(), "Ma resource khong duoc de trong");
+        String actionCode = normalizeCode(request.getActionCode(), "Ma action khong duoc de trong");
+        String scopeCode = normalizeCode(request.getScopeCode(), "Ma scope khong duoc de trong");
+        String permissionCode = buildPermissionCode(moduleCode, resourceCode, actionCode, scopeCode);
+
+        validateTaxonomy(moduleCode, resourceCode, actionCode, scopeCode);
+        if (systemPermissionRepository.findById(permissionCode).isPresent()) {
+            throw commonValidationHelper.conflict("Quyen da ton tai: " + permissionCode);
         }
-        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tạo quyền");
-        Permission permission = systemPermissionRepository.create(request, actor);
+
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Khong xac dinh duoc nguoi tao quyen");
+        PermissionWritePayload payload = new PermissionWritePayload();
+        payload.setPermissionCode(permissionCode);
+        payload.setPermissionName(normalizeRequiredText(request.getPermissionName(), "Ten quyen khong duoc de trong"));
+        payload.setModuleCode(moduleCode);
+        payload.setResourceCode(resourceCode);
+        payload.setActionCode(actionCode);
+        payload.setScopeCode(scopeCode);
+        payload.setDescription(commonValidationHelper.normalizeOptionalText(request.getDescription()));
+        payload.setIsSystem(Boolean.FALSE);
+        payload.setDisplayOrder(request.getDisplayOrder());
+
+        Permission permission = systemPermissionRepository.create(payload, actor);
         return toResponse(permission);
     }
 
@@ -40,47 +63,73 @@ public class PermissionManagementService {
 
     public PermissionResponse findById(String permissionCode) {
         return toResponse(systemPermissionRepository.findById(permissionCode)
-                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy quyền: " + permissionCode)));
+                .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay quyen: " + permissionCode)));
     }
 
     public PermissionResponse update(String permissionCode, PermissionUpdateRequest request, Authentication authentication) {
         Permission permission = systemPermissionRepository.findById(permissionCode)
-                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy quyền: " + permissionCode));
+                .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay quyen: " + permissionCode));
+
         if (request.getPermissionName() != null) {
-            permission.setPermissionName(commonValidationHelper.normalizeRequiredText(request.getPermissionName()));
-        }
-        if (request.getModuleCode() != null) {
-            systemPermissionRepository.update(permissionCode, request, commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật quyền"));
-            permission = systemPermissionRepository.getRequired(permissionCode);
-            return toResponse(permission);
-        }
-        if (request.getResourceCode() != null || request.getActionCode() != null || request.getScopeCode() != null) {
-            systemPermissionRepository.update(permissionCode, request, commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật quyền"));
-            permission = systemPermissionRepository.getRequired(permissionCode);
-            return toResponse(permission);
+            permission.setPermissionName(normalizeRequiredText(request.getPermissionName(), "Ten quyen khong duoc de trong"));
         }
         if (request.getDescription() != null) {
             permission.setDescription(commonValidationHelper.normalizeOptionalText(request.getDescription()));
         }
-        if (request.getIsSystem() != null) {
-            permission.setIsSystem(request.getIsSystem());
-        }
         if (request.getDisplayOrder() != null) {
             permission.setDisplayOrder(request.getDisplayOrder());
         }
-        permission.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật quyền"));
+
+        permission.setUpdatedAt(OffsetDateTime.now());
+        permission.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Khong xac dinh duoc nguoi cap nhat quyen"));
         return toResponse(permission);
     }
 
     public void delete(String permissionCode) {
+        Permission permission = systemPermissionRepository.findById(permissionCode)
+                .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay quyen: " + permissionCode));
+        if (Boolean.TRUE.equals(permission.getIsSystem())) {
+            throw commonValidationHelper.forbidden("Khong the xoa quyen he thong");
+        }
         systemPermissionRepository.delete(permissionCode);
     }
 
     public PermissionResponse toggleStatus(String permissionCode, StatusToggleRequest request, Authentication authentication) {
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
-        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái quyền");
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Khong xac dinh duoc nguoi doi trang thai quyen");
         systemPermissionRepository.toggleStatus(permissionCode, actor);
         return findById(permissionCode);
+    }
+
+    private void validateTaxonomy(String moduleCode, String resourceCode, String actionCode, String scopeCode) {
+        if (!systemPermissionRepository.existsModuleCode(moduleCode)) {
+            throw commonValidationHelper.notFound("Khong tim thay module: " + moduleCode);
+        }
+        if (!systemPermissionRepository.existsResourceCodeInModule(resourceCode, moduleCode)) {
+            throw commonValidationHelper.notFound("Khong tim thay resource " + resourceCode + " trong module " + moduleCode);
+        }
+        if (!systemPermissionRepository.existsActionCode(actionCode)) {
+            throw commonValidationHelper.notFound("Khong tim thay action: " + actionCode);
+        }
+        if (!systemPermissionRepository.existsScopeCode(scopeCode)) {
+            throw commonValidationHelper.notFound("Khong tim thay scope: " + scopeCode);
+        }
+    }
+
+    private String buildPermissionCode(String moduleCode, String resourceCode, String actionCode, String scopeCode) {
+        return String.join(".", moduleCode, resourceCode, actionCode, scopeCode);
+    }
+
+    private String normalizeCode(String value, String message) {
+        return normalizeRequiredText(value, message).toLowerCase(Locale.ROOT);
+    }
+
+    private String normalizeRequiredText(String value, String message) {
+        String normalized = commonValidationHelper.normalizeRequiredText(value);
+        if (normalized == null || normalized.isBlank()) {
+            throw commonValidationHelper.validationError(message);
+        }
+        return normalized;
     }
 
     private BaseSearchRequest copyRequest(BaseSearchRequest request) {
@@ -112,5 +161,19 @@ public class PermissionManagementService {
                 .createdAt(permission.getCreatedAt())
                 .updatedAt(permission.getUpdatedAt())
                 .build();
+    }
+
+    @Getter
+    @Setter
+    private static class PermissionWritePayload {
+        private String permissionCode;
+        private String permissionName;
+        private String moduleCode;
+        private String resourceCode;
+        private String actionCode;
+        private String scopeCode;
+        private String description;
+        private Boolean isSystem;
+        private Integer displayOrder;
     }
 }

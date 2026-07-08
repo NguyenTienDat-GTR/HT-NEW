@@ -9,22 +9,21 @@ import lombok.Setter;
 public class PermissionCreateRequest {
 
     @NotBlank
-    private String permissionCode;
-
-    @NotBlank
     private String permissionName;
 
+    @NotBlank
     private String moduleCode;
 
+    @NotBlank
     private String resourceCode;
 
+    @NotBlank
     private String actionCode;
 
+    @NotBlank
     private String scopeCode;
 
     private String description;
-
-    private Boolean isSystem;
 
     private Integer displayOrder;
 }
