@@ -70,7 +70,7 @@ class DeaneryControllerSecurityIntegrationTest {
         UUID deaneryId = UUID.randomUUID();
         UUID dioceseId = UUID.randomUUID();
         when(deaneryAccessEvaluator.canRead(any(), eq(deaneryId))).thenReturn(true);
-        when(deaneryService.findById(deaneryId)).thenReturn(sampleDeanery(deaneryId, dioceseId));
+        when(deaneryService.findById(eq(deaneryId), any())).thenReturn(sampleDeanery(deaneryId, dioceseId));
 
         mockMvc.perform(get("/api/deaneries/" + deaneryId)
                         .header("Authorization", bearer(deaneryAdminToken(List.of(DeaneryAccessEvaluator.READ_DEANERY)))))

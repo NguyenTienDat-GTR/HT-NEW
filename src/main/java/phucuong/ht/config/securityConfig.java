@@ -35,6 +35,7 @@ public class securityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final ApiRateLimitFilter apiRateLimitFilter;
+    private final ApiAuditLoggingFilter apiAuditLoggingFilter;
     private final AuthUserDetailsService authUserDetailsService;
     private final ObjectMapper objectMapper;
 
@@ -79,7 +80,8 @@ public class securityConfig {
                         })
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterAfter(apiRateLimitFilter, JwtAuthenticationFilter.class);
+                .addFilterAfter(apiRateLimitFilter, JwtAuthenticationFilter.class)
+                .addFilterAfter(apiAuditLoggingFilter, ApiRateLimitFilter.class);
 
         return http.build();
     }

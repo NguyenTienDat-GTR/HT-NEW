@@ -1,6 +1,9 @@
 package phucuong.ht.modules.leader.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -10,6 +13,7 @@ import org.springframework.stereotype.Service;
 import phucuong.ht.common.exception.errorCode;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
+import phucuong.ht.config.CacheNames;
 import phucuong.ht.modules.auth.exception.ApiException;
 import phucuong.ht.modules.leader.helper.LeaderScopeHelper;
 import phucuong.ht.modules.leader.helper.LeaderValidationHelper;
@@ -38,6 +42,10 @@ public class LeaderService {
     private final LeaderValidationHelper leaderValidationHelper;
     private final LeaderScopeHelper leaderScopeHelper;
 
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.LEADER_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.LEADER_DETAIL, allEntries = true)
+    })
     public LeaderResponse create(LeaderCreateRequest request, Authentication authentication) {
         leaderValidationHelper.validateCreateInput(request);
         leaderScopeHelper.enforceCreateScope(request, authentication);
@@ -67,6 +75,7 @@ public class LeaderService {
         }
     }
 
+    @Cacheable(cacheNames = CacheNames.LEADER_LIST, key = "@cacheScopeKeyHelper.listKey(#authentication, #request)")
     public Page<LeaderResponse> findAll(BaseSearchRequest request, Authentication authentication) {
         if (!hasReadAuthority(authentication)) {
             throw new ApiException(HttpStatus.FORBIDDEN, errorCode.ACCESS_DENIED, "Tài khoản hiện tại không có quyền xem danh sách leader");
@@ -78,10 +87,15 @@ public class LeaderService {
         return loadLeaderPageWithParish(scopedRequest);
     }
 
-    public LeaderResponse findById(UUID id) {
+    @Cacheable(cacheNames = CacheNames.LEADER_DETAIL, key = "@cacheScopeKeyHelper.detailKey(#authentication, #id)")
+    public LeaderResponse findById(UUID id, Authentication authentication) {
         return toLeaderResponse(leaderValidationHelper.requireExistingLeaderWithParish(id));
     }
 
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.LEADER_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.LEADER_DETAIL, allEntries = true)
+    })
     public LeaderResponse update(UUID id, LeaderUpdateRequest request, Authentication authentication) {
         leaderValidationHelper.validateUpdateInput(request);
         Leader existingLeader = leaderValidationHelper.requireExistingLeaderWithParish(id);
@@ -107,6 +121,10 @@ public class LeaderService {
         }
     }
 
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.LEADER_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.LEADER_DETAIL, allEntries = true)
+    })
     public LeaderResponse toggleStatus(UUID id, StatusToggleRequest request, Authentication authentication) {
         leaderValidationHelper.requireExistingLeaderWithParish(id);
         leaderValidationHelper.validateToggleConfirmation(request == null ? null : request.getConfirmationText());

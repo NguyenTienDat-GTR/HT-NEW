@@ -71,7 +71,7 @@ class ParishControllerSecurityIntegrationTest {
         UUID deaneryId = UUID.randomUUID();
         when(parishAccessEvaluator.canRead(any(), eq(parishId))).thenReturn(true);
         when(parishAccessEvaluator.canDelete(any())).thenReturn(true);
-        when(parishService.findById(parishId)).thenReturn(sampleParish(parishId, deaneryId));
+        when(parishService.findById(eq(parishId), any())).thenReturn(sampleParish(parishId, deaneryId));
 
         mockMvc.perform(get("/api/parishes/" + parishId)
                         .header("Authorization", bearer(dioceseAdminToken(List.of(ParishAccessEvaluator.READ_DIOCESE)))))
@@ -122,7 +122,7 @@ class ParishControllerSecurityIntegrationTest {
         request.setChapterName("Updated Chapter");
         when(parishAccessEvaluator.canRead(any(), eq(parishId))).thenReturn(true);
         when(parishAccessEvaluator.canUpdate(any(), eq(parishId))).thenReturn(true);
-        when(parishService.findById(parishId)).thenReturn(sampleParish(parishId, deaneryId));
+        when(parishService.findById(eq(parishId), any())).thenReturn(sampleParish(parishId, deaneryId));
         when(parishService.update(eq(parishId), any(ParishUpdateRequest.class), any())).thenReturn(sampleParish(parishId, deaneryId));
 
         mockMvc.perform(get("/api/parishes/" + parishId)

@@ -583,6 +583,122 @@ Leader permission seed notes:
 - Flyway migration `V017__add_leader_gender_and_permissions.sql` seeds the new `leader` permission resource and parish-scoped leader permissions
 - the current repo does not yet define a stable seed role code for parish-admin role assignment, so this pass seeds permissions only and documents the expected parish-admin usage here
 
+### Executive Board Assignment Scope Rules
+
+Executive board assignment API endpoints:
+
+- `POST /api/executive-board/assignments`
+- `GET /api/executive-board/assignments`
+- `GET /api/executive-board/assignments/{id}`
+- `PUT /api/executive-board/assignments/{id}`
+- `PATCH /api/executive-board/assignments/{id}/toggle-status`
+
+Assignment request contract:
+
+- `unitType`
+- `unitId`
+- `positionCode`
+- `leaderId`
+- `startDate`
+- `endDate`
+
+Assignment response behavior:
+
+- returns assignment `id` as UUID
+- returns `unitType`, `unitId`, `dioceseId`, `deaneryId`, and `parishId`
+- returns `leaderId`, `leaderFullName`, and `leaderParishId`
+- returns `positionCode` and `positionName`
+- returns audit timestamps and audit actors
+
+Assignment business rules:
+
+- `position.positionType` must match request `unitType`
+- `unitId` must resolve to an active real unit of that `unitType`
+- a leader may hold multiple different positions
+- the same `positionCode` may be assigned in many different concrete units
+- each concrete `unitType + unitId + positionCode` may have only one current active assignment
+- current active assignment means `status = true` and `endDate IS NULL`
+- ended historical assignments may coexist for the same concrete unit and position
+- leader membership must match the target scope exactly:
+- `DIOCESE`: leader parish -> deanery -> diocese must equal `unitId`
+- `DEANERY`: leader parish -> deanery must equal `unitId`
+- `PARISH`: leader parish must equal `unitId`
+
+Assignment authorization behavior:
+
+- `SUPER_ADMIN` inherits the seeded assignment permissions through its existing all-permission role grant
+- diocese-scoped admins use `organization.executive_board_assignment.create.read.update.diocese` for diocesan assignments
+- diocese-scoped admins may also manage descendant deanery and parish assignments inside their own diocese
+- deanery-scoped admins use `organization.executive_board_assignment.create.read.update.deanery`
+- deanery-scoped admins may also manage descendant parish assignments inside their own deanery
+- parish-scoped admins use `organization.executive_board_assignment.create.read.update.parish`
+- parish-scoped admins may manage only assignments in their own parish
+- `GET /api/executive-board/assignments` is scope-filtered by resolved `dioceseId`, `deaneryId`, or `parishId`
+- `PATCH /api/executive-board/assignments/{id}/toggle-status` requires confirmation text `Xác nhận`
+
+Persistence and migration notes:
+
+- `ExecutiveBoardAssignment.unitId` is now UUID-backed
+- `ExecutiveBoardAssignment` now stores denormalized `diocese_id`, `deanery_id`, and `parish_id` for scope filtering and audit backfill
+- migration `V020__executive_board_assignment_cache_and_audit_scope.sql` adds scope columns, indexes, and partial uniqueness for active current assignments
+
+### API Cache Policy
+
+Cache implementation notes:
+
+- API read caching now uses Redis with key prefix `ht:api-cache:`
+- cache keys include normalized request payload, current username, authority hash, and resolved scope ids
+- scope-aware keys prevent one admin from reading another scope's cached result
+- audit-log APIs are intentionally not cached
+
+Current cache groups and TTLs:
+
+- org-unit lists/details: 10 minutes
+- position lists/details: 10 minutes
+- leader lists/details: 5 minutes
+- executive-board assignment lists/details: 5 minutes
+- training-course, requirement, and certificate read models: 3 minutes
+
+Current cache invalidation behavior:
+
+- org-unit write and toggle-status flows evict their own list/detail caches
+- leader write and toggle-status flows evict leader caches
+- position write and toggle-status flows evict position caches
+- executive-board assignment create/update/toggle-status evicts assignment caches
+- training-course, requirement, certificate, and workflow mutations evict their related read-model caches
+- eviction is broad by cache group so in-flight stale scoped pages are not served after writes
+
+### Audit Log Read Scope Rules
+
+Audit log API endpoints:
+
+- `GET /api/system/audit-logs`
+- `GET /api/system/audit-logs/{id}`
+
+Audit log permission model:
+
+- `system.audit_log.read.all`
+- `system.audit_log.read.diocese`
+- `system.audit_log.read.deanery`
+- `system.audit_log.read.parish`
+
+Audit log scope behavior:
+
+- `system_log` now stores nullable `unit_type`, `unit_id`, `diocese_id`, `deanery_id`, and `parish_id`
+- existing logs are backfilled where scope can be derived from the resource type and resource id
+- logs that remain unscoped stay visible only to `system.audit_log.read.all`
+- diocese-scoped readers see logs in their own diocese plus descendant deanery/parish activity tied to that diocese
+- deanery-scoped readers see logs in their own deanery plus descendant parish activity tied to that deanery
+- parish-scoped readers see only logs in their own parish
+- detail access follows the same scope rules as list access
+
+Audit logging implementation notes:
+
+- `ApiAuditLoggingFilter` records API requests after the filter chain completes
+- resource scope is resolved from direct account scope first, then from the resource id when the target resource is scope-bound
+- `system_log.username` is written only when the username exists as a persisted `account`, which keeps security/integration tests and unauthenticated flows from violating the legacy foreign key
+- audit-log reads use `SystemLogAccessEvaluator` plus scope-filtered repository search instead of cache
+
 ### Docker Development Workflow
 
 Development container behavior:
@@ -658,6 +774,12 @@ The following work was added in this iteration:
 54. Added CRUD API for `Certificate` under `/api/certificates` plus an approval endpoint that requires a passing score, updates `Leader.leaderLevel`, and appends `RankHistory`.
 55. Added CRUD API for `Position` under `/api/positions` with permission checks mapped to `UnitType.DIOCESE`, `UnitType.DEANERY`, and `UnitType.PARISH`.
 56. Added focused unit tests for scoped role assignment, training registration and scoring workflow, and certificate approval with leader promotion.
+57. Added scoped `ExecutiveBoardAssignment` CRUD and toggle-status APIs so one active current leader can hold a given position per concrete unit while the same position may exist across many different units.
+58. Added Redis-backed scope-safe caching for selected org-unit, leader, position, executive-board, training, requirement, and certificate read APIs, with write-side invalidation.
+59. Added `GET /api/system/audit-logs` and `GET /api/system/audit-logs/{id}` with scoped visibility for diocese, deanery, and parish admins.
+60. Added `V020__executive_board_assignment_cache_and_audit_scope.sql` to migrate assignment scope columns, backfill audit-log scope columns, add indexes, enforce active-current uniqueness, and seed assignment plus scoped audit-log permissions.
+61. Updated the API audit logging filter to derive scope from account/resource context and to persist `system_log.username` only when the actor exists as an `account`.
+62. Added assignment service tests, assignment controller security tests, and audit-log scope service tests, then verified the full suite with `./gradlew.bat test`.
 
 ## Technical Notes
 
@@ -674,4 +796,6 @@ The following work was added in this iteration:
 - Training scope resolution now prefers `account.diocese`, `account.deanery`, and `account.parish` before using the `Account -> Leader -> Parish -> Deanery -> Diocese` fallback chain.
 - Training and certificate approval currently assume the progression map encoded in `TrainingWorkflowSupport`; if `CourseType` expands, update that helper first.
 - Certificate approval now owns leader promotion and `RankHistory` creation, so normal `Leader` update APIs should continue treating `leaderLevel` as non-editable business state.
+- `ExecutiveBoardAssignment` update now explicitly saves the entity after scope and uniqueness validation so changed leader/position/unit fields are persisted consistently.
+- `SystemLog` scope columns are now the source of truth for scoped audit-log reads; later resource modules should backfill these fields when they introduce new audit-visible resources.
 

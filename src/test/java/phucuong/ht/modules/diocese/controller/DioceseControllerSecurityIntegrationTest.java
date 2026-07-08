@@ -54,7 +54,7 @@ class DioceseControllerSecurityIntegrationTest {
     void shouldAllowScopedAdminToReadOwnDiocese() throws Exception {
         UUID dioceseId = UUID.randomUUID();
         when(dioceseAccessEvaluator.canRead(any(), eq(dioceseId))).thenReturn(true);
-        when(dioceseService.findById(dioceseId)).thenReturn(sampleDiocese(dioceseId));
+        when(dioceseService.findById(eq(dioceseId), any())).thenReturn(sampleDiocese(dioceseId));
 
         mockMvc.perform(get("/api/dioceses/" + dioceseId)
                         .header("Authorization", bearer(dioceseAdminToken(List.of(DioceseAccessEvaluator.READ_DIOCESE)))))

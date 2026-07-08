@@ -1,6 +1,9 @@
 package phucuong.ht.modules.parish.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -11,6 +14,7 @@ import phucuong.ht.common.exception.errorCode;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.utils.securityUtils;
+import phucuong.ht.config.CacheNames;
 import phucuong.ht.modules.auth.exception.ApiException;
 import phucuong.ht.modules.deanery.model.entity.Deanery;
 import phucuong.ht.modules.parish.helper.ParishScopeHelper;
@@ -43,6 +47,10 @@ public class ParishService {
     private final ParishScopeHelper parishScopeHelper;
     private final securityUtils securityUtils;
 
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.PARISH_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.PARISH_DETAIL, allEntries = true)
+    })
     public ParishResponse create(ParishCreateRequest request, Authentication authentication) {
         parishValidationHelper.validateCreateInput(request);
         parishScopeHelper.enforceCreateScope(request, authentication);
@@ -71,6 +79,7 @@ public class ParishService {
         }
     }
 
+    @Cacheable(cacheNames = CacheNames.PARISH_LIST, key = "@cacheScopeKeyHelper.listKey(#authentication, #request)")
     public Page<ParishResponse> findAll(BaseSearchRequest request, Authentication authentication) {
         BaseSearchRequest scopedRequest = copyRequest(request);
 
@@ -99,10 +108,15 @@ public class ParishService {
         throw new ApiException(HttpStatus.FORBIDDEN, errorCode.ACCESS_DENIED, "Tài khoản hiện tại không có quyền xem danh sách giáo xứ");
     }
 
-    public ParishResponse findById(UUID id) {
+    @Cacheable(cacheNames = CacheNames.PARISH_DETAIL, key = "@cacheScopeKeyHelper.detailKey(#authentication, #id)")
+    public ParishResponse findById(UUID id, Authentication authentication) {
         return toParishResponse(parishValidationHelper.requireExistingParishWithDeaneryAndDiocese(id));
     }
 
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.PARISH_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.PARISH_DETAIL, allEntries = true)
+    })
     public ParishResponse update(UUID id, ParishUpdateRequest request, Authentication authentication) {
         parishValidationHelper.validateUpdateInput(request);
         Parish existingParish = parishValidationHelper.requireExistingParishWithDeaneryAndDiocese(id);
@@ -122,6 +136,10 @@ public class ParishService {
         }
     }
 
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.PARISH_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.PARISH_DETAIL, allEntries = true)
+    })
     public void delete(UUID id, Authentication authentication) {
         Parish parish = parishValidationHelper.requireExistingParish(id);
         parishScopeHelper.enforceDeleteScope(authentication, parish);
@@ -132,6 +150,10 @@ public class ParishService {
         }
     }
 
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.PARISH_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.PARISH_DETAIL, allEntries = true)
+    })
     public ParishResponse toggleStatus(UUID id, StatusToggleRequest request, Authentication authentication) {
         parishValidationHelper.requireExistingParishWithDeaneryAndDiocese(id);
         parishValidationHelper.validateToggleConfirmation(request == null ? null : request.getConfirmationText());

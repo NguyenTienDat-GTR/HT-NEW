@@ -1,6 +1,5 @@
 package phucuong.ht.modules.executiveBoard.model.request;
 
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
@@ -16,13 +15,13 @@ public class ExecutiveBoardAssignmentCreateRequest {
     @NotNull
     private UnitType unitType;
 
-    @NotBlank
-    private String unitId;
+    @NotNull
+    private UUID unitId;
 
-    @NotBlank
+    @NotNull
     private UUID leaderId;
 
-    @NotBlank
+    @jakarta.validation.constraints.NotBlank
     private String positionCode;
 
     private LocalDate startDate;
