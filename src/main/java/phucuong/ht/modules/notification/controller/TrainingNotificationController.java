@@ -22,11 +22,11 @@ public class TrainingNotificationController {
 
     @GetMapping
     public apiResponse<List<TrainingNotificationResponse>> findMyNotifications(Authentication authentication) {
-        return apiResponse.success("Get notifications successfully", trainingNotificationService.findCurrentUserNotifications(authentication));
+        return apiResponse.success("Lấy danh sách thông báo thành công", trainingNotificationService.findCurrentUserNotifications(authentication));
     }
 
     @PatchMapping("/{id}/read")
     public apiResponse<TrainingNotificationResponse> markRead(@PathVariable String id, Authentication authentication) {
-        return apiResponse.success("Mark notification as read successfully", trainingNotificationService.markRead(id, authentication));
+        return apiResponse.success("Đánh dấu thông báo đã đọc thành công", trainingNotificationService.markRead(id, authentication));
     }
 }

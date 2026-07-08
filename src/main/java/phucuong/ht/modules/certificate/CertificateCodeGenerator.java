@@ -18,14 +18,14 @@ public class CertificateCodeGenerator {
 
     public String buildCode(String unitName, CourseType courseType, Integer hostYear, long sequence) {
         if (hostYear == null) {
-            throw commonValidationHelper.validationError("hostYear is required to generate certificate code");
+            throw commonValidationHelper.validationError("hostYear là bắt buộc để tạo mã chứng chỉ");
         }
         return abbreviation(unitName) + "-" + courseShortCode(courseType) + "-" + hostYear + "-" + sequence;
     }
 
     public String buildPrefix(String unitName, CourseType courseType, Integer hostYear) {
         if (hostYear == null) {
-            throw commonValidationHelper.validationError("hostYear is required to generate certificate code");
+            throw commonValidationHelper.validationError("hostYear là bắt buộc để tạo mã chứng chỉ");
         }
         return abbreviation(unitName) + "-" + courseShortCode(courseType) + "-" + hostYear + "-";
     }
@@ -33,7 +33,7 @@ public class CertificateCodeGenerator {
     public String abbreviation(String unitName) {
         String normalized = normalizeAscii(unitName);
         if (normalized.isBlank()) {
-            throw commonValidationHelper.validationError("Unit name is required to generate certificate code");
+            throw commonValidationHelper.validationError("Tên đơn vị là bắt buộc để tạo mã chứng chỉ");
         }
         StringBuilder builder = new StringBuilder();
         for (String token : normalized.split("\\s+")) {
@@ -42,14 +42,14 @@ public class CertificateCodeGenerator {
             }
         }
         if (builder.isEmpty()) {
-            throw commonValidationHelper.validationError("Unit name is required to generate certificate code");
+            throw commonValidationHelper.validationError("Tên đơn vị là bắt buộc để tạo mã chứng chỉ");
         }
         return builder.toString();
     }
 
     public String courseShortCode(CourseType courseType) {
         if (courseType == null) {
-            throw commonValidationHelper.validationError("Course type is required to generate certificate code");
+            throw commonValidationHelper.validationError("Loại khóa học là bắt buộc để tạo mã chứng chỉ");
         }
         return switch (courseType) {
             case SMTL_DT, SMKN_DT -> "DT";

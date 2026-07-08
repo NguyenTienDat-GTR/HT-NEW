@@ -139,7 +139,7 @@ public abstract class BaseRepo<T extends BaseModel, ID> {
      */
     @Transactional(readOnly = true)
     public T getRequired(ID id) {
-        return findById(id).orElseThrow(() -> new EntityNotFoundException(entityClass.getSimpleName() + " not found: " + id));
+        return findById(id).orElseThrow(() -> new EntityNotFoundException("Không tìm thấy " + entityClass.getSimpleName() + ": " + id));
     }
 
     /**
@@ -396,7 +396,7 @@ public abstract class BaseRepo<T extends BaseModel, ID> {
                 .getResultList()
                 .stream()
                 .findFirst()
-                .orElseThrow(() -> new EntityNotFoundException(relationType.getSimpleName() + " not found by " + fieldName + ": " + value));
+                .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy " + relationType.getSimpleName() + " theo " + fieldName + ": " + value));
     }
 
     private <E> Optional<E> findFirst(List<E> results) {

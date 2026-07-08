@@ -23,7 +23,12 @@ import phucuong.ht.modules.training.scoreFormulaTemplate.model.response.ScoreFor
 import phucuong.ht.modules.training.scoreFormulaTemplate.model.response.ScoreFormulaTemplateResponse;
 import phucuong.ht.modules.training.scoreFormulaTemplate.repository.ScoreFormulaTemplateRepository;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -41,7 +46,7 @@ public class ScoreFormulaTemplateService {
     private final TrainingScoreFormulaEvaluator formulaEvaluator;
 
     public ScoreFormulaTemplateResponse create(ScoreFormulaTemplateCreateRequest request, Authentication authentication) {
-        String actor = commonValidationHelper.requireAuditActor(authentication, "Cannot determine score formula creator");
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tạo công thức tính điểm");
         ScoreFormulaTemplate formula = new ScoreFormulaTemplate();
         formula.setCode(commonValidationHelper.normalizeRequiredText(request.getCode()));
         formula.setName(commonValidationHelper.normalizeRequiredText(request.getName()));
@@ -66,7 +71,7 @@ public class ScoreFormulaTemplateService {
         } else if (hasAuthority(authentication, "training.score_formula.read.deanery")) {
             scopedRequest.getFilters().put(DEANERY_FILTER_FIELD, accountScopeValidationHelper.requireActiveDeaneryId(authentication, "training.score_formula.read.deanery"));
         } else {
-            throw commonValidationHelper.forbidden("Current account cannot read score formulas");
+            throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền xem công thức tính điểm");
         }
         Page<ScoreFormulaTemplate> page = repository.findAll(scopedRequest);
         List<ScoreFormulaTemplateResponse> content = page.getContent().stream()
@@ -78,12 +83,12 @@ public class ScoreFormulaTemplateService {
 
     public ScoreFormulaTemplateResponse findById(String id) {
         return toResponse(repository.findByIdWithComponents(id)
-                .orElseThrow(() -> commonValidationHelper.notFound("Score formula not found: " + id)));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy công thức tính điểm: " + id)));
     }
 
     public ScoreFormulaTemplateResponse update(String id, ScoreFormulaTemplateUpdateRequest request, Authentication authentication) {
         ScoreFormulaTemplate formula = repository.findByIdWithComponents(id)
-                .orElseThrow(() -> commonValidationHelper.notFound("Score formula not found: " + id));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy công thức tính điểm: " + id));
         if (request.getCode() != null) {
             formula.setCode(commonValidationHelper.normalizeRequiredText(request.getCode()));
         }
@@ -99,7 +104,7 @@ public class ScoreFormulaTemplateService {
         if (request.getDescription() != null) {
             formula.setDescription(commonValidationHelper.normalizeOptionalText(request.getDescription()));
         }
-        String actor = commonValidationHelper.requireAuditActor(authentication, "Cannot determine score formula updater");
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật công thức tính điểm");
         if (request.getComponentIds() != null) {
             replaceComponents(formula, request.getComponentIds(), actor);
         }
@@ -114,7 +119,7 @@ public class ScoreFormulaTemplateService {
 
     public ScoreFormulaTemplateResponse toggleStatus(String id, StatusToggleRequest request, Authentication authentication) {
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
-        repository.toggleStatus(id, commonValidationHelper.requireAuditActor(authentication, "Cannot determine score formula actor"));
+        repository.toggleStatus(id, commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái công thức tính điểm"));
         return findById(id);
     }
 
@@ -129,17 +134,17 @@ public class ScoreFormulaTemplateService {
             formula.setDiocese(null);
             return;
         }
-        throw commonValidationHelper.validationError("Score formula unitType must be DIOCESE or DEANERY");
+        throw commonValidationHelper.validationError("unitType của công thức tính điểm phải là DIOCESE hoặc DEANERY");
     }
 
     private void replaceComponents(ScoreFormulaTemplate formula, List<String> componentIds, String actor) {
         if (componentIds == null || componentIds.isEmpty()) {
-            throw commonValidationHelper.validationError("componentIds is required");
+            throw commonValidationHelper.validationError("componentIds là bắt buộc");
         }
         List<String> normalizedIds = new ArrayList<>(new LinkedHashSet<>(componentIds));
         List<ScoreComponentTemplate> components = scoreComponentTemplateRepository.findAllByIdsWithScope(normalizedIds);
         if (components.size() != normalizedIds.size()) {
-            throw commonValidationHelper.validationError("One or more score components were not found");
+            throw commonValidationHelper.validationError("Có một hoặc nhiều thành phần điểm không tồn tại");
         }
         Map<String, ScoreComponentTemplate> byId = new LinkedHashMap<>();
         components.forEach(component -> byId.put(component.getId(), component));
@@ -163,23 +168,23 @@ public class ScoreFormulaTemplateService {
 
     private void validateComponentScope(ScoreFormulaTemplate formula, ScoreComponentTemplate component) {
         if (formula.getUnitType() != component.getUnitType()) {
-            throw commonValidationHelper.validationError("Formula and component unitType must match");
+            throw commonValidationHelper.validationError("unitType của công thức và thành phần điểm phải trùng nhau");
         }
         if (formula.getUnitType() == UnitType.DIOCESE) {
             if (formula.getDiocese() == null || component.getDiocese() == null
                     || !formula.getDiocese().getId().equals(component.getDiocese().getId())) {
-                throw commonValidationHelper.validationError("Formula components must belong to the same diocese");
+                throw commonValidationHelper.validationError("Các thành phần điểm phải thuộc cùng một giáo phận với công thức");
             }
             return;
         }
         if (formula.getUnitType() == UnitType.DEANERY) {
             if (formula.getDeanery() == null || component.getDeanery() == null
                     || !formula.getDeanery().getId().equals(component.getDeanery().getId())) {
-                throw commonValidationHelper.validationError("Formula components must belong to the same deanery");
+                throw commonValidationHelper.validationError("Các thành phần điểm phải thuộc cùng một giáo hạt với công thức");
             }
             return;
         }
-        throw commonValidationHelper.validationError("Unsupported formula unitType");
+        throw commonValidationHelper.validationError("unitType của công thức tính điểm không được hỗ trợ");
     }
 
     private void validateExpressionAgainstComponents(ScoreFormulaTemplate formula) {
@@ -189,7 +194,7 @@ public class ScoreFormulaTemplateService {
             componentCodes.add(componentLink.getComponent().getCode());
         }
         if (!componentCodes.equals(variableNames)) {
-            throw commonValidationHelper.validationError("Formula expression variables must exactly match the selected score component codes");
+            throw commonValidationHelper.validationError("Biến trong biểu thức phải khớp chính xác với mã các thành phần điểm đã chọn");
         }
     }
 

@@ -170,12 +170,12 @@ class DioceseServiceTest {
         Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
 
         when(dioceseValidationHelper.requireExistingDiocese(id)).thenReturn(new Diocese());
-        doThrow(new ApiException(HttpStatus.BAD_REQUEST, errorCode.VALIDATION_ERROR, "invalid"))
+        doThrow(new ApiException(HttpStatus.BAD_REQUEST, errorCode.VALIDATION_ERROR, "Không hợp lệ"))
                 .when(dioceseValidationHelper)
                 .validateToggleConfirmation("Sai");
 
         ApiException exception = assertThrows(ApiException.class, () -> dioceseService.toggleStatus(id, request, authentication));
 
-        assertEquals("invalid", exception.getMessage());
+        assertEquals("Không hợp lệ", exception.getMessage());
     }
 }

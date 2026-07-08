@@ -30,7 +30,7 @@ public class AccountPermissionOverrideController {
             @Valid @RequestBody AccountPermissionOverrideCreateRequest request,
             Authentication authentication
     ) {
-        return apiResponse.success("Assign account permission successfully", accountPermissionOverrideManagementService.create(request, authentication));
+        return apiResponse.success("Gán quyền cho tài khoản thành công", accountPermissionOverrideManagementService.create(request, authentication));
     }
 
     @GetMapping
@@ -39,7 +39,7 @@ public class AccountPermissionOverrideController {
                     + " || @securityUtils.hasAuthority(authentication, 'system.account_permission.manage.diocese')"
     )
     public apiResponse<Page<AccountPermissionOverrideResponse>> findAll(@ModelAttribute BaseSearchRequest request) {
-        return apiResponse.success("Get account permission list successfully", accountPermissionOverrideManagementService.findAll(request));
+        return apiResponse.success("Lấy danh sách quyền của tài khoản thành công", accountPermissionOverrideManagementService.findAll(request));
     }
 
     @GetMapping("/{id}")
@@ -48,7 +48,7 @@ public class AccountPermissionOverrideController {
                     + " || @securityUtils.hasAuthority(authentication, 'system.account_permission.manage.diocese')"
     )
     public apiResponse<AccountPermissionOverrideResponse> findById(@PathVariable String id) {
-        return apiResponse.success("Get account permission successfully", accountPermissionOverrideManagementService.findById(id));
+        return apiResponse.success("Lấy thông tin quyền của tài khoản thành công", accountPermissionOverrideManagementService.findById(id));
     }
 
     @PutMapping("/{id}")
@@ -61,7 +61,7 @@ public class AccountPermissionOverrideController {
             @Valid @RequestBody AccountPermissionOverrideUpdateRequest request,
             Authentication authentication
     ) {
-        return apiResponse.success("Update account permission successfully", accountPermissionOverrideManagementService.update(id, request, authentication));
+        return apiResponse.success("Cập nhật quyền của tài khoản thành công", accountPermissionOverrideManagementService.update(id, request, authentication));
     }
 
     @DeleteMapping("/{id}")
@@ -71,7 +71,7 @@ public class AccountPermissionOverrideController {
     )
     public apiResponse<Void> delete(@PathVariable String id, Authentication authentication) {
         accountPermissionOverrideManagementService.delete(id, authentication);
-        return apiResponse.success("Delete account permission successfully", null);
+        return apiResponse.success("Xóa quyền của tài khoản thành công", null);
     }
 
     @PatchMapping("/{id}/toggle-status")
@@ -84,6 +84,6 @@ public class AccountPermissionOverrideController {
             @Valid @RequestBody StatusToggleRequest request,
             Authentication authentication
     ) {
-        return apiResponse.success("Toggle account permission status successfully", accountPermissionOverrideManagementService.toggleStatus(id, request, authentication));
+        return apiResponse.success("Đổi trạng thái quyền của tài khoản thành công", accountPermissionOverrideManagementService.toggleStatus(id, request, authentication));
     }
 }

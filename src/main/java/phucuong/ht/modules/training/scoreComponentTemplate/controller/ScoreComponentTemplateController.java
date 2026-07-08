@@ -24,37 +24,37 @@ public class ScoreComponentTemplateController {
     @PostMapping
     @PreAuthorize("@scoreComponentTemplateAccessEvaluator.canCreate(authentication, #request.unitType)")
     public apiResponse<ScoreComponentTemplateResponse> create(@Valid @RequestBody ScoreComponentTemplateCreateRequest request, Authentication authentication) {
-        return apiResponse.success("Create score component successfully", service.create(request, authentication));
+        return apiResponse.success("Tạo thành phần điểm thành công", service.create(request, authentication));
     }
 
     @GetMapping
     @PreAuthorize("@scoreComponentTemplateAccessEvaluator.canList(authentication)")
     public apiResponse<Page<ScoreComponentTemplateResponse>> findAll(@ModelAttribute BaseSearchRequest request, Authentication authentication) {
-        return apiResponse.success("Get score components successfully", service.findAll(request, authentication));
+        return apiResponse.success("Lấy danh sách thành phần điểm thành công", service.findAll(request, authentication));
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("@scoreComponentTemplateAccessEvaluator.canRead(authentication, #id)")
     public apiResponse<ScoreComponentTemplateResponse> findById(@PathVariable String id) {
-        return apiResponse.success("Get score component successfully", service.findById(id));
+        return apiResponse.success("Lấy thông tin thành phần điểm thành công", service.findById(id));
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("@scoreComponentTemplateAccessEvaluator.canUpdate(authentication, #id)")
     public apiResponse<ScoreComponentTemplateResponse> update(@PathVariable String id, @Valid @RequestBody ScoreComponentTemplateUpdateRequest request, Authentication authentication) {
-        return apiResponse.success("Update score component successfully", service.update(id, request, authentication));
+        return apiResponse.success("Cập nhật thành phần điểm thành công", service.update(id, request, authentication));
     }
 
     @DeleteMapping("/{id}")
     @PreAuthorize("@scoreComponentTemplateAccessEvaluator.canDelete(authentication, #id)")
     public apiResponse<Void> delete(@PathVariable String id) {
         service.delete(id);
-        return apiResponse.success("Delete score component successfully", null);
+        return apiResponse.success("Xóa thành phần điểm thành công", null);
     }
 
     @PatchMapping("/{id}/toggle-status")
     @PreAuthorize("@scoreComponentTemplateAccessEvaluator.canUpdate(authentication, #id)")
     public apiResponse<ScoreComponentTemplateResponse> toggleStatus(@PathVariable String id, @Valid @RequestBody StatusToggleRequest request, Authentication authentication) {
-        return apiResponse.success("Toggle score component successfully", service.toggleStatus(id, request, authentication));
+        return apiResponse.success("Đổi trạng thái thành phần điểm thành công", service.toggleStatus(id, request, authentication));
     }
 }

@@ -24,19 +24,19 @@ public class RoleController {
     @PostMapping
     @PreAuthorize("@securityUtils.hasAuthority(authentication, 'system.role.create.all')")
     public apiResponse<RoleResponse> create(@Valid @RequestBody RoleCreateRequest request, Authentication authentication) {
-        return apiResponse.success("Create role successfully", roleManagementService.create(request, authentication));
+        return apiResponse.success("Tạo vai trò thành công", roleManagementService.create(request, authentication));
     }
 
     @GetMapping
     @PreAuthorize("@securityUtils.hasAuthority(authentication, 'system.role.read.all')")
     public apiResponse<Page<RoleResponse>> findAll(@ModelAttribute BaseSearchRequest request) {
-        return apiResponse.success("Get role list successfully", roleManagementService.findAll(request));
+        return apiResponse.success("Lấy danh sách vai trò thành công", roleManagementService.findAll(request));
     }
 
     @GetMapping("/{roleCode}")
     @PreAuthorize("@securityUtils.hasAuthority(authentication, 'system.role.read.all')")
     public apiResponse<RoleResponse> findById(@PathVariable String roleCode) {
-        return apiResponse.success("Get role successfully", roleManagementService.findById(roleCode));
+        return apiResponse.success("Lấy thông tin vai trò thành công", roleManagementService.findById(roleCode));
     }
 
     @PutMapping("/{roleCode}")
@@ -46,14 +46,14 @@ public class RoleController {
             @Valid @RequestBody RoleUpdateRequest request,
             Authentication authentication
     ) {
-        return apiResponse.success("Update role successfully", roleManagementService.update(roleCode, request, authentication));
+        return apiResponse.success("Cập nhật vai trò thành công", roleManagementService.update(roleCode, request, authentication));
     }
 
     @DeleteMapping("/{roleCode}")
     @PreAuthorize("@securityUtils.hasAuthority(authentication, 'system.role.delete.all')")
     public apiResponse<Void> delete(@PathVariable String roleCode) {
         roleManagementService.delete(roleCode);
-        return apiResponse.success("Delete role successfully", null);
+        return apiResponse.success("Xóa vai trò thành công", null);
     }
 
     @PatchMapping("/{roleCode}/toggle-status")
@@ -63,6 +63,6 @@ public class RoleController {
             @Valid @RequestBody StatusToggleRequest request,
             Authentication authentication
     ) {
-        return apiResponse.success("Toggle role status successfully", roleManagementService.toggleStatus(roleCode, request, authentication));
+        return apiResponse.success("Đổi trạng thái vai trò thành công", roleManagementService.toggleStatus(roleCode, request, authentication));
     }
 }

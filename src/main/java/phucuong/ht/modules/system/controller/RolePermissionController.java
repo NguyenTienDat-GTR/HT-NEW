@@ -27,7 +27,7 @@ public class RolePermissionController {
                     + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.diocese')"
     )
     public apiResponse<RolePermissionResponse> create(@Valid @RequestBody RolePermissionCreateRequest request, Authentication authentication) {
-        return apiResponse.success("Assign permission to role successfully", rolePermissionManagementService.create(request, authentication));
+        return apiResponse.success("Gán quyền cho vai trò thành công", rolePermissionManagementService.create(request, authentication));
     }
 
     @GetMapping
@@ -38,7 +38,7 @@ public class RolePermissionController {
                     + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.diocese')"
     )
     public apiResponse<Page<RolePermissionResponse>> findAll(@ModelAttribute BaseSearchRequest request) {
-        return apiResponse.success("Get role permission list successfully", rolePermissionManagementService.findAll(request));
+        return apiResponse.success("Lấy danh sách quyền của vai trò thành công", rolePermissionManagementService.findAll(request));
     }
 
     @GetMapping("/{id}")
@@ -49,7 +49,7 @@ public class RolePermissionController {
                     + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.diocese')"
     )
     public apiResponse<RolePermissionResponse> findById(@PathVariable String id) {
-        return apiResponse.success("Get role permission successfully", rolePermissionManagementService.findById(id));
+        return apiResponse.success("Lấy thông tin quyền của vai trò thành công", rolePermissionManagementService.findById(id));
     }
 
     @PutMapping("/{id}")
@@ -62,7 +62,7 @@ public class RolePermissionController {
             @Valid @RequestBody RolePermissionUpdateRequest request,
             Authentication authentication
     ) {
-        return apiResponse.success("Update role permission successfully", rolePermissionManagementService.update(id, request, authentication));
+        return apiResponse.success("Cập nhật quyền của vai trò thành công", rolePermissionManagementService.update(id, request, authentication));
     }
 
     @DeleteMapping("/{id}")
@@ -72,7 +72,7 @@ public class RolePermissionController {
     )
     public apiResponse<Void> delete(@PathVariable String id, Authentication authentication) {
         rolePermissionManagementService.delete(id, authentication);
-        return apiResponse.success("Delete role permission successfully", null);
+        return apiResponse.success("Xóa quyền của vai trò thành công", null);
     }
 
     @PatchMapping("/{id}/toggle-status")
@@ -85,6 +85,6 @@ public class RolePermissionController {
             @Valid @RequestBody StatusToggleRequest request,
             Authentication authentication
     ) {
-        return apiResponse.success("Toggle role permission status successfully", rolePermissionManagementService.toggleStatus(id, request, authentication));
+        return apiResponse.success("Đổi trạng thái quyền của vai trò thành công", rolePermissionManagementService.toggleStatus(id, request, authentication));
     }
 }

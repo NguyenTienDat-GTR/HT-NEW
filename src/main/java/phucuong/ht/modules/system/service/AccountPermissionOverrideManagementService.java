@@ -33,20 +33,20 @@ public class AccountPermissionOverrideManagementService {
 
     public AccountPermissionOverrideResponse create(AccountPermissionOverrideCreateRequest request, Authentication authentication) {
         Account account = accountRepository.findActiveByUsername(request.getUsername())
-                .orElseThrow(() -> commonValidationHelper.notFound("Account not found: " + request.getUsername()));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy tài khoản: " + request.getUsername()));
         Permission permission = systemPermissionRepository.findById(request.getPermissionCode())
-                .orElseThrow(() -> commonValidationHelper.notFound("Permission not found: " + request.getPermissionCode()));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy quyền: " + request.getPermissionCode()));
         if (!Boolean.TRUE.equals(permission.getStatus())) {
-            throw commonValidationHelper.conflict("Cannot assign inactive permission");
+            throw commonValidationHelper.conflict("Không thể gán quyền đang ngừng hoạt động");
         }
 
         authorizationHelper.requireAccountPermissionWriteAccess(authentication, request.getUsername(), permission);
 
         if (accountPermissionOverrideRepository.findByUsernameAndPermissionCode(request.getUsername(), request.getPermissionCode()).isPresent()) {
-            throw commonValidationHelper.conflict("Account permission override already exists");
+            throw commonValidationHelper.conflict("Phân quyền ghi đè cho tài khoản đã tồn tại");
         }
 
-        String actor = commonValidationHelper.requireAuditActor(authentication, "Unable to resolve account-permission creator");
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tạo phân quyền cho tài khoản");
         AccountPermissionOverride override = accountPermissionOverrideRepository.create(request, actor);
         return toResponse(override);
     }
@@ -58,12 +58,12 @@ public class AccountPermissionOverrideManagementService {
 
     public AccountPermissionOverrideResponse findById(String id) {
         return toResponse(accountPermissionOverrideRepository.findById(id)
-                .orElseThrow(() -> commonValidationHelper.notFound("Account permission override not found: " + id)));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy phân quyền ghi đè của tài khoản: " + id)));
     }
 
     public AccountPermissionOverrideResponse update(String id, AccountPermissionOverrideUpdateRequest request, Authentication authentication) {
         AccountPermissionOverride override = accountPermissionOverrideRepository.findById(id)
-                .orElseThrow(() -> commonValidationHelper.notFound("Account permission override not found: " + id));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy phân quyền ghi đè của tài khoản: " + id));
         authorizationHelper.requireAccountPermissionWriteAccess(authentication, override.getAccount().getUsername(), override.getPermission());
 
         if (request.getEffect() != null) {
@@ -75,23 +75,23 @@ public class AccountPermissionOverrideManagementService {
         if (request.getExpiresAt() != null) {
             override.setExpiresAt(request.getExpiresAt());
         }
-        override.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Unable to resolve account-permission updater"));
+        override.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật phân quyền cho tài khoản"));
         return toResponse(override);
     }
 
     public void delete(String id, Authentication authentication) {
         AccountPermissionOverride override = accountPermissionOverrideRepository.findById(id)
-                .orElseThrow(() -> commonValidationHelper.notFound("Account permission override not found: " + id));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy phân quyền ghi đè của tài khoản: " + id));
         authorizationHelper.requireAccountPermissionWriteAccess(authentication, override.getAccount().getUsername(), override.getPermission());
         accountPermissionOverrideRepository.delete(id);
     }
 
     public AccountPermissionOverrideResponse toggleStatus(String id, StatusToggleRequest request, Authentication authentication) {
         AccountPermissionOverride override = accountPermissionOverrideRepository.findById(id)
-                .orElseThrow(() -> commonValidationHelper.notFound("Account permission override not found: " + id));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy phân quyền ghi đè của tài khoản: " + id));
         authorizationHelper.requireAccountPermissionWriteAccess(authentication, override.getAccount().getUsername(), override.getPermission());
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
-        String actor = commonValidationHelper.requireAuditActor(authentication, "Unable to resolve account-permission status updater");
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái phân quyền cho tài khoản");
         accountPermissionOverrideRepository.toggleStatus(id, actor);
         return findById(id);
     }

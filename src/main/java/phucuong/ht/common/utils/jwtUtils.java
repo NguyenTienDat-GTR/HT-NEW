@@ -91,12 +91,12 @@ public class jwtUtils {
                     .parseSignedClaims(token)
                     .getPayload();
         } catch (Exception exception) {
-            throw new ApiException(HttpStatus.UNAUTHORIZED, errorCode.INVALID_TOKEN, "Token is invalid or expired");
+            throw new ApiException(HttpStatus.UNAUTHORIZED, errorCode.INVALID_TOKEN, "Token không hợp lệ hoặc đã hết hạn");
         }
 
         String tokenType = claims.get(CLAIM_TOKEN_TYPE, String.class);
         if (!expectedType.equals(tokenType)) {
-            throw new ApiException(HttpStatus.UNAUTHORIZED, errorCode.INVALID_TOKEN, "Token type is not allowed for this operation");
+            throw new ApiException(HttpStatus.UNAUTHORIZED, errorCode.INVALID_TOKEN, "Loại token không được phép cho thao tác này");
         }
 
         return AuthUserDetails.tokenPrincipal(

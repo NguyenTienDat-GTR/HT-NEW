@@ -64,7 +64,7 @@ public class CertificateService {
     public CertificateResponse create(CertificateCreateRequest request, Authentication authentication) {
         TrainingCourse course = requireCourse(request.getCourseCode());
         Leader leader = requireLeader(request.getLeaderId());
-        String actor = commonValidationHelper.requireAuditActor(authentication, "Cannot determine certificate creator");
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tạo chứng chỉ");
 
         Certificate certificate = new Certificate();
         certificate.setCertificateCode(request.getCertificateCode());
@@ -96,7 +96,7 @@ public class CertificateService {
             UUID deaneryId = accountScopeValidationHelper.requireActiveDeaneryId(authentication, "training.certificate.read.deanery");
             scopedRequest.getFilters().put(DEANERY_FILTER_FIELD, deaneryId);
         } else {
-            throw commonValidationHelper.forbidden("Current account cannot read certificates");
+            throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền xem chứng chỉ");
         }
         Page<Certificate> page = certificateRepository.findAll(scopedRequest);
         return new PageImpl<>(page.getContent().stream().map(this::toResponse).toList(), page.getPageable(), page.getTotalElements());
@@ -105,7 +105,7 @@ public class CertificateService {
     @Cacheable(cacheNames = CacheNames.CERTIFICATE_DETAIL, key = "@cacheScopeKeyHelper.detailKey(#authentication, #certificateCode)")
     public CertificateResponse findById(String certificateCode, Authentication authentication) {
         return toResponse(certificateRepository.findByCodeWithLeaderAndCourse(certificateCode)
-                .orElseThrow(() -> commonValidationHelper.notFound("Certificate not found: " + certificateCode)));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy chứng chỉ: " + certificateCode)));
     }
 
     @Caching(evict = {
@@ -114,7 +114,7 @@ public class CertificateService {
     })
     public CertificateResponse update(String certificateCode, CertificateUpdateRequest request, Authentication authentication) {
         Certificate certificate = certificateRepository.findByCodeWithLeaderAndCourse(certificateCode)
-                .orElseThrow(() -> commonValidationHelper.notFound("Certificate not found: " + certificateCode));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy chứng chỉ: " + certificateCode));
         if (request.getOldCertificateCode() != null) {
             certificate.setOldCertificateCode(request.getOldCertificateCode());
         }
@@ -139,7 +139,7 @@ public class CertificateService {
         if (request.getImageUrl() != null) {
             certificate.setImageUrl(request.getImageUrl());
         }
-        certificate.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Cannot determine certificate updater"));
+        certificate.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật chứng chỉ"));
         return toResponse(certificate);
     }
 
@@ -157,7 +157,7 @@ public class CertificateService {
     })
     public CertificateResponse toggleStatus(String certificateCode, StatusToggleRequest request, Authentication authentication) {
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
-        certificateRepository.toggleStatus(certificateCode, commonValidationHelper.requireAuditActor(authentication, "Cannot determine certificate actor"));
+        certificateRepository.toggleStatus(certificateCode, commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái chứng chỉ"));
         return findById(certificateCode, authentication);
     }
 
@@ -167,19 +167,19 @@ public class CertificateService {
     })
     public CertificateResponse approve(String certificateCode, CertificateApproveRequest request, Authentication authentication) {
         Certificate certificate = certificateRepository.findByCodeWithLeaderAndCourse(certificateCode)
-                .orElseThrow(() -> commonValidationHelper.notFound("Certificate not found: " + certificateCode));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy chứng chỉ: " + certificateCode));
         if (certificate.getLeader() == null || certificate.getCourse() == null) {
-            throw commonValidationHelper.validationError("Certificate must be linked to a leader and training course");
+            throw commonValidationHelper.validationError("Chứng chỉ phải được liên kết với leader và khóa huấn luyện");
         }
         if (certificate.getApprovalStatus() == WorkflowApprovalStatus.APPROVED) {
-            throw commonValidationHelper.conflict("Certificate has already been approved");
+            throw commonValidationHelper.conflict("Chứng chỉ đã được duyệt trước đó");
         }
 
         CourseParticipation participation = courseParticipationRepository.findByLeaderIdAndCourseCode(
                         certificate.getLeader().getId(),
                         certificate.getCourse().getCourseCode()
                 )
-                .orElseThrow(() -> commonValidationHelper.validationError("Leader does not have a participation record for this training course"));
+                .orElseThrow(() -> commonValidationHelper.validationError("Leader không có bản ghi tham gia cho khóa huấn luyện này"));
 
         boolean passingScore = participation.getCourse() != null
                 && participation.getCourse().getScoreFormula() != null
@@ -187,10 +187,10 @@ public class CertificateService {
                 && participation.getTotalScore().compareTo(participation.getCourse().getScoreFormula().getPassingScore()) >= 0;
         String approvalReason = request == null ? null : commonValidationHelper.normalizeOptionalText(request.getApprovalReason());
         if (!passingScore && approvalReason == null) {
-            throw commonValidationHelper.validationError("approvalReason is required when approving a certificate for a leader who has not reached the passing score");
+            throw commonValidationHelper.validationError("approvalReason là bắt buộc khi duyệt chứng chỉ cho leader chưa đạt điểm qua");
         }
 
-        String actor = commonValidationHelper.requireAuditActor(authentication, "Cannot determine certificate approver");
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người duyệt chứng chỉ");
         certificate.setApprovalStatus(WorkflowApprovalStatus.APPROVED);
         certificate.setApprovedAt(OffsetDateTime.now());
         certificate.setApprovedBy(actor);
@@ -226,7 +226,7 @@ public class CertificateService {
         rankHistory.setOldLevel(leader.getLeaderLevel());
         rankHistory.setNewLevel(newLevel);
         rankHistory.setPromotionDate(LocalDate.now());
-        rankHistory.setNote("Approved from certificate " + certificateCode);
+        rankHistory.setNote("Duyệt từ chứng chỉ " + certificateCode);
         rankHistory.setStatus(Boolean.TRUE);
         rankHistory.setCreatedBy(actor);
         rankHistory.setUpdatedBy(actor);
@@ -237,18 +237,18 @@ public class CertificateService {
 
     private TrainingCourse requireCourse(String courseCode) {
         if (courseCode == null || courseCode.isBlank()) {
-            throw commonValidationHelper.validationError("courseCode is required");
+            throw commonValidationHelper.validationError("courseCode là bắt buộc");
         }
         return trainingCourseRepository.findByCodeWithRequirement(courseCode)
-                .orElseThrow(() -> commonValidationHelper.notFound("Training course not found: " + courseCode));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy khóa huấn luyện: " + courseCode));
     }
 
     private Leader requireLeader(UUID leaderId) {
         if (leaderId == null) {
-            throw commonValidationHelper.validationError("leaderId is required");
+            throw commonValidationHelper.validationError("leaderId là bắt buộc");
         }
         return leaderRepository.findByIdWithParish(leaderId)
-                .orElseThrow(() -> commonValidationHelper.notFound("Leader not found: " + leaderId));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy leader: " + leaderId));
     }
 
     private BaseSearchRequest copyRequest(BaseSearchRequest request) {

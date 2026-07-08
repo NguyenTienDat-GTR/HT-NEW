@@ -125,7 +125,7 @@ class AuthControllerSecurityIntegrationTest {
 
     @Test
     void shouldRejectRefreshWithoutCookie() throws Exception {
-        when(authService.refresh(isNull())).thenThrow(new ApiException(UNAUTHORIZED, phucuong.ht.common.exception.errorCode.INVALID_TOKEN, "Refresh token is required"));
+        when(authService.refresh(isNull())).thenThrow(new ApiException(UNAUTHORIZED, phucuong.ht.common.exception.errorCode.INVALID_TOKEN, "Refresh token là bắt buộc"));
 
         mockMvc.perform(post("/api/auth/refresh"))
                 .andExpect(status().isUnauthorized())
