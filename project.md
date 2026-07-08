@@ -328,6 +328,14 @@ Authorization is based on:
 - `permission`
 - `account_permission_override`
 
+Effective permission behavior:
+
+- role-derived permissions are effective only when `account`, `account_role`, `role`, `role_permission`, and `permission` are all active
+- direct account overrides are effective only when `account`, `account_permission_override`, and `permission` are all active
+- expired `account_role`, `role_permission`, and `account_permission_override` records are excluded from effective permission resolution
+- a background scheduler now automatically flips expired `role_permission` and `account_permission_override` records to `status = false`
+- toggling any of the records above to `status = false` removes that grant or override from the next login or refresh result
+
 Authority strategy:
 
 - roles are exposed as `ROLE_<ROLE_CODE>`
@@ -384,6 +392,47 @@ Protected sample endpoint:
 
 - `GET /api/auth/admin/summary`
 - requires authority `auth.session.manage.all`
+
+### Role, Permission, And Override Administration
+
+System administration endpoints:
+
+- `POST /api/system/roles`
+- `GET /api/system/roles`
+- `GET /api/system/roles/{roleCode}`
+- `PUT /api/system/roles/{roleCode}`
+- `DELETE /api/system/roles/{roleCode}`
+- `PATCH /api/system/roles/{roleCode}/toggle-status`
+- `POST /api/system/permissions`
+- `GET /api/system/permissions`
+- `GET /api/system/permissions/{permissionCode}`
+- `PUT /api/system/permissions/{permissionCode}`
+- `DELETE /api/system/permissions/{permissionCode}`
+- `PATCH /api/system/permissions/{permissionCode}/toggle-status`
+- `POST /api/system/role-permissions`
+- `GET /api/system/role-permissions`
+- `GET /api/system/role-permissions/{id}`
+- `PUT /api/system/role-permissions/{id}`
+- `DELETE /api/system/role-permissions/{id}`
+- `PATCH /api/system/role-permissions/{id}/toggle-status`
+- `POST /api/system/account-permissions`
+- `GET /api/system/account-permissions`
+- `GET /api/system/account-permissions/{id}`
+- `PUT /api/system/account-permissions/{id}`
+- `DELETE /api/system/account-permissions/{id}`
+- `PATCH /api/system/account-permissions/{id}/toggle-status`
+
+Administration behavior:
+
+- `SUPER_ADMIN` may CRUD roles and permissions, assign or revoke permissions for any role, and manage direct account permission overrides system-wide
+- `ADMIN_DIOCESE` may also CRUD roles and permissions through the seeded role/permission admin authorities
+- `ADMIN_DIOCESE` may assign or revoke role permissions and account overrides only for non-`all` permission scopes
+- `ADMIN_DIOCESE` may not assign a permission whose `scopeCode` is `all`
+- `ADMIN_DIOCESE` may manage role-permission mappings only for roles whose `displayOrder` is equal to or lower than `ADMIN_DIOCESE`
+- `ADMIN_DIOCESE` may manage account-permission overrides only for accounts in the same active diocese
+- role and permission create or update requests do not write `status`; active or inactive state changes only through toggle-status
+- new business roles may be created through the role API and stay permission-empty until role-permission APIs assign explicit permissions
+- direct account overrides continue to use `ALLOW` and `DENY`, with optional `expiresAt`
 
 ### Diocese CRUD And Scope Rules
 
@@ -780,6 +829,12 @@ The following work was added in this iteration:
 60. Added `V020__executive_board_assignment_cache_and_audit_scope.sql` to migrate assignment scope columns, backfill audit-log scope columns, add indexes, enforce active-current uniqueness, and seed assignment plus scoped audit-log permissions.
 61. Updated the API audit logging filter to derive scope from account/resource context and to persist `system_log.username` only when the actor exists as an `account`.
 62. Added assignment service tests, assignment controller security tests, and audit-log scope service tests, then verified the full suite with `./gradlew.bat test`.
+63. Added CRUD and toggle-status APIs for `Role` and `Permission` under `/api/system`.
+64. Added role-permission management APIs so permissions can be assigned to or revoked from both seeded and newly created roles.
+65. Added account-level permission override APIs for direct `ALLOW` and `DENY` grants with optional expiration.
+66. Added `V021__seed_role_permission_admin_permissions.sql` to seed role, permission, role-permission, and account-permission administration authorities.
+67. Tightened `v_role_permission_matrix` and `v_account_effective_permission` so inactive `role`, `permission`, `role_permission`, `account_role`, and `account_permission_override` records no longer produce effective permissions.
+68. Added automatic expiry revocation for `role_permission` and `account_permission_override`, driven by a scheduled background job that marks expired records inactive and preserves audit history with a system actor.
 
 ## Technical Notes
 
@@ -798,4 +853,6 @@ The following work was added in this iteration:
 - Certificate approval now owns leader promotion and `RankHistory` creation, so normal `Leader` update APIs should continue treating `leaderLevel` as non-editable business state.
 - `ExecutiveBoardAssignment` update now explicitly saves the entity after scope and uniqueness validation so changed leader/position/unit fields are persisted consistently.
 - `SystemLog` scope columns are now the source of truth for scoped audit-log reads; later resource modules should backfill these fields when they introduce new audit-visible resources.
+- Role and permission administration now use `/api/system/roles`, `/api/system/permissions`, `/api/system/role-permissions`, and `/api/system/account-permissions` rather than folding everything into the original `system.role.manage.all` and `system.permission.manage.all` permissions.
+- The effective-permission SQL views are now part of the security contract: if a record with authorization impact is toggled to inactive, it must disappear from the next JWT login or refresh result without needing extra Java-side filtering.
 
