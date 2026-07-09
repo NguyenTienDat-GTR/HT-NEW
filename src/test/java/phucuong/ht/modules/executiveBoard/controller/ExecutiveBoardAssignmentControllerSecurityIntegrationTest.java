@@ -1,6 +1,7 @@
 package phucuong.ht.modules.executiveBoard.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -13,6 +14,7 @@ import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.utils.jwtUtils;
 import phucuong.ht.modules.auth.model.AuthUserDetails;
+import phucuong.ht.modules.auth.service.RedisTokenSessionService;
 import phucuong.ht.modules.executiveBoard.model.request.ExecutiveBoardAssignmentCreateRequest;
 import phucuong.ht.modules.executiveBoard.model.response.ExecutiveBoardAssignmentResponse;
 import phucuong.ht.modules.executiveBoard.security.ExecutiveBoardAssignmentAccessEvaluator;
@@ -22,6 +24,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -48,6 +51,14 @@ class ExecutiveBoardAssignmentControllerSecurityIntegrationTest {
 
     @MockitoBean
     private ExecutiveBoardAssignmentAccessEvaluator accessEvaluator;
+
+    @MockitoBean
+    private RedisTokenSessionService redisTokenSessionService;
+
+    @BeforeEach
+    void setUp() {
+        when(redisTokenSessionService.isAccessTokenActive(anyString(), anyString(), anyString())).thenReturn(true);
+    }
 
     @Test
     void shouldAllowDeaneryAdminToCreateListAndReadAssignment() throws Exception {

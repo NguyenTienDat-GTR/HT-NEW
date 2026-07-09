@@ -6,7 +6,11 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 import phucuong.ht.common.dto.apiResponse;
 import phucuong.ht.modules.auth.model.request.LoginRequest;
 import phucuong.ht.modules.auth.model.response.AuthTokenResponse;
@@ -22,17 +26,14 @@ public class AuthController {
     private final AuthService authService;
     private final AuthCookieService authCookieService;
 
-//    @PostMapping("/bootstrap/super-admin")
-//    public apiResponse<BootstrapSuperAdminResponse> bootstrapSuperAdmin(HttpServletResponse response) {
-//        BootstrapSuperAdminResponse result = authService.bootstrapSuperAdmin();
-//        authCookieService.writeAuthCookies(response, result.getTokens());
-//        return apiResponse.success("Super admin bootstrap completed", result);
-//    }
-
     @PostMapping("/login")
-    public apiResponse<AuthTokenResponse> login(@Valid @RequestBody LoginRequest request, HttpServletResponse response) {
-        AuthTokenResponse tokens = authService.login(request);
-        authCookieService.writeAuthCookies(response, tokens);
+    public apiResponse<AuthTokenResponse> login(
+            @Valid @RequestBody LoginRequest request,
+            HttpServletRequest httpServletRequest,
+            HttpServletResponse httpServletResponse
+    ) {
+        AuthTokenResponse tokens = authService.login(request, httpServletRequest.getRemoteAddr());
+        authCookieService.writeAuthCookies(httpServletResponse, tokens);
         return apiResponse.success("Đăng nhập thành công", tokens);
     }
 

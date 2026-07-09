@@ -3,12 +3,12 @@ package phucuong.ht.common.utils;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
+import phucuong.ht.common.exception.errorCode;
 import phucuong.ht.modules.auth.config.AuthProperties;
 import phucuong.ht.modules.auth.exception.ApiException;
 import phucuong.ht.modules.auth.model.AuthUserDetails;
-import phucuong.ht.common.exception.errorCode;
-import org.springframework.http.HttpStatus;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
@@ -28,6 +28,7 @@ public class jwtUtils {
     private static final String CLAIM_ROLES = "roles";
     private static final String CLAIM_PERMISSIONS = "permissions";
     private static final String CLAIM_JTI = "jti";
+    private static final String CLAIM_SESSION_ID = "sessionId";
 
     private final AuthProperties authProperties;
     private final SecretKey accessSecretKey;
@@ -40,19 +41,47 @@ public class jwtUtils {
     }
 
     public String generateAccessToken(AuthUserDetails principal) {
-        return generateToken(principal, ACCESS_TOKEN_TYPE, authProperties.getJwt().getAccessTokenExpirationMs());
+        return generateAccessToken(principal, UUID.randomUUID().toString(), UUID.randomUUID().toString());
     }
 
     public String generateRefreshToken(AuthUserDetails principal) {
-        return generateToken(principal, REFRESH_TOKEN_TYPE, authProperties.getJwt().getRefreshTokenExpirationMs());
+        return generateRefreshToken(principal, UUID.randomUUID().toString(), UUID.randomUUID().toString());
+    }
+
+    public String generateAccessToken(AuthUserDetails principal, String sessionId, String tokenId) {
+        return generateToken(
+                principal,
+                ACCESS_TOKEN_TYPE,
+                authProperties.getJwt().getAccessTokenExpirationMs(),
+                sessionId,
+                tokenId
+        );
+    }
+
+    public String generateRefreshToken(AuthUserDetails principal, String sessionId, String tokenId) {
+        return generateToken(
+                principal,
+                REFRESH_TOKEN_TYPE,
+                authProperties.getJwt().getRefreshTokenExpirationMs(),
+                sessionId,
+                tokenId
+        );
     }
 
     public AuthUserDetails parseAccessToken(String token) {
-        return parseToken(token, ACCESS_TOKEN_TYPE);
+        return parseAccessTokenClaims(token).principal();
     }
 
     public AuthUserDetails parseRefreshToken(String token) {
-        return parseToken(token, REFRESH_TOKEN_TYPE);
+        return parseRefreshTokenClaims(token).principal();
+    }
+
+    public TokenClaims parseAccessTokenClaims(String token) {
+        return parseTokenClaims(token, ACCESS_TOKEN_TYPE);
+    }
+
+    public TokenClaims parseRefreshTokenClaims(String token) {
+        return parseTokenClaims(token, REFRESH_TOKEN_TYPE);
     }
 
     public long getAccessTokenExpirationMs() {
@@ -63,7 +92,7 @@ public class jwtUtils {
         return authProperties.getJwt().getRefreshTokenExpirationMs();
     }
 
-    private String generateToken(AuthUserDetails principal, String tokenType, long ttlMs) {
+    private String generateToken(AuthUserDetails principal, String tokenType, long ttlMs, String sessionId, String tokenId) {
         Instant now = Instant.now();
         Instant expiresAt = now.plusMillis(ttlMs);
 
@@ -74,7 +103,8 @@ public class jwtUtils {
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(expiresAt))
                 .claim(CLAIM_TOKEN_TYPE, tokenType)
-                .claim(CLAIM_JTI, UUID.randomUUID().toString())
+                .claim(CLAIM_JTI, tokenId)
+                .claim(CLAIM_SESSION_ID, sessionId)
                 .claim(CLAIM_LEADER_ID, principal.getLeaderId())
                 .claim(CLAIM_ROLES, principal.getRoles())
                 .claim(CLAIM_PERMISSIONS, principal.getPermissions())
@@ -82,7 +112,7 @@ public class jwtUtils {
                 .compact();
     }
 
-    private AuthUserDetails parseToken(String token, String expectedType) {
+    private TokenClaims parseTokenClaims(String token, String expectedType) {
         Claims claims;
         try {
             claims = Jwts.parser()
@@ -99,11 +129,18 @@ public class jwtUtils {
             throw new ApiException(HttpStatus.UNAUTHORIZED, errorCode.INVALID_TOKEN, "Loại token không được phép cho thao tác này");
         }
 
-        return AuthUserDetails.tokenPrincipal(
-                claims.getSubject(),
-                claims.get(CLAIM_LEADER_ID, String.class),
-                readClaimList(claims.get(CLAIM_ROLES)),
-                readClaimList(claims.get(CLAIM_PERMISSIONS))
+        return new TokenClaims(
+                AuthUserDetails.tokenPrincipal(
+                        claims.getSubject(),
+                        claims.get(CLAIM_LEADER_ID, String.class),
+                        readClaimList(claims.get(CLAIM_ROLES)),
+                        readClaimList(claims.get(CLAIM_PERMISSIONS))
+                ),
+                claims.get(CLAIM_SESSION_ID, String.class),
+                claims.get(CLAIM_JTI, String.class),
+                claims.getIssuedAt() == null ? null : claims.getIssuedAt().toInstant(),
+                claims.getExpiration() == null ? null : claims.getExpiration().toInstant(),
+                tokenType
         );
     }
 
@@ -123,5 +160,15 @@ public class jwtUtils {
             return refreshSecretKey;
         }
         return accessSecretKey;
+    }
+
+    public record TokenClaims(
+            AuthUserDetails principal,
+            String sessionId,
+            String tokenId,
+            Instant issuedAt,
+            Instant expiresAt,
+            String tokenType
+    ) {
     }
 }
