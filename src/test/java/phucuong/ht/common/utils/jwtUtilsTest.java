@@ -8,6 +8,7 @@ import phucuong.ht.modules.auth.model.AuthUserDetails;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class jwtUtilsTest {
@@ -35,13 +36,16 @@ class jwtUtilsTest {
                 List.of("auth.session.manage.all")
         );
 
-        String token = jwtUtils.generateAccessToken(principal);
-        AuthUserDetails parsed = jwtUtils.parseAccessToken(token);
+        String token = jwtUtils.generateAccessToken(principal, "session-123", "access-123");
+        jwtUtils.TokenClaims parsed = jwtUtils.parseAccessTokenClaims(token);
 
-        assertEquals("superadminpc", parsed.getUsername());
-        assertEquals("leader-001", parsed.getLeaderId());
-        assertEquals(List.of("SUPER_ADMIN"), parsed.getRoles());
-        assertEquals(List.of("auth.session.manage.all"), parsed.getPermissions());
+        assertEquals("superadminpc", parsed.principal().getUsername());
+        assertEquals("leader-001", parsed.principal().getLeaderId());
+        assertEquals(List.of("SUPER_ADMIN"), parsed.principal().getRoles());
+        assertEquals(List.of("auth.session.manage.all"), parsed.principal().getPermissions());
+        assertEquals("session-123", parsed.sessionId());
+        assertEquals("access-123", parsed.tokenId());
+        assertNotNull(parsed.expiresAt());
     }
 
     @Test
@@ -53,7 +57,7 @@ class jwtUtilsTest {
                 List.of("auth.session.manage.all")
         );
 
-        String token = jwtUtils.generateRefreshToken(principal);
+        String token = jwtUtils.generateRefreshToken(principal, "session-123", "refresh-123");
 
         assertThrows(RuntimeException.class, () -> jwtUtils.parseAccessToken(token));
     }

@@ -1,6 +1,7 @@
 package phucuong.ht.modules.system.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -11,6 +12,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import phucuong.ht.common.utils.jwtUtils;
 import phucuong.ht.modules.auth.model.AuthUserDetails;
+import phucuong.ht.modules.auth.service.RedisTokenSessionService;
 import phucuong.ht.modules.system.model.request.RoleCreateRequest;
 import phucuong.ht.modules.system.model.response.RoleResponse;
 import phucuong.ht.modules.system.service.RoleManagementService;
@@ -18,6 +20,7 @@ import phucuong.ht.modules.system.service.RoleManagementService;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -39,6 +42,14 @@ class RoleControllerSecurityIntegrationTest {
 
     @MockitoBean
     private RoleManagementService roleManagementService;
+
+    @MockitoBean
+    private RedisTokenSessionService redisTokenSessionService;
+
+    @BeforeEach
+    void setUp() {
+        when(redisTokenSessionService.isAccessTokenActive(anyString(), anyString(), anyString())).thenReturn(true);
+    }
 
     @Test
     void shouldAllowCreateRoleWithAuthority() throws Exception {

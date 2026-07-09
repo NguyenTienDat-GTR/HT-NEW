@@ -1,7 +1,6 @@
 package phucuong.ht.modules.auth.service;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.util.StringUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -10,6 +9,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import phucuong.ht.common.enums.AuthProvider;
 import phucuong.ht.common.exception.errorCode;
 import phucuong.ht.common.utils.jwtUtils;
@@ -28,6 +28,7 @@ import phucuong.ht.modules.system.model.entity.AccountRole;
 import phucuong.ht.modules.system.model.entity.Role;
 
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -43,6 +44,7 @@ public class AuthService {
     private final AuthUserDetailsService authUserDetailsService;
     private final jwtUtils jwtUtils;
     private final AuthProperties authProperties;
+    private final RedisTokenSessionService redisTokenSessionService;
 
     @Transactional
     public BootstrapSuperAdminResponse bootstrapSuperAdmin() {
@@ -83,26 +85,33 @@ public class AuthService {
         return BootstrapSuperAdminResponse.builder()
                 .username(username)
                 .roleCode(role.getRoleCode())
-                .tokens(issueTokens(principal))
+                .tokens(issueNewSessionTokens(principal, "bootstrap"))
                 .build();
     }
 
-    public AuthTokenResponse login(LoginRequest request) {
+    public AuthTokenResponse login(LoginRequest request, String ipAddress) {
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword())
         );
         SecurityContextHolder.getContext().setAuthentication(authentication);
         AuthUserDetails principal = (AuthUserDetails) authentication.getPrincipal();
-        return issueTokens(principal);
+        return issueNewSessionTokens(principal, normalizeIpAddress(ipAddress));
     }
 
     public AuthTokenResponse refresh(String refreshToken) {
         if (!StringUtils.hasText(refreshToken)) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, errorCode.INVALID_TOKEN, "Refresh token là bắt buộc");
         }
-        AuthUserDetails tokenPrincipal = jwtUtils.parseRefreshToken(refreshToken);
-        AuthUserDetails currentPrincipal = authUserDetailsService.loadUserByUsername(tokenPrincipal.getUsername());
-        return issueTokens(currentPrincipal);
+
+        jwtUtils.TokenClaims refreshClaims = jwtUtils.parseRefreshTokenClaims(refreshToken);
+        AuthUserDetails currentPrincipal = authUserDetailsService.loadUserByUsername(refreshClaims.principal().getUsername());
+        redisTokenSessionService.requireRefreshSession(
+                refreshClaims.sessionId(),
+                refreshClaims.principal().getUsername(),
+                refreshClaims.tokenId(),
+                refreshToken
+        );
+        return rotateSessionTokens(currentPrincipal, refreshClaims.sessionId());
     }
 
     public AuthenticatedUserResponse currentUser(Authentication authentication) {
@@ -116,15 +125,60 @@ public class AuthService {
         return currentUser(authentication);
     }
 
-    private AuthTokenResponse issueTokens(AuthUserDetails principal) {
+    private AuthTokenResponse issueNewSessionTokens(AuthUserDetails principal, String ipAddress) {
+        String accessTokenJti = UUID.randomUUID().toString();
+        String refreshTokenJti = UUID.randomUUID().toString();
+        TokenSessionState sessionState = redisTokenSessionService.createSession(
+                principal.getUsername(),
+                ipAddress,
+                accessTokenJti,
+                refreshTokenJti,
+                "pending"
+        );
+
+        String accessToken = jwtUtils.generateAccessToken(principal, sessionState.getSessionId(), accessTokenJti);
+        String refreshToken = jwtUtils.generateRefreshToken(principal, sessionState.getSessionId(), refreshTokenJti);
+        redisTokenSessionService.rotateSession(
+                sessionState.getSessionId(),
+                principal.getUsername(),
+                accessTokenJti,
+                refreshTokenJti,
+                refreshToken
+        );
+        return buildTokenResponse(principal, accessToken, refreshToken);
+    }
+
+    private AuthTokenResponse rotateSessionTokens(AuthUserDetails principal, String sessionId) {
+        String accessTokenJti = UUID.randomUUID().toString();
+        String refreshTokenJti = UUID.randomUUID().toString();
+        String accessToken = jwtUtils.generateAccessToken(principal, sessionId, accessTokenJti);
+        String refreshToken = jwtUtils.generateRefreshToken(principal, sessionId, refreshTokenJti);
+        redisTokenSessionService.rotateSession(
+                sessionId,
+                principal.getUsername(),
+                accessTokenJti,
+                refreshTokenJti,
+                refreshToken
+        );
+        return buildTokenResponse(principal, accessToken, refreshToken);
+    }
+
+    private AuthTokenResponse buildTokenResponse(AuthUserDetails principal, String accessToken, String refreshToken) {
         return AuthTokenResponse.builder()
-                .accessToken(jwtUtils.generateAccessToken(principal))
-                .refreshToken(jwtUtils.generateRefreshToken(principal))
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
                 .tokenType("Bearer")
                 .accessTokenExpiresInMs(jwtUtils.getAccessTokenExpirationMs())
                 .refreshTokenExpiresInMs(jwtUtils.getRefreshTokenExpirationMs())
                 .user(toUserResponse(principal))
                 .build();
+    }
+
+    private String normalizeIpAddress(String ipAddress) {
+        if (!StringUtils.hasText(ipAddress)) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, errorCode.AUTHENTICATION_FAILED, "Không thể xác định địa chỉ IP đăng nhập");
+        }
+        return ipAddress.trim();
     }
 
     private AuthenticatedUserResponse toUserResponse(AuthUserDetails principal) {

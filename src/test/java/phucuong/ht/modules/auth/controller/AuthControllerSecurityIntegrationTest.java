@@ -1,6 +1,7 @@
 package phucuong.ht.modules.auth.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -15,11 +16,13 @@ import phucuong.ht.modules.auth.model.request.LoginRequest;
 import phucuong.ht.modules.auth.model.response.AuthTokenResponse;
 import phucuong.ht.modules.auth.model.response.AuthenticatedUserResponse;
 import phucuong.ht.modules.auth.service.AuthService;
+import phucuong.ht.modules.auth.service.RedisTokenSessionService;
 
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -47,13 +50,21 @@ class AuthControllerSecurityIntegrationTest {
     @MockitoBean
     private AuthService authService;
 
+    @MockitoBean
+    private RedisTokenSessionService redisTokenSessionService;
+
+    @BeforeEach
+    void setUp() {
+        when(redisTokenSessionService.isAccessTokenActive(anyString(), anyString(), anyString())).thenReturn(true);
+    }
+
     @Test
     void shouldAllowPublicLoginEndpoint() throws Exception {
         LoginRequest request = new LoginRequest();
         request.setUsername("superadminpc");
         request.setPassword("htgppc2026");
 
-        when(authService.login(any(LoginRequest.class))).thenReturn(sampleTokenResponse());
+        when(authService.login(any(LoginRequest.class), anyString())).thenReturn(sampleTokenResponse());
 
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)

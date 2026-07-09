@@ -18,8 +18,8 @@ import phucuong.ht.common.dto.apiResponse;
 import phucuong.ht.common.exception.errorCode;
 import phucuong.ht.common.utils.jwtUtils;
 import phucuong.ht.modules.auth.exception.ApiException;
-import phucuong.ht.modules.auth.model.AuthUserDetails;
 import phucuong.ht.modules.auth.service.AuthCookieService;
+import phucuong.ht.modules.auth.service.RedisTokenSessionService;
 
 import java.io.IOException;
 
@@ -30,12 +30,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final jwtUtils jwtUtils;
     private final ObjectMapper objectMapper;
     private final AuthCookieService authCookieService;
+    private final RedisTokenSessionService redisTokenSessionService;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
         String authorizationHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
-        String token = null;
+        String token;
 
         if (authorizationHeader != null && authorizationHeader.startsWith("Bearer ")) {
             token = authorizationHeader.substring(7);
@@ -49,12 +50,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         try {
-            AuthUserDetails principal = jwtUtils.parseAccessToken(token);
+            jwtUtils.TokenClaims accessClaims = jwtUtils.parseAccessTokenClaims(token);
+            if (!redisTokenSessionService.isAccessTokenActive(
+                    accessClaims.sessionId(),
+                    accessClaims.principal().getUsername(),
+                    accessClaims.tokenId()
+            )) {
+                throw new ApiException(HttpStatus.UNAUTHORIZED, errorCode.INVALID_TOKEN, "Phiên đăng nhập không còn hiệu lực");
+            }
 
             UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                    principal,
+                    accessClaims.principal(),
                     null,
-                    principal.getAuthorities()
+                    accessClaims.principal().getAuthorities()
             );
             authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
             SecurityContextHolder.getContext().setAuthentication(authentication);

@@ -277,13 +277,15 @@ Implemented flow:
 
 Token behavior:
 
-- stateless JWT
+- JWT access and refresh tokens are now backed by Redis session state
 - separate `accessToken` and `refreshToken`
 - token contains `username`
 - token contains `leaderId`
 - token contains role list
 - token contains effective permission list
-- token contains `tokenType` and `jti`
+- token contains `tokenType`, `jti`, and `sessionId`
+- Redis keeps `auth:session:{sessionId}` as the source of truth for active tokens
+- Redis keeps `auth:user:{username}:sessions` to enforce login limits per account
 
 Configured properties:
 
@@ -302,6 +304,17 @@ Environment variables:
 - `JWT_REFRESH_EXPIRATION`
 - `JWT_ISSUER`
 - `JWT_AUDIENCE`
+
+Current login session policy:
+
+- the backend identifies the login source by `HttpServletRequest.getRemoteAddr()`
+- each account may keep at most 2 active IP-based sessions
+- each IP may keep only 1 active session for the same account
+- a new login from the same IP revokes both the previous access token and refresh token on that IP
+- a login from a third IP revokes the oldest active IP session for that account
+- `POST /api/auth/refresh` still reads the refresh token from the HttpOnly cookie
+- successful refresh rotates both access token and refresh token for the existing `sessionId`
+- protected APIs now validate `sessionId + accessToken jti` against Redis on every request
 
 ### Super Admin Provisioning
 
