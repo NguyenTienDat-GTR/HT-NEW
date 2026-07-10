@@ -41,6 +41,22 @@ public class CacheScopeKeyHelper {
                 + "|filters=" + joinFilters(source.getFilters());
     }
 
+    public String analyticsKey(
+            Authentication authentication,
+            String endpoint,
+            Object fromDate,
+            Object toDate,
+            Object timeBucket,
+            Object groupBy
+    ) {
+        return authSignature(authentication)
+                + "|endpoint=" + Objects.toString(endpoint, "")
+                + "|fromDate=" + Objects.toString(fromDate, "")
+                + "|toDate=" + Objects.toString(toDate, "")
+                + "|timeBucket=" + Objects.toString(timeBucket, "month")
+                + "|groupBy=" + Objects.toString(groupBy, "");
+    }
+
     private String authSignature(Authentication authentication) {
         String username = securityUtils.currentUsername(authentication);
         String authorities = authentication == null ? "" : authentication.getAuthorities().stream()

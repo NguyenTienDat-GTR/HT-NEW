@@ -43,7 +43,10 @@ public class CacheConfig {
         addCaches(cacheConfigurations, Duration.ofMinutes(3),
                 CacheNames.TRAINING_COURSE_LIST, CacheNames.TRAINING_COURSE_DETAIL,
                 CacheNames.COURSE_REQUIREMENT_LIST, CacheNames.COURSE_REQUIREMENT_DETAIL,
-                CacheNames.CERTIFICATE_LIST, CacheNames.CERTIFICATE_DETAIL);
+                CacheNames.CERTIFICATE_LIST, CacheNames.CERTIFICATE_DETAIL,
+                CacheNames.ANALYTICS_OVERVIEW, CacheNames.ANALYTICS_ORGANIZATION,
+                CacheNames.ANALYTICS_LEADERS, CacheNames.ANALYTICS_COURSES,
+                CacheNames.ANALYTICS_CERTIFICATES);
 
         return RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(baseConfig)
