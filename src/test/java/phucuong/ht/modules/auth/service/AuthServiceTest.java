@@ -211,6 +211,7 @@ class AuthServiceTest {
                 username,
                 ipAddress,
                 "access-jti",
+                new java.util.ArrayList<>(),
                 "refresh-jti",
                 "hash",
                 now,

@@ -20,17 +20,17 @@ import phucuong.ht.modules.auth.service.RedisTokenSessionService;
 
 import java.util.List;
 
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -71,7 +71,7 @@ class AuthControllerSecurityIntegrationTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(cookie().exists("accessToken"))
+                .andExpect(cookie().doesNotExist("accessToken"))
                 .andExpect(cookie().exists("refreshToken"))
                 .andExpect(jsonPath("$.data.user.username").value("superadminpc"));
     }
@@ -127,7 +127,7 @@ class AuthControllerSecurityIntegrationTest {
         mockMvc.perform(post("/api/auth/refresh")
                         .cookie(new jakarta.servlet.http.Cookie("refreshToken", "refresh-token-cookie")))
                 .andExpect(status().isOk())
-                .andExpect(cookie().exists("accessToken"))
+                .andExpect(cookie().doesNotExist("accessToken"))
                 .andExpect(cookie().exists("refreshToken"))
                 .andExpect(jsonPath("$.success").value(true));
 
@@ -136,7 +136,7 @@ class AuthControllerSecurityIntegrationTest {
 
     @Test
     void shouldRejectRefreshWithoutCookie() throws Exception {
-        when(authService.refresh(isNull())).thenThrow(new ApiException(UNAUTHORIZED, phucuong.ht.common.exception.errorCode.INVALID_TOKEN, "Refresh token là bắt buộc"));
+        when(authService.refresh(isNull())).thenThrow(new ApiException(UNAUTHORIZED, phucuong.ht.common.exception.errorCode.INVALID_TOKEN, "Refresh token la bat buoc"));
 
         mockMvc.perform(post("/api/auth/refresh"))
                 .andExpect(status().isUnauthorized())
@@ -144,17 +144,17 @@ class AuthControllerSecurityIntegrationTest {
     }
 
     @Test
-    void shouldNotRequireAuthenticationForSwaggerUiEvenWhenCookieExists() throws Exception {
+    void shouldRequireAuthenticationForSwaggerUiEvenWhenCookieExists() throws Exception {
         mockMvc.perform(get("/swagger-ui/index.html")
                         .cookie(new jakarta.servlet.http.Cookie("accessToken", "invalid-token")))
-                .andExpect(status().isOk());
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
-    void shouldServeSwaggerInitializerWithCookieCredentialsEnabled() throws Exception {
+    void shouldRequireAuthenticationForSwaggerInitializer() throws Exception {
         mockMvc.perform(get("/swagger-ui/swagger-initializer.js"))
-                .andExpect(status().isOk())
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("\"withCredentials\" : true")));
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON));
     }
 
     private AuthTokenResponse sampleTokenResponse() {

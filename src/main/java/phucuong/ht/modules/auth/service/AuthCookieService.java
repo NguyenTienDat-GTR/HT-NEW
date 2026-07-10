@@ -18,13 +18,7 @@ public class AuthCookieService {
         this.authProperties = authProperties;
     }
 
-    public void writeAuthCookies(HttpServletResponse response, AuthTokenResponse tokens) {
-        response.addHeader("Set-Cookie", buildCookie(
-                authProperties.getCookie().getAccessTokenName(),
-                tokens.getAccessToken(),
-                tokens.getAccessTokenExpiresInMs()
-        ).toString());
-
+    public void writeRefreshCookie(HttpServletResponse response, AuthTokenResponse tokens) {
         response.addHeader("Set-Cookie", buildCookie(
                 authProperties.getCookie().getRefreshTokenName(),
                 tokens.getRefreshToken(),

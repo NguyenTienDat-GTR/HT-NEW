@@ -33,7 +33,7 @@ public class AuthController {
             HttpServletResponse httpServletResponse
     ) {
         AuthTokenResponse tokens = authService.login(request, httpServletRequest.getRemoteAddr());
-        authCookieService.writeAuthCookies(httpServletResponse, tokens);
+        authCookieService.writeRefreshCookie(httpServletResponse, tokens);
         return apiResponse.success("Đăng nhập thành công", tokens);
     }
 
@@ -44,7 +44,7 @@ public class AuthController {
     ) {
         String refreshToken = authCookieService.resolveRefreshToken(httpServletRequest);
         AuthTokenResponse tokens = authService.refresh(refreshToken);
-        authCookieService.writeAuthCookies(httpServletResponse, tokens);
+        authCookieService.writeRefreshCookie(httpServletResponse, tokens);
         return apiResponse.success("Làm mới token thành công", tokens);
     }
 

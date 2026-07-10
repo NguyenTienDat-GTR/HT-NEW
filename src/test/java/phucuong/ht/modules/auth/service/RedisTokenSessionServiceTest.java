@@ -1,0 +1,199 @@
+package phucuong.ht.modules.auth.service;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.data.redis.core.ZSetOperations;
+import phucuong.ht.modules.auth.config.AuthProperties;
+
+import java.time.Duration;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+class RedisTokenSessionServiceTest {
+
+    private final Map<String, String> valueStore = new HashMap<>();
+    private final Map<String, Map<String, Double>> zsetStore = new HashMap<>();
+
+    private RedisTokenSessionService redisTokenSessionService;
+
+    @BeforeEach
+    void setUp() {
+        valueStore.clear();
+        zsetStore.clear();
+
+        StringRedisTemplate stringRedisTemplate = mock(StringRedisTemplate.class);
+        @SuppressWarnings("unchecked")
+        ValueOperations<String, String> valueOperations = mock(ValueOperations.class);
+        @SuppressWarnings("unchecked")
+        ZSetOperations<String, String> zSetOperations = mock(ZSetOperations.class);
+
+        when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(stringRedisTemplate.opsForZSet()).thenReturn(zSetOperations);
+
+        doAnswer(invocation -> {
+            valueStore.put(invocation.getArgument(0), invocation.getArgument(1));
+            return null;
+        }).when(valueOperations).set(anyString(), anyString(), any(Duration.class));
+
+        when(valueOperations.get(anyString())).thenAnswer(invocation -> valueStore.get(invocation.getArgument(0)));
+
+        doAnswer(invocation -> {
+            String key = invocation.getArgument(0);
+            String value = invocation.getArgument(1);
+            double score = invocation.getArgument(2);
+            zsetStore.computeIfAbsent(key, ignored -> new LinkedHashMap<>()).put(value, score);
+            return true;
+        }).when(zSetOperations).add(anyString(), anyString(), anyDouble());
+
+        when(zSetOperations.range(anyString(), anyLong(), anyLong())).thenAnswer(invocation ->
+                zsetStore.getOrDefault(invocation.getArgument(0), Map.of()).entrySet().stream()
+                        .sorted(Map.Entry.comparingByValue())
+                        .map(Map.Entry::getKey)
+                        .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new))
+        );
+
+        doAnswer(invocation -> {
+            String key = invocation.getArgument(0);
+            Object rawValues = invocation.getArgument(1);
+            Object[] values = rawValues instanceof Object[] objects ? objects : new Object[]{rawValues};
+            Map<String, Double> entries = zsetStore.get(key);
+            if (entries != null) {
+                for (Object value : values) {
+                    entries.remove(String.valueOf(value));
+                }
+            }
+            return (long) values.length;
+        }).when(zSetOperations).remove(anyString(), any());
+
+        doAnswer(invocation -> {
+            valueStore.remove(invocation.getArgument(0));
+            return true;
+        }).when(stringRedisTemplate).delete(anyString());
+
+        doAnswer(invocation -> true).when(stringRedisTemplate).expire(anyString(), any(Duration.class));
+
+        AuthProperties authProperties = new AuthProperties();
+        authProperties.getJwt().setRefreshTokenExpirationMs(604_800_000L);
+
+        redisTokenSessionService = new RedisTokenSessionService(
+                stringRedisTemplate,
+                new ObjectMapper().findAndRegisterModules(),
+                authProperties
+        );
+    }
+
+    @Test
+    void shouldKeepPreviousSessionWhenSameIpLogsInAgain() {
+        TokenSessionState first = redisTokenSessionService.createSession(
+                "superadminpc",
+                "127.0.0.1",
+                "access-1",
+                "refresh-1",
+                "refresh-token-1"
+        );
+
+        TokenSessionState second = redisTokenSessionService.createSession(
+                "superadminpc",
+                "127.0.0.1",
+                "access-2",
+                "refresh-2",
+                "refresh-token-2"
+        );
+
+        List<TokenSessionState> sessions = redisTokenSessionService.listActiveSessions("superadminpc");
+
+        assertEquals(2, sessions.size());
+        assertTrue(sessions.stream().anyMatch(session -> session.getSessionId().equals(first.getSessionId())));
+        assertTrue(sessions.stream().anyMatch(session -> session.getSessionId().equals(second.getSessionId())));
+    }
+
+    @Test
+    void shouldEvictOldestSessionWhenSessionLimitIsReached() throws InterruptedException {
+        TokenSessionState first = redisTokenSessionService.createSession(
+                "superadminpc",
+                "127.0.0.1",
+                "access-1",
+                "refresh-1",
+                "refresh-token-1"
+        );
+        Thread.sleep(5);
+        TokenSessionState second = redisTokenSessionService.createSession(
+                "superadminpc",
+                "127.0.0.1",
+                "access-2",
+                "refresh-2",
+                "refresh-token-2"
+        );
+        Thread.sleep(5);
+        TokenSessionState third = redisTokenSessionService.createSession(
+                "superadminpc",
+                "127.0.0.1",
+                "access-3",
+                "refresh-3",
+                "refresh-token-3"
+        );
+        Thread.sleep(5);
+        TokenSessionState fourth = redisTokenSessionService.createSession(
+                "superadminpc",
+                "127.0.0.1",
+                "access-4",
+                "refresh-4",
+                "refresh-token-4"
+        );
+        Thread.sleep(5);
+        TokenSessionState fifth = redisTokenSessionService.createSession(
+                "superadminpc",
+                "127.0.0.1",
+                "access-5",
+                "refresh-5",
+                "refresh-token-5"
+        );
+
+        List<TokenSessionState> sessions = redisTokenSessionService.listActiveSessions("superadminpc");
+
+        assertEquals(4, sessions.size());
+        assertFalse(sessions.stream().anyMatch(session -> session.getSessionId().equals(first.getSessionId())));
+        assertTrue(sessions.stream().anyMatch(session -> session.getSessionId().equals(second.getSessionId())));
+        assertTrue(sessions.stream().anyMatch(session -> session.getSessionId().equals(third.getSessionId())));
+        assertTrue(sessions.stream().anyMatch(session -> session.getSessionId().equals(fourth.getSessionId())));
+        assertTrue(sessions.stream().anyMatch(session -> session.getSessionId().equals(fifth.getSessionId())));
+    }
+
+    @Test
+    void shouldKeepPreviousAccessTokenActiveAfterRefreshRotation() {
+        TokenSessionState session = redisTokenSessionService.createSession(
+                "superadminpc",
+                "127.0.0.1",
+                "access-1",
+                "refresh-1",
+                "refresh-token-1"
+        );
+
+        redisTokenSessionService.rotateSession(
+                session.getSessionId(),
+                "superadminpc",
+                "access-2",
+                "refresh-2",
+                "refresh-token-2"
+        );
+
+        assertTrue(redisTokenSessionService.isAccessTokenActive(session.getSessionId(), "superadminpc", "access-1"));
+        assertTrue(redisTokenSessionService.isAccessTokenActive(session.getSessionId(), "superadminpc", "access-2"));
+    }
+}

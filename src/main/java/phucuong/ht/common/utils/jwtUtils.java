@@ -59,13 +59,20 @@ public class jwtUtils {
     }
 
     public String generateRefreshToken(AuthUserDetails principal, String sessionId, String tokenId) {
-        return generateToken(
-                principal,
-                REFRESH_TOKEN_TYPE,
-                authProperties.getJwt().getRefreshTokenExpirationMs(),
-                sessionId,
-                tokenId
-        );
+        Instant now = Instant.now();
+        Instant expiresAt = now.plusMillis(authProperties.getJwt().getRefreshTokenExpirationMs());
+
+        return Jwts.builder()
+                .subject(principal.getUsername())
+                .issuer(authProperties.getJwt().getIssuer())
+                .audience().add(authProperties.getJwt().getAudience()).and()
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(expiresAt))
+                .claim(CLAIM_TOKEN_TYPE, REFRESH_TOKEN_TYPE)
+                .claim(CLAIM_JTI, tokenId)
+                .claim(CLAIM_SESSION_ID, sessionId)
+                .signWith(refreshSecretKey)
+                .compact();
     }
 
     public AuthUserDetails parseAccessToken(String token) {

@@ -6,6 +6,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 @Getter
 @Setter
@@ -17,6 +19,7 @@ public class TokenSessionState {
     private String username;
     private String ipAddress;
     private String accessTokenJti;
+    private List<String> previousAccessTokenJtis = new ArrayList<>();
     private String refreshTokenJti;
     private String refreshTokenHash;
     private Instant issuedAt;
