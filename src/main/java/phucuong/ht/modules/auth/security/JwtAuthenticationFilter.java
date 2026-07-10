@@ -6,6 +6,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -22,6 +23,7 @@ import phucuong.ht.modules.auth.service.AuthCookieService;
 import phucuong.ht.modules.auth.service.RedisTokenSessionService;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
 @Component
 @RequiredArgsConstructor
@@ -31,6 +33,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final ObjectMapper objectMapper;
     private final AuthCookieService authCookieService;
     private final RedisTokenSessionService redisTokenSessionService;
+    @Value("${app.security.swagger-public-enabled:false}")
+    private boolean swaggerPublicEnabled;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
@@ -56,7 +60,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     accessClaims.principal().getUsername(),
                     accessClaims.tokenId()
             )) {
-                throw new ApiException(HttpStatus.UNAUTHORIZED, errorCode.INVALID_TOKEN, "Phiên đăng nhập không còn hiệu lực");
+                throw new ApiException(HttpStatus.UNAUTHORIZED, errorCode.INVALID_TOKEN, "Phien dang nhap khong con hieu luc");
             }
 
             UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
@@ -77,6 +81,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private void writeUnauthorizedResponse(HttpServletResponse response, String message, errorCode code) throws IOException {
         response.setStatus(HttpStatus.UNAUTHORIZED.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         objectMapper.writeValue(response.getWriter(), apiResponse.error(message, code.name()));
     }
 
@@ -84,11 +89,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI();
 
-        return path.startsWith("/swagger-ui")
+        if (swaggerPublicEnabled && (path.startsWith("/swagger-ui")
                 || path.equals("/swagger-ui.html")
                 || path.equals("/swagger-auth-token.js")
-                || path.startsWith("/v3/api-docs")
-                || path.startsWith("/actuator")
+                || path.startsWith("/v3/api-docs"))) {
+            return true;
+        }
+
+        return path.startsWith("/actuator")
                 || path.startsWith("/api/auth/login")
                 || path.startsWith("/api/auth/refresh")
                 || path.startsWith("/api/auth/bootstrap");

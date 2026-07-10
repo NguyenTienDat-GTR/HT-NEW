@@ -9,7 +9,9 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class jwtUtilsTest {
 
@@ -46,6 +48,26 @@ class jwtUtilsTest {
         assertEquals("session-123", parsed.sessionId());
         assertEquals("access-123", parsed.tokenId());
         assertNotNull(parsed.expiresAt());
+    }
+
+    @Test
+    void shouldKeepRefreshTokenClaimsMinimal() {
+        AuthUserDetails principal = AuthUserDetails.tokenPrincipal(
+                "superadminpc",
+                "leader-001",
+                List.of("SUPER_ADMIN"),
+                List.of("auth.session.manage.all")
+        );
+
+        String token = jwtUtils.generateRefreshToken(principal, "session-123", "refresh-123");
+        jwtUtils.TokenClaims parsed = jwtUtils.parseRefreshTokenClaims(token);
+
+        assertEquals("superadminpc", parsed.principal().getUsername());
+        assertNull(parsed.principal().getLeaderId());
+        assertTrue(parsed.principal().getRoles().isEmpty());
+        assertTrue(parsed.principal().getPermissions().isEmpty());
+        assertEquals("session-123", parsed.sessionId());
+        assertEquals("refresh-123", parsed.tokenId());
     }
 
     @Test

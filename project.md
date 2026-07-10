@@ -978,4 +978,7 @@ The following work was added in this iteration:
 - `SystemLog` retention now deletes records whose `loggedAt` is older than 10 days through the `SystemLogRetentionScheduler` background job.
 - Role and permission administration now use `/api/system/roles`, `/api/system/permissions`, `/api/system/role-permissions`, and `/api/system/account-permissions` rather than folding everything into the original `system.role.manage.all` and `system.permission.manage.all` permissions.
 - The effective-permission SQL views are now part of the security contract: if a record with authorization impact is toggled to inactive, it must disappear from the next JWT login or refresh result without needing extra Java-side filtering.
+- Auth hardening local July 2026: refresh token chỉ còn claim tối thiểu và chỉ được set bằng `refreshToken` HttpOnly cookie để tránh `HeadersTooLargeException`; `/v3/api-docs`, `/swagger-ui/**`, và whitelist drift `/api/auth/bootstrap/super-admin` không còn public; generic 500, malformed JSON, và missing resource responses đã được sanitize để không lộ chi tiết nội bộ.
+- Auth session hardening local July 2026: refresh rotation hiện giữ hợp lệ access-token JTI liền trước trong Redis session state để client không rơi `401` ngay sau khi vừa refresh; local validation đã xác nhận live flow `login -> /api/auth/me -> refresh -> /api/auth/me` tiếp tục trả `200`.
+- Kết quả kiểm thử tải cục bộ ngày 2026-07-09 đã xác nhận read surge không phát sinh `401` hay `5xx`; hệ thống tự shed load bằng `429` dưới áp lực thay vì sập dịch vụ.
 

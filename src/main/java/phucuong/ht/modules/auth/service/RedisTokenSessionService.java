@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import phucuong.ht.common.exception.errorCode;
 import phucuong.ht.modules.auth.config.AuthProperties;
 import phucuong.ht.modules.auth.exception.ApiException;
@@ -29,7 +30,8 @@ public class RedisTokenSessionService {
 
     private static final String SESSION_KEY_PREFIX = "auth:session:";
     private static final String USER_SESSIONS_KEY_PREFIX = "auth:user:";
-    private static final int MAX_ACTIVE_IPS = 2;
+    private static final int MAX_ACTIVE_SESSIONS = 4;
+    private static final int MAX_TRACKED_ACCESS_TOKEN_IDS = 4;
 
     private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
@@ -43,13 +45,12 @@ public class RedisTokenSessionService {
             String refreshToken
     ) {
         cleanupUserSessions(username);
-        revokeSessionsByIp(username, ipAddress);
 
         List<TokenSessionState> activeSessions = listActiveSessions(username);
-        while (activeSessions.size() >= MAX_ACTIVE_IPS) {
+        while (activeSessions.size() >= MAX_ACTIVE_SESSIONS) {
             TokenSessionState oldestSession = activeSessions.stream()
                     .min(Comparator.comparing(this::evictionInstant))
-                    .orElseThrow(() -> invalidSession("Không thể xác định phiên đăng nhập cần thu hồi"));
+                    .orElseThrow(() -> invalidSession("Khong the xac dinh phien dang nhap can thu hoi"));
             revokeSession(oldestSession.getSessionId());
             activeSessions.removeIf(session -> Objects.equals(session.getSessionId(), oldestSession.getSessionId()));
         }
@@ -60,6 +61,7 @@ public class RedisTokenSessionService {
                 username,
                 ipAddress,
                 accessTokenJti,
+                new ArrayList<>(),
                 refreshTokenJti,
                 hashRefreshToken(refreshToken),
                 now,
@@ -81,7 +83,7 @@ public class RedisTokenSessionService {
                 || !Objects.equals(sessionState.getRefreshTokenJti(), refreshTokenJti)
                 || !Objects.equals(sessionState.getRefreshTokenHash(), hashRefreshToken(refreshToken))) {
             revokeSession(sessionId);
-            throw invalidSession("Phiên đăng nhập không còn hiệu lực");
+            throw invalidSession("Phien dang nhap khong con hieu luc");
         }
         touchSession(sessionState, Instant.now());
         return sessionState;
@@ -97,8 +99,10 @@ public class RedisTokenSessionService {
         TokenSessionState sessionState = requireSession(sessionId);
         if (!Objects.equals(sessionState.getUsername(), username)) {
             revokeSession(sessionId);
-            throw invalidSession("Phiên đăng nhập không còn hiệu lực");
+            throw invalidSession("Phien dang nhap khong con hieu luc");
         }
+
+        rememberAccessToken(sessionState);
 
         Instant now = Instant.now();
         sessionState.setAccessTokenJti(accessTokenJti);
@@ -120,7 +124,7 @@ public class RedisTokenSessionService {
             return false;
         }
         if (!Objects.equals(sessionState.getUsername(), username)
-                || !Objects.equals(sessionState.getAccessTokenJti(), accessTokenJti)) {
+                || !isKnownAccessToken(sessionState, accessTokenJti)) {
             return false;
         }
 
@@ -156,19 +160,11 @@ public class RedisTokenSessionService {
         return activeSessions;
     }
 
-    private void revokeSessionsByIp(String username, String ipAddress) {
-        for (TokenSessionState sessionState : listActiveSessions(username)) {
-            if (Objects.equals(sessionState.getIpAddress(), ipAddress)) {
-                revokeSession(sessionState.getSessionId());
-            }
-        }
-    }
-
     private TokenSessionState requireSession(String sessionId) {
         TokenSessionState sessionState = getSession(sessionId);
         if (sessionState == null || isExpired(sessionState)) {
             revokeSession(sessionId);
-            throw invalidSession("Phiên đăng nhập không còn hiệu lực");
+            throw invalidSession("Phien dang nhap khong con hieu luc");
         }
         return sessionState;
     }
@@ -180,10 +176,14 @@ public class RedisTokenSessionService {
         }
 
         try {
-            return objectMapper.readValue(rawSession, TokenSessionState.class);
+            TokenSessionState sessionState = objectMapper.readValue(rawSession, TokenSessionState.class);
+            if (sessionState.getPreviousAccessTokenJtis() == null) {
+                sessionState.setPreviousAccessTokenJtis(new ArrayList<>());
+            }
+            return sessionState;
         } catch (JsonProcessingException exception) {
             deleteSessionKeys(sessionId, null);
-            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode.INTERNAL_ERROR, "Không thể đọc dữ liệu phiên đăng nhập");
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode.INTERNAL_ERROR, "Khong the doc du lieu phien dang nhap");
         }
     }
 
@@ -202,9 +202,9 @@ public class RedisTokenSessionService {
             );
             stringRedisTemplate.expire(userSessionsKey(sessionState.getUsername()), ttl);
         } catch (JsonProcessingException exception) {
-            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode.INTERNAL_ERROR, "Không thể lưu dữ liệu phiên đăng nhập");
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode.INTERNAL_ERROR, "Khong the luu du lieu phien dang nhap");
         } catch (RuntimeException exception) {
-            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode.INTERNAL_ERROR, "Hệ thống phiên đăng nhập tạm thời không khả dụng");
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode.INTERNAL_ERROR, "He thong phien dang nhap tam thoi khong kha dung");
         }
     }
 
@@ -230,12 +230,39 @@ public class RedisTokenSessionService {
         return instant == null ? Instant.now().toEpochMilli() : instant.toEpochMilli();
     }
 
+    private void rememberAccessToken(TokenSessionState sessionState) {
+        if (!StringUtils.hasText(sessionState.getAccessTokenJti())) {
+            return;
+        }
+
+        List<String> knownIds = sessionState.getPreviousAccessTokenJtis();
+        if (knownIds == null) {
+            knownIds = new ArrayList<>();
+            sessionState.setPreviousAccessTokenJtis(knownIds);
+        }
+
+        knownIds.remove(sessionState.getAccessTokenJti());
+        knownIds.add(sessionState.getAccessTokenJti());
+        while (knownIds.size() > MAX_TRACKED_ACCESS_TOKEN_IDS) {
+            knownIds.remove(0);
+        }
+    }
+
+    private boolean isKnownAccessToken(TokenSessionState sessionState, String accessTokenJti) {
+        if (Objects.equals(sessionState.getAccessTokenJti(), accessTokenJti)) {
+            return true;
+        }
+
+        List<String> knownIds = sessionState.getPreviousAccessTokenJtis();
+        return knownIds != null && knownIds.contains(accessTokenJti);
+    }
+
     private String hashRefreshToken(String refreshToken) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             return HexFormat.of().formatHex(digest.digest(refreshToken.getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException exception) {
-            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode.INTERNAL_ERROR, "Không thể mã hóa refresh token");
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode.INTERNAL_ERROR, "Khong the ma hoa refresh token");
         }
     }
 
@@ -243,7 +270,7 @@ public class RedisTokenSessionService {
         try {
             return stringRedisTemplate.opsForValue().get(key);
         } catch (RuntimeException exception) {
-            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode.INTERNAL_ERROR, "Hệ thống phiên đăng nhập tạm thời không khả dụng");
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode.INTERNAL_ERROR, "He thong phien dang nhap tam thoi khong kha dung");
         }
     }
 
@@ -254,7 +281,7 @@ public class RedisTokenSessionService {
                 stringRedisTemplate.opsForZSet().remove(userSessionsKey(username), sessionId);
             }
         } catch (RuntimeException exception) {
-            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode.INTERNAL_ERROR, "Hệ thống phiên đăng nhập tạm thời không khả dụng");
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode.INTERNAL_ERROR, "He thong phien dang nhap tam thoi khong kha dung");
         }
     }
 
