@@ -1,5 +1,19 @@
 ﻿# HT Management New
 
+## Dashboard phân tích theo scope
+
+- API: `GET /api/analytics/overview`, `/organization`, `/leaders`, `/courses`, `/certificates`.
+- Filter dùng chung: `fromDate`, `toDate` (ISO `yyyy-MM-dd`), `timeBucket` (`month`, `quarter`, `year`, mặc định `month`) và `groupBy` (`deanery`, `parish`, `courseType`, `leaderLevel`, `gender`, `status`, `approvalStatus`, `year`). Backend tự resolve scope từ account, không nhận ID scope từ client.
+- Quyền: `analytics.dashboard.read.all`, `.diocese`, `.deanery`, `.parish`.
+- `SUPER_ADMIN` chỉ có thể gọi overview với đúng bốn KPI toàn hệ thống: `totalDioceses`, `totalDeaneries`, `totalParishes`, `totalLeaders`; các endpoint chi tiết trả 403.
+- Diocese chỉ xem dữ liệu thuộc giáo phận và các giáo hạt/giáo xứ con; deanery chỉ xem giáo hạt và giáo xứ con; parish chỉ xem dữ liệu giáo xứ hiện tại. Response chuẩn gồm `scope`, `filters`, `kpis`, `breakdowns`, `trends`, `comparisons`.
+- Response còn có `comparisons`: chuỗi so sánh theo năm trong khoảng lọc, mỗi chỉ số có `GrowthRate` so với năm trước để FE dựng biểu đồ cột/đường tăng trưởng.
+- `courses` phân tích số khóa mở trong scope (trừ parish), đăng ký, tham dự, hoàn thành, đạt, hủy, tồn đọng duyệt, điểm trung bình, tỷ lệ tham dự/hoàn thành/đạt/hủy và funnel yêu cầu-duyệt chứng nhận; breakdown luôn có theo từng khóa và có thể nhóm thêm theo loại khóa, giáo hạt, giáo xứ hoặc năm.
+- `certificates` phân tích số chứng nhận, trạng thái duyệt/chờ/từ chối, hệ thống gợi ý, duyệt ngoại lệ, tỷ lệ duyệt, tỷ lệ chuyển đổi từ lượt đạt khóa học và số giờ duyệt trung bình; breakdown theo trạng thái duyệt, theo từng khóa học và các nhóm được yêu cầu.
+- `leaders` luôn trả cơ cấu theo giới tính, nhóm tuổi, cấp bậc, trạng thái và thâm niên; KPI gồm quy mô, tỷ lệ hoạt động, nam/nữ, nhóm dưới 25 tuổi, nhóm từ 45 tuổi và tuổi trung bình. Insight giải thích trực tiếp sức khỏe nhân sự, cân bằng giới tính và nhu cầu kế thừa.
+- Response analytics chỉ trả dữ liệu cấu trúc: `scope`, `filters`, `kpis`, `breakdowns`, `trends`, `comparisons`. Không trả `insights`, message, label, định nghĩa KPI hoặc ghi chú diễn giải; FE ánh xạ các `type`/`key` và hiển thị biểu đồ theo nhu cầu.
+- Phân biệt thời gian: snapshot tổ chức/leader phản ánh hiện tại; biểu đồ leader dùng ngày tạo để thể hiện nhân sự mới; course dùng ngày đăng ký hoặc ngày bắt đầu khóa; certificate dùng ngày cấp, hoặc ngày tạo khi hồ sơ chưa được cấp để không bỏ sót trạng thái chờ duyệt.
+
 ## Session Rules
 
 - Tất cả message trả về cho người dùng, message validation, message success hoặc failure, và message cảnh báo liên quan tới thao tác nghiệp vụ phải dùng tiếng Việt.

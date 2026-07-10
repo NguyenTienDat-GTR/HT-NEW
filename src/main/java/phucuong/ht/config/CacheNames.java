@@ -20,6 +20,11 @@ public final class CacheNames {
     public static final String COURSE_REQUIREMENT_DETAIL = "course-requirement-detail";
     public static final String CERTIFICATE_LIST = "certificate-list";
     public static final String CERTIFICATE_DETAIL = "certificate-detail";
+    public static final String ANALYTICS_OVERVIEW = "analytics-overview";
+    public static final String ANALYTICS_ORGANIZATION = "analytics-organization";
+    public static final String ANALYTICS_LEADERS = "analytics-leaders";
+    public static final String ANALYTICS_COURSES = "analytics-courses";
+    public static final String ANALYTICS_CERTIFICATES = "analytics-certificates";
 
     private CacheNames() {
     }
