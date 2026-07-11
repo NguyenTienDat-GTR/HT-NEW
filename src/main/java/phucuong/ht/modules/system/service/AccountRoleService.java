@@ -120,10 +120,9 @@ public class AccountRoleService {
 
     private void enforceAssignmentScope(Authentication authentication, Account targetAccount, Role targetRole) {
         if (hasRole(authentication, ROLE_SUPER_ADMIN)) {
-            if (!ROLE_ADMIN_DIOCESE.equals(targetRole.getRoleCode())) {
-                throw commonValidationHelper.forbidden("SUPER_ADMIN chỉ được gán role ADMIN_DIOCESE");
-            }
-            return;
+            throw commonValidationHelper.forbidden(
+                    "SUPER_ADMIN phải tạo account ADMIN_DIOCESE qua API account để hệ thống sinh và gửi thông tin đăng nhập"
+            );
         }
 
         if (ROLE_ADMIN_DIOCESE.equals(targetRole.getRoleCode())) {

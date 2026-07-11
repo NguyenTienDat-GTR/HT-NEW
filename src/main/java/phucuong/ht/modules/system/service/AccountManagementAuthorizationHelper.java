@@ -51,7 +51,8 @@ public class AccountManagementAuthorizationHelper {
         if (hasRole(authentication, "SUPER_ADMIN")) {
             boolean onlyDioceseAdmin = accountRoleRepository.findActiveRoleCodesByUsername(target.getUsername()).stream()
                     .allMatch("ADMIN_DIOCESE"::equals);
-            if (!onlyDioceseAdmin || accountRoleRepository.findActiveRoleCodesByUsername(target.getUsername()).isEmpty()) {
+            if (!onlyDioceseAdmin || accountRoleRepository.findActiveRoleCodesByUsername(target.getUsername()).isEmpty()
+                    || target.getDiocese() == null) {
                 throw validation.forbidden("SUPER_ADMIN chỉ được quản lý tài khoản ADMIN_DIOCESE");
             }
             return;
@@ -64,12 +65,26 @@ public class AccountManagementAuthorizationHelper {
     }
 
     public boolean canRead(Authentication authentication, Account target) {
+        if (hasRole(authentication, "SUPER_ADMIN")) return false;
         try {
             requireCanManage(authentication, target);
             return true;
         } catch (RuntimeException ignored) {
             return false;
         }
+    }
+
+    public void requireCanRead(Authentication authentication, Account target) {
+        if (!canRead(authentication, target)) {
+            throw validation.forbidden("Tài khoản hiện tại không có quyền đọc account này");
+        }
+    }
+
+    public void requireCanDelete(Authentication authentication, Account target) {
+        if (hasRole(authentication, "SUPER_ADMIN")) {
+            throw validation.forbidden("SUPER_ADMIN chỉ có quyền tạo, cập nhật và đổi trạng thái account ADMIN_DIOCESE");
+        }
+        requireCanManage(authentication, target);
     }
 
     private void requireScopedAccess(Authentication authentication, Account target, Role targetRole) {
