@@ -972,6 +972,7 @@ The following work was added in this iteration:
 - `Account` and `Role` do not shadow `status` from `BaseModel`.
 - `RankHistory` does not shadow `updatedBy`.
 - `BaseRepo` handles relation mapping from ID-based request DTOs.
+- `BaseModel` owns automatic audit metadata through a JPA entity listener: every JPA persist fills missing `createdAt`, `createdBy`, `updatedAt`, `updatedBy`, and default `status=true`; every JPA update refreshes `updatedAt` and fills missing `updatedBy`. Actor resolution uses `super-admin`, then current `leaderId`, then username, and finally `SYSTEM` for background work. Services may still set explicit audit actors when they need a business-specific actor; the listener preserves non-blank actor fields.
 - Relation request DTOs should keep using IDs instead of nested payloads.
 - Bắt buộc sử dụng UTF-8 cho mọi dòng code, string literal, và comment bằng tiếng Việt; không được để phát sinh mojibake trong source.
 - JWT authorization is stateless, so permission changes apply immediately on next login or refresh, while existing access tokens remain valid until expiration.
@@ -982,11 +983,11 @@ The following work was added in this iteration:
 - Refresh tokens are transport-only credentials: they are written to the HttpOnly refresh cookie and intentionally excluded from JSON response bodies.
 - Every `TrainingCourse` must reference a score formula. Flyway `V028` maps legacy courses only when their owner scope has exactly one active formula, then enforces `score_formula_id NOT NULL`; ambiguous or missing mappings stop migration for an explicit business decision.
 - A course requirement must have the same `courseType` and owner scope as its training course. Changing `courseType` requires a matching new formula and is forbidden after registrations exist.
-- Direct account scope is optional but mutually exclusive: an account may set only one of `dioceseId`, `deaneryId`, or `parishId`. Updating a direct scope replaces the previous direct scope; `clearDirectScope=true` removes it and resumes the Leader-derived fallback.
+- Public account create/update chỉ cho `ADMIN_DIOCESE` dùng direct `dioceseId`; mọi account khác bắt buộc gắn Leader và resolve scope từ Leader. Các cột direct deanery/parish cũ không còn nằm trong request contract.
 - Tạo account giờ bắt buộc gửi `roleCode` và backend tạo primary `AccountRole` trong cùng transaction. `SUPER_ADMIN` chỉ được tạo/quản lý account `ADMIN_DIOCESE` có direct `dioceseId`; không được tạo account cấp thấp hơn.
 - `Account` không còn giữ `avatarUrl`; ảnh đại diện leader dùng field nullable `leader.imageUrl`, và migration `V032__move_account_avatar_to_leader_image.sql` sẽ backfill từ account cũ sang leader theo `leader_id` trước khi drop cột `account.avatar_url`.
 - `ADMIN_DIOCESE`, `ADMIN_DEANERY`, `ADMIN_PARISH` dùng lần lượt `system.account.manage.diocese|deanery|parish` để tạo account role thấp hơn và đọc/update/delete/toggle account khác có role bằng hoặc thấp hơn trong đúng scope của mình; không được tự quản lý account đang đăng nhập.
-- Gán role cho account cho phép role bằng hoặc thấp hơn actor trong cùng scope; `SUPER_ADMIN` chỉ gán `ADMIN_DIOCESE`, và parish dùng `system.account_role.assign.parish`. Direct permission override cũng bị giới hạn theo account đích; scoped admin chỉ được gán permission mình đang sở hữu và permission đó không được có scope cao hơn actor.
+- Gán role cho account cho phép role bằng hoặc thấp hơn actor trong cùng scope. `SUPER_ADMIN` không còn gán `ADMIN_DIOCESE` qua API account-role mà phải dùng luồng tạo account để hệ thống sinh và gửi credential; parish dùng `system.account_role.assign.parish`. Direct permission override cũng bị giới hạn theo account đích; scoped admin chỉ được gán permission mình đang sở hữu và permission đó không được có scope cao hơn actor.
 - `Leader` currently treats `leaderLevel` as create-only input; do not re-open direct update of this field from the normal Leader update API.
 - Training scope resolution now prefers `account.diocese`, `account.deanery`, and `account.parish` before using the `Account -> Leader -> Parish -> Deanery -> Diocese` fallback chain.
 - Training registration now uses a two-step non-DT flow: parish -> deanery only aggregates and notifies deanery recipients, while deanery -> diocese is the first point where eligible non-DT registrations may auto-approve.
@@ -1025,4 +1026,17 @@ The following work was added in this iteration:
 - Leader management includes `DELETE /api/leaders/{id}` guarded by `organization.leader.delete.parish`; FE should prefer status deactivation when audit/history retention is required.
 - The detailed FE integration contract, state machines, UX rules, endpoint payloads, response expectations, RBAC notes, test matrix, and open product decisions are maintained in `../HT-MANAGEMENT-FE-Technical-Guide.html` and `../HT-MANAGEMENT-FE-Technical-Guide.docx`.
 - Product decision finalized: scores remain editable only while the related certificate is not `APPROVED`; approved certificates lock scoring. Score formulas become immutable as soon as at least one participation using them has scoring data (`totalScore != null`). FE must disable the corresponding edit actions and still handle backend conflict responses.
+
+### Scoped leader and account credential flow 2026-07-11
+
+- `ADMIN_DIOCESE`, `ADMIN_DEANERY`, và `ADMIN_PARISH` được tạo leader trong đúng scope; create luôn bắt buộc `parishId`. Chỉ `ADMIN_PARISH` đúng giáo xứ được update hoặc toggle status leader.
+- Normal leader update không nhận `fullName`, `birthDate`, hoặc `leaderLevel`; `holyName`, email, phoneNumber, imageUrl, gender, và parishId vẫn được phép cập nhật trong scope giáo xứ.
+- `POST /api/system/accounts` nhận `roleCode`, `leaderId?`, `dioceseId?`, `credentialEmail?`; client không gửi username hoặc password.
+- Account không phải `ADMIN_DIOCESE` bắt buộc gắn leader. `ADMIN_DIOCESE` luôn có direct `dioceseId`, có thể gắn leader cùng giáo phận hoặc không gắn leader; mỗi giáo phận chỉ có một account `ADMIN_DIOCESE`, không phụ thuộc trạng thái account.
+- Account có leader tự sinh username bằng `firstName + parishName + day + month`; account `ADMIN_DIOCESE` không leader dùng `dioceseName + admin`. Chuỗi được viết thường, bỏ dấu/ký tự đặc biệt và thêm hậu tố `2`, `3`, ... khi trùng.
+- Account không leader bắt buộc `credentialEmail`; field này chỉ dùng gửi mail và không lưu DB. Account có leader nhận credential qua `Leader.email`.
+- Mật khẩu tạm là 6 chữ số ngẫu nhiên bằng `SecureRandom`, được BCrypt hash trước khi lưu. Email tạo account luôn chứa username và mật khẩu tạm; lỗi SMTP làm rollback account và primary role.
+- `SUPER_ADMIN` chỉ create, update và toggle account `ADMIN_DIOCESE`; không đọc danh sách, xóa, quản lý account cấp thấp hoặc gán role để bỏ qua luồng credential.
+- `POST /api/auth/change-password` nhận `{oldPassword,newPassword}`; mật khẩu mới dài 8-72 ký tự, khác mật khẩu cũ, được hash trước khi lưu và thành công sẽ revoke toàn bộ Redis session của account.
+- Gmail SMTP dùng `smtp.gmail.com:587` với STARTTLS. Runtime cần `MAIL_USERNAME`, `MAIL_PASSWORD` là Google App Password, và tùy chọn `MAIL_FROM`; không commit secret vào Git.
 
