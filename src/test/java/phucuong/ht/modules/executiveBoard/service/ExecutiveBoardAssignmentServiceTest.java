@@ -5,6 +5,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.transaction.annotation.Transactional;
 import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.common.validation.AccountScopeValidationHelper;
@@ -28,6 +29,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -47,6 +49,19 @@ class ExecutiveBoardAssignmentServiceTest {
     private ParishRepository parishRepository;
     @Mock
     private AccountScopeValidationHelper accountScopeValidationHelper;
+
+    @Test
+    void writeOperationsShouldRunInASingleTransaction() throws NoSuchMethodException {
+        assertTrue(ExecutiveBoardAssignmentService.class
+                .getMethod("create", ExecutiveBoardAssignmentCreateRequest.class, org.springframework.security.core.Authentication.class)
+                .isAnnotationPresent(Transactional.class));
+        assertTrue(ExecutiveBoardAssignmentService.class
+                .getMethod("update", UUID.class, phucuong.ht.modules.executiveBoard.model.request.ExecutiveBoardAssignmentUpdateRequest.class, org.springframework.security.core.Authentication.class)
+                .isAnnotationPresent(Transactional.class));
+        assertTrue(ExecutiveBoardAssignmentService.class
+                .getMethod("toggleStatus", UUID.class, phucuong.ht.common.model.request.StatusToggleRequest.class, org.springframework.security.core.Authentication.class)
+                .isAnnotationPresent(Transactional.class));
+    }
 
     @Test
     void createShouldRejectDuplicateActiveAssignmentInSameUnit() {

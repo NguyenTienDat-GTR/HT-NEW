@@ -60,6 +60,8 @@ public class LeaderRepository extends BaseRepo<Leader, UUID> {
                                 select l
                                 from Leader l
                                 join fetch l.parish p
+                                join fetch p.deanery d
+                                join fetch d.diocese
                                 where l.id = :id
                                 """,
                         Leader.class
@@ -81,6 +83,8 @@ public class LeaderRepository extends BaseRepo<Leader, UUID> {
                                 select l
                                 from Leader l
                                 join fetch l.parish p
+                                join fetch p.deanery d
+                                join fetch d.diocese
                                 where l.id in :ids
                                 """,
                         Leader.class
