@@ -29,6 +29,7 @@ public class AccountRoleService {
     private static final String ROLE_SUPER_ADMIN = "SUPER_ADMIN";
     private static final String ROLE_ADMIN_DIOCESE = "ADMIN_DIOCESE";
     private static final String ROLE_ADMIN_DEANERY = "ADMIN_DEANERY";
+    private static final String ROLE_ADMIN_PARISH = "ADMIN_PARISH";
 
     private final AccountRepository accountRepository;
     private final AccountRoleRepository accountRoleRepository;
@@ -119,6 +120,9 @@ public class AccountRoleService {
 
     private void enforceAssignmentScope(Authentication authentication, Account targetAccount, Role targetRole) {
         if (hasRole(authentication, ROLE_SUPER_ADMIN)) {
+            if (!ROLE_ADMIN_DIOCESE.equals(targetRole.getRoleCode())) {
+                throw commonValidationHelper.forbidden("SUPER_ADMIN chỉ được gán role ADMIN_DIOCESE");
+            }
             return;
         }
 
@@ -147,6 +151,18 @@ public class AccountRoleService {
                 throw commonValidationHelper.forbidden("Không thể gán role cho account ngoài giáo hạt hiện tại");
             }
             enforceHierarchy(authentication, targetRole, ROLE_ADMIN_DEANERY);
+            return;
+        }
+
+        if (hasAuthority(authentication, "system.account_role.assign.parish")) {
+            UUID actorParishId = accountRepository.findActiveParishIdByUsername(currentUsername(authentication))
+                    .orElseThrow(() -> commonValidationHelper.forbidden("Tài khoản hiện tại không có scope giáo xứ hợp lệ"));
+            UUID targetParishId = accountRepository.findActiveParishIdByUsername(targetAccount.getUsername())
+                    .orElseThrow(() -> commonValidationHelper.forbidden("Account đích chưa có scope giáo xứ hợp lệ để gán role"));
+            if (!actorParishId.equals(targetParishId)) {
+                throw commonValidationHelper.forbidden("Không thể gán role cho account ngoài giáo xứ hiện tại");
+            }
+            enforceHierarchy(authentication, targetRole, ROLE_ADMIN_PARISH);
             return;
         }
 

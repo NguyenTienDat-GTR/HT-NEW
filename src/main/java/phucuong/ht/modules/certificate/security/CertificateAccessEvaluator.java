@@ -13,6 +13,8 @@ import phucuong.ht.modules.training.trainingCourse.repository.TrainingCourseRepo
 @RequiredArgsConstructor
 public class CertificateAccessEvaluator {
 
+    private static final String SUPER_ADMIN_ROLE = "ROLE_SUPER_ADMIN";
+
     private final securityUtils securityUtils;
     private final AccountRepository accountRepository;
     private final TrainingCourseRepository trainingCourseRepository;
@@ -45,6 +47,9 @@ public class CertificateAccessEvaluator {
     }
 
     public boolean canApprove(Authentication authentication, String certificateCode) {
+        if (securityUtils.hasAuthority(authentication, SUPER_ADMIN_ROLE)) {
+            return false;
+        }
         return hasScopedAccess(authentication, certificateCode, "approve");
     }
 

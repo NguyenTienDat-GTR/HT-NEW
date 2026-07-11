@@ -109,6 +109,7 @@ public class CourseParticipationService {
     @Transactional
     public TrainingRegistrationBatchResponse register(String courseCode, TrainingRegistrationRequest request, Authentication authentication) {
         TrainingCourse course = requireCourse(courseCode);
+        requireActiveRegistrationData(course);
         requireRegistrationWindowOpen(course);
 
         UUID activeParishId = accountScopeValidationHelper.requireActiveParishId(authentication, CourseParticipationAccessEvaluator.SUBMIT_PARISH);
@@ -121,6 +122,9 @@ public class CourseParticipationService {
         for (UUID leaderId : normalizeLeaderIds(request.getLeaderIds())) {
             Leader leader = leaderRepository.findByIdWithParish(leaderId)
                     .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy leader " + leaderId));
+            if (!Boolean.TRUE.equals(leader.getStatus())) {
+                throw commonValidationHelper.validationError("Chỉ được đăng ký leader đang hoạt động");
+            }
             if (leader.getParish() == null || !activeParishId.equals(leader.getParish().getId())) {
                 throw commonValidationHelper.forbidden("Không thể đăng ký leader ngoài giáo xứ hiện tại");
             }
@@ -430,6 +434,15 @@ public class CourseParticipationService {
         }
     }
 
+    private void requireActiveRegistrationData(TrainingCourse course) {
+        if (!Boolean.TRUE.equals(course.getStatus())) {
+            throw commonValidationHelper.validationError("Khóa huấn luyện đã ngừng hoạt động");
+        }
+        if (course.getRequirement() != null && !Boolean.TRUE.equals(course.getRequirement().getStatus())) {
+            throw commonValidationHelper.validationError("Yêu cầu đăng ký của khóa huấn luyện đã ngừng hoạt động");
+        }
+    }
+
     private String resolveExceptionReason(Map<UUID, String> exceptionReasonsByLeaderId, UUID leaderId) {
         if (exceptionReasonsByLeaderId == null || exceptionReasonsByLeaderId.isEmpty()) {
             return null;
@@ -543,13 +556,19 @@ public class CourseParticipationService {
             if (requirement.getRequiredCurrentLevel() != null && leader.getLeaderLevel() != requirement.getRequiredCurrentLevel()) {
                 return false;
             }
-            if (requirement.getRequiredMinAge() != null && leader.getBirthDate() != null) {
+            if (requirement.getRequiredMinAge() != null) {
+                if (leader.getBirthDate() == null) {
+                    return false;
+                }
                 int age = Period.between(leader.getBirthDate(), LocalDate.now()).getYears();
                 if (age < requirement.getRequiredMinAge()) {
                     return false;
                 }
             }
-            if (requirement.getRequiredYearsActive() != null && leader.getCreatedAt() != null) {
+            if (requirement.getRequiredYearsActive() != null) {
+                if (leader.getCreatedAt() == null) {
+                    return false;
+                }
                 int yearsActive = Period.between(leader.getCreatedAt().toLocalDate(), LocalDate.now()).getYears();
                 if (yearsActive < requirement.getRequiredYearsActive()) {
                     return false;

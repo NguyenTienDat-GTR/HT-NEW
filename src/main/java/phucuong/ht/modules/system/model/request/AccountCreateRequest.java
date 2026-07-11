@@ -16,6 +16,9 @@ public class AccountCreateRequest {
     @NotBlank
     private String password;
 
+    @NotBlank
+    private String roleCode;
+
     private UUID leaderId;
 
     private UUID dioceseId;
