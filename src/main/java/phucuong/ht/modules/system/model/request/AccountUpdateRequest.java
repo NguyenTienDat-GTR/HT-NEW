@@ -25,6 +25,4 @@ public class AccountUpdateRequest {
     private String authProvider;
 
     private String providerId;
-
-    private String avatarUrl;
 }

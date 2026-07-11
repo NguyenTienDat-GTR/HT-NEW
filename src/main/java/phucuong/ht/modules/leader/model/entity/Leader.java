@@ -43,6 +43,9 @@ public class Leader extends BaseModel {
     @Column(name = "phone_number", length = 15)
     private String phoneNumber;
 
+    @Column(name = "image_url")
+    private String imageUrl;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "gender", length = 20)
     private LeaderGender gender;

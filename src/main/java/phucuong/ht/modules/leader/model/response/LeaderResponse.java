@@ -26,6 +26,7 @@ public class LeaderResponse {
     private LocalDate birthDate;
     private String email;
     private String phoneNumber;
+    private String imageUrl;
     private LeaderGender gender;
     private LeaderLevel leaderLevel;
     private UUID parishId;

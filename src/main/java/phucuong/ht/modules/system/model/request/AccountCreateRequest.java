@@ -30,6 +30,4 @@ public class AccountCreateRequest {
     private String authProvider;
 
     private String providerId;
-
-    private String avatarUrl;
 }

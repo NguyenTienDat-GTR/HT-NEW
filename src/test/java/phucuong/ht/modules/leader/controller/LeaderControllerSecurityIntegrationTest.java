@@ -84,12 +84,14 @@ class LeaderControllerSecurityIntegrationTest {
         createRequest.setFullName("Nguyen An");
         createRequest.setBirthDate(java.time.LocalDate.of(2000, 1, 1));
         createRequest.setEmail("leader@example.com");
+        createRequest.setImageUrl("https://cdn.example.com/leaders/an.jpg");
         createRequest.setGender(LeaderGender.NAM);
         createRequest.setLeaderLevel(LeaderLevel.HT_XU);
         createRequest.setParishId(parishId);
 
         LeaderUpdateRequest updateRequest = new LeaderUpdateRequest();
         updateRequest.setFullName("Nguyen Binh");
+        updateRequest.setImageUrl("https://cdn.example.com/leaders/binh.jpg");
         updateRequest.setGender(LeaderGender.NU);
 
         when(leaderAccessEvaluator.canCreate(any())).thenReturn(true);
@@ -174,6 +176,7 @@ class LeaderControllerSecurityIntegrationTest {
                 .fullName("Nguyen An")
                 .firstName("An")
                 .lastName("Nguyen")
+                .imageUrl("https://cdn.example.com/leaders/an.jpg")
                 .gender(LeaderGender.NAM)
                 .leaderLevel(LeaderLevel.HT_XU)
                 .status(true)

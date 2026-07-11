@@ -44,6 +44,9 @@ public class LeaderCreateRequest {
     @Size(max = 15)
     private String phoneNumber;
 
+    @Size(max = 500)
+    private String imageUrl;
+
     @NotNull
     private LeaderGender gender;
 

@@ -15,6 +15,5 @@ public class AccountResponse {
     private UUID parishId;
     private String authProvider;
     private String providerId;
-    private String avatarUrl;
     private Boolean status;
 }
