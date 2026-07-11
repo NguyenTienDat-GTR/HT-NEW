@@ -63,7 +63,6 @@ public class LeaderValidationHelper {
         }
 
         request.setHolyName(commonValidationHelper.normalizeOptionalText(request.getHolyName()));
-        request.setFullName(commonValidationHelper.normalizeOptionalText(request.getFullName()));
         request.setEmail(commonValidationHelper.normalizeOptionalText(request.getEmail()));
         request.setPhoneNumber(commonValidationHelper.normalizeOptionalText(request.getPhoneNumber()));
     }

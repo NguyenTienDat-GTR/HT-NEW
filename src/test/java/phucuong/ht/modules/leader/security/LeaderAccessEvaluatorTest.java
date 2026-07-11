@@ -80,6 +80,20 @@ class LeaderAccessEvaluatorTest {
     }
 
     @Test
+    void canCreateShouldAllowDioceseAdminWithDiocesePermission() {
+        Authentication authentication = authentication(
+                "admin-diocese", null, List.of("ADMIN_DIOCESE"), List.of(LeaderAccessEvaluator.CREATE_DIOCESE));
+        assertTrue(leaderAccessEvaluator.canCreate(authentication));
+    }
+
+    @Test
+    void canCreateShouldDenySuperAdminEvenWithPermission() {
+        Authentication authentication = authentication(
+                "super-admin", null, List.of("SUPER_ADMIN"), List.of(LeaderAccessEvaluator.CREATE_DIOCESE));
+        assertFalse(leaderAccessEvaluator.canCreate(authentication));
+    }
+
+    @Test
     void canToggleShouldAllowMatchingParish() {
         UUID parishId = UUID.randomUUID();
         UUID leaderId = UUID.randomUUID();

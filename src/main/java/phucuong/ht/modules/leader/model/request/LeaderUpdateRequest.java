@@ -1,6 +1,5 @@
 package phucuong.ht.modules.leader.model.request;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -8,7 +7,6 @@ import lombok.Getter;
 import lombok.Setter;
 import phucuong.ht.modules.leader.model.enums.LeaderGender;
 
-import java.time.LocalDate;
 import java.util.UUID;
 
 @Getter
@@ -17,17 +15,6 @@ public class LeaderUpdateRequest {
 
     @Size(max = 50)
     private String holyName;
-
-    @Size(max = 200)
-    private String fullName;
-
-    @JsonIgnore
-    private String firstName;
-
-    @JsonIgnore
-    private String lastName;
-
-    private LocalDate birthDate;
 
     @Email
     @Size(max = 100)
