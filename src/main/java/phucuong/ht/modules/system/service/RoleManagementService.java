@@ -29,8 +29,11 @@ public class RoleManagementService {
             throw commonValidationHelper.conflict("Vai trò đã tồn tại: " + request.getRoleCode());
         }
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tạo vai trò");
+        request.setRoleCode(commonValidationHelper.normalizeRequiredText(request.getRoleCode()));
+        request.setRoleName(commonValidationHelper.normalizeRequiredText(request.getRoleName()));
+        request.setDescription(commonValidationHelper.normalizeOptionalText(request.getDescription()));
         request.setIsSystem(Boolean.FALSE);
-        Role role = systemRoleRepository.create(request, actor);
+        Role role = systemRoleRepository.createRole(request, actor);
         return toResponse(role);
     }
 

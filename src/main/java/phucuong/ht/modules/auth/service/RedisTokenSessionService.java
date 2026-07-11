@@ -141,6 +141,13 @@ public class RedisTokenSessionService {
         return cleanupUserSessions(username);
     }
 
+    public void revokeAllSessions(String username) {
+        for (TokenSessionState session : listActiveSessions(username)) {
+            revokeSession(session.getSessionId());
+        }
+        stringRedisTemplate.delete(userSessionsKey(username));
+    }
+
     private List<TokenSessionState> cleanupUserSessions(String username) {
         String userSessionsKey = userSessionsKey(username);
         Set<String> sessionIds = stringRedisTemplate.opsForZSet().range(userSessionsKey, 0, -1);

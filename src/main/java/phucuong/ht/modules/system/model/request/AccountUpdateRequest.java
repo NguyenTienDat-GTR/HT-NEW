@@ -9,20 +9,9 @@ import java.util.UUID;
 @Setter
 public class AccountUpdateRequest {
 
-    private String password;
-
+    /** Only non-ADMIN_DIOCESE accounts may change their linked leader. */
     private UUID leaderId;
 
+    /** Only the leaderless ADMIN_DIOCESE account may change its direct diocese. */
     private UUID dioceseId;
-
-    private UUID deaneryId;
-
-    private UUID parishId;
-
-    /** Explicitly removes the direct organization scope when true. */
-    private Boolean clearDirectScope;
-
-    private String authProvider;
-
-    private String providerId;
 }

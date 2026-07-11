@@ -5,6 +5,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Component;
 import phucuong.ht.common.utils.securityUtils;
+import phucuong.ht.modules.auth.model.AuthUserDetails;
 import phucuong.ht.modules.auth.repository.AccountRepository;
 import phucuong.ht.modules.leader.repository.LeaderRepository;
 
@@ -14,6 +15,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class LeaderAccessEvaluator {
 
+    public static final String CREATE_DIOCESE = "organization.leader.create.diocese";
+    public static final String CREATE_DEANERY = "organization.leader.create.deanery";
     public static final String CREATE_PARISH = "organization.leader.create.parish";
     public static final String READ_PARISH = "organization.leader.read.parish";
     public static final String UPDATE_PARISH = "organization.leader.update.parish";
@@ -24,7 +27,9 @@ public class LeaderAccessEvaluator {
     private final securityUtils securityUtils;
 
     public boolean canCreate(Authentication authentication) {
-        return hasAuthority(authentication, CREATE_PARISH);
+        return (hasRole(authentication, "ADMIN_DIOCESE") && hasAuthority(authentication, CREATE_DIOCESE))
+                || (hasRole(authentication, "ADMIN_DEANERY") && hasAuthority(authentication, CREATE_DEANERY))
+                || (hasRole(authentication, "ADMIN_PARISH") && hasAuthority(authentication, CREATE_PARISH));
     }
 
     public boolean canList(Authentication authentication) {
@@ -36,11 +41,11 @@ public class LeaderAccessEvaluator {
     }
 
     public boolean canUpdate(Authentication authentication, UUID id) {
-        return hasParishScopedAccess(authentication, id, UPDATE_PARISH);
+        return hasRole(authentication, "ADMIN_PARISH") && hasParishScopedAccess(authentication, id, UPDATE_PARISH);
     }
 
     public boolean canToggle(Authentication authentication, UUID id) {
-        return hasParishScopedAccess(authentication, id, UPDATE_PARISH);
+        return hasRole(authentication, "ADMIN_PARISH") && hasParishScopedAccess(authentication, id, UPDATE_PARISH);
     }
 
     public boolean canDelete(Authentication authentication, UUID id) {
@@ -71,5 +76,11 @@ public class LeaderAccessEvaluator {
         return authentication.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
                 .anyMatch(authority::equals);
+    }
+
+    private boolean hasRole(Authentication authentication, String roleCode) {
+        return authentication != null
+                && authentication.getPrincipal() instanceof AuthUserDetails principal
+                && principal.getRoles().contains(roleCode);
     }
 }

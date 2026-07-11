@@ -78,4 +78,26 @@ public interface AccountRepository extends JpaRepository<Account, String> {
     Optional<UUID> findActiveParishIdByUsername(@Param("username") String username);
 
     boolean existsByUsername(String username);
+
+    @Query("""
+            select count(a) > 0
+            from Account a
+            join AccountRole ar on ar.account = a
+            where a.diocese.id = :dioceseId
+              and ar.role.roleCode = 'ADMIN_DIOCESE'
+            """)
+    boolean existsAdminDioceseByDioceseId(@Param("dioceseId") UUID dioceseId);
+
+    @Query("""
+            select count(a) > 0
+            from Account a
+            join AccountRole ar on ar.account = a
+            where a.diocese.id = :dioceseId
+              and a.username <> :username
+              and ar.role.roleCode = 'ADMIN_DIOCESE'
+            """)
+    boolean existsOtherAdminDiocese(
+            @Param("dioceseId") UUID dioceseId,
+            @Param("username") String username
+    );
 }

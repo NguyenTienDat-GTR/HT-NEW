@@ -90,7 +90,6 @@ class LeaderControllerSecurityIntegrationTest {
         createRequest.setParishId(parishId);
 
         LeaderUpdateRequest updateRequest = new LeaderUpdateRequest();
-        updateRequest.setFullName("Nguyen Binh");
         updateRequest.setImageUrl("https://cdn.example.com/leaders/binh.jpg");
         updateRequest.setGender(LeaderGender.NU);
 

@@ -77,6 +77,9 @@ class LeaderServiceTest {
                         && "https://cdn.example.com/leaders/an.jpg".equals(entity.getImageUrl())
                         && parishId.equals(entity.getParish().getId())
                         && "LEADER1".equals(entity.getCreatedBy())
+                        && "LEADER1".equals(entity.getUpdatedBy())
+                        && entity.getCreatedAt() != null
+                        && entity.getUpdatedAt() != null
         ))).thenAnswer(invocation -> {
             Leader entity = invocation.getArgument(0);
             entity.setId(leaderId);
@@ -125,21 +128,15 @@ class LeaderServiceTest {
         UUID parishId = UUID.randomUUID();
         UUID leaderId = UUID.randomUUID();
         LeaderUpdateRequest request = new LeaderUpdateRequest();
-        request.setFullName("Nguyen Binh");
         request.setGender(LeaderGender.NU);
         request.setImageUrl("https://cdn.example.com/leaders/binh.jpg");
         Leader existing = leader(leaderId, parish(parishId));
         existing.setEmail("leader@example.com");
         existing.setLeaderLevel(LeaderLevel.HLV_I);
         Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
-        when(leaderValidationHelper.splitFullName("Nguyen Binh"))
-                .thenReturn(new LeaderValidationHelper.LeaderNameParts("Binh", "Nguyen"));
-
         when(leaderValidationHelper.requireExistingLeaderWithParish(leaderId)).thenReturn(existing, existing);
         when(leaderValidationHelper.getRequiredAuditActor(authentication)).thenReturn("LEADER1");
         when(leaderRepository.update(leaderId, request, "LEADER1")).thenAnswer(invocation -> {
-            existing.setFirstName("Binh");
-            existing.setLastName("Nguyen");
             existing.setGender(LeaderGender.NU);
             existing.setImageUrl("https://cdn.example.com/leaders/binh.jpg");
             return existing;
@@ -149,8 +146,8 @@ class LeaderServiceTest {
 
         assertEquals(LeaderLevel.HLV_I, result.getLeaderLevel());
         assertEquals(LeaderGender.NU, result.getGender());
-        assertEquals("Binh", result.getFirstName());
-        assertEquals("Nguyen", result.getLastName());
+        assertEquals(existing.getFirstName(), result.getFirstName());
+        assertEquals(existing.getLastName(), result.getLastName());
         assertEquals("https://cdn.example.com/leaders/binh.jpg", result.getImageUrl());
     }
 

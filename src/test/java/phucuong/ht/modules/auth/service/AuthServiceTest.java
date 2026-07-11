@@ -14,6 +14,7 @@ import phucuong.ht.modules.auth.config.AuthProperties;
 import phucuong.ht.modules.auth.exception.ApiException;
 import phucuong.ht.modules.auth.model.AuthUserDetails;
 import phucuong.ht.modules.auth.model.request.LoginRequest;
+import phucuong.ht.modules.auth.model.request.ChangePasswordRequest;
 import phucuong.ht.modules.auth.model.response.AuthTokenResponse;
 import phucuong.ht.modules.auth.repository.AccountRepository;
 import phucuong.ht.modules.auth.repository.AccountRoleRepository;
@@ -33,6 +34,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -180,6 +182,50 @@ class AuthServiceTest {
     void refreshShouldRejectMissingToken() {
         AuthService authService = createService();
         assertThrows(ApiException.class, () -> authService.refresh(null));
+    }
+
+    @Test
+    void changePasswordShouldHashNewPasswordAndRevokeAllSessions() {
+        AuthService authService = createService();
+        Account account = new Account();
+        account.setUsername("admin-parish");
+        account.setPassword("old-hash");
+        AuthUserDetails principal = AuthUserDetails.databasePrincipal(
+                "admin-parish", "old-hash", null, List.of("ADMIN_PARISH"), List.of(), true);
+        Authentication authentication = new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
+        ChangePasswordRequest request = new ChangePasswordRequest();
+        request.setOldPassword("old-password");
+        request.setNewPassword("new-password");
+        when(accountRepository.findById("admin-parish")).thenReturn(Optional.of(account));
+        when(passwordEncoder.matches("old-password", "old-hash")).thenReturn(true);
+        when(passwordEncoder.matches("new-password", "old-hash")).thenReturn(false);
+        when(passwordEncoder.encode("new-password")).thenReturn("new-hash");
+
+        authService.changePassword(request, authentication);
+
+        assertEquals("new-hash", account.getPassword());
+        verify(accountRepository).save(account);
+        verify(redisTokenSessionService).revokeAllSessions("admin-parish");
+    }
+
+    @Test
+    void changePasswordShouldRejectWrongOldPassword() {
+        AuthService authService = createService();
+        Account account = new Account();
+        account.setUsername("admin-parish");
+        account.setPassword("old-hash");
+        AuthUserDetails principal = AuthUserDetails.databasePrincipal(
+                "admin-parish", "old-hash", null, List.of("ADMIN_PARISH"), List.of(), true);
+        Authentication authentication = new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
+        ChangePasswordRequest request = new ChangePasswordRequest();
+        request.setOldPassword("wrong-password");
+        request.setNewPassword("new-password");
+        when(accountRepository.findById("admin-parish")).thenReturn(Optional.of(account));
+        when(passwordEncoder.matches("wrong-password", "old-hash")).thenReturn(false);
+
+        assertThrows(ApiException.class, () -> authService.changePassword(request, authentication));
+        verify(accountRepository, never()).save(any(Account.class));
+        verify(redisTokenSessionService, never()).revokeAllSessions(anyString());
     }
 
     private AuthService createService() {

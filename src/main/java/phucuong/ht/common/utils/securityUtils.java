@@ -23,10 +23,13 @@ public class securityUtils {
     }
 
     public String currentUsername(Authentication authentication) {
-        if (authentication == null || !(authentication.getPrincipal() instanceof AuthUserDetails principal)) {
+        if (authentication == null) {
             return null;
         }
-        return principal.getUsername();
+        if (authentication.getPrincipal() instanceof AuthUserDetails principal) {
+            return principal.getUsername();
+        }
+        return authentication.getName();
     }
 
     public String currentLeaderId(Authentication authentication) {
@@ -46,6 +49,7 @@ public class securityUtils {
             return leaderId;
         }
 
-        return null;
+        String username = currentUsername(authentication);
+        return StringUtils.hasText(username) ? username : null;
     }
 }
