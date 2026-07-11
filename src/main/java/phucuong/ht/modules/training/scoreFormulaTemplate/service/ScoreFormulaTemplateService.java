@@ -87,6 +87,9 @@ public class ScoreFormulaTemplateService {
     }
 
     public ScoreFormulaTemplateResponse update(String id, ScoreFormulaTemplateUpdateRequest request, Authentication authentication) {
+        if (repository.hasScoredParticipations(id)) {
+            throw commonValidationHelper.conflict("Không thể sửa công thức tính điểm đã có dữ liệu chấm điểm");
+        }
         ScoreFormulaTemplate formula = repository.findByIdWithComponents(id)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy công thức tính điểm: " + id));
         if (request.getCode() != null) {

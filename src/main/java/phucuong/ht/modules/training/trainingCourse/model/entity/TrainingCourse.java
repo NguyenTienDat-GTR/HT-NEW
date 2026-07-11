@@ -56,7 +56,7 @@ public class TrainingCourse extends BaseModel {
     private Deanery deanery;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "score_formula_id")
+    @JoinColumn(name = "score_formula_id", nullable = false)
     private ScoreFormulaTemplate scoreFormula;
 
     private String additionalNotes;

@@ -4,6 +4,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.common.validation.AccountScopeValidationHelper;
 import phucuong.ht.common.validation.CommonValidationHelper;
@@ -79,6 +82,30 @@ public class CourseParticipationService {
     private final TrainingNotificationRecipientResolver notificationRecipientResolver;
     private final TrainingNotificationService trainingNotificationService;
 
+    @Transactional(readOnly = true)
+    public Page<CourseParticipationResponse> findAll(BaseSearchRequest request, Authentication authentication) {
+        BaseSearchRequest scoped = copySearchRequest(request);
+        if (hasAuthority(authentication, CourseParticipationAccessEvaluator.READ_DIOCESE)
+                || hasAuthority(authentication, CourseParticipationAccessEvaluator.APPROVE_DIOCESE)
+                || hasAuthority(authentication, CourseParticipationAccessEvaluator.SCORE_DIOCESE)) {
+            scoped.getFilters().put("course.diocese.id", accountScopeValidationHelper.requireActiveDioceseId(authentication, CourseParticipationAccessEvaluator.APPROVE_DIOCESE));
+        } else if (hasAuthority(authentication, CourseParticipationAccessEvaluator.READ_DEANERY)
+                || hasAuthority(authentication, CourseParticipationAccessEvaluator.APPROVE_DEANERY)
+                || hasAuthority(authentication, CourseParticipationAccessEvaluator.SCORE_DEANERY)) {
+            scoped.getFilters().put("course.deanery.id", accountScopeValidationHelper.requireActiveDeaneryId(authentication, CourseParticipationAccessEvaluator.APPROVE_DEANERY));
+        } else {
+            throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền xem hồ sơ đào tạo");
+        }
+        Page<CourseParticipation> page = courseParticipationRepository.findAll(scoped);
+        return new PageImpl<>(page.getContent().stream().map(this::toResponse).toList(), page.getPageable(), page.getTotalElements());
+    }
+
+    @Transactional(readOnly = true)
+    public CourseParticipationResponse findById(String participationId) {
+        return toResponse(courseParticipationRepository.findByIdWithLeaderAndCourse(participationId)
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy hồ sơ đào tạo: " + participationId)));
+    }
+
     @Transactional
     public TrainingRegistrationBatchResponse register(String courseCode, TrainingRegistrationRequest request, Authentication authentication) {
         TrainingCourse course = requireCourse(courseCode);
@@ -98,6 +125,9 @@ public class CourseParticipationService {
                 throw commonValidationHelper.forbidden("Không thể đăng ký leader ngoài giáo xứ hiện tại");
             }
 
+            if (courseParticipationRepository.existsByLeaderIdAndCourseCode(leaderId, courseCode)) {
+                throw commonValidationHelper.conflict("Leader đã có hồ sơ tham gia khóa huấn luyện này");
+            }
             boolean eligible = isEligible(leader, course);
             String exceptionReason = resolveExceptionReason(request.getExceptionReasonsByLeaderId(), leaderId);
             if (!eligible && (exceptionReason == null || exceptionReason.isBlank())) {
@@ -225,6 +255,7 @@ public class CourseParticipationService {
         }
 
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người duyệt giáo hạt");
+        requirePendingManualApproval(participation.getDeaneryApprovalStatus());
         participation.setDeaneryApprovalStatus(Boolean.TRUE.equals(request.getApproved()) ? WorkflowApprovalStatus.APPROVED : WorkflowApprovalStatus.REJECTED);
         participation.setReview(request.getReview());
         participation.setApprovedBy(actor);
@@ -242,6 +273,7 @@ public class CourseParticipationService {
         }
 
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người duyệt giáo phận");
+        requirePendingManualApproval(participation.getDioceseApprovalStatus());
         participation.setDioceseApprovalStatus(Boolean.TRUE.equals(request.getApproved()) ? WorkflowApprovalStatus.APPROVED : WorkflowApprovalStatus.REJECTED);
         participation.setReview(request.getReview());
         participation.setApprovedBy(actor);
@@ -256,6 +288,10 @@ public class CourseParticipationService {
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy đăng ký khóa huấn luyện " + participationId));
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người nhập điểm");
 
+        if (participation.getCertificateApprovalStatus() == WorkflowApprovalStatus.APPROVED) {
+            throw commonValidationHelper.conflict("Không thể sửa điểm sau khi chứng chỉ đã được duyệt");
+        }
+        requireApprovedForScoring(participation);
         ScoreFormulaTemplate scoreFormula = requireScoreFormula(participation);
         Map<String, ComponentScoreRequest> requestedScores = normalizeComponentScores(request.getComponentScores());
         Map<String, BigDecimal> formulaVariables = new LinkedHashMap<>();
@@ -358,6 +394,7 @@ public class CourseParticipationService {
     private String nextCertificateCode(CourseParticipation participation) {
         String unitName = unitNameForCertificate(participation.getCourse());
         String prefix = certificateCodeGenerator.buildPrefix(unitName, participation.getCourse().getCourseType(), participation.getCourse().getHostYear());
+        certificateRepository.lockCodePrefix(prefix);
         long nextSequence = certificateRepository.findHighestSequenceByCodePrefix(prefix).orElse(0L) + 1L;
         return certificateCodeGenerator.buildCode(unitName, participation.getCourse().getCourseType(), participation.getCourse().getHostYear(), nextSequence);
     }
@@ -567,6 +604,38 @@ public class CourseParticipationService {
                         .toList())
                 .status(participation.getStatus())
                 .build();
+    }
+
+    private void requirePendingManualApproval(WorkflowApprovalStatus status) {
+        if (status != WorkflowApprovalStatus.PENDING && status != WorkflowApprovalStatus.SUBMITTED) {
+            throw commonValidationHelper.conflict("Hồ sơ đã ở trạng thái kết thúc hoặc không chờ duyệt");
+        }
+    }
+
+    private void requireApprovedForScoring(CourseParticipation participation) {
+        if (participation.getParticipationStatus() == ParticipationStatus.CANCELLED) {
+            throw commonValidationHelper.conflict("Không thể chấm điểm hồ sơ đã hủy");
+        }
+        WorkflowApprovalStatus requiredStatus = trainingWorkflowSupport.isDeaneryManaged(participation.getCourse().getCourseType())
+                ? participation.getDeaneryApprovalStatus() : participation.getDioceseApprovalStatus();
+        if (requiredStatus != WorkflowApprovalStatus.APPROVED) {
+            throw commonValidationHelper.validationError("Chỉ được chấm điểm sau khi hồ sơ đã được duyệt đúng cấp");
+        }
+    }
+
+    private BaseSearchRequest copySearchRequest(BaseSearchRequest request) {
+        BaseSearchRequest source = request == null ? new BaseSearchRequest() : request;
+        BaseSearchRequest copy = new BaseSearchRequest();
+        copy.setPage(source.getPage()); copy.setSize(source.getSize()); copy.setSearch(source.getSearch());
+        copy.setSearchFields(source.getSearchFields() == null ? List.of() : List.copyOf(source.getSearchFields()));
+        copy.setFilters(source.getFilters() == null ? new LinkedHashMap<>() : new LinkedHashMap<>(source.getFilters()));
+        copy.setStatus(source.getStatus()); copy.setSortBy(source.getSortBy()); copy.setSortDirection(source.getSortDirection());
+        return copy;
+    }
+
+    private boolean hasAuthority(Authentication authentication, String authority) {
+        return authentication != null && authentication.getAuthorities().stream()
+                .anyMatch(grantedAuthority -> authority.equals(grantedAuthority.getAuthority()));
     }
 
     private void publishEvent(String eventType, String entityType, String entityId, String actor, Map<String, Object> payload) {

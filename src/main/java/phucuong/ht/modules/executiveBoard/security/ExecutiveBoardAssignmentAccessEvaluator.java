@@ -38,7 +38,7 @@ public class ExecutiveBoardAssignmentAccessEvaluator {
     }
 
     public boolean canCreate(Authentication authentication, UnitType unitType) {
-        return hasAuthority(authentication, requiredAuthority(unitType, "create"));
+        return hasAuthorityForTarget(authentication, unitType, "create");
     }
 
     public boolean canList(Authentication authentication) {
@@ -65,7 +65,7 @@ public class ExecutiveBoardAssignmentAccessEvaluator {
         }
 
         return executiveBoardAssignmentRepository.findByIdWithRelations(id)
-                .map(assignment -> hasAuthority(authentication, requiredAuthority(assignment.getUnitType(), action))
+                .map(assignment -> hasAuthorityForTarget(authentication, assignment.getUnitType(), action)
                         && matchesScope(authentication, assignment))
                 .orElse(false);
     }
@@ -103,6 +103,21 @@ public class ExecutiveBoardAssignmentAccessEvaluator {
             case DEANERY -> "organization.executive_board_assignment." + action + ".deanery";
             case PARISH -> "organization.executive_board_assignment." + action + ".parish";
         };
+    }
+
+    private boolean hasAuthorityForTarget(Authentication authentication, UnitType unitType, String action) {
+        if (unitType == null) {
+            return false;
+        }
+        if (hasAuthority(authentication, requiredAuthority(UnitType.DIOCESE, action))) {
+            return true;
+        }
+        if (unitType != UnitType.DIOCESE
+                && hasAuthority(authentication, requiredAuthority(UnitType.DEANERY, action))) {
+            return true;
+        }
+        return unitType == UnitType.PARISH
+                && hasAuthority(authentication, requiredAuthority(UnitType.PARISH, action));
     }
 
     private boolean hasAuthority(Authentication authentication, String authority) {

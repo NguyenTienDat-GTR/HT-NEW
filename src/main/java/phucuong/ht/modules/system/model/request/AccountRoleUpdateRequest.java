@@ -15,8 +15,6 @@ public class AccountRoleUpdateRequest {
 
     private Boolean isPrimary;
 
-    private String assignedBy;
-
     private OffsetDateTime assignedAt;
 
     private OffsetDateTime expiresAt;

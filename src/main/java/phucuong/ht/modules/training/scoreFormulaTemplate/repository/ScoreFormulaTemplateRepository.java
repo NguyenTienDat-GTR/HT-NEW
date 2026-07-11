@@ -65,4 +65,15 @@ public class ScoreFormulaTemplateRepository extends BaseRepo<ScoreFormulaTemplat
                 .getResultList();
         return results.stream().findFirst();
     }
+
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public boolean hasScoredParticipations(String id) {
+        Long count = entityManager.createQuery(
+                        "select count(cp) from CourseParticipation cp where cp.course.scoreFormula.id = :id and cp.totalScore is not null",
+                        Long.class
+                )
+                .setParameter("id", id)
+                .getSingleResult();
+        return count != null && count > 0;
+    }
 }

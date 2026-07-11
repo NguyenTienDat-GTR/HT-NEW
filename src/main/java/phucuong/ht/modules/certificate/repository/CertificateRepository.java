@@ -125,4 +125,10 @@ public class CertificateRepository extends BaseRepo<Certificate, String> {
         }
         return highest == 0L ? Optional.empty() : Optional.of(highest);
     }
+
+    public void lockCodePrefix(String codePrefix) {
+        entityManager.createNativeQuery("select pg_advisory_xact_lock(hashtext(:codePrefix))")
+                .setParameter("codePrefix", codePrefix)
+                .getSingleResult();
+    }
 }

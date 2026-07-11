@@ -342,13 +342,10 @@ RBAC seed behavior:
 - Flyway does not create records in `account`
 - Flyway does not create records in `account_role`
 
-Optional account bootstrap endpoint:
+Super-admin provisioning behavior:
 
-- `POST /api/auth/bootstrap/super-admin`
-
-Bootstrap behavior:
-
-- public endpoint for first-time setup
+- there is no public HTTP bootstrap endpoint; `/api/auth/bootstrap/super-admin` remains blocked by the security configuration
+- the bootstrap service is an internal deployment operation only
 - creates account without linking to `Leader`
 - creates primary role assignment with `SUPER_ADMIN`
 - fails with conflict if the account already exists
@@ -799,11 +796,15 @@ Training course score configuration:
 Participation scoring behavior:
 
 - `PATCH /api/training/participations/{id}/score` now accepts `componentScores` instead of a direct `totalScore`
+- a participation may be scored only after the required approval is `APPROVED`: deanery approval for DT courses and diocese approval for non-DT courses
+- manual approval accepts only `PENDING` or `SUBMITTED` records; rejected records are terminal unless a future explicit reopen flow is introduced
+- one leader has exactly one participation per course
 - every participation in a course must be scored with the exact component set defined by that course's formula
 - the backend rejects missing, extra, duplicate, or over-max component scores
 - `totalScore` is calculated by the backend from the formula expression
 - pass or fail is determined by the formula `passingScore`
 - when a participation becomes passing and no certificate exists yet for the same leader and course, the system creates one `PENDING` certificate proposal automatically
+- one leader has exactly one certificate per course; code generation is serialized per certificate-code prefix
 
 ### API Cache Policy
 
@@ -975,18 +976,25 @@ The following work was added in this iteration:
 - JWT authorization is stateless, so permission changes apply immediately on next login or refresh, while existing access tokens remain valid until expiration.
 - Organization modules no longer rely on generated slug codes or business `code` values.
 - If a later session continues organization work, start from the helper structure under `common/validation`, `modules/diocese/helper`, `modules/deanery/helper`, and `modules/parish/helper` instead of moving validation back into services.
-- If a later session extends parish or leader update flows, preserve the UUID-based storage model and implement same-diocese move validation rather than reintroducing code-based relations.
+- Parish moves must preserve the UUID-based storage model and stay inside the same diocese. Leader moves are stricter: a parish-scoped administrator may only manage leaders in the active parish and may not move a leader to another parish.
+- Training participation queue/detail APIs are available at `GET /api/training/participations` and `GET /api/training/participations/{id}`. Both are scope-filtered by the owning course and support `BaseSearchRequest` for the list endpoint.
+- Refresh tokens are transport-only credentials: they are written to the HttpOnly refresh cookie and intentionally excluded from JSON response bodies.
+- Every `TrainingCourse` must reference a score formula. Flyway `V028` maps legacy courses only when their owner scope has exactly one active formula, then enforces `score_formula_id NOT NULL`; ambiguous or missing mappings stop migration for an explicit business decision.
+- A course requirement must have the same `courseType` and owner scope as its training course. Changing `courseType` requires a matching new formula and is forbidden after registrations exist.
+- Direct account scope is optional but mutually exclusive: an account may set only one of `dioceseId`, `deaneryId`, or `parishId`. Updating a direct scope replaces the previous direct scope; `clearDirectScope=true` removes it and resumes the Leader-derived fallback.
 - `Leader` currently treats `leaderLevel` as create-only input; do not re-open direct update of this field from the normal Leader update API.
 - Training scope resolution now prefers `account.diocese`, `account.deanery`, and `account.parish` before using the `Account -> Leader -> Parish -> Deanery -> Diocese` fallback chain.
 - Training registration now uses a two-step non-DT flow: parish -> deanery only aggregates and notifies deanery recipients, while deanery -> diocese is the first point where eligible non-DT registrations may auto-approve.
 - For DT courses, parish submission may auto-approve eligible registrations at deanery stage through RabbitMQ, but non-eligible records remain pending for manual deanery review.
 - Training scoring now treats the course formula as the source of truth: every participation must send the exact component set from the course formula before the backend computes `totalScore`.
-- Score formulas use arithmetic expressions over component codes; if a formula changes, future scoring requests must follow the updated component set and variable names.
+- Score formulas use arithmetic expressions over component codes. Once any participation using a formula has a non-null `totalScore`, that formula is locked and `PUT /api/training/score-formulas/{id}` returns conflict; create a new formula for future courses instead of rewriting scored history.
 - Notification recipients are permission-driven rather than role-name-driven; custom roles such as `nghienhuan-liendoan` work as long as their effective permissions and resolved scopes match the current workflow step.
 - Training and certificate approval currently assume the progression map encoded in `TrainingWorkflowSupport`; if `CourseType` expands, update that helper first.
 - Certificate approval now owns leader promotion and `RankHistory` creation, so normal `Leader` update APIs should continue treating `leaderLevel` as non-editable business state.
 - Certificate proposals may be auto-created by the system when a leader passes a course, but only a user with the scoped certificate approve permission can finalize the certificate.
 - Exception certificate approvals for non-passing leaders must always record `exceptionApprovalReason`.
+- Certificate approval requires a scored, non-cancelled participation whose required workflow stage is approved. Certificate promotion is monotonic: an approved late certificate never lowers a Leader level, and approved certificate identity/result fields are immutable.
+- Participation scores may be edited while the related certificate is not approved. Once `certificateApprovalStatus` is `APPROVED`, `PATCH /api/training/participations/{id}/score` returns conflict and the score becomes immutable.
 - `ExecutiveBoardAssignment` update now explicitly saves the entity after scope and uniqueness validation so changed leader/position/unit fields are persisted consistently.
 - `SystemLog` scope columns are now the source of truth for scoped audit-log reads; later resource modules should backfill these fields when they introduce new audit-visible resources.
 - `SystemLog` retention now deletes records whose `loggedAt` is older than 10 days through the `SystemLogRetentionScheduler` background job.
@@ -995,4 +1003,15 @@ The following work was added in this iteration:
 - Auth hardening local July 2026: refresh token chỉ còn claim tối thiểu và chỉ được set bằng `refreshToken` HttpOnly cookie để tránh `HeadersTooLargeException`; `/v3/api-docs`, `/swagger-ui/**`, và whitelist drift `/api/auth/bootstrap/super-admin` không còn public; generic 500, malformed JSON, và missing resource responses đã được sanitize để không lộ chi tiết nội bộ.
 - Auth session hardening local July 2026: refresh rotation hiện giữ hợp lệ access-token JTI liền trước trong Redis session state để client không rơi `401` ngay sau khi vừa refresh; local validation đã xác nhận live flow `login -> /api/auth/me -> refresh -> /api/auth/me` tiếp tục trả `200`.
 - Kết quả kiểm thử tải cục bộ ngày 2026-07-09 đã xác nhận read surge không phát sinh `401` hay `5xx`; hệ thống tự shed load bằng `429` dưới áp lực thay vì sập dịch vụ.
+
+### Flow audit 2026-07-11
+
+- `GET /api/analytics/certificates` now joins `training_course` in every certificate breakdown query before applying course-owner scope; scoped dashboards must not reference a missing `tc` alias.
+- Executive-board assignment authorization is hierarchical: diocese assignment permissions cover descendant deanery/parish targets, and deanery permissions cover descendant parish targets; service-level scope checks still restrict access to the active account scope.
+- Executive-board assignment rejects an `endDate` earlier than `startDate`; FE must apply the same validation before submit.
+- `PositionCreateRequest.positionType` is mandatory and must be one of `DIOCESE`, `DEANERY`, or `PARISH`.
+- Roles created through the public role-management API are always non-system roles; `isSystem` is backend-owned metadata and normal role updates must not change it.
+- Leader management includes `DELETE /api/leaders/{id}` guarded by `organization.leader.delete.parish`; FE should prefer status deactivation when audit/history retention is required.
+- The detailed FE integration contract, state machines, UX rules, endpoint payloads, response expectations, RBAC notes, test matrix, and open product decisions are maintained in `../HT-MANAGEMENT-FE-Technical-Guide.html` and `../HT-MANAGEMENT-FE-Technical-Guide.docx`.
+- Product decision finalized: scores remain editable only while the related certificate is not `APPROVED`; approved certificates lock scoring. Score formulas become immutable as soon as at least one participation using them has scoring data (`totalScore != null`). FE must disable the corresponding edit actions and still handle backend conflict responses.
 

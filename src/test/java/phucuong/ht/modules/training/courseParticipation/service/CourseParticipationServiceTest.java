@@ -188,6 +188,7 @@ class CourseParticipationServiceTest {
         course.setScoreFormula(formula);
         participation.setCourse(course);
         participation.setLeader(leader(UUID.randomUUID(), UUID.randomUUID(), LeaderLevel.HT_XU));
+        participation.setDioceseApprovalStatus(WorkflowApprovalStatus.APPROVED);
 
         when(courseParticipationRepository.findByIdWithLeaderAndCourse("cp-1")).thenReturn(Optional.of(participation));
         when(certificateRepository.findByLeaderIdAndCourseCode(any(), any())).thenReturn(Optional.empty());
@@ -210,6 +211,23 @@ class CourseParticipationServiceTest {
         assertEquals(WorkflowApprovalStatus.PENDING, response.getCertificateApprovalStatus());
         assertEquals(BigDecimal.valueOf(8), response.getTotalScore());
         verify(domainEventPublisher).publishAfterCommit(any());
+    }
+
+    @Test
+    void scoreShouldRejectWhenCertificateAlreadyApproved() {
+        courseParticipationService = buildService();
+        CourseParticipation participation = new CourseParticipation();
+        participation.setId("cp-approved");
+        participation.setCertificateApprovalStatus(WorkflowApprovalStatus.APPROVED);
+        when(courseParticipationRepository.findByIdWithLeaderAndCourse("cp-approved"))
+                .thenReturn(Optional.of(participation));
+
+        assertThrows(RuntimeException.class, () -> courseParticipationService.score(
+                "cp-approved",
+                new TrainingScoreRequest(),
+                authentication("admin-diocese", "training.participation.score.diocese")
+        ));
+        verify(domainEventPublisher, never()).publishAfterCommit(any());
     }
 
     private CourseParticipationService buildService() {

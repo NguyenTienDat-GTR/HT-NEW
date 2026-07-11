@@ -108,24 +108,27 @@ public class AnalyticsService {
         AnalyticsScope scope = scopeResolver.resolve(authentication, false);
         Map<String, Object> params = repository.params(scope);
         String leaderScope = repository.leaderScope(scope, "l");
+        String courseScope = repository.courseScope(scope, "c");
         String participationDate = date("cp.registration_date", filters, params);
         String courseDate = date("c.start_date", filters, params);
         Map<String, Object> kpis = new LinkedHashMap<>();
-        kpis.put("totalCourses", scope.type() == AnalyticsScopeType.PARISH ? 0L : count("training_course c", repository.courseScope(scope, "c"), courseDate, params));
-        long registrations = count("course_participation cp join leader l on l.id = cp.leader_id", leaderScope, participationDate, params);
-        long attended = count("course_participation cp join leader l on l.id = cp.leader_id", leaderScope + " and cp.participation_status in ('ATTENDED', 'COMPLETED')", participationDate, params);
-        long completed = count("course_participation cp join leader l on l.id = cp.leader_id", leaderScope + " and cp.participation_status = 'COMPLETED'", participationDate, params);
-        long passed = count("course_participation cp join leader l on l.id = cp.leader_id", leaderScope + " and cp.result = 'COMPLETED'", participationDate, params);
-        long cancelled = count("course_participation cp join leader l on l.id = cp.leader_id", leaderScope + " and cp.participation_status = 'CANCELLED'", participationDate, params);
-        long pending = count("course_participation cp join leader l on l.id = cp.leader_id", leaderScope + " and ('PENDING' in (cp.deanery_approval_status, cp.diocese_approval_status, cp.certificate_approval_status) or 'SUBMITTED' in (cp.deanery_approval_status, cp.diocese_approval_status, cp.certificate_approval_status))", participationDate, params);
-        long certificateRequested = count("course_participation cp join leader l on l.id = cp.leader_id", leaderScope + " and cp.certificate_requested_at is not null", participationDate, params);
-        long certificateApproved = count("course_participation cp join leader l on l.id = cp.leader_id", leaderScope + " and cp.certificate_approved_at is not null", participationDate, params);
+        kpis.put("totalCourses", scope.type() == AnalyticsScopeType.PARISH ? 0L : count("training_course c", courseScope, courseDate, params));
+        String participationFrom = "course_participation cp join training_course c on c.course_code = cp.course_id join leader l on l.id = cp.leader_id";
+        String participationScope = leaderScope + " and " + courseScope;
+        long registrations = count(participationFrom, participationScope, participationDate, params);
+        long attended = count(participationFrom, participationScope + " and cp.participation_status in ('ATTENDED', 'COMPLETED')", participationDate, params);
+        long completed = count(participationFrom, participationScope + " and cp.participation_status = 'COMPLETED'", participationDate, params);
+        long passed = count(participationFrom, participationScope + " and cp.result = 'COMPLETED'", participationDate, params);
+        long cancelled = count(participationFrom, participationScope + " and cp.participation_status = 'CANCELLED'", participationDate, params);
+        long pending = count(participationFrom, participationScope + " and ('PENDING' in (cp.deanery_approval_status, cp.diocese_approval_status, cp.certificate_approval_status) or 'SUBMITTED' in (cp.deanery_approval_status, cp.diocese_approval_status, cp.certificate_approval_status))", participationDate, params);
+        long certificateRequested = count(participationFrom, participationScope + " and cp.certificate_requested_at is not null", participationDate, params);
+        long certificateApproved = count(participationFrom, participationScope + " and cp.certificate_approved_at is not null", participationDate, params);
         kpis.put("registrations", registrations); kpis.put("attended", attended); kpis.put("completed", completed); kpis.put("passed", passed); kpis.put("cancelled", cancelled); kpis.put("pendingApproval", pending);
         kpis.put("attendanceRate", rate(attended, registrations)); kpis.put("completionRate", rate(completed, registrations)); kpis.put("passRate", rate(passed, completed)); kpis.put("cancellationRate", rate(cancelled, registrations)); kpis.put("certificateRequestRate", rate(certificateRequested, passed)); kpis.put("certificateApprovalRate", rate(certificateApproved, certificateRequested));
-        kpis.put("averageScore", repository.decimal("select coalesce(avg(cp.total_score), 0) from course_participation cp join leader l on l.id = cp.leader_id where " + leaderScope + participationDate, params));
-        List<AnalyticsResponse.Breakdown> breakdowns = new ArrayList<>(courseBreakdown(leaderScope, participationDate, params));
-        breakdowns.addAll(groupedBreakdown("course_participation cp join training_course c on c.course_code = cp.course_id join leader l on l.id = cp.leader_id", "cp", leaderScope, participationDate, "cp.registration_date", filters, params));
-        return response(scope, filters, kpis, breakdowns, courseTrends(leaderScope, participationDate, filters, params), courseComparisons(leaderScope, participationDate, params));
+        kpis.put("averageScore", repository.decimal("select coalesce(avg(cp.total_score), 0) from " + participationFrom + " where " + participationScope + participationDate, params));
+        List<AnalyticsResponse.Breakdown> breakdowns = new ArrayList<>(courseBreakdown(participationScope, participationDate, params));
+        breakdowns.addAll(groupedBreakdown(participationFrom, "cp", participationScope, participationDate, "cp.registration_date", filters, params));
+        return response(scope, filters, kpis, breakdowns, courseTrends(participationScope, participationDate, filters, params), courseComparisons(participationScope, participationDate, params));
     }
 
     @Cacheable(cacheNames = CacheNames.ANALYTICS_CERTIFICATES, key = "@cacheScopeKeyHelper.analyticsKey(#authentication, 'certificates', #request.fromDate, #request.toDate, #request.timeBucket, #request.groupBy)")
@@ -134,22 +137,25 @@ public class AnalyticsService {
         AnalyticsScope scope = scopeResolver.resolve(authentication, false);
         Map<String, Object> params = repository.params(scope);
         String leaderScope = repository.leaderScope(scope, "l");
+        String courseScope = repository.courseScope(scope, "tc");
+        String certificateScope = leaderScope + " and " + courseScope;
         String dateFilter = date("coalesce(c.issue_date, c.created_at::date)", filters, params);
         Map<String, Object> kpis = new LinkedHashMap<>();
-        long total = count("certificate c join leader l on l.id = c.leader_id", leaderScope, dateFilter, params);
-        long approved = count("certificate c join leader l on l.id = c.leader_id", leaderScope + " and c.approval_status = 'APPROVED'", dateFilter, params);
-        long pending = count("certificate c join leader l on l.id = c.leader_id", leaderScope + " and c.approval_status in ('PENDING', 'SUBMITTED')", dateFilter, params);
-        long rejected = count("certificate c join leader l on l.id = c.leader_id", leaderScope + " and c.approval_status = 'REJECTED'", dateFilter, params);
-        long suggested = count("certificate c join leader l on l.id = c.leader_id", leaderScope + " and c.system_suggested = true", dateFilter, params);
-        long exceptionApproved = count("certificate c join leader l on l.id = c.leader_id", leaderScope + " and c.approved_by_exception = true", dateFilter, params);
-        long passed = count("course_participation cp join leader l on l.id = cp.leader_id", leaderScope + " and cp.result = 'COMPLETED'", date("cp.registration_date", filters, params), params);
+        String certificateFrom = "certificate c join training_course tc on tc.course_code = c.course_code join leader l on l.id = c.leader_id";
+        long total = count(certificateFrom, certificateScope, dateFilter, params);
+        long approved = count(certificateFrom, certificateScope + " and c.approval_status = 'APPROVED'", dateFilter, params);
+        long pending = count(certificateFrom, certificateScope + " and c.approval_status in ('PENDING', 'SUBMITTED')", dateFilter, params);
+        long rejected = count(certificateFrom, certificateScope + " and c.approval_status = 'REJECTED'", dateFilter, params);
+        long suggested = count(certificateFrom, certificateScope + " and c.system_suggested = true", dateFilter, params);
+        long exceptionApproved = count(certificateFrom, certificateScope + " and c.approved_by_exception = true", dateFilter, params);
+        long passed = count("course_participation cp join training_course tc on tc.course_code = cp.course_id join leader l on l.id = cp.leader_id", certificateScope + " and cp.result = 'COMPLETED'", date("cp.registration_date", filters, params), params);
         kpis.put("totalCertificates", total); kpis.put("approved", approved); kpis.put("pending", pending); kpis.put("rejected", rejected); kpis.put("systemSuggested", suggested); kpis.put("exceptionApproved", exceptionApproved);
         kpis.put("approvalRate", rate(approved, total)); kpis.put("conversionRate", rate(approved, passed));
-        kpis.put("averageApprovalHours", repository.decimal("select coalesce(avg(extract(epoch from (c.approved_at - c.created_at)) / 3600), 0) from certificate c join leader l on l.id = c.leader_id where " + leaderScope + " and c.approved_at is not null" + dateFilter, params));
-        List<AnalyticsResponse.Breakdown> breakdowns = new ArrayList<>(certificateBreakdown(leaderScope, dateFilter, params));
-        breakdowns.addAll(certificateCourseBreakdown(leaderScope, dateFilter, params));
-        breakdowns.addAll(groupedBreakdown("certificate c join leader l on l.id = c.leader_id", "c", leaderScope, dateFilter, "c.issue_date", filters, params));
-        return response(scope, filters, kpis, breakdowns, certificateTrends(leaderScope, dateFilter, filters, params), certificateComparisons(leaderScope, dateFilter, params));
+        kpis.put("averageApprovalHours", repository.decimal("select coalesce(avg(extract(epoch from (c.approved_at - c.created_at)) / 3600), 0) from " + certificateFrom + " where " + certificateScope + " and c.approved_at is not null" + dateFilter, params));
+        List<AnalyticsResponse.Breakdown> breakdowns = new ArrayList<>(certificateBreakdown(certificateScope, dateFilter, params));
+        breakdowns.addAll(certificateCourseBreakdown(certificateScope, dateFilter, params));
+        breakdowns.addAll(groupedBreakdown(certificateFrom, "c", certificateScope, dateFilter, "c.issue_date", filters, params));
+        return response(scope, filters, kpis, breakdowns, certificateTrends(certificateScope, dateFilter, filters, params), certificateComparisons(certificateScope, dateFilter, params));
     }
 
     private List<AnalyticsResponse.Breakdown> courseBreakdown(String leaderScope, String dateFilter, Map<String, Object> params) {
@@ -166,7 +172,7 @@ public class AnalyticsService {
     }
 
     private List<AnalyticsResponse.Breakdown> certificateBreakdown(String leaderScope, String dateFilter, Map<String, Object> params) {
-        String sql = "select c.approval_status, count(*), count(*) filter (where c.system_suggested = true), count(*) filter (where c.approved_by_exception = true) from certificate c join leader l on l.id = c.leader_id where " + leaderScope + dateFilter + " group by c.approval_status order by count(*) desc";
+        String sql = "select c.approval_status, count(*), count(*) filter (where c.system_suggested = true), count(*) filter (where c.approved_by_exception = true) from certificate c join training_course tc on tc.course_code = c.course_code join leader l on l.id = c.leader_id where " + leaderScope + dateFilter + " group by c.approval_status order by count(*) desc";
         List<AnalyticsResponse.Breakdown> result = new ArrayList<>();
         for (Object[] row : repository.rows(sql, params)) {
             Map<String, Object> metrics = new LinkedHashMap<>(); metrics.put("count", number(row[1])); metrics.put("systemSuggested", number(row[2])); metrics.put("exceptionApproved", number(row[3]));
@@ -199,10 +205,10 @@ public class AnalyticsService {
     private List<AnalyticsResponse.Comparison> organizationComparisons(String scope, AnalyticsFilterRequest filters, Map<String, Object> params) { return leaderComparisons(scope, date("l.created_at::date", filters, params), params); }
     private List<AnalyticsResponse.Trend> leaderTrends(String scope, String dateFilter, AnalyticsFilterRequest filters, Map<String, Object> params) { return trend("leader l", scope, dateFilter, "l.created_at::date", filters, params, "newLeaders"); }
     private List<AnalyticsResponse.Comparison> leaderComparisons(String scope, String dateFilter, Map<String, Object> params) { return yearly("leader l", scope, dateFilter, "l.created_at::date", "count(*), count(*) filter (where l.status = true)", List.of("newLeaders", "activeLeaders"), params); }
-    private List<AnalyticsResponse.Trend> courseTrends(String scope, String dateFilter, AnalyticsFilterRequest filters, Map<String, Object> params) { return trend("course_participation cp join leader l on l.id = cp.leader_id", scope, dateFilter, "cp.registration_date", filters, params, "registrations"); }
-    private List<AnalyticsResponse.Comparison> courseComparisons(String scope, String dateFilter, Map<String, Object> params) { return yearly("course_participation cp join leader l on l.id = cp.leader_id", scope, dateFilter, "cp.registration_date", "count(*), count(*) filter (where cp.participation_status = 'COMPLETED'), count(*) filter (where cp.result = 'COMPLETED'), coalesce(avg(cp.total_score), 0)", List.of("registrations", "completed", "passed", "averageScore"), params); }
-    private List<AnalyticsResponse.Trend> certificateTrends(String scope, String dateFilter, AnalyticsFilterRequest filters, Map<String, Object> params) { return trend("certificate c join leader l on l.id = c.leader_id", scope, dateFilter, "coalesce(c.issue_date, c.created_at::date)", filters, params, "certificateRecords"); }
-    private List<AnalyticsResponse.Comparison> certificateComparisons(String scope, String dateFilter, Map<String, Object> params) { return yearly("certificate c join leader l on l.id = c.leader_id", scope, dateFilter, "coalesce(c.issue_date, c.created_at::date)", "count(*), count(*) filter (where c.approval_status = 'APPROVED'), count(*) filter (where c.approval_status = 'REJECTED')", List.of("records", "approved", "rejected"), params); }
+    private List<AnalyticsResponse.Trend> courseTrends(String scope, String dateFilter, AnalyticsFilterRequest filters, Map<String, Object> params) { return trend("course_participation cp join training_course c on c.course_code = cp.course_id join leader l on l.id = cp.leader_id", scope, dateFilter, "cp.registration_date", filters, params, "registrations"); }
+    private List<AnalyticsResponse.Comparison> courseComparisons(String scope, String dateFilter, Map<String, Object> params) { return yearly("course_participation cp join training_course c on c.course_code = cp.course_id join leader l on l.id = cp.leader_id", scope, dateFilter, "cp.registration_date", "count(*), count(*) filter (where cp.participation_status = 'COMPLETED'), count(*) filter (where cp.result = 'COMPLETED'), coalesce(avg(cp.total_score), 0)", List.of("registrations", "completed", "passed", "averageScore"), params); }
+    private List<AnalyticsResponse.Trend> certificateTrends(String scope, String dateFilter, AnalyticsFilterRequest filters, Map<String, Object> params) { return trend("certificate c join training_course tc on tc.course_code = c.course_code join leader l on l.id = c.leader_id", scope, dateFilter, "coalesce(c.issue_date, c.created_at::date)", filters, params, "certificateRecords"); }
+    private List<AnalyticsResponse.Comparison> certificateComparisons(String scope, String dateFilter, Map<String, Object> params) { return yearly("certificate c join training_course tc on tc.course_code = c.course_code join leader l on l.id = c.leader_id", scope, dateFilter, "coalesce(c.issue_date, c.created_at::date)", "count(*), count(*) filter (where c.approval_status = 'APPROVED'), count(*) filter (where c.approval_status = 'REJECTED')", List.of("records", "approved", "rejected"), params); }
 
     private List<AnalyticsResponse.Comparison> yearly(String from, String scope, String dateFilter, String field, String aggregates, List<String> names, Map<String, Object> params) {
         String sql = "select extract(year from " + field + ")::int, " + aggregates + " from " + from + " where " + scope + dateFilter + " group by extract(year from " + field + ") order by extract(year from " + field + ")";

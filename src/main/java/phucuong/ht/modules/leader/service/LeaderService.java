@@ -133,6 +133,15 @@ public class LeaderService {
         return toLeaderResponse(leaderValidationHelper.requireExistingLeaderWithParish(id));
     }
 
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.LEADER_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.LEADER_DETAIL, allEntries = true)
+    })
+    public void delete(UUID id) {
+        leaderValidationHelper.requireExistingLeaderWithParish(id);
+        leaderRepository.delete(id);
+    }
+
     private boolean hasReadAuthority(Authentication authentication) {
         return authentication != null && authentication.getAuthorities().stream()
                 .anyMatch(authority -> LeaderAccessEvaluator.READ_PARISH.equals(authority.getAuthority()));
