@@ -105,6 +105,7 @@ class CourseParticipationServiceTest {
         Leader leader = leader(leaderId, parishId, LeaderLevel.HT_XU);
         CourseRequirement requirement = new CourseRequirement();
         requirement.setRequiredCurrentLevel(LeaderLevel.DU_TRUONG);
+        requirement.setStatus(Boolean.TRUE);
         course.setRequirement(requirement);
 
         Parish parish = parish(parishId);
@@ -135,6 +136,56 @@ class CourseParticipationServiceTest {
 
         assertThrows(RuntimeException.class, () -> courseParticipationService.register("SMKNDT-2026", request, authentication("admin-parish", "training.participation.submit.parish")));
         verify(domainEventPublisher, never()).publishAfterCommit(any());
+    }
+
+    @Test
+    void registerShouldRequireExceptionReasonWhenRequiredBirthDateIsMissing() {
+        courseParticipationService = buildService();
+
+        UUID parishId = UUID.randomUUID();
+        UUID leaderId = UUID.randomUUID();
+        TrainingCourse course = course(CourseType.SMTL_I);
+        CourseRequirement requirement = new CourseRequirement();
+        requirement.setRequiredMinAge(18);
+        requirement.setStatus(Boolean.TRUE);
+        course.setRequirement(requirement);
+        Leader leader = leader(leaderId, parishId, LeaderLevel.HT_XU);
+        leader.setBirthDate(null);
+
+        when(trainingCourseRepository.findByCodeWithRequirement("SMTLI-2026")).thenReturn(Optional.of(course));
+        when(leaderRepository.findByIdWithParish(leaderId)).thenReturn(Optional.of(leader));
+        when(parishRepository.findByIdWithDeaneryAndDiocese(parishId)).thenReturn(Optional.of(parish(parishId)));
+        when(accountScopeValidationHelper.requireActiveParishId(any(), any())).thenReturn(parishId);
+
+        TrainingRegistrationRequest request = new TrainingRegistrationRequest();
+        request.setLeaderIds(List.of(leaderId));
+
+        assertThrows(RuntimeException.class, () -> courseParticipationService.register(
+                "SMTLI-2026", request, authentication("admin-parish", "training.participation.submit.parish")));
+        verify(courseParticipationRepository, never()).save(any());
+    }
+
+    @Test
+    void registerShouldRejectInactiveLeader() {
+        courseParticipationService = buildService();
+
+        UUID parishId = UUID.randomUUID();
+        UUID leaderId = UUID.randomUUID();
+        TrainingCourse course = course(CourseType.SMTL_I);
+        Leader leader = leader(leaderId, parishId, LeaderLevel.HT_XU);
+        leader.setStatus(Boolean.FALSE);
+
+        when(trainingCourseRepository.findByCodeWithRequirement("SMTLI-2026")).thenReturn(Optional.of(course));
+        when(leaderRepository.findByIdWithParish(leaderId)).thenReturn(Optional.of(leader));
+        when(parishRepository.findByIdWithDeaneryAndDiocese(parishId)).thenReturn(Optional.of(parish(parishId)));
+        when(accountScopeValidationHelper.requireActiveParishId(any(), any())).thenReturn(parishId);
+
+        TrainingRegistrationRequest request = new TrainingRegistrationRequest();
+        request.setLeaderIds(List.of(leaderId));
+
+        assertThrows(RuntimeException.class, () -> courseParticipationService.register(
+                "SMTLI-2026", request, authentication("admin-parish", "training.participation.submit.parish")));
+        verify(courseParticipationRepository, never()).save(any());
     }
 
     @Test
@@ -258,6 +309,7 @@ class CourseParticipationServiceTest {
         TrainingCourse course = new TrainingCourse();
         course.setCourseCode("COURSE");
         course.setCourseType(courseType);
+        course.setStatus(Boolean.TRUE);
         course.setRegistrationStartAt(OffsetDateTime.now().minusDays(1));
         course.setRegistrationEndAt(OffsetDateTime.now().plusDays(1));
         return course;
@@ -267,6 +319,7 @@ class CourseParticipationServiceTest {
         Leader leader = new Leader();
         leader.setId(leaderId);
         leader.setLeaderLevel(level);
+        leader.setStatus(Boolean.TRUE);
         leader.setBirthDate(LocalDate.now().minusYears(20));
         leader.setCreatedAt(OffsetDateTime.now().minusYears(5));
         Parish parish = new Parish();

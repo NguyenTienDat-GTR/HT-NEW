@@ -13,6 +13,8 @@ import phucuong.ht.modules.training.trainingCourse.repository.TrainingCourseRepo
 @RequiredArgsConstructor
 public class CourseParticipationAccessEvaluator {
 
+    private static final String SUPER_ADMIN_ROLE = "ROLE_SUPER_ADMIN";
+
     public static final String SUBMIT_PARISH = "training.participation.submit.parish";
     public static final String SUBMIT_DEANERY = "training.participation.submit.deanery";
     public static final String APPROVE_DEANERY = "training.participation.approve.deanery";
@@ -57,6 +59,9 @@ public class CourseParticipationAccessEvaluator {
     }
 
     public boolean canScore(Authentication authentication, String participationId) {
+        if (securityUtils.hasAuthority(authentication, SUPER_ADMIN_ROLE)) {
+            return false;
+        }
         return courseParticipationRepository.findByIdWithLeaderAndCourse(participationId)
                 .map(participation -> {
                     if (trainingWorkflowSupport.isDeaneryManaged(participation.getCourse().getCourseType())) {

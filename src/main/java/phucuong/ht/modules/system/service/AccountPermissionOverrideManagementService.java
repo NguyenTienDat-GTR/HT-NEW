@@ -51,9 +51,12 @@ public class AccountPermissionOverrideManagementService {
         return toResponse(override);
     }
 
-    public Page<AccountPermissionOverrideResponse> findAll(BaseSearchRequest request) {
+    public Page<AccountPermissionOverrideResponse> findAll(BaseSearchRequest request, Authentication authentication) {
         Page<AccountPermissionOverride> page = accountPermissionOverrideRepository.findAll(copyRequest(request));
-        return new PageImpl<>(page.getContent().stream().map(this::toResponse).toList(), page.getPageable(), page.getTotalElements());
+        var content = page.getContent().stream()
+                .filter(override -> authorizationHelper.canManageAccountPermission(authentication, override.getAccount().getUsername(), override.getPermission()))
+                .map(this::toResponse).toList();
+        return new PageImpl<>(content, page.getPageable(), content.size());
     }
 
     public AccountPermissionOverrideResponse findById(String id) {

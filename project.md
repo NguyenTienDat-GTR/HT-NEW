@@ -982,6 +982,9 @@ The following work was added in this iteration:
 - Every `TrainingCourse` must reference a score formula. Flyway `V028` maps legacy courses only when their owner scope has exactly one active formula, then enforces `score_formula_id NOT NULL`; ambiguous or missing mappings stop migration for an explicit business decision.
 - A course requirement must have the same `courseType` and owner scope as its training course. Changing `courseType` requires a matching new formula and is forbidden after registrations exist.
 - Direct account scope is optional but mutually exclusive: an account may set only one of `dioceseId`, `deaneryId`, or `parishId`. Updating a direct scope replaces the previous direct scope; `clearDirectScope=true` removes it and resumes the Leader-derived fallback.
+- Tạo account giờ bắt buộc gửi `roleCode` và backend tạo primary `AccountRole` trong cùng transaction. `SUPER_ADMIN` chỉ được tạo/quản lý account `ADMIN_DIOCESE` có direct `dioceseId`; không được tạo account cấp thấp hơn.
+- `ADMIN_DIOCESE`, `ADMIN_DEANERY`, `ADMIN_PARISH` dùng lần lượt `system.account.manage.diocese|deanery|parish` để tạo account role thấp hơn và đọc/update/delete/toggle account khác có role bằng hoặc thấp hơn trong đúng scope của mình; không được tự quản lý account đang đăng nhập.
+- Gán role cho account cho phép role bằng hoặc thấp hơn actor trong cùng scope; `SUPER_ADMIN` chỉ gán `ADMIN_DIOCESE`, và parish dùng `system.account_role.assign.parish`. Direct permission override cũng bị giới hạn theo account đích; scoped admin chỉ được gán permission mình đang sở hữu và permission đó không được có scope cao hơn actor.
 - `Leader` currently treats `leaderLevel` as create-only input; do not re-open direct update of this field from the normal Leader update API.
 - Training scope resolution now prefers `account.diocese`, `account.deanery`, and `account.parish` before using the `Account -> Leader -> Parish -> Deanery -> Diocese` fallback chain.
 - Training registration now uses a two-step non-DT flow: parish -> deanery only aggregates and notifies deanery recipients, while deanery -> diocese is the first point where eligible non-DT registrations may auto-approve.
@@ -1005,6 +1008,12 @@ The following work was added in this iteration:
 - Kết quả kiểm thử tải cục bộ ngày 2026-07-09 đã xác nhận read surge không phát sinh `401` hay `5xx`; hệ thống tự shed load bằng `429` dưới áp lực thay vì sập dịch vụ.
 
 ### Flow audit 2026-07-11
+
+- Chấm điểm và duyệt chứng chỉ là hai nghiệp vụ loại trừ `SUPER_ADMIN`: migration `V030` vô hiệu bốn grant score/approve của vai trò này, bảo đảm grant đúng cho `ADMIN_DIOCESE` và `ADMIN_DEANERY`, còn access evaluator chặn `ROLE_SUPER_ADMIN` ngay cả khi access token cũ vẫn mang authority.
+- Quyền chấm điểm gồm `training.participation.score.diocese` cho khóa giáo phận và `.deanery` cho khóa DT giáo hạt; quyền duyệt chứng chỉ tương ứng là `training.certificate.approve.diocese` và `.deanery`. Cả hai luôn kiểm tra đúng owner scope của khóa/hồ sơ.
+- Flow chấm điểm chỉ cho hồ sơ không hủy đã được duyệt đúng cấp; request phải gửi đúng và đủ component của formula, không trùng, không vượt max, backend tự tính total. Đạt điểm tạo proposal chứng chỉ `PENDING`; chứng chỉ `APPROVED` khóa sửa điểm.
+- Flow duyệt chứng chỉ chỉ nhận participation đã chấm, không hủy, được duyệt đúng cấp; dưới passing score bắt buộc `approvalReason`, approval cập nhật trạng thái, promotion đơn điệu và ghi `RankHistory`.
+- Flow đăng ký chỉ nhận khóa, requirement và leader đang hoạt động, trong cửa sổ đăng ký, đúng parish scope và chưa có hồ sơ trùng. Eligibility kiểm tra current level, tuổi, số năm hoạt động và khóa tiên quyết; thiếu ngày sinh/ngày bắt đầu hoạt động khi requirement tương ứng tồn tại được xem là không đủ điều kiện và bắt buộc exception reason.
 
 - `GET /api/analytics/certificates` now joins `training_course` in every certificate breakdown query before applying course-owner scope; scoped dashboards must not reference a missing `tc` alias.
 - Executive-board assignment authorization is hierarchical: diocese assignment permissions cover descendant deanery/parish targets, and deanery permissions cover descendant parish targets; service-level scope checks still restrict access to the active account scope.
