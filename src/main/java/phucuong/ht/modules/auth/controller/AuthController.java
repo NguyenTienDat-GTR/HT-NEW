@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import phucuong.ht.common.dto.apiResponse;
 import phucuong.ht.modules.auth.model.request.LoginRequest;
+import phucuong.ht.modules.auth.model.request.ChangePasswordRequest;
 import phucuong.ht.modules.auth.model.response.AuthTokenResponse;
 import phucuong.ht.modules.auth.model.response.AuthenticatedUserResponse;
 import phucuong.ht.modules.auth.service.AuthCookieService;
@@ -51,6 +52,15 @@ public class AuthController {
     @GetMapping("/me")
     public apiResponse<AuthenticatedUserResponse> me(Authentication authentication) {
         return apiResponse.success("Lấy thông tin người dùng đã xác thực thành công", authService.currentUser(authentication));
+    }
+
+    @PostMapping("/change-password")
+    public apiResponse<Void> changePassword(
+            @Valid @RequestBody ChangePasswordRequest request,
+            Authentication authentication
+    ) {
+        authService.changePassword(request, authentication);
+        return apiResponse.success("Đổi mật khẩu thành công. Vui lòng đăng nhập lại", null);
     }
 
     @GetMapping("/admin/summary")

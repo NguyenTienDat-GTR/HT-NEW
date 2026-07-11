@@ -17,6 +17,7 @@ import phucuong.ht.modules.auth.config.AuthProperties;
 import phucuong.ht.modules.auth.exception.ApiException;
 import phucuong.ht.modules.auth.model.AuthUserDetails;
 import phucuong.ht.modules.auth.model.request.LoginRequest;
+import phucuong.ht.modules.auth.model.request.ChangePasswordRequest;
 import phucuong.ht.modules.auth.model.response.AuthTokenResponse;
 import phucuong.ht.modules.auth.model.response.AuthenticatedUserResponse;
 import phucuong.ht.modules.auth.model.response.BootstrapSuperAdminResponse;
@@ -119,6 +120,25 @@ public class AuthService {
             throw new ApiException(HttpStatus.UNAUTHORIZED, errorCode.AUTHENTICATION_FAILED, "Yêu cầu xác thực");
         }
         return toUserResponse(principal);
+    }
+
+    @Transactional
+    public void changePassword(ChangePasswordRequest request, Authentication authentication) {
+        if (authentication == null || !(authentication.getPrincipal() instanceof AuthUserDetails principal)) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, errorCode.AUTHENTICATION_FAILED, "Yêu cầu xác thực");
+        }
+        Account account = accountRepository.findById(principal.getUsername())
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, errorCode.RESOURCE_NOT_FOUND, "Không tìm thấy tài khoản"));
+        if (!passwordEncoder.matches(request.getOldPassword(), account.getPassword())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, errorCode.VALIDATION_ERROR, "Mật khẩu cũ không chính xác");
+        }
+        if (passwordEncoder.matches(request.getNewPassword(), account.getPassword())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, errorCode.VALIDATION_ERROR, "Mật khẩu mới phải khác mật khẩu cũ");
+        }
+        account.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        account.setUpdatedBy(principal.getUsername());
+        accountRepository.save(account);
+        redisTokenSessionService.revokeAllSessions(principal.getUsername());
     }
 
     public AuthenticatedUserResponse adminSummary(Authentication authentication) {
