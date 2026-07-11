@@ -56,6 +56,7 @@ class LeaderServiceTest {
         request.setHolyName("Phaolo");
         request.setFullName("Nguyen An");
         request.setEmail("leader@example.com");
+        request.setImageUrl("https://cdn.example.com/leaders/an.jpg");
         request.setGender(LeaderGender.NAM);
         request.setLeaderLevel(LeaderLevel.HT_XU);
         request.setParishId(parishId);
@@ -73,6 +74,7 @@ class LeaderServiceTest {
                         && LeaderLevel.HT_XU == entity.getLeaderLevel()
                         && "An".equals(entity.getFirstName())
                         && "Nguyen".equals(entity.getLastName())
+                        && "https://cdn.example.com/leaders/an.jpg".equals(entity.getImageUrl())
                         && parishId.equals(entity.getParish().getId())
                         && "LEADER1".equals(entity.getCreatedBy())
         ))).thenAnswer(invocation -> {
@@ -125,6 +127,7 @@ class LeaderServiceTest {
         LeaderUpdateRequest request = new LeaderUpdateRequest();
         request.setFullName("Nguyen Binh");
         request.setGender(LeaderGender.NU);
+        request.setImageUrl("https://cdn.example.com/leaders/binh.jpg");
         Leader existing = leader(leaderId, parish(parishId));
         existing.setEmail("leader@example.com");
         existing.setLeaderLevel(LeaderLevel.HLV_I);
@@ -138,6 +141,7 @@ class LeaderServiceTest {
             existing.setFirstName("Binh");
             existing.setLastName("Nguyen");
             existing.setGender(LeaderGender.NU);
+            existing.setImageUrl("https://cdn.example.com/leaders/binh.jpg");
             return existing;
         });
 
@@ -147,6 +151,7 @@ class LeaderServiceTest {
         assertEquals(LeaderGender.NU, result.getGender());
         assertEquals("Binh", result.getFirstName());
         assertEquals("Nguyen", result.getLastName());
+        assertEquals("https://cdn.example.com/leaders/binh.jpg", result.getImageUrl());
     }
 
     @Test
@@ -187,6 +192,7 @@ class LeaderServiceTest {
         leader.setLastName("Nguyen");
         leader.setLeaderLevel(LeaderLevel.HLV_I);
         leader.setGender(LeaderGender.NAM);
+        leader.setImageUrl("https://cdn.example.com/leaders/sample.jpg");
         leader.setParish(parish);
         leader.setStatus(true);
         return leader;

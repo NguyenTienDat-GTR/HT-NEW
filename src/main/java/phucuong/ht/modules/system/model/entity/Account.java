@@ -42,6 +42,4 @@ public class Account extends BaseModel {
     private String authProvider;
 
     private String providerId;
-
-    private String avatarUrl;
 }

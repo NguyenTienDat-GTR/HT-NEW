@@ -62,6 +62,7 @@ public class LeaderService {
             leader.setBirthDate(request.getBirthDate());
             leader.setEmail(request.getEmail());
             leader.setPhoneNumber(request.getPhoneNumber());
+            leader.setImageUrl(request.getImageUrl());
             leader.setGender(request.getGender());
             leader.setLeaderLevel(request.getLeaderLevel());
             leader.setParish(parish);
@@ -198,6 +199,7 @@ public class LeaderService {
                 .birthDate(leader.getBirthDate())
                 .email(leader.getEmail())
                 .phoneNumber(leader.getPhoneNumber())
+                .imageUrl(leader.getImageUrl())
                 .gender(leader.getGender())
                 .leaderLevel(leader.getLeaderLevel())
                 .parishId(leader.getParish() == null ? null : leader.getParish().getId())

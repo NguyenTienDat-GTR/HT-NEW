@@ -651,7 +651,7 @@ Leader request/response behavior:
 
 - `Leader` now includes `gender` enum with values `NAM` and `NU`
 - `POST /api/leaders`, `GET /api/leaders`, `GET /api/leaders/{id}`, and `PUT /api/leaders/{id}` return `LeaderResponse`
-- the response contains leader scalar fields plus UUID `id`, `fullName`, and `parishId`
+- the response contains leader scalar fields plus UUID `id`, `fullName`, nullable `imageUrl`, and `parishId`
 - the response does not expose nested `parish` objects
 
 Leader authorization behavior:
@@ -668,6 +668,7 @@ Leader validation and update behavior:
 - create requires `holyName`, `fullName`, `birthDate`, `email`, `gender`, `leaderLevel`, and `parishId`
 - request `fullName` is split internally so the last token becomes `firstName` and the remaining prefix becomes `lastName`
 - `phoneNumber` must be a Vietnamese phone number with exactly 10 digits and leading `0`
+- `imageUrl` belongs to `Leader`, is optional, and may be `null`
 - optional blank text values are normalized to `null`
 - `email` must remain unique across leaders
 - update request no longer accepts `leaderLevel`
@@ -983,6 +984,7 @@ The following work was added in this iteration:
 - A course requirement must have the same `courseType` and owner scope as its training course. Changing `courseType` requires a matching new formula and is forbidden after registrations exist.
 - Direct account scope is optional but mutually exclusive: an account may set only one of `dioceseId`, `deaneryId`, or `parishId`. Updating a direct scope replaces the previous direct scope; `clearDirectScope=true` removes it and resumes the Leader-derived fallback.
 - Tạo account giờ bắt buộc gửi `roleCode` và backend tạo primary `AccountRole` trong cùng transaction. `SUPER_ADMIN` chỉ được tạo/quản lý account `ADMIN_DIOCESE` có direct `dioceseId`; không được tạo account cấp thấp hơn.
+- `Account` không còn giữ `avatarUrl`; ảnh đại diện leader dùng field nullable `leader.imageUrl`, và migration `V032__move_account_avatar_to_leader_image.sql` sẽ backfill từ account cũ sang leader theo `leader_id` trước khi drop cột `account.avatar_url`.
 - `ADMIN_DIOCESE`, `ADMIN_DEANERY`, `ADMIN_PARISH` dùng lần lượt `system.account.manage.diocese|deanery|parish` để tạo account role thấp hơn và đọc/update/delete/toggle account khác có role bằng hoặc thấp hơn trong đúng scope của mình; không được tự quản lý account đang đăng nhập.
 - Gán role cho account cho phép role bằng hoặc thấp hơn actor trong cùng scope; `SUPER_ADMIN` chỉ gán `ADMIN_DIOCESE`, và parish dùng `system.account_role.assign.parish`. Direct permission override cũng bị giới hạn theo account đích; scoped admin chỉ được gán permission mình đang sở hữu và permission đó không được có scope cao hơn actor.
 - `Leader` currently treats `leaderLevel` as create-only input; do not re-open direct update of this field from the normal Leader update API.

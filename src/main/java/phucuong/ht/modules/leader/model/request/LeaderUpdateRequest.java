@@ -37,6 +37,9 @@ public class LeaderUpdateRequest {
     @Size(max = 15)
     private String phoneNumber;
 
+    @Size(max = 500)
+    private String imageUrl;
+
     private LeaderGender gender;
 
     private UUID parishId;

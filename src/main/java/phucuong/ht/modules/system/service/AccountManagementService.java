@@ -48,7 +48,7 @@ public class AccountManagementService {
         Account account = new Account();
         account.setUsername(username);
         account.setPassword(passwordEncoder.encode(request.getPassword()));
-        apply(account, request.getLeaderId(), request.getDioceseId(), request.getDeaneryId(), request.getParishId(), request.getAuthProvider(), request.getProviderId(), request.getAvatarUrl());
+        apply(account, request.getLeaderId(), request.getDioceseId(), request.getDeaneryId(), request.getParishId(), request.getAuthProvider(), request.getProviderId());
         Role role = roleRepository.findByRoleCodeAndStatusTrue(request.getRoleCode())
                 .orElseThrow(() -> validation.notFound("Không tìm thấy role " + request.getRoleCode()));
         authorizationHelper.requireCanCreate(authentication, account, role);
@@ -88,7 +88,7 @@ public class AccountManagementService {
             account.setDeanery(null);
             account.setParish(null);
         }
-        apply(account, request.getLeaderId(), request.getDioceseId(), request.getDeaneryId(), request.getParishId(), request.getAuthProvider(), request.getProviderId(), request.getAvatarUrl());
+        apply(account, request.getLeaderId(), request.getDioceseId(), request.getDeaneryId(), request.getParishId(), request.getAuthProvider(), request.getProviderId());
         authorizationHelper.requireCanManage(authentication, account);
         account.setUpdatedBy(validation.requireAuditActor(authentication, "Không xác định được người cập nhật tài khoản"));
         return response(account);
@@ -131,7 +131,7 @@ public class AccountManagementService {
         accountRoleRepository.save(accountRole);
     }
 
-    private void apply(Account a, UUID leaderId, UUID dioceseId, UUID deaneryId, UUID parishId, String provider, String providerId, String avatarUrl) {
+    private void apply(Account a, UUID leaderId, UUID dioceseId, UUID deaneryId, UUID parishId, String provider, String providerId) {
         int directScopeCount = (dioceseId == null ? 0 : 1) + (deaneryId == null ? 0 : 1) + (parishId == null ? 0 : 1);
         if (directScopeCount > 1) throw validation.validationError("Tài khoản chỉ được có một direct scope: dioceseId, deaneryId hoặc parishId");
         if (leaderId != null) a.setLeader(leaderRepository.findById(leaderId).orElseThrow(() -> validation.notFound("Không tìm thấy leader")));
@@ -140,13 +140,12 @@ public class AccountManagementService {
         if (parishId != null) a.setParish(parishRepository.findById(parishId).orElseThrow(() -> validation.notFound("Không tìm thấy giáo xứ")));
         if (provider != null) a.setAuthProvider(provider);
         if (providerId != null) a.setProviderId(providerId);
-        if (avatarUrl != null) a.setAvatarUrl(avatarUrl);
     }
 
     private AccountResponse response(Account a) {
         return AccountResponse.builder().username(a.getUsername()).leaderId(a.getLeader() == null ? null : a.getLeader().getId())
                 .dioceseId(a.getDiocese() == null ? null : a.getDiocese().getId()).deaneryId(a.getDeanery() == null ? null : a.getDeanery().getId())
                 .parishId(a.getParish() == null ? null : a.getParish().getId()).authProvider(a.getAuthProvider()).providerId(a.getProviderId())
-                .avatarUrl(a.getAvatarUrl()).status(a.getStatus()).build();
+                .status(a.getStatus()).build();
     }
 }
