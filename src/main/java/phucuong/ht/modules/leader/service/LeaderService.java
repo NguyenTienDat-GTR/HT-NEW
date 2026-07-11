@@ -25,6 +25,7 @@ import phucuong.ht.modules.leader.repository.LeaderRepository;
 import phucuong.ht.modules.leader.security.LeaderAccessEvaluator;
 import phucuong.ht.modules.parish.model.entity.Parish;
 
+import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -67,6 +68,9 @@ public class LeaderService {
             leader.setLeaderLevel(request.getLeaderLevel());
             leader.setParish(parish);
             leader.setStatus(Boolean.TRUE);
+            OffsetDateTime now = OffsetDateTime.now();
+            leader.setCreatedAt(now);
+            leader.setUpdatedAt(now);
             leader.setCreatedBy(auditActor);
             leader.setUpdatedBy(auditActor);
             leaderRepository.save(leader);
@@ -102,12 +106,6 @@ public class LeaderService {
         Leader existingLeader = leaderValidationHelper.requireExistingLeaderWithParish(id);
         String auditActor = leaderValidationHelper.getRequiredAuditActor(authentication);
         leaderValidationHelper.validateUpdateEmailUniqueness(id, request.getEmail(), existingLeader.getEmail());
-
-        if (request.getFullName() != null) {
-            LeaderValidationHelper.LeaderNameParts nameParts = leaderValidationHelper.splitFullName(request.getFullName());
-            request.setFirstName(nameParts.firstName());
-            request.setLastName(nameParts.lastName());
-        }
 
         if (request.getParishId() != null) {
             leaderValidationHelper.requireExistingParish(request.getParishId());

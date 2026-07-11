@@ -52,7 +52,18 @@ public class PermissionManagementService {
         payload.setIsSystem(Boolean.FALSE);
         payload.setDisplayOrder(request.getDisplayOrder());
 
-        Permission permission = systemPermissionRepository.create(payload, actor);
+        Permission permission = systemPermissionRepository.createPermission(
+                payload.getPermissionCode(),
+                payload.getPermissionName(),
+                payload.getModuleCode(),
+                payload.getResourceCode(),
+                payload.getActionCode(),
+                payload.getScopeCode(),
+                payload.getDescription(),
+                payload.getIsSystem(),
+                payload.getDisplayOrder(),
+                actor
+        );
         return toResponse(permission);
     }
 

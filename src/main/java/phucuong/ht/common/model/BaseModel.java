@@ -1,6 +1,7 @@
 package phucuong.ht.common.model;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.MappedSuperclass;
 import lombok.Getter;
 import lombok.Setter;
@@ -8,6 +9,7 @@ import lombok.Setter;
 import java.time.OffsetDateTime;
 
 @MappedSuperclass
+@EntityListeners(BaseAuditEntityListener.class)
 @Getter
 @Setter
 public abstract class BaseModel {
