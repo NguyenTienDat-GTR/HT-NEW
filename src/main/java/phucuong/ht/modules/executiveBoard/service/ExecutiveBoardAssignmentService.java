@@ -9,6 +9,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
@@ -64,6 +65,7 @@ public class ExecutiveBoardAssignmentService {
             @CacheEvict(cacheNames = CacheNames.EXECUTIVE_ASSIGNMENT_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.EXECUTIVE_ASSIGNMENT_DETAIL, allEntries = true)
     })
+    @Transactional
     public ExecutiveBoardAssignmentResponse create(ExecutiveBoardAssignmentCreateRequest request, Authentication authentication) {
         validateRequest(request.getUnitType(), request.getUnitId(), request.getLeaderId(), request.getPositionCode());
         validateDateRange(request.getStartDate(), request.getEndDate());
@@ -146,6 +148,7 @@ public class ExecutiveBoardAssignmentService {
             @CacheEvict(cacheNames = CacheNames.EXECUTIVE_ASSIGNMENT_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.EXECUTIVE_ASSIGNMENT_DETAIL, allEntries = true)
     })
+    @Transactional
     public ExecutiveBoardAssignmentResponse update(UUID id, ExecutiveBoardAssignmentUpdateRequest request, Authentication authentication) {
         ExecutiveBoardAssignment existing = assignmentRepository.findByIdWithRelations(id)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy phân công chức vụ " + id));
@@ -193,6 +196,7 @@ public class ExecutiveBoardAssignmentService {
             @CacheEvict(cacheNames = CacheNames.EXECUTIVE_ASSIGNMENT_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.EXECUTIVE_ASSIGNMENT_DETAIL, allEntries = true)
     })
+    @Transactional
     public ExecutiveBoardAssignmentResponse toggleStatus(UUID id, StatusToggleRequest request, Authentication authentication) {
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái phân công chức vụ");
