@@ -102,6 +102,7 @@ class CertificateServiceTest {
         participation.setCourse(course);
         participation.setTotalScore(BigDecimal.valueOf(7));
         participation.setResult(CourseResult.COMPLETED);
+        participation.setDioceseApprovalStatus(WorkflowApprovalStatus.APPROVED);
 
         when(certificateRepository.findByCodeWithLeaderAndCourse("CERT-1")).thenReturn(Optional.of(certificate));
         when(courseParticipationRepository.findByLeaderIdAndCourseCode(leader.getId(), "SMKNI")).thenReturn(Optional.of(participation));

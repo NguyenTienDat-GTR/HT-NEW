@@ -13,6 +13,8 @@ import phucuong.ht.modules.system.model.entity.Account;
 import phucuong.ht.modules.system.model.entity.AccountRole;
 import phucuong.ht.modules.system.model.entity.Role;
 import phucuong.ht.modules.system.model.request.AccountRoleCreateRequest;
+import phucuong.ht.modules.system.model.request.AccountRoleUpdateRequest;
+import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.modules.system.model.response.AccountRoleResponse;
 
 import java.time.OffsetDateTime;
@@ -60,6 +62,59 @@ public class AccountRoleService {
 
         AccountRole saved = accountRoleRepository.save(accountRole);
         return toResponse(saved);
+    }
+
+    @Transactional(readOnly = true)
+    public List<AccountRoleResponse> findAll(Authentication authentication) {
+        return accountRoleRepository.findAll().stream()
+                .filter(accountRole -> canManage(authentication, accountRole.getAccount(), accountRole.getRole()))
+                .map(this::toResponse).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public AccountRoleResponse findById(String id, Authentication authentication) {
+        AccountRole entity = require(id);
+        if (!canManage(authentication, entity.getAccount(), entity.getRole())) {
+            throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền xem role của account này");
+        }
+        return toResponse(entity);
+    }
+
+    @Transactional
+    public AccountRoleResponse update(String id, AccountRoleUpdateRequest request, Authentication authentication) {
+        AccountRole entity = require(id);
+        Account account = request.getUsername() == null ? entity.getAccount() : accountRepository.findById(request.getUsername()).orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy account " + request.getUsername()));
+        Role role = request.getRoleCode() == null ? entity.getRole() : roleRepository.findByRoleCodeAndStatusTrue(request.getRoleCode()).orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy role " + request.getRoleCode()));
+        enforceAssignmentScope(authentication, account, role);
+        entity.setAccount(account); entity.setRole(role);
+        if (request.getIsPrimary() != null) entity.setIsPrimary(request.getIsPrimary());
+        if (request.getAssignedAt() != null) entity.setAssignedAt(request.getAssignedAt());
+        if (request.getExpiresAt() != null) entity.setExpiresAt(request.getExpiresAt());
+        entity.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật role tài khoản"));
+        return toResponse(entity);
+    }
+
+    @Transactional
+    public void delete(String id, Authentication authentication) { AccountRole entity = require(id); enforceAssignmentScope(authentication, entity.getAccount(), entity.getRole()); accountRoleRepository.delete(entity); }
+
+    @Transactional
+    public AccountRoleResponse toggleStatus(String id, StatusToggleRequest request, Authentication authentication) {
+        commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
+        AccountRole entity = require(id); enforceAssignmentScope(authentication, entity.getAccount(), entity.getRole());
+        entity.setStatus(!Boolean.TRUE.equals(entity.getStatus()));
+        entity.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái role tài khoản"));
+        return toResponse(entity);
+    }
+
+    private AccountRole require(String id) { return accountRoleRepository.findById(id).orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy account role " + id)); }
+
+    private boolean canManage(Authentication authentication, Account targetAccount, Role targetRole) {
+        try {
+            enforceAssignmentScope(authentication, targetAccount, targetRole);
+            return true;
+        } catch (RuntimeException ignored) {
+            return false;
+        }
     }
 
     private void enforceAssignmentScope(Authentication authentication, Account targetAccount, Role targetRole) {

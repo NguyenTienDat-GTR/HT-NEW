@@ -17,6 +17,7 @@ public class LeaderAccessEvaluator {
     public static final String CREATE_PARISH = "organization.leader.create.parish";
     public static final String READ_PARISH = "organization.leader.read.parish";
     public static final String UPDATE_PARISH = "organization.leader.update.parish";
+    public static final String DELETE_PARISH = "organization.leader.delete.parish";
 
     private final AccountRepository accountRepository;
     private final LeaderRepository leaderRepository;
@@ -40,6 +41,10 @@ public class LeaderAccessEvaluator {
 
     public boolean canToggle(Authentication authentication, UUID id) {
         return hasParishScopedAccess(authentication, id, UPDATE_PARISH);
+    }
+
+    public boolean canDelete(Authentication authentication, UUID id) {
+        return hasParishScopedAccess(authentication, id, DELETE_PARISH);
     }
 
     private boolean hasParishScopedAccess(Authentication authentication, UUID id, String scopedAuthority) {

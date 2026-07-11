@@ -56,6 +56,10 @@ public class TrainingWorkflowSupport {
         return courseType != null;
     }
 
+    public boolean isPromotion(LeaderLevel currentLevel, LeaderLevel targetLevel) {
+        return targetLevel != null && (currentLevel == null || targetLevel.ordinal() > currentLevel.ordinal());
+    }
+
     public boolean shouldAutoApproveAfterParishSubmission(CourseType courseType) {
         return isDeaneryManaged(courseType);
     }

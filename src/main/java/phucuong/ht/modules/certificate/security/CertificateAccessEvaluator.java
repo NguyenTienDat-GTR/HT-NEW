@@ -22,8 +22,8 @@ public class CertificateAccessEvaluator {
     public boolean canCreate(Authentication authentication, String courseCode) {
         return trainingCourseRepository.findByCodeWithRequirement(courseCode)
                 .map(course -> trainingWorkflowSupport.isDeaneryManaged(course.getCourseType())
-                        ? securityUtils.hasAuthority(authentication, "training.certificate.create.deanery")
-                        : securityUtils.hasAuthority(authentication, "training.certificate.create.diocese"))
+                        ? securityUtils.hasAuthority(authentication, "training.certificate.create.deanery") && scopedDeanery(authentication, courseCode)
+                        : securityUtils.hasAuthority(authentication, "training.certificate.create.diocese") && scopedDiocese(authentication, courseCode))
                 .orElse(false);
     }
 
@@ -67,5 +67,17 @@ public class CertificateAccessEvaluator {
                             .orElse(false);
                 })
                 .orElse(false);
+    }
+
+    private boolean scopedDeanery(Authentication authentication, String courseCode) {
+        String username = securityUtils.currentUsername(authentication);
+        return username != null && accountRepository.findActiveDeaneryIdByUsername(username)
+                .flatMap(id -> trainingCourseRepository.findDeaneryIdByCourseCode(courseCode).map(id::equals)).orElse(false);
+    }
+
+    private boolean scopedDiocese(Authentication authentication, String courseCode) {
+        String username = securityUtils.currentUsername(authentication);
+        return username != null && accountRepository.findActiveDioceseIdByUsername(username)
+                .flatMap(id -> trainingCourseRepository.findDioceseIdByCourseCode(courseCode).map(id::equals)).orElse(false);
     }
 }

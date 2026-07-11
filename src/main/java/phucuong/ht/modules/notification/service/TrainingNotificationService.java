@@ -70,7 +70,7 @@ public class TrainingNotificationService {
     public TrainingNotificationResponse markRead(String id, Authentication authentication) {
         String username = currentUsername(authentication);
         TrainingNotification notification = trainingNotificationRepository.findByIdAndUsernameAndStatusTrue(id, username)
-                .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay thong bao " + id));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy thông báo " + id));
         if (notification.getReadAt() == null) {
             notification.setReadAt(OffsetDateTime.now());
             notification.setUpdatedAt(notification.getReadAt());
@@ -82,7 +82,7 @@ public class TrainingNotificationService {
     private String currentUsername(Authentication authentication) {
         String username = securityUtils.currentUsername(authentication);
         if (username == null || username.isBlank()) {
-            throw commonValidationHelper.forbidden("Khong xac dinh duoc tai khoan hien tai");
+            throw commonValidationHelper.forbidden("Không xác định được tài khoản hiện tại");
         }
         return username;
     }

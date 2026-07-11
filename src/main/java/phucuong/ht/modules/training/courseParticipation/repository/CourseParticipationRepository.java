@@ -156,4 +156,16 @@ public class CourseParticipationRepository extends BaseRepo<CourseParticipation,
                 .getResultList();
         return results.stream().findFirst();
     }
+
+    public boolean existsByLeaderIdAndCourseCode(UUID leaderId, String courseCode) {
+        Long count = entityManager.createQuery("select count(cp) from CourseParticipation cp where cp.leader.id = :leaderId and cp.course.courseCode = :courseCode", Long.class)
+                .setParameter("leaderId", leaderId).setParameter("courseCode", courseCode).getSingleResult();
+        return count != null && count > 0;
+    }
+
+    public boolean existsByCourseCode(String courseCode) {
+        Long count = entityManager.createQuery("select count(cp) from CourseParticipation cp where cp.course.courseCode = :courseCode", Long.class)
+                .setParameter("courseCode", courseCode).getSingleResult();
+        return count != null && count > 0;
+    }
 }

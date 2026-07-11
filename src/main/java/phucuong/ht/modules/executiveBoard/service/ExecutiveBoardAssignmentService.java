@@ -33,6 +33,7 @@ import phucuong.ht.modules.parish.repository.ParishRepository;
 import phucuong.ht.modules.position.model.entity.Position;
 import phucuong.ht.modules.position.repository.PositionRepository;
 
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -65,6 +66,7 @@ public class ExecutiveBoardAssignmentService {
     })
     public ExecutiveBoardAssignmentResponse create(ExecutiveBoardAssignmentCreateRequest request, Authentication authentication) {
         validateRequest(request.getUnitType(), request.getUnitId(), request.getLeaderId(), request.getPositionCode());
+        validateDateRange(request.getStartDate(), request.getEndDate());
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người gán chức vụ");
 
         Leader leader = leaderRepository.findByIdWithParish(request.getLeaderId())
@@ -155,6 +157,8 @@ public class ExecutiveBoardAssignmentService {
         UUID targetLeaderId = request.getLeaderId() == null ? existing.getLeader().getId() : request.getLeaderId();
 
         validateRequest(targetUnitType, targetUnitId, targetLeaderId, targetPositionCode);
+        LocalDate targetStartDate = request.getStartDate() == null ? existing.getStartDate() : request.getStartDate();
+        validateDateRange(targetStartDate, request.getEndDate());
         Leader leader = leaderRepository.findByIdWithParish(targetLeaderId)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy leader " + targetLeaderId));
         Position position = positionRepository.findById(targetPositionCode)
@@ -205,6 +209,12 @@ public class ExecutiveBoardAssignmentService {
         commonValidationHelper.requireId(leaderId, "leaderId là bắt buộc");
         if (positionCode == null || positionCode.isBlank()) {
             throw commonValidationHelper.validationError("positionCode là bắt buộc");
+        }
+    }
+
+    private void validateDateRange(java.time.LocalDate startDate, java.time.LocalDate endDate) {
+        if (startDate != null && endDate != null && endDate.isBefore(startDate)) {
+            throw commonValidationHelper.validationError("Ngày kết thúc không được trước ngày bắt đầu");
         }
     }
 

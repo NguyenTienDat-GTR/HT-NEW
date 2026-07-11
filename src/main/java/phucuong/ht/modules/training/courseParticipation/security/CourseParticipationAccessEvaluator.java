@@ -19,6 +19,8 @@ public class CourseParticipationAccessEvaluator {
     public static final String APPROVE_DIOCESE = "training.participation.approve.diocese";
     public static final String SCORE_DEANERY = "training.participation.score.deanery";
     public static final String SCORE_DIOCESE = "training.participation.score.diocese";
+    public static final String READ_DEANERY = "training.participation.read.deanery";
+    public static final String READ_DIOCESE = "training.participation.read.diocese";
 
     private final securityUtils securityUtils;
     private final AccountRepository accountRepository;
@@ -64,6 +66,23 @@ public class CourseParticipationAccessEvaluator {
                     return securityUtils.hasAuthority(authentication, SCORE_DIOCESE)
                             && scopedDiocese(authentication, participation.getCourse().getCourseCode());
                 })
+                .orElse(false);
+    }
+
+    public boolean canRead(Authentication authentication) {
+        return securityUtils.hasAuthority(authentication, READ_DEANERY)
+                || securityUtils.hasAuthority(authentication, READ_DIOCESE)
+                || securityUtils.hasAuthority(authentication, APPROVE_DEANERY)
+                || securityUtils.hasAuthority(authentication, APPROVE_DIOCESE)
+                || securityUtils.hasAuthority(authentication, SCORE_DEANERY)
+                || securityUtils.hasAuthority(authentication, SCORE_DIOCESE);
+    }
+
+    public boolean canReadOne(Authentication authentication, String participationId) {
+        return canRead(authentication) && courseParticipationRepository.findByIdWithLeaderAndCourse(participationId)
+                .map(participation -> trainingWorkflowSupport.isDeaneryManaged(participation.getCourse().getCourseType())
+                        ? scopedDeanery(authentication, participation.getCourse().getCourseCode())
+                        : scopedDiocese(authentication, participation.getCourse().getCourseCode()))
                 .orElse(false);
     }
 

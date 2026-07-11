@@ -19,6 +19,9 @@ public class AccountUpdateRequest {
 
     private UUID parishId;
 
+    /** Explicitly removes the direct organization scope when true. */
+    private Boolean clearDirectScope;
+
     private String authProvider;
 
     private String providerId;
