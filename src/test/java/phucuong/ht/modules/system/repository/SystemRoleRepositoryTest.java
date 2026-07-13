@@ -7,6 +7,7 @@ import phucuong.ht.modules.system.model.entity.Role;
 import phucuong.ht.modules.system.model.request.RoleCreateRequest;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -23,7 +24,6 @@ class SystemRoleRepositoryTest {
         request.setRoleCode("LD_TRUONG");
         request.setRoleName("Lien doan truong");
         request.setDescription("Role description");
-        request.setIsSystem(false);
         request.setDisplayOrder(90);
 
         Role role = repository.createRole(request, "phucuongadmin");
@@ -40,5 +40,6 @@ class SystemRoleRepositoryTest {
         assertNotNull(persisted.getCreatedAt());
         assertNotNull(persisted.getUpdatedAt());
         assertTrue(persisted.getStatus());
+        assertFalse(persisted.getIsSystem());
     }
 }

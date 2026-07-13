@@ -62,6 +62,7 @@ public class AuthService {
         account.setUsername(username);
         account.setPassword(passwordEncoder.encode(authProperties.getBootstrap().getSuperAdmin().getPassword()));
         account.setAuthProvider(AuthProvider.LOCAL.name());
+        account.setMustChangePassword(Boolean.FALSE);
         account.setStatus(Boolean.TRUE);
         account.setCreatedAt(now);
         account.setUpdatedAt(now);
@@ -106,13 +107,7 @@ public class AuthService {
 
         jwtUtils.TokenClaims refreshClaims = jwtUtils.parseRefreshTokenClaims(refreshToken);
         AuthUserDetails currentPrincipal = authUserDetailsService.loadUserByUsername(refreshClaims.principal().getUsername());
-        redisTokenSessionService.requireRefreshSession(
-                refreshClaims.sessionId(),
-                refreshClaims.principal().getUsername(),
-                refreshClaims.tokenId(),
-                refreshToken
-        );
-        return rotateSessionTokens(currentPrincipal, refreshClaims.sessionId());
+        return rotateSessionTokens(currentPrincipal, refreshClaims, refreshToken);
     }
 
     public AuthenticatedUserResponse currentUser(Authentication authentication) {
@@ -136,6 +131,7 @@ public class AuthService {
             throw new ApiException(HttpStatus.BAD_REQUEST, errorCode.VALIDATION_ERROR, "Mật khẩu mới phải khác mật khẩu cũ");
         }
         account.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        account.setMustChangePassword(Boolean.FALSE);
         account.setUpdatedBy(principal.getUsername());
         accountRepository.save(account);
         redisTokenSessionService.revokeAllSessions(principal.getUsername());
@@ -168,14 +164,20 @@ public class AuthService {
         return buildTokenResponse(principal, accessToken, refreshToken);
     }
 
-    private AuthTokenResponse rotateSessionTokens(AuthUserDetails principal, String sessionId) {
+    private AuthTokenResponse rotateSessionTokens(
+            AuthUserDetails principal,
+            jwtUtils.TokenClaims previousRefreshClaims,
+            String previousRefreshToken
+    ) {
         String accessTokenJti = UUID.randomUUID().toString();
         String refreshTokenJti = UUID.randomUUID().toString();
-        String accessToken = jwtUtils.generateAccessToken(principal, sessionId, accessTokenJti);
-        String refreshToken = jwtUtils.generateRefreshToken(principal, sessionId, refreshTokenJti);
-        redisTokenSessionService.rotateSession(
-                sessionId,
+        String accessToken = jwtUtils.generateAccessToken(principal, previousRefreshClaims.sessionId(), accessTokenJti);
+        String refreshToken = jwtUtils.generateRefreshToken(principal, previousRefreshClaims.sessionId(), refreshTokenJti);
+        redisTokenSessionService.rotateRefreshSession(
+                previousRefreshClaims.sessionId(),
                 principal.getUsername(),
+                previousRefreshClaims.tokenId(),
+                previousRefreshToken,
                 accessTokenJti,
                 refreshTokenJti,
                 refreshToken
@@ -207,6 +209,7 @@ public class AuthService {
                 .leaderId(principal.getLeaderId())
                 .roles(principal.getRoles())
                 .permissions(principal.getPermissions())
+                .mustChangePassword(principal.isMustChangePassword())
                 .build();
     }
 }

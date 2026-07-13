@@ -78,7 +78,7 @@ public class ExecutiveBoardAssignmentService {
 
         enforceUnitType(position, request.getUnitType());
         ScopeData scopeData = resolveScopeData(request.getUnitType(), request.getUnitId());
-        enforceTargetScope(authentication, request.getUnitType(), scopeData);
+        enforceTargetScope(authentication, request.getUnitType(), scopeData, "create");
         enforceLeaderMembership(leader, request.getUnitType(), request.getUnitId());
         enforceUniqueness(request.getUnitType(), request.getUnitId(), request.getPositionCode(), null);
 
@@ -169,7 +169,7 @@ public class ExecutiveBoardAssignmentService {
 
         enforceUnitType(position, targetUnitType);
         ScopeData scopeData = resolveScopeData(targetUnitType, targetUnitId);
-        enforceTargetScope(authentication, targetUnitType, scopeData);
+        enforceTargetScope(authentication, targetUnitType, scopeData, "update");
         enforceLeaderMembership(leader, targetUnitType, targetUnitId);
         enforceUniqueness(targetUnitType, targetUnitId, targetPositionCode, id);
 
@@ -247,43 +247,55 @@ public class ExecutiveBoardAssignmentService {
         }
     }
 
-    private void enforceTargetScope(Authentication authentication, UnitType unitType, ScopeData scopeData) {
+    private void enforceTargetScope(Authentication authentication, UnitType unitType, ScopeData scopeData, String action) {
+        String dioceseAuthority = "organization.executive_board_assignment." + action + ".diocese";
+        String deaneryAuthority = "organization.executive_board_assignment." + action + ".deanery";
+        String parishAuthority = "organization.executive_board_assignment." + action + ".parish";
         switch (unitType) {
             case DIOCESE -> {
-                UUID activeDioceseId = accountScopeValidationHelper.requireActiveDioceseId(authentication, ExecutiveBoardAssignmentAccessEvaluator.CREATE_DIOCESE);
+                if (!securityUtils.hasAuthority(authentication, dioceseAuthority)) {
+                    throw commonValidationHelper.forbidden("Khong co quyen " + action + " phan cong cap giao phan");
+                }
+                UUID activeDioceseId = accountScopeValidationHelper.requireActiveDioceseId(authentication, dioceseAuthority);
                 if (!activeDioceseId.equals(scopeData.diocese().getId())) {
                     throw commonValidationHelper.forbidden("Không thể quản lý chức vụ ngoài giáo phận hiện tại");
                 }
             }
             case DEANERY -> {
-                if (securityUtils.hasAuthority(authentication, ExecutiveBoardAssignmentAccessEvaluator.CREATE_DIOCESE)) {
-                    UUID activeDioceseId = accountScopeValidationHelper.requireActiveDioceseId(authentication, ExecutiveBoardAssignmentAccessEvaluator.CREATE_DIOCESE);
+                if (securityUtils.hasAuthority(authentication, dioceseAuthority)) {
+                    UUID activeDioceseId = accountScopeValidationHelper.requireActiveDioceseId(authentication, dioceseAuthority);
                     if (!activeDioceseId.equals(scopeData.diocese().getId())) {
                         throw commonValidationHelper.forbidden("Không thể quản lý chức vụ giáo hạt ngoài giáo phận hiện tại");
                     }
                     return;
                 }
-                UUID activeDeaneryId = accountScopeValidationHelper.requireActiveDeaneryId(authentication, ExecutiveBoardAssignmentAccessEvaluator.CREATE_DEANERY);
+                if (!securityUtils.hasAuthority(authentication, deaneryAuthority)) {
+                    throw commonValidationHelper.forbidden("Khong co quyen " + action + " phan cong cap giao hat");
+                }
+                UUID activeDeaneryId = accountScopeValidationHelper.requireActiveDeaneryId(authentication, deaneryAuthority);
                 if (!activeDeaneryId.equals(scopeData.deanery().getId())) {
                     throw commonValidationHelper.forbidden("Không thể quản lý chức vụ ngoài giáo hạt hiện tại");
                 }
             }
             case PARISH -> {
-                if (securityUtils.hasAuthority(authentication, ExecutiveBoardAssignmentAccessEvaluator.CREATE_DIOCESE)) {
-                    UUID activeDioceseId = accountScopeValidationHelper.requireActiveDioceseId(authentication, ExecutiveBoardAssignmentAccessEvaluator.CREATE_DIOCESE);
+                if (securityUtils.hasAuthority(authentication, dioceseAuthority)) {
+                    UUID activeDioceseId = accountScopeValidationHelper.requireActiveDioceseId(authentication, dioceseAuthority);
                     if (!activeDioceseId.equals(scopeData.diocese().getId())) {
                         throw commonValidationHelper.forbidden("Không thể quản lý chức vụ giáo xứ ngoài giáo phận hiện tại");
                     }
                     return;
                 }
-                if (securityUtils.hasAuthority(authentication, ExecutiveBoardAssignmentAccessEvaluator.CREATE_DEANERY)) {
-                    UUID activeDeaneryId = accountScopeValidationHelper.requireActiveDeaneryId(authentication, ExecutiveBoardAssignmentAccessEvaluator.CREATE_DEANERY);
+                if (securityUtils.hasAuthority(authentication, deaneryAuthority)) {
+                    UUID activeDeaneryId = accountScopeValidationHelper.requireActiveDeaneryId(authentication, deaneryAuthority);
                     if (!activeDeaneryId.equals(scopeData.deanery().getId())) {
                         throw commonValidationHelper.forbidden("Không thể quản lý chức vụ giáo xứ ngoài giáo hạt hiện tại");
                     }
                     return;
                 }
-                UUID activeParishId = accountScopeValidationHelper.requireActiveParishId(authentication, ExecutiveBoardAssignmentAccessEvaluator.CREATE_PARISH);
+                if (!securityUtils.hasAuthority(authentication, parishAuthority)) {
+                    throw commonValidationHelper.forbidden("Khong co quyen " + action + " phan cong cap giao xu");
+                }
+                UUID activeParishId = accountScopeValidationHelper.requireActiveParishId(authentication, parishAuthority);
                 if (!activeParishId.equals(scopeData.parish().getId())) {
                     throw commonValidationHelper.forbidden("Không thể quản lý chức vụ ngoài giáo xứ hiện tại");
                 }

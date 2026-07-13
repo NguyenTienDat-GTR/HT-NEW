@@ -3,6 +3,7 @@ package phucuong.ht.modules.system.service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import phucuong.ht.common.model.request.StatusToggleRequest;
@@ -23,6 +24,7 @@ public class RoleManagementService {
 
     private final SystemRoleRepository systemRoleRepository;
     private final CommonValidationHelper commonValidationHelper;
+    private final SystemAdminAuthorizationHelper authorizationHelper;
 
     public RoleResponse create(RoleCreateRequest request, Authentication authentication) {
         if (systemRoleRepository.findById(request.getRoleCode()).isPresent()) {
@@ -32,19 +34,22 @@ public class RoleManagementService {
         request.setRoleCode(commonValidationHelper.normalizeRequiredText(request.getRoleCode()));
         request.setRoleName(commonValidationHelper.normalizeRequiredText(request.getRoleName()));
         request.setDescription(commonValidationHelper.normalizeOptionalText(request.getDescription()));
-        request.setIsSystem(Boolean.FALSE);
         Role role = systemRoleRepository.createRole(request, actor);
         return toResponse(role);
     }
 
-    public Page<RoleResponse> findAll(BaseSearchRequest request) {
-        Page<Role> page = systemRoleRepository.findAll(copyRequest(request));
-        return new PageImpl<>(page.getContent().stream().map(this::toResponse).toList(), page.getPageable(), page.getTotalElements());
+    public Page<RoleResponse> findAll(BaseSearchRequest request, Authentication authentication) {
+        List<Role> manageable = loadAllMatching(request).stream()
+                .filter(role -> authorizationHelper.canReadRole(authentication, role))
+                .toList();
+        return page(request, manageable);
     }
 
-    public RoleResponse findById(String roleCode) {
-        return toResponse(systemRoleRepository.findById(roleCode)
-                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy vai trò: " + roleCode)));
+    public RoleResponse findById(String roleCode, Authentication authentication) {
+        Role role = systemRoleRepository.findById(roleCode)
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy vai trò: " + roleCode));
+        authorizationHelper.requireRoleReadAccess(authentication, role);
+        return toResponse(role);
     }
 
     public RoleResponse update(String roleCode, RoleUpdateRequest request, Authentication authentication) {
@@ -71,7 +76,7 @@ public class RoleManagementService {
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái vai trò");
         systemRoleRepository.toggleStatus(roleCode, actor);
-        return findById(roleCode);
+        return findById(roleCode, authentication);
     }
 
     private BaseSearchRequest copyRequest(BaseSearchRequest request) {
@@ -86,6 +91,30 @@ public class RoleManagementService {
         copy.setSortBy(source.getSortBy());
         copy.setSortDirection(source.getSortDirection());
         return copy;
+    }
+
+    private List<Role> loadAllMatching(BaseSearchRequest request) {
+        List<Role> matches = new java.util.ArrayList<>();
+        int page = 0;
+        while (true) {
+            BaseSearchRequest batch = copyRequest(request);
+            batch.setPage(page);
+            batch.setSize(BaseSearchRequest.MAX_PAGE_SIZE);
+            Page<Role> result = systemRoleRepository.findAll(batch);
+            matches.addAll(result.getContent());
+            if (!result.hasNext()) {
+                return matches;
+            }
+            page++;
+        }
+    }
+
+    private Page<RoleResponse> page(BaseSearchRequest request, List<Role> roles) {
+        int page = request == null ? 0 : request.getPage();
+        int size = request == null ? 10 : request.getSize();
+        int start = Math.min(page * size, roles.size());
+        int end = Math.min(start + size, roles.size());
+        return new PageImpl<>(roles.subList(start, end).stream().map(this::toResponse).toList(), PageRequest.of(page, size), roles.size());
     }
 
     private RoleResponse toResponse(Role role) {

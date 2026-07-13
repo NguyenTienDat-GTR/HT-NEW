@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import phucuong.ht.common.model.request.StatusToggleRequest;
@@ -27,6 +28,7 @@ public class PermissionManagementService {
 
     private final SystemPermissionRepository systemPermissionRepository;
     private final CommonValidationHelper commonValidationHelper;
+    private final SystemAdminAuthorizationHelper authorizationHelper;
 
     public PermissionResponse create(PermissionCreateRequest request, Authentication authentication) {
         String moduleCode = normalizeCode(request.getModuleCode(), "Ma module khong duoc de trong");
@@ -67,14 +69,18 @@ public class PermissionManagementService {
         return toResponse(permission);
     }
 
-    public Page<PermissionResponse> findAll(BaseSearchRequest request) {
-        Page<Permission> page = systemPermissionRepository.findAll(copyRequest(request));
-        return new PageImpl<>(page.getContent().stream().map(this::toResponse).toList(), page.getPageable(), page.getTotalElements());
+    public Page<PermissionResponse> findAll(BaseSearchRequest request, Authentication authentication) {
+        List<Permission> manageable = loadAllMatching(request).stream()
+                .filter(permission -> authorizationHelper.canReadPermission(authentication, permission))
+                .toList();
+        return page(request, manageable);
     }
 
-    public PermissionResponse findById(String permissionCode) {
-        return toResponse(systemPermissionRepository.findById(permissionCode)
-                .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay quyen: " + permissionCode)));
+    public PermissionResponse findById(String permissionCode, Authentication authentication) {
+        Permission permission = systemPermissionRepository.findById(permissionCode)
+                .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay quyen: " + permissionCode));
+        authorizationHelper.requirePermissionReadAccess(authentication, permission);
+        return toResponse(permission);
     }
 
     public PermissionResponse update(String permissionCode, PermissionUpdateRequest request, Authentication authentication) {
@@ -109,7 +115,7 @@ public class PermissionManagementService {
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
         String actor = commonValidationHelper.requireAuditActor(authentication, "Khong xac dinh duoc nguoi doi trang thai quyen");
         systemPermissionRepository.toggleStatus(permissionCode, actor);
-        return findById(permissionCode);
+        return findById(permissionCode, authentication);
     }
 
     private void validateTaxonomy(String moduleCode, String resourceCode, String actionCode, String scopeCode) {
@@ -155,6 +161,30 @@ public class PermissionManagementService {
         copy.setSortBy(source.getSortBy());
         copy.setSortDirection(source.getSortDirection());
         return copy;
+    }
+
+    private List<Permission> loadAllMatching(BaseSearchRequest request) {
+        List<Permission> matches = new java.util.ArrayList<>();
+        int page = 0;
+        while (true) {
+            BaseSearchRequest batch = copyRequest(request);
+            batch.setPage(page);
+            batch.setSize(BaseSearchRequest.MAX_PAGE_SIZE);
+            Page<Permission> result = systemPermissionRepository.findAll(batch);
+            matches.addAll(result.getContent());
+            if (!result.hasNext()) {
+                return matches;
+            }
+            page++;
+        }
+    }
+
+    private Page<PermissionResponse> page(BaseSearchRequest request, List<Permission> permissions) {
+        int page = request == null ? 0 : request.getPage();
+        int size = request == null ? 10 : request.getSize();
+        int start = Math.min(page * size, permissions.size());
+        int end = Math.min(start + size, permissions.size());
+        return new PageImpl<>(permissions.subList(start, end).stream().map(this::toResponse).toList(), PageRequest.of(page, size), permissions.size());
     }
 
     private PermissionResponse toResponse(Permission permission) {

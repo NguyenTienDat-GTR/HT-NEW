@@ -34,7 +34,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
+@SpringBootTest(properties = "app.security.swagger-public-enabled=false")
 @AutoConfigureMockMvc
 class AuthControllerSecurityIntegrationTest {
 
@@ -118,6 +118,22 @@ class AuthControllerSecurityIntegrationTest {
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.permissions[0]").value("auth.session.manage.all"));
+    }
+
+    @Test
+    void shouldRequireTemporaryPasswordChangeBeforeBusinessApiUse() throws Exception {
+        String token = jwtUtils.generateAccessToken(AuthUserDetails.tokenPrincipal(
+                "new-admin",
+                null,
+                List.of("ADMIN_PARISH"),
+                List.of("auth.session.manage.all"),
+                true
+        ));
+
+        mockMvc.perform(get("/api/auth/admin/summary")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"));
     }
 
     @Test

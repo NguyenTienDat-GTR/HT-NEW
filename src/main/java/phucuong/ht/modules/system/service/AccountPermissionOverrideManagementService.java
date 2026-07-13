@@ -3,6 +3,7 @@ package phucuong.ht.modules.system.service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import phucuong.ht.common.model.request.StatusToggleRequest;
@@ -52,16 +53,19 @@ public class AccountPermissionOverrideManagementService {
     }
 
     public Page<AccountPermissionOverrideResponse> findAll(BaseSearchRequest request, Authentication authentication) {
-        Page<AccountPermissionOverride> page = accountPermissionOverrideRepository.findAll(copyRequest(request));
-        var content = page.getContent().stream()
+        List<AccountPermissionOverride> manageable = loadAllMatching(request).stream()
                 .filter(override -> authorizationHelper.canManageAccountPermission(authentication, override.getAccount().getUsername(), override.getPermission()))
-                .map(this::toResponse).toList();
-        return new PageImpl<>(content, page.getPageable(), content.size());
+                .toList();
+        return page(request, manageable);
     }
 
-    public AccountPermissionOverrideResponse findById(String id) {
-        return toResponse(accountPermissionOverrideRepository.findById(id)
-                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy phân quyền ghi đè của tài khoản: " + id)));
+    public AccountPermissionOverrideResponse findById(String id, Authentication authentication) {
+        AccountPermissionOverride override = accountPermissionOverrideRepository.findById(id)
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy phân quyền ghi đè của tài khoản: " + id));
+        if (!authorizationHelper.canManageAccountPermission(authentication, override.getAccount().getUsername(), override.getPermission())) {
+            throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền đọc phân quyền ghi đè này");
+        }
+        return toResponse(override);
     }
 
     public AccountPermissionOverrideResponse update(String id, AccountPermissionOverrideUpdateRequest request, Authentication authentication) {
@@ -96,7 +100,7 @@ public class AccountPermissionOverrideManagementService {
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái phân quyền cho tài khoản");
         accountPermissionOverrideRepository.toggleStatus(id, actor);
-        return findById(id);
+        return findById(id, authentication);
     }
 
     private BaseSearchRequest copyRequest(BaseSearchRequest request) {
@@ -111,6 +115,30 @@ public class AccountPermissionOverrideManagementService {
         copy.setSortBy(source.getSortBy());
         copy.setSortDirection(source.getSortDirection());
         return copy;
+    }
+
+    private List<AccountPermissionOverride> loadAllMatching(BaseSearchRequest request) {
+        List<AccountPermissionOverride> matches = new java.util.ArrayList<>();
+        int page = 0;
+        while (true) {
+            BaseSearchRequest batch = copyRequest(request);
+            batch.setPage(page);
+            batch.setSize(BaseSearchRequest.MAX_PAGE_SIZE);
+            Page<AccountPermissionOverride> result = accountPermissionOverrideRepository.findAll(batch);
+            matches.addAll(result.getContent());
+            if (!result.hasNext()) {
+                return matches;
+            }
+            page++;
+        }
+    }
+
+    private Page<AccountPermissionOverrideResponse> page(BaseSearchRequest request, List<AccountPermissionOverride> overrides) {
+        int page = request == null ? 0 : request.getPage();
+        int size = request == null ? 10 : request.getSize();
+        int start = Math.min(page * size, overrides.size());
+        int end = Math.min(start + size, overrides.size());
+        return new PageImpl<>(overrides.subList(start, end).stream().map(this::toResponse).toList(), PageRequest.of(page, size), overrides.size());
     }
 
     private AccountPermissionOverrideResponse toResponse(AccountPermissionOverride override) {

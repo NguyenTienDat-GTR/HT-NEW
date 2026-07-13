@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.data.redis.core.ZSetOperations;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import phucuong.ht.modules.auth.config.AuthProperties;
 
 import java.time.Duration;
@@ -16,11 +17,13 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -31,13 +34,14 @@ class RedisTokenSessionServiceTest {
     private final Map<String, Map<String, Double>> zsetStore = new HashMap<>();
 
     private RedisTokenSessionService redisTokenSessionService;
+    private StringRedisTemplate stringRedisTemplate;
 
     @BeforeEach
     void setUp() {
         valueStore.clear();
         zsetStore.clear();
 
-        StringRedisTemplate stringRedisTemplate = mock(StringRedisTemplate.class);
+        stringRedisTemplate = mock(StringRedisTemplate.class);
         @SuppressWarnings("unchecked")
         ValueOperations<String, String> valueOperations = mock(ValueOperations.class);
         @SuppressWarnings("unchecked")
@@ -99,7 +103,7 @@ class RedisTokenSessionServiceTest {
     }
 
     @Test
-    void shouldKeepPreviousSessionWhenSameIpLogsInAgain() {
+    void shouldRevokePreviousSessionWhenSameIpLogsInAgain() {
         TokenSessionState first = redisTokenSessionService.createSession(
                 "superadminpc",
                 "127.0.0.1",
@@ -118,8 +122,8 @@ class RedisTokenSessionServiceTest {
 
         List<TokenSessionState> sessions = redisTokenSessionService.listActiveSessions("superadminpc");
 
-        assertEquals(2, sessions.size());
-        assertTrue(sessions.stream().anyMatch(session -> session.getSessionId().equals(first.getSessionId())));
+        assertEquals(1, sessions.size());
+        assertFalse(sessions.stream().anyMatch(session -> session.getSessionId().equals(first.getSessionId())));
         assertTrue(sessions.stream().anyMatch(session -> session.getSessionId().equals(second.getSessionId())));
     }
 
@@ -135,7 +139,7 @@ class RedisTokenSessionServiceTest {
         Thread.sleep(5);
         TokenSessionState second = redisTokenSessionService.createSession(
                 "superadminpc",
-                "127.0.0.1",
+                "127.0.0.2",
                 "access-2",
                 "refresh-2",
                 "refresh-token-2"
@@ -143,36 +147,17 @@ class RedisTokenSessionServiceTest {
         Thread.sleep(5);
         TokenSessionState third = redisTokenSessionService.createSession(
                 "superadminpc",
-                "127.0.0.1",
+                "127.0.0.3",
                 "access-3",
                 "refresh-3",
                 "refresh-token-3"
         );
-        Thread.sleep(5);
-        TokenSessionState fourth = redisTokenSessionService.createSession(
-                "superadminpc",
-                "127.0.0.1",
-                "access-4",
-                "refresh-4",
-                "refresh-token-4"
-        );
-        Thread.sleep(5);
-        TokenSessionState fifth = redisTokenSessionService.createSession(
-                "superadminpc",
-                "127.0.0.1",
-                "access-5",
-                "refresh-5",
-                "refresh-token-5"
-        );
-
         List<TokenSessionState> sessions = redisTokenSessionService.listActiveSessions("superadminpc");
 
-        assertEquals(4, sessions.size());
+        assertEquals(2, sessions.size());
         assertFalse(sessions.stream().anyMatch(session -> session.getSessionId().equals(first.getSessionId())));
         assertTrue(sessions.stream().anyMatch(session -> session.getSessionId().equals(second.getSessionId())));
         assertTrue(sessions.stream().anyMatch(session -> session.getSessionId().equals(third.getSessionId())));
-        assertTrue(sessions.stream().anyMatch(session -> session.getSessionId().equals(fourth.getSessionId())));
-        assertTrue(sessions.stream().anyMatch(session -> session.getSessionId().equals(fifth.getSessionId())));
     }
 
     @Test
@@ -195,5 +180,21 @@ class RedisTokenSessionServiceTest {
 
         assertTrue(redisTokenSessionService.isAccessTokenActive(session.getSessionId(), "superadminpc", "access-1"));
         assertTrue(redisTokenSessionService.isAccessTokenActive(session.getSessionId(), "superadminpc", "access-2"));
+    }
+
+    @Test
+    void shouldAllowOnlyOneRefreshRotationWhenAtomicCompareAndSetIsContended() {
+        TokenSessionState session = redisTokenSessionService.createSession(
+                "superadminpc", "127.0.0.1", "access-1", "refresh-1", "refresh-token-1");
+        when(stringRedisTemplate.execute(any(DefaultRedisScript.class), anyList(), any(Object[].class)))
+                .thenReturn(1L, 0L);
+
+        redisTokenSessionService.rotateRefreshSession(
+                session.getSessionId(), "superadminpc", "refresh-1", "refresh-token-1",
+                "access-2", "refresh-2", "refresh-token-2");
+
+        assertThrows(RuntimeException.class, () -> redisTokenSessionService.rotateRefreshSession(
+                session.getSessionId(), "superadminpc", "refresh-1", "refresh-token-1",
+                "access-3", "refresh-3", "refresh-token-3"));
     }
 }

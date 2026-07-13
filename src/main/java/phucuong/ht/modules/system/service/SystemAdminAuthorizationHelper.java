@@ -65,19 +65,78 @@ public class SystemAdminAuthorizationHelper {
     }
 
     public void requireRolePermissionWriteAccess(Authentication authentication, Role role, Permission permission, String authority) {
-        if (isSuperAdmin(authentication)) return;
-        if (!hasAuthority(authentication, authority)) throw commonValidationHelper.forbidden("Không có quyền quản lý phân quyền cho vai trò");
+        if (!isSuperAdmin(authentication)) {
+            throw commonValidationHelper.forbidden("Chỉ SUPER_ADMIN được thay đổi phân quyền chung của vai trò");
+        }
+    }
+
+    public boolean canReadRole(Authentication authentication, Role role) {
+        try {
+            requireRoleReadAccess(authentication, role);
+            return true;
+        } catch (RuntimeException ignored) {
+            return false;
+        }
+    }
+
+    public void requireRoleReadAccess(Authentication authentication, Role role) {
+        if (isSuperAdmin(authentication)) {
+            return;
+        }
+        if (!hasAuthority(authentication, "system.role.read.all")) {
+            throw commonValidationHelper.forbidden("Không có quyền đọc vai trò");
+        }
+        requireRoleManageableByDioceseAdmin(role);
+    }
+
+    public boolean canReadPermission(Authentication authentication, Permission permission) {
+        try {
+            requirePermissionReadAccess(authentication, permission);
+            return true;
+        } catch (RuntimeException ignored) {
+            return false;
+        }
+    }
+
+    public void requirePermissionReadAccess(Authentication authentication, Permission permission) {
+        if (isSuperAdmin(authentication)) {
+            return;
+        }
+        if (!hasAuthority(authentication, ROLE_PERMISSION_ASSIGN_DIOCESE)
+                && !hasAuthority(authentication, ROLE_PERMISSION_REVOKE_DIOCESE)) {
+            throw commonValidationHelper.forbidden("Không có quyền đọc permission trong phạm vi quản lý");
+        }
+        requirePermissionAssignableByDioceseAdmin(permission);
+    }
+
+    public boolean canReadRolePermission(Authentication authentication, Role role, Permission permission) {
+        try {
+            requireRolePermissionReadAccess(authentication, role, permission);
+            return true;
+        } catch (RuntimeException ignored) {
+            return false;
+        }
+    }
+
+    public void requireRolePermissionReadAccess(Authentication authentication, Role role, Permission permission) {
+        if (isSuperAdmin(authentication)) {
+            return;
+        }
+        if (!hasAuthority(authentication, ROLE_PERMISSION_ASSIGN_DIOCESE)
+                && !hasAuthority(authentication, ROLE_PERMISSION_REVOKE_DIOCESE)) {
+            throw commonValidationHelper.forbidden("Không có quyền đọc phân quyền vai trò");
+        }
         requireRoleManageableByDioceseAdmin(role);
         requirePermissionAssignableByDioceseAdmin(permission);
     }
 
     public void requireAccountPermissionWriteAccess(Authentication authentication, String username, Permission permission) {
+        if (isSuperAdmin(authentication)) return;
         if (accountManagementAuthorizationHelper != null) {
             Account target = accountRepository.findById(username)
                     .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy tài khoản: " + username));
             accountManagementAuthorizationHelper.requireCanManage(authentication, target);
         }
-        if (isSuperAdmin(authentication)) return;
         if (!hasAuthority(authentication, permission.getPermissionCode())) {
             throw commonValidationHelper.forbidden("Không thể gán quyền mà tài khoản hiện tại không sở hữu");
         }

@@ -22,10 +22,7 @@ public class RolePermissionController {
     private final RolePermissionManagementService rolePermissionManagementService;
 
     @PostMapping
-    @PreAuthorize(
-            "@securityUtils.hasAuthority(authentication, 'system.role_permission.assign.all')"
-                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.diocese')"
-    )
+    @PreAuthorize("@systemAdminAuthorizationHelper.isSuperAdmin(authentication)")
     public apiResponse<RolePermissionResponse> create(@Valid @RequestBody RolePermissionCreateRequest request, Authentication authentication) {
         return apiResponse.success("Gán quyền cho vai trò thành công", rolePermissionManagementService.create(request, authentication));
     }
@@ -37,8 +34,8 @@ public class RolePermissionController {
                     + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.all')"
                     + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.diocese')"
     )
-    public apiResponse<Page<RolePermissionResponse>> findAll(@ModelAttribute BaseSearchRequest request) {
-        return apiResponse.success("Lấy danh sách quyền của vai trò thành công", rolePermissionManagementService.findAll(request));
+    public apiResponse<Page<RolePermissionResponse>> findAll(@ModelAttribute BaseSearchRequest request, Authentication authentication) {
+        return apiResponse.success("Lấy danh sách quyền của vai trò thành công", rolePermissionManagementService.findAll(request, authentication));
     }
 
     @GetMapping("/{id}")
@@ -48,15 +45,12 @@ public class RolePermissionController {
                     + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.all')"
                     + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.diocese')"
     )
-    public apiResponse<RolePermissionResponse> findById(@PathVariable String id) {
-        return apiResponse.success("Lấy thông tin quyền của vai trò thành công", rolePermissionManagementService.findById(id));
+    public apiResponse<RolePermissionResponse> findById(@PathVariable String id, Authentication authentication) {
+        return apiResponse.success("Lấy thông tin quyền của vai trò thành công", rolePermissionManagementService.findById(id, authentication));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize(
-            "@securityUtils.hasAuthority(authentication, 'system.role_permission.assign.all')"
-                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.diocese')"
-    )
+    @PreAuthorize("@systemAdminAuthorizationHelper.isSuperAdmin(authentication)")
     public apiResponse<RolePermissionResponse> update(
             @PathVariable String id,
             @Valid @RequestBody RolePermissionUpdateRequest request,
@@ -66,20 +60,14 @@ public class RolePermissionController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize(
-            "@securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.all')"
-                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.diocese')"
-    )
+    @PreAuthorize("@systemAdminAuthorizationHelper.isSuperAdmin(authentication)")
     public apiResponse<Void> delete(@PathVariable String id, Authentication authentication) {
         rolePermissionManagementService.delete(id, authentication);
         return apiResponse.success("Xóa quyền của vai trò thành công", null);
     }
 
     @PatchMapping("/{id}/toggle-status")
-    @PreAuthorize(
-            "@securityUtils.hasAuthority(authentication, 'system.role_permission.assign.all')"
-                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.diocese')"
-    )
+    @PreAuthorize("@systemAdminAuthorizationHelper.isSuperAdmin(authentication)")
     public apiResponse<RolePermissionResponse> toggleStatus(
             @PathVariable String id,
             @Valid @RequestBody StatusToggleRequest request,

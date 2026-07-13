@@ -11,8 +11,6 @@ services:
       - POSTGRES_DB=${DB_NAME}
       - POSTGRES_USER=${DB_USER}
       - POSTGRES_PASSWORD=${DB_PASSWORD}
-    ports:
-      - '5432:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -36,8 +34,6 @@ services:
     image: 'redis:7-alpine'
     container_name: ht-redis
     command: redis-server --requirepass ${REDIS_PASSWORD}
-    ports:
-      - '6379:6379'
     volumes:
       - redisdata:/data
     healthcheck:
@@ -59,9 +55,6 @@ services:
     environment:
       - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER}
       - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD}
-    ports:
-      - '5672:5672'
-      - '15672:15672'
     volumes:
       - rabbitdata:/var/lib/rabbitmq
     healthcheck:
@@ -87,7 +80,7 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=prod
       - SERVER_PORT=${SERVER_PORT}
-      - APP_SECURITY_SWAGGER_PUBLIC_ENABLED=true
+      - APP_SECURITY_SWAGGER_PUBLIC_ENABLED=false
 
       - DB_URL=${DB_URL}
       - DB_USER=${DB_USER}

@@ -151,7 +151,6 @@ class AuthServiceTest {
                 List.of("auth.session.manage.all"),
                 true
         );
-        TokenSessionState sessionState = session("session-3", "superadminpc", "127.0.0.1");
         jwtUtils.TokenClaims tokenClaims = new jwtUtils.TokenClaims(
                 AuthUserDetails.tokenPrincipal("superadminpc", null, List.of("SUPER_ADMIN"), List.of("auth.session.manage.all")),
                 "session-3",
@@ -163,12 +162,8 @@ class AuthServiceTest {
 
         when(jwtUtils.parseRefreshTokenClaims("refresh-token-old")).thenReturn(tokenClaims);
         when(authUserDetailsService.loadUserByUsername("superadminpc")).thenReturn(principal);
-        when(redisTokenSessionService.requireRefreshSession("session-3", "superadminpc", "refresh-jti-old", "refresh-token-old"))
-                .thenReturn(sessionState);
         when(jwtUtils.generateAccessToken(eq(principal), eq("session-3"), anyString())).thenReturn("access-token-new");
         when(jwtUtils.generateRefreshToken(eq(principal), eq("session-3"), anyString())).thenReturn("refresh-token-new");
-        when(redisTokenSessionService.rotateSession(eq("session-3"), eq("superadminpc"), anyString(), anyString(), eq("refresh-token-new")))
-                .thenReturn(sessionState);
         when(jwtUtils.getAccessTokenExpirationMs()).thenReturn(900000L);
         when(jwtUtils.getRefreshTokenExpirationMs()).thenReturn(604800000L);
 
@@ -176,6 +171,15 @@ class AuthServiceTest {
 
         assertEquals("access-token-new", response.getAccessToken());
         assertEquals("refresh-token-new", response.getRefreshToken());
+        verify(redisTokenSessionService).rotateRefreshSession(
+                eq("session-3"),
+                eq("superadminpc"),
+                eq("refresh-jti-old"),
+                eq("refresh-token-old"),
+                anyString(),
+                anyString(),
+                eq("refresh-token-new")
+        );
     }
 
     @Test

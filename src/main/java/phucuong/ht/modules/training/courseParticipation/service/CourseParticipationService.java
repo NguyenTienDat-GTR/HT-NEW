@@ -115,6 +115,7 @@ public class CourseParticipationService {
         UUID activeParishId = accountScopeValidationHelper.requireActiveParishId(authentication, CourseParticipationAccessEvaluator.SUBMIT_PARISH);
         Parish parish = parishRepository.findByIdWithDeaneryAndDiocese(activeParishId)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy giáo xứ " + activeParishId));
+        requireParishWithinCourseScope(course, parish);
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người gửi danh sách");
         OffsetDateTime submittedAt = OffsetDateTime.now();
 
@@ -440,6 +441,24 @@ public class CourseParticipationService {
         }
         if (course.getRequirement() != null && !Boolean.TRUE.equals(course.getRequirement().getStatus())) {
             throw commonValidationHelper.validationError("Yêu cầu đăng ký của khóa huấn luyện đã ngừng hoạt động");
+        }
+    }
+
+    private void requireParishWithinCourseScope(TrainingCourse course, Parish parish) {
+        if (parish == null || parish.getDeanery() == null) {
+            throw commonValidationHelper.forbidden("Giáo xứ hiện tại không có scope giáo hạt hợp lệ để gửi đăng ký");
+        }
+        if (trainingWorkflowSupport.isDeaneryManaged(course.getCourseType())) {
+            if (course.getDeanery() == null || course.getDeanery().getId() == null
+                    || !course.getDeanery().getId().equals(parish.getDeanery().getId())) {
+                throw commonValidationHelper.forbidden("Giáo xứ hiện tại không thuộc giáo hạt sở hữu khóa DT");
+            }
+            return;
+        }
+        if (course.getDiocese() == null || course.getDiocese().getId() == null
+                || parish.getDeanery().getDiocese() == null
+                || !course.getDiocese().getId().equals(parish.getDeanery().getDiocese().getId())) {
+            throw commonValidationHelper.forbidden("Giáo xứ hiện tại không thuộc giáo phận sở hữu khóa huấn luyện");
         }
     }
 

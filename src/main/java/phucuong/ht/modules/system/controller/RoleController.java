@@ -29,14 +29,14 @@ public class RoleController {
 
     @GetMapping
     @PreAuthorize("@securityUtils.hasAuthority(authentication, 'system.role.read.all')")
-    public apiResponse<Page<RoleResponse>> findAll(@ModelAttribute BaseSearchRequest request) {
-        return apiResponse.success("Lấy danh sách vai trò thành công", roleManagementService.findAll(request));
+    public apiResponse<Page<RoleResponse>> findAll(@ModelAttribute BaseSearchRequest request, Authentication authentication) {
+        return apiResponse.success("Lấy danh sách vai trò thành công", roleManagementService.findAll(request, authentication));
     }
 
     @GetMapping("/{roleCode}")
     @PreAuthorize("@securityUtils.hasAuthority(authentication, 'system.role.read.all')")
-    public apiResponse<RoleResponse> findById(@PathVariable String roleCode) {
-        return apiResponse.success("Lấy thông tin vai trò thành công", roleManagementService.findById(roleCode));
+    public apiResponse<RoleResponse> findById(@PathVariable String roleCode, Authentication authentication) {
+        return apiResponse.success("Lấy thông tin vai trò thành công", roleManagementService.findById(roleCode, authentication));
     }
 
     @PutMapping("/{roleCode}")

@@ -11,7 +11,5 @@ public class RoleUpdateRequest {
 
     private String description;
 
-    private Boolean isSystem;
-
     private Integer displayOrder;
 }

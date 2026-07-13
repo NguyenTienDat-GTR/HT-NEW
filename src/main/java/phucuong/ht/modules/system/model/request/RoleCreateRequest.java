@@ -16,7 +16,5 @@ public class RoleCreateRequest {
 
     private String description;
 
-    private Boolean isSystem;
-
     private Integer displayOrder;
 }

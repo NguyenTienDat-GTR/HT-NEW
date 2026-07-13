@@ -1,6 +1,6 @@
 plugins {
     id 'java'
-    id 'org.springframework.boot' version '3.5.7'
+    id 'org.springframework.boot' version '3.5.14'
     id 'io.spring.dependency-management' version '1.1.7'
 }
 
@@ -55,7 +55,48 @@ dependencies {
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
+    // Docker Desktop 29 requires Testcontainers 1.21.4 or newer.
+    testImplementation 'org.testcontainers:junit-jupiter:1.21.4'
+    testImplementation 'org.testcontainers:postgresql:1.21.4'
+    testImplementation 'org.testcontainers:rabbitmq:1.21.4'
     implementation 'me.paulschwarz:spring-dotenv:4.0.0'
+}
+
+configurations.configureEach {
+    resolutionStrategy.eachDependency {
+        if (requested.group == 'org.testcontainers') {
+            useVersion('1.21.4')
+            because('Docker Desktop 29 requires the Testcontainers 1.21.4 compatibility patch')
+        }
+        if (requested.group == 'org.springframework.security') {
+            useVersion('6.5.11')
+            because('CVE-2026-47838 is fixed in Spring Security 6.5.11')
+        }
+        if (requested.group == 'org.apache.tomcat.embed') {
+            useVersion('10.1.55')
+            because('Tomcat 10.1.55 includes the required 2025-2026 security fixes')
+        }
+        if (requested.group == 'com.fasterxml.jackson.core' && requested.name == 'jackson-annotations') {
+            // Jackson's 2.21.5 BOM intentionally keeps annotations at 2.21.
+            useVersion('2.21')
+            because('Jackson 2.21.5 does not publish a jackson-annotations 2.21.5 artifact')
+        } else if (requested.group == 'com.fasterxml.jackson'
+                || requested.group == 'com.fasterxml.jackson.core'
+                || requested.group == 'com.fasterxml.jackson.dataformat'
+                || requested.group == 'com.fasterxml.jackson.datatype'
+                || requested.group == 'com.fasterxml.jackson.module') {
+            useVersion('2.21.5')
+            because('CVE-2026-54512 through CVE-2026-54515 are fixed in Jackson 2.21.5')
+        }
+        if (requested.group == 'io.netty') {
+            useVersion('4.1.135.Final')
+            because('2026 Netty advisories are fixed in 4.1.135.Final')
+        }
+        if (requested.group == 'org.postgresql' && requested.name == 'postgresql') {
+            useVersion('42.7.11')
+            because('CVE-2026-42198 is fixed in pgjdbc 42.7.11')
+        }
+    }
 }
 
 tasks.withType(Test).configureEach {
