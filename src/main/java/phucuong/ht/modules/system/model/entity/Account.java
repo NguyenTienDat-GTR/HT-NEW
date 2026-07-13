@@ -42,4 +42,7 @@ public class Account extends BaseModel {
     private String authProvider;
 
     private String providerId;
+
+    @Column(name = "must_change_password", nullable = false)
+    private Boolean mustChangePassword = Boolean.FALSE;
 }

@@ -1,0 +1,169 @@
+# Route contract matrix. Columns: route | success | 401 | 403 | 400 | 404 | 409
+# An error-status cell is either that exact status or `N/A: <clear rationale>`.
+
+# Analytics
+GET /api/analytics/overview|200|401|403|400|N/A: aggregate endpoint has no individual resource lookup|N/A: read-only aggregate does not mutate state
+GET /api/analytics/organization|200|401|403|400|N/A: aggregate endpoint has no individual resource lookup|N/A: read-only aggregate does not mutate state
+GET /api/analytics/leaders|200|401|403|400|N/A: aggregate endpoint has no individual resource lookup|N/A: read-only aggregate does not mutate state
+GET /api/analytics/courses|200|401|403|400|N/A: aggregate endpoint has no individual resource lookup|N/A: read-only aggregate does not mutate state
+GET /api/analytics/certificates|200|401|403|400|N/A: aggregate endpoint has no individual resource lookup|N/A: read-only aggregate does not mutate state
+
+# Authentication and session
+POST /api/auth/login|200|401|N/A: public login endpoint has no permission gate|400|N/A: invalid credentials must not expose account existence|N/A: login does not create a persistent conflict
+POST /api/auth/refresh|200|401|N/A: public refresh endpoint has no permission gate|N/A: refresh token is read from a cookie rather than a request body|N/A: invalid refresh tokens are reported as unauthorized|N/A: refresh does not create a persistent conflict
+GET /api/auth/me|200|401|N/A: authenticated caller needs no additional permission|N/A: endpoint accepts no client request data|N/A: current authenticated account is resolved from the session|N/A: read-only endpoint does not mutate state
+POST /api/auth/change-password|200|401|N/A: authenticated caller changes only its own password|400|N/A: current authenticated account is resolved from the session|N/A: password change has no uniqueness conflict
+GET /api/auth/admin/summary|200|401|403|N/A: endpoint accepts no client request data|N/A: summary is scoped to the authenticated administrator|N/A: read-only endpoint does not mutate state
+
+# Certificates
+POST /api/certificates|200|401|403|400|404|409
+GET /api/certificates|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/certificates/{certificateCode}|200|401|403|400|404|N/A: read-only endpoint does not mutate state
+PUT /api/certificates/{certificateCode}|200|401|403|400|404|409
+DELETE /api/certificates/{certificateCode}|200|401|403|400|404|409
+PATCH /api/certificates/{certificateCode}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict
+POST /api/certificates/{certificateCode}/approve|200|401|403|400|404|409
+
+# Deaneries
+POST /api/deaneries|200|401|403|400|404|409
+GET /api/deaneries|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/deaneries/{id}|200|401|403|400|404|N/A: read-only endpoint does not mutate state
+PUT /api/deaneries/{id}|200|401|403|400|404|409
+DELETE /api/deaneries/{id}|200|401|403|400|404|409
+PATCH /api/deaneries/{id}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict
+
+# Dioceses
+POST /api/dioceses|200|401|403|400|N/A: create does not reference an existing diocese|409
+GET /api/dioceses|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/dioceses/{id}|200|401|403|400|404|N/A: read-only endpoint does not mutate state
+PUT /api/dioceses/{id}|200|401|403|400|404|409
+DELETE /api/dioceses/{id}|200|401|403|400|404|409
+PATCH /api/dioceses/{id}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict
+
+# Executive board assignments
+POST /api/executive-board/assignments|200|401|403|400|404|409
+GET /api/executive-board/assignments|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/executive-board/assignments/{id}|200|401|403|400|404|N/A: read-only endpoint does not mutate state
+PUT /api/executive-board/assignments/{id}|200|401|403|400|404|409
+PATCH /api/executive-board/assignments/{id}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict
+
+# Leaders
+POST /api/leaders|200|401|403|400|404|409
+GET /api/leaders|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/leaders/{id}|200|401|403|400|404|N/A: read-only endpoint does not mutate state
+PUT /api/leaders/{id}|200|401|403|400|404|409
+DELETE /api/leaders/{id}|200|401|403|400|404|409
+PATCH /api/leaders/{id}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict
+
+# Notifications
+GET /api/system/notifications|200|401|403|N/A: endpoint accepts no client request data|N/A: user-scoped collection has no individual target|N/A: read-only endpoint does not mutate state
+PATCH /api/system/notifications/{id}/read|200|401|403|N/A: notification id is an opaque string|404|N/A: marking read has no uniqueness conflict
+
+# Parishes
+POST /api/parishes|200|401|403|400|404|409
+GET /api/parishes|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/parishes/{id}|200|401|403|400|404|N/A: read-only endpoint does not mutate state
+PUT /api/parishes/{id}|200|401|403|400|404|409
+DELETE /api/parishes/{id}|200|401|403|400|404|409
+PATCH /api/parishes/{id}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict
+
+# Positions
+POST /api/positions|200|401|403|400|N/A: create does not reference an existing position|409
+GET /api/positions|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/positions/{positionCode}|200|401|403|N/A: position code is an opaque string|404|N/A: read-only endpoint does not mutate state
+PUT /api/positions/{positionCode}|200|401|403|400|404|409
+DELETE /api/positions/{positionCode}|200|401|403|N/A: position code is an opaque string|404|409
+PATCH /api/positions/{positionCode}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict
+
+# System accounts
+POST /api/system/accounts|200|401|403|400|404|409
+GET /api/system/accounts|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/system/accounts/{username}|200|401|403|N/A: username is an opaque string|404|N/A: read-only endpoint does not mutate state
+PUT /api/system/accounts/{username}|200|401|403|400|404|409
+DELETE /api/system/accounts/{username}|200|401|403|N/A: username is an opaque string|404|409
+PATCH /api/system/accounts/{username}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict
+
+# Account permission overrides
+POST /api/system/account-permissions|200|401|403|400|404|409
+GET /api/system/account-permissions|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/system/account-permissions/{id}|200|401|403|N/A: identifier is an opaque string|404|N/A: read-only endpoint does not mutate state
+PUT /api/system/account-permissions/{id}|200|401|403|400|404|409
+DELETE /api/system/account-permissions/{id}|200|401|403|N/A: identifier is an opaque string|404|409
+PATCH /api/system/account-permissions/{id}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict
+
+# Account role assignments
+POST /api/system/account-roles|200|401|403|400|404|409
+GET /api/system/account-roles|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/system/account-roles/{id}|200|401|403|N/A: identifier is an opaque string|404|N/A: read-only endpoint does not mutate state
+PUT /api/system/account-roles/{id}|200|401|403|400|404|409
+DELETE /api/system/account-roles/{id}|200|401|403|N/A: identifier is an opaque string|404|409
+PATCH /api/system/account-roles/{id}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict
+
+# Permission catalogue
+POST /api/system/permissions|200|401|403|400|404|409
+GET /api/system/permissions|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/system/permissions/{permissionCode}|200|401|403|N/A: permission code is an opaque string|404|N/A: read-only endpoint does not mutate state
+PUT /api/system/permissions/{permissionCode}|200|401|403|400|404|409
+DELETE /api/system/permissions/{permissionCode}|200|401|403|N/A: permission code is an opaque string|404|409
+PATCH /api/system/permissions/{permissionCode}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict
+
+# Roles
+POST /api/system/roles|200|401|403|400|N/A: create does not reference an existing role|409
+GET /api/system/roles|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/system/roles/{roleCode}|200|401|403|N/A: role code is an opaque string|404|N/A: read-only endpoint does not mutate state
+PUT /api/system/roles/{roleCode}|200|401|403|400|404|409
+DELETE /api/system/roles/{roleCode}|200|401|403|N/A: role code is an opaque string|404|409
+PATCH /api/system/roles/{roleCode}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict
+
+# Role permission assignments
+POST /api/system/role-permissions|200|401|403|400|404|409
+GET /api/system/role-permissions|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/system/role-permissions/{id}|200|401|403|N/A: identifier is an opaque string|404|N/A: read-only endpoint does not mutate state
+PUT /api/system/role-permissions/{id}|200|401|403|400|404|409
+DELETE /api/system/role-permissions/{id}|200|401|403|N/A: identifier is an opaque string|404|409
+PATCH /api/system/role-permissions/{id}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict
+
+# Audit log
+GET /api/system/audit-logs|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/system/audit-logs/{id}|200|401|403|N/A: log identifier is an opaque string|404|N/A: read-only endpoint does not mutate state
+
+# Training participations and workflow
+GET /api/training/participations|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/training/participations/{id}|200|401|403|N/A: participation identifier is an opaque string|404|N/A: read-only endpoint does not mutate state
+POST /api/training/courses/{courseCode}/registrations|200|401|403|400|404|409
+POST /api/training/courses/{courseCode}/deanery-submit|200|401|403|400|404|409
+POST /api/training/registrations/{id}/deanery-approval|200|401|403|400|404|409
+POST /api/training/registrations/{id}/diocese-approval|200|401|403|400|404|409
+PATCH /api/training/participations/{id}/score|200|401|403|400|404|409
+
+# Training requirements
+POST /api/training/requirements|200|401|403|400|N/A: create does not reference an existing requirement|409
+GET /api/training/requirements|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/training/requirements/{requirementCode}|200|401|403|N/A: requirement code is an opaque string|404|N/A: read-only endpoint does not mutate state
+PUT /api/training/requirements/{requirementCode}|200|401|403|400|404|409
+DELETE /api/training/requirements/{requirementCode}|200|401|403|N/A: requirement code is an opaque string|404|409
+PATCH /api/training/requirements/{requirementCode}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict
+
+# Score component templates
+POST /api/training/score-components|200|401|403|400|404|409
+GET /api/training/score-components|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/training/score-components/{id}|200|401|403|400|404|N/A: read-only endpoint does not mutate state
+PUT /api/training/score-components/{id}|200|401|403|400|404|409
+DELETE /api/training/score-components/{id}|200|401|403|400|404|409
+PATCH /api/training/score-components/{id}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict
+
+# Score formula templates
+POST /api/training/score-formulas|200|401|403|400|404|409
+GET /api/training/score-formulas|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/training/score-formulas/{id}|200|401|403|400|404|N/A: read-only endpoint does not mutate state
+PUT /api/training/score-formulas/{id}|200|401|403|400|404|409
+DELETE /api/training/score-formulas/{id}|200|401|403|400|404|409
+PATCH /api/training/score-formulas/{id}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict
+
+# Training courses
+POST /api/training/courses|200|401|403|400|404|409
+GET /api/training/courses|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/training/courses/{courseCode}|200|401|403|N/A: course code is an opaque string|404|N/A: read-only endpoint does not mutate state
+PUT /api/training/courses/{courseCode}|200|401|403|400|404|409
+DELETE /api/training/courses/{courseCode}|200|401|403|N/A: course code is an opaque string|404|409
+PATCH /api/training/courses/{courseCode}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict

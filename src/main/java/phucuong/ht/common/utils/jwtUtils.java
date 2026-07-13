@@ -29,6 +29,7 @@ public class jwtUtils {
     private static final String CLAIM_PERMISSIONS = "permissions";
     private static final String CLAIM_JTI = "jti";
     private static final String CLAIM_SESSION_ID = "sessionId";
+    private static final String CLAIM_MUST_CHANGE_PASSWORD = "mustChangePassword";
 
     private final AuthProperties authProperties;
     private final SecretKey accessSecretKey;
@@ -115,6 +116,7 @@ public class jwtUtils {
                 .claim(CLAIM_LEADER_ID, principal.getLeaderId())
                 .claim(CLAIM_ROLES, principal.getRoles())
                 .claim(CLAIM_PERMISSIONS, principal.getPermissions())
+                .claim(CLAIM_MUST_CHANGE_PASSWORD, principal.isMustChangePassword())
                 .signWith(resolveSecretKey(tokenType))
                 .compact();
     }
@@ -124,6 +126,8 @@ public class jwtUtils {
         try {
             claims = Jwts.parser()
                     .verifyWith(resolveSecretKey(expectedType))
+                    .requireIssuer(authProperties.getJwt().getIssuer())
+                    .requireAudience(authProperties.getJwt().getAudience())
                     .build()
                     .parseSignedClaims(token)
                     .getPayload();
@@ -141,7 +145,8 @@ public class jwtUtils {
                         claims.getSubject(),
                         claims.get(CLAIM_LEADER_ID, String.class),
                         readClaimList(claims.get(CLAIM_ROLES)),
-                        readClaimList(claims.get(CLAIM_PERMISSIONS))
+                        readClaimList(claims.get(CLAIM_PERMISSIONS)),
+                        Boolean.TRUE.equals(claims.get(CLAIM_MUST_CHANGE_PASSWORD, Boolean.class))
                 ),
                 claims.get(CLAIM_SESSION_ID, String.class),
                 claims.get(CLAIM_JTI, String.class),

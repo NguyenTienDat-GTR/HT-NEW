@@ -13,6 +13,7 @@ import phucuong.ht.modules.auth.exception.ApiException;
 import phucuong.ht.modules.auth.repository.AccountRepository;
 import phucuong.ht.modules.auth.repository.AccountRoleRepository;
 import phucuong.ht.modules.auth.repository.RoleRepository;
+import phucuong.ht.modules.auth.service.RedisTokenSessionService;
 import phucuong.ht.modules.deanery.model.entity.Deanery;
 import phucuong.ht.modules.diocese.model.entity.Diocese;
 import phucuong.ht.modules.diocese.repository.DioceseRepository;
@@ -22,6 +23,7 @@ import phucuong.ht.modules.parish.model.entity.Parish;
 import phucuong.ht.modules.system.model.entity.Account;
 import phucuong.ht.modules.system.model.entity.Role;
 import phucuong.ht.modules.system.model.request.AccountCreateRequest;
+import phucuong.ht.common.model.request.StatusToggleRequest;
 
 import java.time.LocalDate;
 import java.util.Optional;
@@ -49,6 +51,7 @@ class AccountManagementServiceTest {
     @Mock CommonValidationHelper validation;
     @Mock AccountManagementAuthorizationHelper authorizationHelper;
     @Mock AccountCredentialMailService mailService;
+    @Mock RedisTokenSessionService redisTokenSessionService;
     @Mock Authentication authentication;
 
     @InjectMocks AccountManagementService service;
@@ -79,7 +82,8 @@ class AccountManagementServiceTest {
                 org.mockito.ArgumentMatchers.eq("phucuongadmin"),
                 password.capture()
         );
-        assertTrue(password.getValue().matches("\\d{6}"));
+        assertTrue(password.getValue().matches("[A-Za-z0-9]{12}"));
+        assertTrue(savedAccount.getValue().getMustChangePassword());
         verify(passwordEncoder).encode(password.getValue());
     }
 
@@ -106,7 +110,7 @@ class AccountManagementServiceTest {
                 org.mockito.ArgumentMatchers.eq(leader.getEmail()),
                 org.mockito.ArgumentMatchers.eq("Nguyễn An"),
                 org.mockito.ArgumentMatchers.eq("anchanhtoa1072"),
-                org.mockito.ArgumentMatchers.matches("\\d{6}")
+                org.mockito.ArgumentMatchers.matches("[A-Za-z0-9]{12}")
         );
     }
 
@@ -127,6 +131,22 @@ class AccountManagementServiceTest {
         ));
 
         assertThrows(ApiException.class, () -> service.create(request, authentication));
+    }
+
+    @Test
+    void disablingAnAccountShouldRevokeItsExistingSessions() {
+        Account account = new Account();
+        account.setUsername("admin-parish");
+        account.setStatus(true);
+        when(accountRepository.findById("admin-parish")).thenReturn(Optional.of(account));
+        when(validation.requireAuditActor(any(), anyString())).thenReturn("superadmin");
+        StatusToggleRequest request = new StatusToggleRequest();
+        request.setConfirmationText("XAC NHAN");
+
+        service.toggleStatus("admin-parish", request, authentication);
+
+        assertTrue(!account.getStatus());
+        verify(redisTokenSessionService).revokeAllSessions("admin-parish");
     }
 
     private void stubCreate(Diocese diocese, Role role) {

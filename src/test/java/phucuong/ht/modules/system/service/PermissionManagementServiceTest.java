@@ -2,7 +2,6 @@ package phucuong.ht.modules.system.service;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -19,9 +18,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -32,10 +29,13 @@ class PermissionManagementServiceTest {
     @Mock
     private SystemPermissionRepository systemPermissionRepository;
 
+    @Mock
+    private SystemAdminAuthorizationHelper authorizationHelper;
+
     @Test
     void createShouldGeneratePermissionCodeAndForceNonSystem() {
         CommonValidationHelper helper = new CommonValidationHelper(new securityUtils());
-        PermissionManagementService service = new PermissionManagementService(systemPermissionRepository, helper);
+        PermissionManagementService service = new PermissionManagementService(systemPermissionRepository, helper, authorizationHelper);
 
         PermissionCreateRequest request = new PermissionCreateRequest();
         request.setPermissionName("  Quan ly quyen  ");
@@ -57,26 +57,39 @@ class PermissionManagementServiceTest {
         saved.setPermissionName("Quan ly quyen");
         saved.setIsSystem(false);
         saved.setStatus(true);
-        when(systemPermissionRepository.create(any(), eq("super-admin"))).thenReturn(saved);
+        when(systemPermissionRepository.createPermission(
+                eq("system.permission.read.diocese"),
+                eq("Quan ly quyen"),
+                eq("system"),
+                eq("permission"),
+                eq("read"),
+                eq("diocese"),
+                eq("Mo ta"),
+                eq(false),
+                eq(15),
+                eq("super-admin")
+        )).thenReturn(saved);
 
         service.create(request, authentication(List.of("SUPER_ADMIN")));
 
-        ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
-        verify(systemPermissionRepository).create(payloadCaptor.capture(), eq("super-admin"));
-        Object payload = payloadCaptor.getValue();
-        assertEquals("system.permission.read.diocese", readProperty(payload, "getPermissionCode"));
-        assertEquals("Quan ly quyen", readProperty(payload, "getPermissionName"));
-        assertEquals("system", readProperty(payload, "getModuleCode"));
-        assertEquals("permission", readProperty(payload, "getResourceCode"));
-        assertEquals("read", readProperty(payload, "getActionCode"));
-        assertEquals("diocese", readProperty(payload, "getScopeCode"));
-        assertFalse((Boolean) readProperty(payload, "getIsSystem"));
+        verify(systemPermissionRepository).createPermission(
+                "system.permission.read.diocese",
+                "Quan ly quyen",
+                "system",
+                "permission",
+                "read",
+                "diocese",
+                "Mo ta",
+                false,
+                15,
+                "super-admin"
+        );
     }
 
     @Test
     void createShouldRejectDuplicateCombination() {
         CommonValidationHelper helper = new CommonValidationHelper(new securityUtils());
-        PermissionManagementService service = new PermissionManagementService(systemPermissionRepository, helper);
+        PermissionManagementService service = new PermissionManagementService(systemPermissionRepository, helper, authorizationHelper);
 
         PermissionCreateRequest request = new PermissionCreateRequest();
         request.setPermissionName("Custom permission");
@@ -97,7 +110,7 @@ class PermissionManagementServiceTest {
     @Test
     void deleteShouldRejectSystemPermission() {
         CommonValidationHelper helper = new CommonValidationHelper(new securityUtils());
-        PermissionManagementService service = new PermissionManagementService(systemPermissionRepository, helper);
+        PermissionManagementService service = new PermissionManagementService(systemPermissionRepository, helper, authorizationHelper);
 
         Permission permission = new Permission();
         permission.setPermissionCode("system.permission.read.all");
@@ -110,7 +123,7 @@ class PermissionManagementServiceTest {
     @Test
     void updateShouldOnlyChangeMetadata() {
         CommonValidationHelper helper = new CommonValidationHelper(new securityUtils());
-        PermissionManagementService service = new PermissionManagementService(systemPermissionRepository, helper);
+        PermissionManagementService service = new PermissionManagementService(systemPermissionRepository, helper, authorizationHelper);
 
         Permission permission = new Permission();
         permission.setPermissionCode("system.permission.read.all");
@@ -134,13 +147,5 @@ class PermissionManagementServiceTest {
     private UsernamePasswordAuthenticationToken authentication(List<String> roles) {
         AuthUserDetails principal = AuthUserDetails.tokenPrincipal("user", null, roles, List.of());
         return new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
-    }
-
-    private Object readProperty(Object target, String getterName) {
-        try {
-            return target.getClass().getMethod(getterName).invoke(target);
-        } catch (ReflectiveOperationException exception) {
-            throw new AssertionError(exception);
-        }
     }
 }

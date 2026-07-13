@@ -65,7 +65,7 @@ public class AccountManagementAuthorizationHelper {
     }
 
     public boolean canRead(Authentication authentication, Account target) {
-        if (hasRole(authentication, "SUPER_ADMIN")) return false;
+        if (hasRole(authentication, "SUPER_ADMIN")) return true;
         try {
             requireCanManage(authentication, target);
             return true;

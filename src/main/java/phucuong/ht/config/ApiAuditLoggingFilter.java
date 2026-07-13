@@ -8,6 +8,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.modules.auth.repository.AccountRepository;
 import phucuong.ht.modules.system.model.entity.SystemLog;
@@ -17,6 +19,10 @@ import java.io.IOException;
 import java.time.OffsetDateTime;
 @Component
 public class ApiAuditLoggingFilter extends OncePerRequestFilter {
+
+    private static final Logger log = LoggerFactory.getLogger(ApiAuditLoggingFilter.class);
+    private static final int REQUEST_PATH_MAX_LENGTH = 500;
+    private static final int USER_AGENT_MAX_LENGTH = 500;
 
     private final SystemLogRepository systemLogRepository;
     private final AuditScopeResolver auditScopeResolver;
@@ -40,6 +46,14 @@ public class ApiAuditLoggingFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
         filterChain.doFilter(request, response);
 
+        try {
+            persistAuditLog(request, response);
+        } catch (RuntimeException exception) {
+            log.warn("Không thể lưu audit log cho {} {}", request.getMethod(), request.getRequestURI(), exception);
+        }
+    }
+
+    private void persistAuditLog(HttpServletRequest request, HttpServletResponse response) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         String currentUsername = securityUtils.currentUsername(authentication);
         String persistedUsername = currentUsername != null && accountRepository.existsByUsername(currentUsername) ? currentUsername : null;
@@ -50,14 +64,14 @@ public class ApiAuditLoggingFilter extends OncePerRequestFilter {
         SystemLog log = new SystemLog();
         log.setAction(request.getMethod());
         log.setHttpMethod(request.getMethod());
-        log.setRequestPath(request.getRequestURI());
+        log.setRequestPath(truncate(request.getRequestURI(), REQUEST_PATH_MAX_LENGTH));
         log.setStatusCode(response.getStatus());
         log.setModule(resolveModule(request.getRequestURI()));
         log.setResource(resource);
         log.setResourceId(resourceId);
         log.setIpAddress(request.getRemoteAddr());
-        log.setUserAgent(request.getHeader("User-Agent"));
-        log.setMessage(request.getMethod() + " " + request.getRequestURI());
+        log.setUserAgent(truncate(request.getHeader("User-Agent"), USER_AGENT_MAX_LENGTH));
+        log.setMessage(request.getMethod() + " " + truncate(request.getRequestURI(), REQUEST_PATH_MAX_LENGTH));
         log.setLoggedAt(OffsetDateTime.now());
         log.setStatus(Boolean.TRUE);
         log.setCreatedAt(log.getLoggedAt());
@@ -71,6 +85,13 @@ public class ApiAuditLoggingFilter extends OncePerRequestFilter {
         log.setDeaneryId(scope.getDeaneryId());
         log.setParishId(scope.getParishId());
         systemLogRepository.save(log);
+    }
+
+    private String truncate(String value, int maximumLength) {
+        if (value == null || value.length() <= maximumLength) {
+            return value;
+        }
+        return value.substring(0, maximumLength);
     }
 
     private String resolveModule(String path) {

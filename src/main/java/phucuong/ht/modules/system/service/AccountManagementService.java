@@ -14,6 +14,7 @@ import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.modules.auth.repository.AccountRepository;
 import phucuong.ht.modules.auth.repository.AccountRoleRepository;
 import phucuong.ht.modules.auth.repository.RoleRepository;
+import phucuong.ht.modules.auth.service.RedisTokenSessionService;
 import phucuong.ht.modules.diocese.model.entity.Diocese;
 import phucuong.ht.modules.diocese.repository.DioceseRepository;
 import phucuong.ht.modules.leader.model.entity.Leader;
@@ -47,6 +48,7 @@ public class AccountManagementService {
     private final CommonValidationHelper validation;
     private final AccountManagementAuthorizationHelper authorizationHelper;
     private final AccountCredentialMailService mailService;
+    private final RedisTokenSessionService redisTokenSessionService;
 
     @Transactional
     public AccountResponse create(AccountCreateRequest request, Authentication authentication) {
@@ -99,6 +101,7 @@ public class AccountManagementService {
         account.setUsername(username);
         account.setPassword(passwordEncoder.encode(rawPassword));
         account.setAuthProvider(AuthProvider.LOCAL.name());
+        account.setMustChangePassword(Boolean.TRUE);
         account.setStatus(true);
         account.setCreatedAt(now);
         account.setUpdatedAt(now);
@@ -115,7 +118,8 @@ public class AccountManagementService {
         var manageable = accountRepository.findAll().stream()
                 .filter(account -> authorizationHelper.canRead(authentication, account))
                 .toList();
-        int start = Math.min((int) pageable.getOffset(), manageable.size());
+        long offset = pageable.getOffset();
+        int start = offset >= manageable.size() ? manageable.size() : (int) offset;
         int end = Math.min(start + pageable.getPageSize(), manageable.size());
         return new PageImpl<>(manageable.subList(start, end).stream().map(this::response).toList(), pageable, manageable.size());
     }
@@ -157,6 +161,7 @@ public class AccountManagementService {
         }
         authorizationHelper.requireCanManage(authentication, account);
         account.setUpdatedBy(validation.requireAuditActor(authentication, "Không xác định được người cập nhật tài khoản"));
+        redisTokenSessionService.revokeAllSessions(account.getUsername());
         return response(account);
     }
 
@@ -164,6 +169,7 @@ public class AccountManagementService {
     public void delete(String username, Authentication authentication) {
         Account account = require(username);
         authorizationHelper.requireCanDelete(authentication, account);
+        redisTokenSessionService.revokeAllSessions(account.getUsername());
         accountRepository.delete(account);
     }
 
@@ -174,6 +180,7 @@ public class AccountManagementService {
         authorizationHelper.requireCanManage(authentication, account);
         account.setStatus(!Boolean.TRUE.equals(account.getStatus()));
         account.setUpdatedBy(validation.requireAuditActor(authentication, "Không xác định được người đổi trạng thái tài khoản"));
+        redisTokenSessionService.revokeAllSessions(account.getUsername());
         return response(account);
     }
 
@@ -230,7 +237,12 @@ public class AccountManagementService {
     }
 
     private String generateTemporaryPassword() {
-        return "%06d".formatted(SECURE_RANDOM.nextInt(1_000_000));
+        final char[] alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789".toCharArray();
+        StringBuilder password = new StringBuilder(12);
+        for (int index = 0; index < 12; index++) {
+            password.append(alphabet[SECURE_RANDOM.nextInt(alphabet.length)]);
+        }
+        return password.toString();
     }
 
     private boolean isAdminDiocese(Account account) {

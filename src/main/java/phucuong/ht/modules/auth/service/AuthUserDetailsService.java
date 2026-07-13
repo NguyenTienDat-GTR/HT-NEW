@@ -36,7 +36,8 @@ public class AuthUserDetailsService implements UserDetailsService {
                 account.getLeader() != null && account.getLeader().getId() != null ? account.getLeader().getId().toString() : null,
                 roles,
                 permissions,
-                Boolean.TRUE.equals(account.getStatus())
+                Boolean.TRUE.equals(account.getStatus()),
+                Boolean.TRUE.equals(account.getMustChangePassword())
         );
     }
 

@@ -3,7 +3,9 @@ package phucuong.ht.modules.auth.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -25,13 +27,26 @@ import java.util.Set;
 import java.util.UUID;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class RedisTokenSessionService {
 
     private static final String SESSION_KEY_PREFIX = "auth:session:";
     private static final String USER_SESSIONS_KEY_PREFIX = "auth:user:";
-    private static final int MAX_ACTIVE_SESSIONS = 4;
+    private static final int MAX_ACTIVE_SESSIONS = 2;
     private static final int MAX_TRACKED_ACCESS_TOKEN_IDS = 4;
+    private static final DefaultRedisScript<Long> COMPARE_AND_ROTATE_REFRESH_SCRIPT = new DefaultRedisScript<>(
+            """
+                    if redis.call('GET', KEYS[1]) ~= ARGV[1] then
+                      return 0
+                    end
+                    redis.call('SET', KEYS[1], ARGV[2], 'PX', ARGV[3])
+                    redis.call('ZADD', KEYS[2], ARGV[5], ARGV[4])
+                    redis.call('PEXPIRE', KEYS[2], ARGV[3])
+                    return 1
+                    """,
+            Long.class
+    );
 
     private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
@@ -47,9 +62,15 @@ public class RedisTokenSessionService {
         cleanupUserSessions(username);
 
         List<TokenSessionState> activeSessions = listActiveSessions(username);
+        activeSessions.stream()
+                .filter(session -> Objects.equals(session.getIpAddress(), ipAddress))
+                .map(TokenSessionState::getSessionId)
+                .toList()
+                .forEach(this::revokeSession);
+        activeSessions = listActiveSessions(username);
         while (activeSessions.size() >= MAX_ACTIVE_SESSIONS) {
             TokenSessionState oldestSession = activeSessions.stream()
-                    .min(Comparator.comparing(this::evictionInstant))
+                    .min(Comparator.comparingDouble(session -> evictionScore(username, session)))
                     .orElseThrow(() -> invalidSession("Khong the xac dinh phien dang nhap can thu hoi"));
             revokeSession(oldestSession.getSessionId());
             activeSessions.removeIf(session -> Objects.equals(session.getSessionId(), oldestSession.getSessionId()));
@@ -112,6 +133,60 @@ public class RedisTokenSessionService {
         sessionState.setLastUsedAt(now);
         saveSession(sessionState);
         return sessionState;
+    }
+
+    public void rotateRefreshSession(
+            String sessionId,
+            String username,
+            String expectedRefreshTokenJti,
+            String expectedRefreshToken,
+            String accessTokenJti,
+            String refreshTokenJti,
+            String refreshToken
+    ) {
+        StoredSession storedSession = getStoredSession(sessionId);
+        if (storedSession == null || isExpired(storedSession.state())) {
+            revokeSession(sessionId);
+            throw invalidSession("Phien dang nhap khong con hieu luc");
+        }
+
+        TokenSessionState sessionState = storedSession.state();
+        if (!Objects.equals(sessionState.getUsername(), username)
+                || !Objects.equals(sessionState.getRefreshTokenJti(), expectedRefreshTokenJti)
+                || !Objects.equals(sessionState.getRefreshTokenHash(), hashRefreshToken(expectedRefreshToken))) {
+            throw invalidSession("Phien dang nhap khong con hieu luc");
+        }
+
+        rememberAccessToken(sessionState);
+        Instant now = Instant.now();
+        sessionState.setAccessTokenJti(accessTokenJti);
+        sessionState.setRefreshTokenJti(refreshTokenJti);
+        sessionState.setRefreshTokenHash(hashRefreshToken(refreshToken));
+        sessionState.setExpiresAt(now.plusMillis(authProperties.getJwt().getRefreshTokenExpirationMs()));
+        sessionState.setLastUsedAt(now);
+
+        try {
+            Duration ttl = resolveTtl(sessionState.getExpiresAt());
+            Long result = stringRedisTemplate.execute(
+                    COMPARE_AND_ROTATE_REFRESH_SCRIPT,
+                    List.of(sessionKey(sessionId), userSessionsKey(username)),
+                    storedSession.raw(),
+                    objectMapper.writeValueAsString(sessionState),
+                    Long.toString(ttl.toMillis()),
+                    sessionId,
+                    Double.toString(score(now))
+            );
+            if (!Long.valueOf(1L).equals(result)) {
+                throw invalidSession("Refresh token đã được sử dụng hoặc không còn hiệu lực");
+            }
+        } catch (JsonProcessingException exception) {
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode.INTERNAL_ERROR, "Khong the luu du lieu phien dang nhap");
+        } catch (ApiException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            log.warn("Atomic refresh-token rotation failed for session {}", sessionId, exception);
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode.INTERNAL_ERROR, "He thong phien dang nhap tam thoi khong kha dung");
+        }
     }
 
     public boolean isAccessTokenActive(String sessionId, String username, String accessTokenJti) {
@@ -177,6 +252,11 @@ public class RedisTokenSessionService {
     }
 
     private TokenSessionState getSession(String sessionId) {
+        StoredSession storedSession = getStoredSession(sessionId);
+        return storedSession == null ? null : storedSession.state();
+    }
+
+    private StoredSession getStoredSession(String sessionId) {
         String rawSession = readValue(sessionKey(sessionId));
         if (rawSession == null || rawSession.isBlank()) {
             return null;
@@ -187,7 +267,7 @@ public class RedisTokenSessionService {
             if (sessionState.getPreviousAccessTokenJtis() == null) {
                 sessionState.setPreviousAccessTokenJtis(new ArrayList<>());
             }
-            return sessionState;
+            return new StoredSession(rawSession, sessionState);
         } catch (JsonProcessingException exception) {
             deleteSessionKeys(sessionId, null);
             throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode.INTERNAL_ERROR, "Khong the doc du lieu phien dang nhap");
@@ -216,8 +296,15 @@ public class RedisTokenSessionService {
     }
 
     private void touchSession(TokenSessionState sessionState, Instant touchedAt) {
-        sessionState.setLastUsedAt(touchedAt);
-        saveSession(sessionState);
+        try {
+            stringRedisTemplate.opsForZSet().add(
+                    userSessionsKey(sessionState.getUsername()),
+                    sessionState.getSessionId(),
+                    score(touchedAt)
+            );
+        } catch (RuntimeException exception) {
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode.INTERNAL_ERROR, "He thong phien dang nhap tam thoi khong kha dung");
+        }
     }
 
     private boolean isExpired(TokenSessionState sessionState) {
@@ -231,6 +318,18 @@ public class RedisTokenSessionService {
 
     private Instant evictionInstant(TokenSessionState sessionState) {
         return sessionState.getLastUsedAt() != null ? sessionState.getLastUsedAt() : sessionState.getIssuedAt();
+    }
+
+    private double evictionScore(String username, TokenSessionState sessionState) {
+        try {
+            Double persistedScore = stringRedisTemplate.opsForZSet().score(
+                    userSessionsKey(username),
+                    sessionState.getSessionId()
+            );
+            return persistedScore == null ? score(evictionInstant(sessionState)) : persistedScore;
+        } catch (RuntimeException exception) {
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode.INTERNAL_ERROR, "He thong phien dang nhap tam thoi khong kha dung");
+        }
     }
 
     private double score(Instant instant) {
@@ -302,5 +401,8 @@ public class RedisTokenSessionService {
 
     private ApiException invalidSession(String message) {
         return new ApiException(HttpStatus.UNAUTHORIZED, errorCode.INVALID_TOKEN, message);
+    }
+
+    private record StoredSession(String raw, TokenSessionState state) {
     }
 }

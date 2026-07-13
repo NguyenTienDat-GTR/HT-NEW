@@ -11,9 +11,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
+import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.common.validation.AccountScopeValidationHelper;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.config.CacheNames;
+import phucuong.ht.modules.deanery.model.entity.Deanery;
 import phucuong.ht.modules.deanery.repository.DeaneryRepository;
 import phucuong.ht.modules.diocese.repository.DioceseRepository;
 import phucuong.ht.modules.training.TrainingWorkflowSupport;
@@ -51,6 +53,7 @@ public class TrainingCourseService {
     private final TrainingWorkflowSupport trainingWorkflowSupport;
     private final AccountScopeValidationHelper accountScopeValidationHelper;
     private final CommonValidationHelper commonValidationHelper;
+    private final securityUtils securityUtils;
 
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_LIST, allEntries = true),
@@ -123,6 +126,7 @@ public class TrainingCourseService {
         TrainingCourse existing = trainingCourseRepository.findByCodeWithRequirement(courseCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy khóa huấn luyện " + courseCode));
         CourseType targetCourseType = request.getCourseType() == null ? existing.getCourseType() : request.getCourseType();
+        requireUpdateScope(authentication, existing, targetCourseType);
         if (request.getCourseType() != null && request.getCourseType() != existing.getCourseType()
                 && courseParticipationRepository.existsByCourseCode(courseCode)) {
             throw commonValidationHelper.conflict("Không thể đổi loại khóa học sau khi đã có hồ sơ tham gia");
@@ -203,6 +207,74 @@ public class TrainingCourseService {
         UUID dioceseId = accountScopeValidationHelper.requireActiveDioceseId(authentication, TrainingCourseAccessEvaluator.CREATE_DIOCESE);
         course.setDiocese(dioceseRepository.getRequired(dioceseId));
         course.setDeanery(null);
+    }
+
+    private void requireUpdateScope(Authentication authentication, TrainingCourse existing, CourseType targetCourseType) {
+        UUID sourceDioceseId = sourceDioceseId(existing);
+        if (trainingWorkflowSupport.isDeaneryManaged(existing.getCourseType())) {
+            requireAuthority(authentication, TrainingCourseAccessEvaluator.UPDATE_DEANERY);
+            UUID activeDeaneryId = accountScopeValidationHelper.requireActiveDeaneryId(
+                    authentication,
+                    TrainingCourseAccessEvaluator.UPDATE_DEANERY
+            );
+            if (existing.getDeanery() == null || !activeDeaneryId.equals(existing.getDeanery().getId())) {
+                throw commonValidationHelper.forbidden("Khong the cap nhat khoa huan luyen ngoai giao hat hien tai");
+            }
+        } else {
+            requireAuthority(authentication, TrainingCourseAccessEvaluator.UPDATE_DIOCESE);
+            UUID activeDioceseId = accountScopeValidationHelper.requireActiveDioceseId(
+                    authentication,
+                    TrainingCourseAccessEvaluator.UPDATE_DIOCESE
+            );
+            if (existing.getDiocese() == null || !activeDioceseId.equals(existing.getDiocese().getId())) {
+                throw commonValidationHelper.forbidden("Khong the cap nhat khoa huan luyen ngoai giao phan hien tai");
+            }
+        }
+
+        if (targetCourseType == existing.getCourseType()) {
+            return;
+        }
+
+        if (trainingWorkflowSupport.isDeaneryManaged(targetCourseType)) {
+            requireAuthority(authentication, TrainingCourseAccessEvaluator.UPDATE_DEANERY);
+            UUID targetDeaneryId = accountScopeValidationHelper.requireActiveDeaneryId(
+                    authentication,
+                    TrainingCourseAccessEvaluator.UPDATE_DEANERY
+            );
+            Deanery targetDeanery = deaneryRepository.getRequired(targetDeaneryId);
+            if (targetDeanery.getDiocese() == null || !sourceDioceseId.equals(targetDeanery.getDiocese().getId())) {
+                throw commonValidationHelper.forbidden("Khong the chuyen khoa sang giao hat ngoai giao phan so huu");
+            }
+            return;
+        }
+
+        requireAuthority(authentication, TrainingCourseAccessEvaluator.UPDATE_DIOCESE);
+        UUID targetDioceseId = accountScopeValidationHelper.requireActiveDioceseId(
+                authentication,
+                TrainingCourseAccessEvaluator.UPDATE_DIOCESE
+        );
+        if (!sourceDioceseId.equals(targetDioceseId)) {
+            throw commonValidationHelper.forbidden("Khong the chuyen khoa sang giao phan ngoai scope so huu");
+        }
+    }
+
+    private UUID sourceDioceseId(TrainingCourse course) {
+        if (trainingWorkflowSupport.isDeaneryManaged(course.getCourseType())) {
+            if (course.getDeanery() == null || course.getDeanery().getDiocese() == null) {
+                throw commonValidationHelper.conflict("Khoa DT khong co scope giao hat/giao phan hop le");
+            }
+            return course.getDeanery().getDiocese().getId();
+        }
+        if (course.getDiocese() == null) {
+            throw commonValidationHelper.conflict("Khoa huan luyen khong co scope giao phan hop le");
+        }
+        return course.getDiocese().getId();
+    }
+
+    private void requireAuthority(Authentication authentication, String authority) {
+        if (!securityUtils.hasAuthority(authentication, authority)) {
+            throw commonValidationHelper.forbidden("Tai khoan hien tai khong co quyen cap nhat scope khoa huan luyen nay");
+        }
     }
 
     private void applyScoreFormula(TrainingCourse course, String scoreFormulaId, Authentication authentication) {

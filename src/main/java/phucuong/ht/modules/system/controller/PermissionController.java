@@ -28,15 +28,19 @@ public class PermissionController {
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public apiResponse<Page<PermissionResponse>> findAll(@ModelAttribute BaseSearchRequest request) {
-        return apiResponse.success("Lấy danh sách quyền thành công", permissionManagementService.findAll(request));
+    @PreAuthorize("hasRole('SUPER_ADMIN')"
+            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.diocese')"
+            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.diocese')")
+    public apiResponse<Page<PermissionResponse>> findAll(@ModelAttribute BaseSearchRequest request, Authentication authentication) {
+        return apiResponse.success("Lấy danh sách quyền thành công", permissionManagementService.findAll(request, authentication));
     }
 
     @GetMapping("/{permissionCode}")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public apiResponse<PermissionResponse> findById(@PathVariable String permissionCode) {
-        return apiResponse.success("Lấy thông tin quyền thành công", permissionManagementService.findById(permissionCode));
+    @PreAuthorize("hasRole('SUPER_ADMIN')"
+            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.diocese')"
+            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.diocese')")
+    public apiResponse<PermissionResponse> findById(@PathVariable String permissionCode, Authentication authentication) {
+        return apiResponse.success("Lấy thông tin quyền thành công", permissionManagementService.findById(permissionCode, authentication));
     }
 
     @PutMapping("/{permissionCode}")

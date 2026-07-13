@@ -53,7 +53,7 @@ class RolePermissionControllerSecurityIntegrationTest {
     }
 
     @Test
-    void shouldAllowDioceseAdminAssignRolePermission() throws Exception {
+    void shouldRejectDioceseAdminAssignRolePermissionBecauseMappingsAreGlobal() throws Exception {
         RolePermissionCreateRequest request = new RolePermissionCreateRequest();
         request.setRoleCode("ADMIN_PARISH");
         request.setPermissionCode("organization.position.read.parish");
@@ -68,11 +68,10 @@ class RolePermissionControllerSecurityIntegrationTest {
                 .build());
 
         mockMvc.perform(post("/api/system/role-permissions")
-                        .header("Authorization", bearer(token(List.of("ADMIN_DIOCESE"), List.of("system.role_permission.assign.diocese"))))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.id").value("rp-1"));
+                .header("Authorization", bearer(token(List.of("ADMIN_DIOCESE"), List.of("system.role_permission.assign.diocese"))))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden());
     }
 
     @Test

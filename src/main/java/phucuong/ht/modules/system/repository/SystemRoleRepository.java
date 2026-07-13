@@ -26,7 +26,7 @@ public class SystemRoleRepository extends BaseRepo<Role, String> {
         role.setRoleCode(request.getRoleCode());
         role.setRoleName(request.getRoleName());
         role.setDescription(request.getDescription());
-        role.setIsSystem(request.getIsSystem());
+        role.setIsSystem(Boolean.FALSE);
         role.setDisplayOrder(request.getDisplayOrder());
 
         OffsetDateTime now = OffsetDateTime.now();

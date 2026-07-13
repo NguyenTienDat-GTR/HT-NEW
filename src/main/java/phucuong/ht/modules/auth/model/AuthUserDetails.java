@@ -19,6 +19,7 @@ public class AuthUserDetails implements UserDetails {
     private final List<String> roles;
     private final List<String> permissions;
     private final boolean enabled;
+    private final boolean mustChangePassword;
     private final List<GrantedAuthority> authorities;
 
     private AuthUserDetails(
@@ -27,7 +28,8 @@ public class AuthUserDetails implements UserDetails {
             String leaderId,
             List<String> roles,
             List<String> permissions,
-            boolean enabled
+            boolean enabled,
+            boolean mustChangePassword
     ) {
         this.username = username;
         this.password = password;
@@ -35,6 +37,7 @@ public class AuthUserDetails implements UserDetails {
         this.roles = List.copyOf(roles);
         this.permissions = List.copyOf(permissions);
         this.enabled = enabled;
+        this.mustChangePassword = mustChangePassword;
         this.authorities = buildAuthorities(roles, permissions);
     }
 
@@ -46,7 +49,19 @@ public class AuthUserDetails implements UserDetails {
             List<String> permissions,
             boolean enabled
     ) {
-        return new AuthUserDetails(username, password, leaderId, roles, permissions, enabled);
+        return databasePrincipal(username, password, leaderId, roles, permissions, enabled, false);
+    }
+
+    public static AuthUserDetails databasePrincipal(
+            String username,
+            String password,
+            String leaderId,
+            List<String> roles,
+            List<String> permissions,
+            boolean enabled,
+            boolean mustChangePassword
+    ) {
+        return new AuthUserDetails(username, password, leaderId, roles, permissions, enabled, mustChangePassword);
     }
 
     public static AuthUserDetails tokenPrincipal(
@@ -55,7 +70,17 @@ public class AuthUserDetails implements UserDetails {
             List<String> roles,
             List<String> permissions
     ) {
-        return new AuthUserDetails(username, "", leaderId, roles, permissions, true);
+        return tokenPrincipal(username, leaderId, roles, permissions, false);
+    }
+
+    public static AuthUserDetails tokenPrincipal(
+            String username,
+            String leaderId,
+            List<String> roles,
+            List<String> permissions,
+            boolean mustChangePassword
+    ) {
+        return new AuthUserDetails(username, "", leaderId, roles, permissions, true, mustChangePassword);
     }
 
     private static List<GrantedAuthority> buildAuthorities(List<String> roles, List<String> permissions) {

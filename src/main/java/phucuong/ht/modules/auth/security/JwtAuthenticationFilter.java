@@ -62,6 +62,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             )) {
                 throw new ApiException(HttpStatus.UNAUTHORIZED, errorCode.INVALID_TOKEN, "Phien dang nhap khong con hieu luc");
             }
+            if (accessClaims.principal().isMustChangePassword() && !isTemporaryPasswordAllowedPath(request.getRequestURI())) {
+                throw new ApiException(HttpStatus.FORBIDDEN, errorCode.ACCESS_DENIED,
+                        "Bạn phải đổi mật khẩu tạm trước khi sử dụng chức năng nghiệp vụ");
+            }
 
             UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                     accessClaims.principal(),
@@ -74,15 +78,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
         } catch (ApiException exception) {
             SecurityContextHolder.clearContext();
-            writeUnauthorizedResponse(response, exception.getMessage(), exception.getErrorCode());
+            writeAuthenticationResponse(response, exception.getStatus(), exception.getMessage(), exception.getErrorCode());
         }
     }
 
-    private void writeUnauthorizedResponse(HttpServletResponse response, String message, errorCode code) throws IOException {
-        response.setStatus(HttpStatus.UNAUTHORIZED.value());
+    private void writeAuthenticationResponse(HttpServletResponse response, HttpStatus status, String message, errorCode code) throws IOException {
+        response.setStatus(status.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         objectMapper.writeValue(response.getWriter(), apiResponse.error(message, code.name()));
+    }
+
+    private boolean isTemporaryPasswordAllowedPath(String path) {
+        return "/api/auth/change-password".equals(path) || "/api/auth/me".equals(path);
     }
 
     @Override

@@ -126,6 +126,14 @@ public class CertificateService {
                 && (request.getLeaderId() != null || request.getCourseCode() != null || request.getResult() != null)) {
             throw commonValidationHelper.conflict("Không thể thay đổi leader, khóa học hoặc kết quả của chứng chỉ đã duyệt");
         }
+
+        Leader targetLeader = request.getLeaderId() == null ? certificate.getLeader() : requireLeader(request.getLeaderId());
+        TrainingCourse targetCourse = request.getCourseCode() == null ? certificate.getCourse() : requireCourse(request.getCourseCode());
+        if (request.getLeaderId() != null || request.getCourseCode() != null) {
+            requireLeaderInCourseScope(targetLeader, targetCourse);
+            requireUpdateAuthorityForTargetCourse(targetCourse, authentication);
+        }
+
         if (request.getOldCertificateCode() != null) {
             certificate.setOldCertificateCode(request.getOldCertificateCode());
         }
@@ -133,10 +141,10 @@ public class CertificateService {
             certificate.setCertificateName(request.getCertificateName());
         }
         if (request.getLeaderId() != null) {
-            certificate.setLeader(requireLeader(request.getLeaderId()));
+            certificate.setLeader(targetLeader);
         }
         if (request.getCourseCode() != null) {
-            certificate.setCourse(requireCourse(request.getCourseCode()));
+            certificate.setCourse(targetCourse);
         }
         requireLeaderInCourseScope(certificate.getLeader(), certificate.getCourse());
         if (request.getResult() != null) {
@@ -287,6 +295,35 @@ public class CertificateService {
                 : course.getDiocese() != null && course.getDiocese().getId().equals(leader.getParish().getDeanery().getDiocese().getId());
         if (!sameScope) {
             throw commonValidationHelper.validationError("Leader phải thuộc cùng scope quản lý với khóa huấn luyện");
+        }
+    }
+
+    private void requireUpdateAuthorityForTargetCourse(TrainingCourse course, Authentication authentication) {
+        if (course == null) {
+            throw commonValidationHelper.validationError("Khóa huấn luyện phải có scope sở hữu hợp lệ");
+        }
+
+        if (trainingWorkflowSupport.isDeaneryManaged(course.getCourseType())) {
+            String authority = "training.certificate.update.deanery";
+            if (!hasAuthority(authentication, authority)) {
+                throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền cập nhật chứng chỉ cấp giáo hạt");
+            }
+            UUID activeDeaneryId = accountScopeValidationHelper.requireActiveDeaneryId(authentication, authority);
+            if (course.getDeanery() == null || course.getDeanery().getId() == null
+                    || !activeDeaneryId.equals(course.getDeanery().getId())) {
+                throw commonValidationHelper.forbidden("Không được cập nhật chứng chỉ sang khóa huấn luyện ngoài giáo hạt quản lý");
+            }
+            return;
+        }
+
+        String authority = "training.certificate.update.diocese";
+        if (!hasAuthority(authentication, authority)) {
+            throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền cập nhật chứng chỉ cấp giáo phận");
+        }
+        UUID activeDioceseId = accountScopeValidationHelper.requireActiveDioceseId(authentication, authority);
+        if (course.getDiocese() == null || course.getDiocese().getId() == null
+                || !activeDioceseId.equals(course.getDiocese().getId())) {
+            throw commonValidationHelper.forbidden("Không được cập nhật chứng chỉ sang khóa huấn luyện ngoài giáo phận quản lý");
         }
     }
 

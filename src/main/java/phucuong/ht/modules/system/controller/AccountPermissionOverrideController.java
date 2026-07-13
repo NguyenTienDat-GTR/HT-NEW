@@ -35,9 +35,8 @@ public class AccountPermissionOverrideController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("@securityUtils.hasAuthority(authentication, 'system.account_permission.manage.all')")
-    public apiResponse<AccountPermissionOverrideResponse> findById(@PathVariable String id) {
-        return apiResponse.success("Lấy thông tin quyền của tài khoản thành công", service.findById(id));
+    public apiResponse<AccountPermissionOverrideResponse> findById(@PathVariable String id, Authentication authentication) {
+        return apiResponse.success("Lấy thông tin quyền của tài khoản thành công", service.findById(id, authentication));
     }
 
     @PutMapping("/{id}")

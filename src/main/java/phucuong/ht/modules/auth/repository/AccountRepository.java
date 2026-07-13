@@ -77,6 +77,28 @@ public interface AccountRepository extends JpaRepository<Account, String> {
             """)
     Optional<UUID> findActiveParishIdByUsername(@Param("username") String username);
 
+    @Query("""
+            select a.diocese.id
+            from Account a
+            join a.diocese d
+            where a.username = :username
+              and a.status = true
+              and d.status = true
+            """)
+    Optional<UUID> findDirectActiveDioceseIdByUsername(@Param("username") String username);
+
+    @Query("""
+            select a.deanery.id
+            from Account a
+            join a.deanery de
+            join de.diocese d
+            where a.username = :username
+              and a.status = true
+              and de.status = true
+              and d.status = true
+            """)
+    Optional<UUID> findDirectActiveDeaneryIdByUsername(@Param("username") String username);
+
     boolean existsByUsername(String username);
 
     @Query("""

@@ -3,6 +3,7 @@ package phucuong.ht.modules.system.service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import phucuong.ht.common.model.request.StatusToggleRequest;
@@ -57,14 +58,19 @@ public class RolePermissionManagementService {
         return toResponse(rolePermission);
     }
 
-    public Page<RolePermissionResponse> findAll(BaseSearchRequest request) {
-        Page<RolePermission> page = rolePermissionRepository.findAll(copyRequest(request));
-        return new PageImpl<>(page.getContent().stream().map(this::toResponse).toList(), page.getPageable(), page.getTotalElements());
+    public Page<RolePermissionResponse> findAll(BaseSearchRequest request, Authentication authentication) {
+        List<RolePermission> manageable = loadAllMatching(request).stream()
+                .filter(rolePermission -> authorizationHelper.canReadRolePermission(
+                        authentication, rolePermission.getRole(), rolePermission.getPermission()))
+                .toList();
+        return page(request, manageable);
     }
 
-    public RolePermissionResponse findById(String id) {
-        return toResponse(rolePermissionRepository.findById(id)
-                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy phân quyền cho vai trò: " + id)));
+    public RolePermissionResponse findById(String id, Authentication authentication) {
+        RolePermission rolePermission = rolePermissionRepository.findById(id)
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy phân quyền cho vai trò: " + id));
+        authorizationHelper.requireRolePermissionReadAccess(authentication, rolePermission.getRole(), rolePermission.getPermission());
+        return toResponse(rolePermission);
     }
 
     public RolePermissionResponse update(String id, RolePermissionUpdateRequest request, Authentication authentication) {
@@ -114,7 +120,7 @@ public class RolePermissionManagementService {
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái phân quyền cho vai trò");
         rolePermissionRepository.toggleStatus(id, actor);
-        return findById(id);
+        return findById(id, authentication);
     }
 
     private BaseSearchRequest copyRequest(BaseSearchRequest request) {
@@ -129,6 +135,30 @@ public class RolePermissionManagementService {
         copy.setSortBy(source.getSortBy());
         copy.setSortDirection(source.getSortDirection());
         return copy;
+    }
+
+    private List<RolePermission> loadAllMatching(BaseSearchRequest request) {
+        List<RolePermission> matches = new java.util.ArrayList<>();
+        int page = 0;
+        while (true) {
+            BaseSearchRequest batch = copyRequest(request);
+            batch.setPage(page);
+            batch.setSize(BaseSearchRequest.MAX_PAGE_SIZE);
+            Page<RolePermission> result = rolePermissionRepository.findAll(batch);
+            matches.addAll(result.getContent());
+            if (!result.hasNext()) {
+                return matches;
+            }
+            page++;
+        }
+    }
+
+    private Page<RolePermissionResponse> page(BaseSearchRequest request, List<RolePermission> rolePermissions) {
+        int page = request == null ? 0 : request.getPage();
+        int size = request == null ? 10 : request.getSize();
+        int start = Math.min(page * size, rolePermissions.size());
+        int end = Math.min(start + size, rolePermissions.size());
+        return new PageImpl<>(rolePermissions.subList(start, end).stream().map(this::toResponse).toList(), PageRequest.of(page, size), rolePermissions.size());
     }
 
     private RolePermissionResponse toResponse(RolePermission rolePermission) {

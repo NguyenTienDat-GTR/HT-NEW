@@ -108,7 +108,7 @@ class CourseParticipationServiceTest {
         requirement.setStatus(Boolean.TRUE);
         course.setRequirement(requirement);
 
-        Parish parish = parish(parishId);
+        Parish parish = parish(parishId, course);
         when(trainingCourseRepository.findByCodeWithRequirement("SMKNDT-2026")).thenReturn(Optional.of(course));
         when(leaderRepository.findByIdWithParish(leaderId)).thenReturn(Optional.of(leader));
         when(parishRepository.findByIdWithDeaneryAndDiocese(parishId)).thenReturn(Optional.of(parish));
@@ -154,7 +154,7 @@ class CourseParticipationServiceTest {
 
         when(trainingCourseRepository.findByCodeWithRequirement("SMTLI-2026")).thenReturn(Optional.of(course));
         when(leaderRepository.findByIdWithParish(leaderId)).thenReturn(Optional.of(leader));
-        when(parishRepository.findByIdWithDeaneryAndDiocese(parishId)).thenReturn(Optional.of(parish(parishId)));
+        when(parishRepository.findByIdWithDeaneryAndDiocese(parishId)).thenReturn(Optional.of(parish(parishId, course)));
         when(accountScopeValidationHelper.requireActiveParishId(any(), any())).thenReturn(parishId);
 
         TrainingRegistrationRequest request = new TrainingRegistrationRequest();
@@ -177,11 +177,61 @@ class CourseParticipationServiceTest {
 
         when(trainingCourseRepository.findByCodeWithRequirement("SMTLI-2026")).thenReturn(Optional.of(course));
         when(leaderRepository.findByIdWithParish(leaderId)).thenReturn(Optional.of(leader));
-        when(parishRepository.findByIdWithDeaneryAndDiocese(parishId)).thenReturn(Optional.of(parish(parishId)));
+        when(parishRepository.findByIdWithDeaneryAndDiocese(parishId)).thenReturn(Optional.of(parish(parishId, course)));
         when(accountScopeValidationHelper.requireActiveParishId(any(), any())).thenReturn(parishId);
 
         TrainingRegistrationRequest request = new TrainingRegistrationRequest();
         request.setLeaderIds(List.of(leaderId));
+
+        assertThrows(RuntimeException.class, () -> courseParticipationService.register(
+                "SMTLI-2026", request, authentication("admin-parish", "training.participation.submit.parish")));
+        verify(courseParticipationRepository, never()).save(any());
+    }
+
+    @Test
+    void registerShouldRejectParishOutsideDeaneryForDtCourse() {
+        courseParticipationService = buildService();
+
+        UUID parishId = UUID.randomUUID();
+        TrainingCourse course = course(CourseType.SMKN_DT);
+        Parish foreignParish = parish(parishId, course);
+        Deanery foreignDeanery = new Deanery();
+        foreignDeanery.setId(UUID.randomUUID());
+        foreignDeanery.setDiocese(course.getDiocese());
+        foreignParish.setDeanery(foreignDeanery);
+
+        when(trainingCourseRepository.findByCodeWithRequirement("SMKNDT-2026")).thenReturn(Optional.of(course));
+        when(accountScopeValidationHelper.requireActiveParishId(any(), any())).thenReturn(parishId);
+        when(parishRepository.findByIdWithDeaneryAndDiocese(parishId)).thenReturn(Optional.of(foreignParish));
+
+        TrainingRegistrationRequest request = new TrainingRegistrationRequest();
+        request.setLeaderIds(List.of(UUID.randomUUID()));
+
+        assertThrows(RuntimeException.class, () -> courseParticipationService.register(
+                "SMKNDT-2026", request, authentication("admin-parish", "training.participation.submit.parish")));
+        verify(courseParticipationRepository, never()).save(any());
+    }
+
+    @Test
+    void registerShouldRejectParishOutsideDioceseForRegularCourse() {
+        courseParticipationService = buildService();
+
+        UUID parishId = UUID.randomUUID();
+        TrainingCourse course = course(CourseType.SMTL_I);
+        Parish foreignParish = parish(parishId, course);
+        Diocese foreignDiocese = new Diocese();
+        foreignDiocese.setId(UUID.randomUUID());
+        Deanery foreignDeanery = new Deanery();
+        foreignDeanery.setId(UUID.randomUUID());
+        foreignDeanery.setDiocese(foreignDiocese);
+        foreignParish.setDeanery(foreignDeanery);
+
+        when(trainingCourseRepository.findByCodeWithRequirement("SMTLI-2026")).thenReturn(Optional.of(course));
+        when(accountScopeValidationHelper.requireActiveParishId(any(), any())).thenReturn(parishId);
+        when(parishRepository.findByIdWithDeaneryAndDiocese(parishId)).thenReturn(Optional.of(foreignParish));
+
+        TrainingRegistrationRequest request = new TrainingRegistrationRequest();
+        request.setLeaderIds(List.of(UUID.randomUUID()));
 
         assertThrows(RuntimeException.class, () -> courseParticipationService.register(
                 "SMTLI-2026", request, authentication("admin-parish", "training.participation.submit.parish")));
@@ -196,7 +246,7 @@ class CourseParticipationServiceTest {
         UUID leaderId = UUID.randomUUID();
         TrainingCourse course = course(CourseType.SMTL_I);
         Leader leader = leader(leaderId, parishId, LeaderLevel.HT_XU);
-        Parish parish = parish(parishId);
+        Parish parish = parish(parishId, course);
 
         when(trainingCourseRepository.findByCodeWithRequirement("SMTLI-2026")).thenReturn(Optional.of(course));
         when(leaderRepository.findByIdWithParish(leaderId)).thenReturn(Optional.of(leader));
@@ -309,6 +359,15 @@ class CourseParticipationServiceTest {
         TrainingCourse course = new TrainingCourse();
         course.setCourseCode("COURSE");
         course.setCourseType(courseType);
+        Diocese diocese = new Diocese();
+        diocese.setId(UUID.randomUUID());
+        diocese.setName("Diocese A");
+        Deanery deanery = new Deanery();
+        deanery.setId(UUID.randomUUID());
+        deanery.setName("Deanery A");
+        deanery.setDiocese(diocese);
+        course.setDiocese(diocese);
+        course.setDeanery(deanery);
         course.setStatus(Boolean.TRUE);
         course.setRegistrationStartAt(OffsetDateTime.now().minusDays(1));
         course.setRegistrationEndAt(OffsetDateTime.now().plusDays(1));
@@ -328,14 +387,11 @@ class CourseParticipationServiceTest {
         return leader;
     }
 
-    private Parish parish(UUID parishId) {
+    private Parish parish(UUID parishId, TrainingCourse course) {
         Parish parish = new Parish();
         parish.setId(parishId);
         parish.setName("Parish A");
-        Deanery deanery = new Deanery();
-        deanery.setId(UUID.randomUUID());
-        deanery.setName("Deanery A");
-        parish.setDeanery(deanery);
+        parish.setDeanery(course.getDeanery());
         return parish;
     }
 

@@ -10,7 +10,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
 
   # ----------------------------------------------------
   # DISTRIBUTED CACHE SERVICE (REDIS)
@@ -20,7 +20,7 @@ services:
     volumes:
       - redisdata:/data
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
 
   # ----------------------------------------------------
   # MESSAGE BROKER SERVICE (RABBITMQ)
@@ -32,8 +32,8 @@ services:
     volumes:
       - rabbitdata:/var/lib/rabbitmq
     ports:
-      - "5672:5672"
-      - "15672:15672" # Giao diện Web quản trị: http://localhost:15672
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672" # Giao diện Web quản trị: http://localhost:15672
 
   # ----------------------------------------------------
   # BACKEND APPLICATION SERVICE (HOT-RELOAD DEV)
@@ -62,6 +62,7 @@ services:
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
       JWT_ACCESS_EXPIRATION: ${JWT_ACCESS_EXPIRATION}
       JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION}
+      APP_SECURITY_SWAGGER_PUBLIC_ENABLED: "true"
       GRADLE_USER_HOME: /root/.gradle
     volumes:
       - .:/app

@@ -136,6 +136,7 @@ Current certification workflow notes:
 - the system now auto-creates `PENDING` certificate proposals for leaders whose participation reaches the course passing score
 - certificate approval is still a user action and requires the existing scoped certificate approve permissions
 - approvers may still approve a certificate for a leader who did not reach the passing score, but they must provide an approval reason
+- changing a certificate's `leaderId` or `courseCode` revalidates that the leader belongs to the target course owner scope and that the updater owns that target deanery for DT courses or target diocese for regular courses; a scoped updater cannot move a certificate across scopes
 
 ### System
 
@@ -215,6 +216,8 @@ Current org-unit contract notes:
 - `status`
 - `sortBy`
 - `sortDirection`
+
+The request boundary limits `page` to a non-negative value (at most `1,000,000`), `size` to `1..100`, `searchFields` to 10 entries, and `filters` to 20 entries before any repository query is built.
 
 Dynamic search/filter supports nested paths such as:
 
@@ -327,8 +330,11 @@ Current login session policy:
 - a new login from the same IP revokes both the previous access token and refresh token on that IP
 - a login from a third IP revokes the oldest active IP session for that account
 - `POST /api/auth/refresh` still reads the refresh token from the HttpOnly cookie
-- successful refresh rotates both access token and refresh token for the existing `sessionId`
+- successful refresh rotates both access token and refresh token for the existing `sessionId` through an atomic Redis compare-and-set/Lua operation; only one concurrent use of the same refresh token can succeed
+- normal access-token activity updates only the session ordering score, so it cannot overwrite a concurrent refresh rotation with stale session data
 - protected APIs now validate `sessionId + accessToken jti` against Redis on every request
+- token parsing requires the configured JWT issuer and audience in addition to the correct signing key and token type
+- updating, disabling, or deleting an account revokes all of that account's Redis sessions immediately; previously issued access tokens then fail the Redis `sessionId + jti` check
 
 ### Super Admin Provisioning
 
@@ -475,10 +481,10 @@ Administration behavior:
 - permission update requests are metadata-only and currently allow `permissionName`, `description`, and `displayOrder`
 - system permissions (`isSystem = true`) may not be deleted through the permission API
 - `ADMIN_DIOCESE` may still manage roles through the seeded role admin authorities, but may not CRUD permissions
-- `ADMIN_DIOCESE` may assign or revoke role permissions and account overrides only for non-`all` permission scopes
-- `ADMIN_DIOCESE` may not assign a permission whose `scopeCode` is `all`
-- `ADMIN_DIOCESE` may manage role-permission mappings only for roles whose `displayOrder` is equal to or lower than `ADMIN_DIOCESE`
-- `ADMIN_DIOCESE` may manage account-permission overrides only for accounts in the same active diocese
+- role-permission mappings are shared global RBAC state, so only `SUPER_ADMIN` may create, update, revoke, or toggle them
+- scoped admins may read only manageable roles, non-`all` permissions at or below their scope, and the corresponding role-permission rows; list filtering is applied before response pagination and out-of-scope detail reads return `403`
+- scoped account-permission administrators may manage and read overrides only for target accounts in their own resolved scope and only for permissions they already hold at an equal-or-lower scope; list filtering is applied before response pagination and out-of-scope detail reads return `403`
+- `SUPER_ADMIN` retains global list/detail reads for roles, permissions, accounts, role-permissions, and account-permission overrides
 - role and permission create or update requests do not write `status`; active or inactive state changes only through toggle-status
 - new business roles may be created through the role API and stay permission-empty until role-permission APIs assign explicit permissions
 - direct account overrides continue to use `ALLOW` and `DENY`, with optional `expiresAt`
@@ -637,7 +643,7 @@ Leader follow-up notes:
 - the future rule remains: leader may move to another parish only within the same diocese
 - the leader move rule is documented here but not enforced yet
 
-### Leader CRU And Scope Rules
+### Leader CRUD And Scope Rules
 
 Leader API endpoints:
 
@@ -645,6 +651,7 @@ Leader API endpoints:
 - `GET /api/leaders`
 - `GET /api/leaders/{id}`
 - `PUT /api/leaders/{id}`
+- `DELETE /api/leaders/{id}`
 - `PATCH /api/leaders/{id}/toggle-status`
 
 Leader request/response behavior:
@@ -657,9 +664,9 @@ Leader request/response behavior:
 Leader authorization behavior:
 
 - only parish-scoped leader admins may call the current Leader endpoints
-- current leader permissions are `organization.leader.create.parish`, `organization.leader.read.parish`, and `organization.leader.update.parish`
+- current leader permissions are `organization.leader.create.parish`, `organization.leader.read.parish`, `organization.leader.update.parish`, and `organization.leader.delete.parish`
 - `GET /api/leaders` is scope-filtered to the active parish resolved from `account.leader.parish`
-- read, update, and toggle-status are allowed only when the target leader belongs to the active parish of the current account
+- read, update, delete, and toggle-status are allowed only when the target leader belongs to the active parish of the current account
 - if the current account has no linked active leader or no resolvable active parish, access is denied
 - this pass does not grant Leader API access to `SUPER_ADMIN`
 
@@ -763,9 +770,12 @@ Training registration API contracts:
 Submission and approval routing:
 
 - parish submission always uses the active parish scope from the current account
+- parish accounts only submit registration lists; they never own an approval stage even if an accidental direct authority is present
+- for DT courses, the submitting parish must belong to the course-owning deanery; for regular courses, it must belong to the course-owning diocese. This hierarchy is checked in both the access evaluator and the service before any registration is persisted.
 - DT courses notify deanery approvers in the target deanery and RabbitMQ auto-approves eligible registrations at the deanery stage
 - non-DT courses submitted from parish to deanery notify deanery aggregators with `training.participation.submit.deanery` in the target deanery and do not auto-approve yet
 - when a deanery submits a non-DT course to diocese, the sender unit in the notification becomes the deanery, recipients must have `training.participation.approve.diocese` in the target diocese, and RabbitMQ auto-approves eligible registrations at the diocese stage
+- manual approval belongs only to the owning scope: a direct deanery owner approves DT registrations and a direct diocese owner approves regular registrations. Deanery is an aggregation step, not final approval, for regular courses.
 - auto-approval is idempotent and skips records already approved or rejected for the target stage
 
 Notification delivery:
@@ -975,7 +985,7 @@ The following work was added in this iteration:
 - `BaseModel` owns automatic audit metadata through a JPA entity listener: every JPA persist fills missing `createdAt`, `createdBy`, `updatedAt`, `updatedBy`, and default `status=true`; every JPA update refreshes `updatedAt` and fills missing `updatedBy`. Actor resolution uses `super-admin`, then current `leaderId`, then username, and finally `SYSTEM` for background work. Services may still set explicit audit actors when they need a business-specific actor; the listener preserves non-blank actor fields.
 - Relation request DTOs should keep using IDs instead of nested payloads.
 - Bắt buộc sử dụng UTF-8 cho mọi dòng code, string literal, và comment bằng tiếng Việt; không được để phát sinh mojibake trong source.
-- JWT authorization is stateless, so permission changes apply immediately on next login or refresh, while existing access tokens remain valid until expiration.
+- Role and permission mapping changes take effect on the next login or refresh. Account update, disable, and delete operations are stricter: they revoke the account's Redis sessions immediately, so its existing access tokens no longer pass the server-side session check.
 - Organization modules no longer rely on generated slug codes or business `code` values.
 - If a later session continues organization work, start from the helper structure under `common/validation`, `modules/diocese/helper`, `modules/deanery/helper`, and `modules/parish/helper` instead of moving validation back into services.
 - Parish moves must preserve the UUID-based storage model and stay inside the same diocese. Leader moves are stricter: a parish-scoped administrator may only manage leaders in the active parish and may not move a leader to another parish.
@@ -1006,8 +1016,9 @@ The following work was added in this iteration:
 - `SystemLog` retention now deletes records whose `loggedAt` is older than 10 days through the `SystemLogRetentionScheduler` background job.
 - Role and permission administration now use `/api/system/roles`, `/api/system/permissions`, `/api/system/role-permissions`, and `/api/system/account-permissions` rather than folding everything into the original `system.role.manage.all` and `system.permission.manage.all` permissions.
 - The effective-permission SQL views are now part of the security contract: if a record with authorization impact is toggled to inactive, it must disappear from the next JWT login or refresh result without needing extra Java-side filtering.
-- Auth hardening local July 2026: refresh token chỉ còn claim tối thiểu và chỉ được set bằng `refreshToken` HttpOnly cookie để tránh `HeadersTooLargeException`; `/v3/api-docs`, `/swagger-ui/**`, và whitelist drift `/api/auth/bootstrap/super-admin` không còn public; generic 500, malformed JSON, và missing resource responses đã được sanitize để không lộ chi tiết nội bộ.
-- Auth session hardening local July 2026: refresh rotation hiện giữ hợp lệ access-token JTI liền trước trong Redis session state để client không rơi `401` ngay sau khi vừa refresh; local validation đã xác nhận live flow `login -> /api/auth/me -> refresh -> /api/auth/me` tiếp tục trả `200`.
+- Auth hardening local July 2026: refresh token chỉ còn claim tối thiểu và chỉ được set bằng `refreshToken` HttpOnly cookie để tránh `HeadersTooLargeException`; `/api/auth/bootstrap/super-admin` không public; generic 500, malformed JSON, và missing resource responses đã được sanitize để không lộ chi tiết nội bộ. Swagger UI và `/v3/api-docs/**` chỉ anonymous khi `APP_SECURITY_SWAGGER_PUBLIC_ENABLED=true` (development override); production Compose luôn đặt flag `false`.
+- Compose production chỉ publish cổng backend. PostgreSQL, Redis, RabbitMQ AMQP và RabbitMQ Management chỉ trao đổi trong Docker network; override development bind các cổng hỗ trợ vào `127.0.0.1`.
+- Auth session hardening local July 2026: refresh rotation giữ hợp lệ access-token JTI liền trước trong Redis session state để client không rơi `401` ngay sau khi vừa refresh, dùng atomic Redis compare-and-set để chặn refresh replay/concurrency, và giới hạn đúng 2 IP với 1 session/account/IP.
 - Kết quả kiểm thử tải cục bộ ngày 2026-07-09 đã xác nhận read surge không phát sinh `401` hay `5xx`; hệ thống tự shed load bằng `429` dưới áp lực thay vì sập dịch vụ.
 
 ### Flow audit 2026-07-11
@@ -1017,11 +1028,13 @@ The following work was added in this iteration:
 - Flow chấm điểm chỉ cho hồ sơ không hủy đã được duyệt đúng cấp; request phải gửi đúng và đủ component của formula, không trùng, không vượt max, backend tự tính total. Đạt điểm tạo proposal chứng chỉ `PENDING`; chứng chỉ `APPROVED` khóa sửa điểm.
 - Flow duyệt chứng chỉ chỉ nhận participation đã chấm, không hủy, được duyệt đúng cấp; dưới passing score bắt buộc `approvalReason`, approval cập nhật trạng thái, promotion đơn điệu và ghi `RankHistory`.
 - Flow đăng ký chỉ nhận khóa, requirement và leader đang hoạt động, trong cửa sổ đăng ký, đúng parish scope và chưa có hồ sơ trùng. Eligibility kiểm tra current level, tuổi, số năm hoạt động và khóa tiên quyết; thiếu ngày sinh/ngày bắt đầu hoạt động khi requirement tương ứng tồn tại được xem là không đủ điều kiện và bắt buộc exception reason.
+- `PUT /api/training/courses/{courseCode}` và `PUT /api/training/requirements/{requirementCode}` kiểm tra cả scope nguồn lẫn quyền `update` của scope đích khi đổi `courseType`; không thể chuyển ownership giữa deanery và diocese chỉ nhờ quyền update của resource cũ. Requirement update chạy trong transaction để thay đổi hợp lệ được persist.
 
 - `GET /api/analytics/certificates` now joins `training_course` in every certificate breakdown query before applying course-owner scope; scoped dashboards must not reference a missing `tc` alias.
-- Executive-board assignment authorization is hierarchical: diocese assignment permissions cover descendant deanery/parish targets, and deanery permissions cover descendant parish targets; service-level scope checks still restrict access to the active account scope.
+- Executive-board assignment authorization is hierarchical: diocese assignment permissions cover descendant deanery/parish targets, and deanery permissions cover descendant parish targets; update luôn kiểm tra quyền `update.*` tại target scope (không dùng quyền `create.*`) trước khi persist, nên không thể đổi assignment sang scope cao hơn.
 - Executive-board assignment rejects an `endDate` earlier than `startDate`; FE must apply the same validation before submit.
 - `PositionCreateRequest.positionType` is mandatory and must be one of `DIOCESE`, `DEANERY`, or `PARISH`.
+- Position list được lọc theo từng `organization.position.read.<scope>` trước pagination, thống nhất với rule detail theo `positionType`.
 - Roles created through the public role-management API are always non-system roles; `isSystem` is backend-owned metadata and normal role updates must not change it.
 - Leader management includes `DELETE /api/leaders/{id}` guarded by `organization.leader.delete.parish`; FE should prefer status deactivation when audit/history retention is required.
 - The detailed FE integration contract, state machines, UX rules, endpoint payloads, response expectations, RBAC notes, test matrix, and open product decisions are maintained in `../HT-MANAGEMENT-FE-Technical-Guide.html` and `../HT-MANAGEMENT-FE-Technical-Guide.docx`.
@@ -1035,8 +1048,8 @@ The following work was added in this iteration:
 - Account không phải `ADMIN_DIOCESE` bắt buộc gắn leader. `ADMIN_DIOCESE` luôn có direct `dioceseId`, có thể gắn leader cùng giáo phận hoặc không gắn leader; mỗi giáo phận chỉ có một account `ADMIN_DIOCESE`, không phụ thuộc trạng thái account.
 - Account có leader tự sinh username bằng `firstName + parishName + day + month`; account `ADMIN_DIOCESE` không leader dùng `dioceseName + admin`. Chuỗi được viết thường, bỏ dấu/ký tự đặc biệt và thêm hậu tố `2`, `3`, ... khi trùng.
 - Account không leader bắt buộc `credentialEmail`; field này chỉ dùng gửi mail và không lưu DB. Account có leader nhận credential qua `Leader.email`.
-- Mật khẩu tạm là 6 chữ số ngẫu nhiên bằng `SecureRandom`, được BCrypt hash trước khi lưu. Email tạo account luôn chứa username và mật khẩu tạm; lỗi SMTP làm rollback account và primary role.
-- `SUPER_ADMIN` chỉ create, update và toggle account `ADMIN_DIOCESE`; không đọc danh sách, xóa, quản lý account cấp thấp hoặc gán role để bỏ qua luồng credential.
+- Mật khẩu tạm là chuỗi ngẫu nhiên 12 ký tự từ `SecureRandom`, được BCrypt hash trước khi lưu. Account mới có `mustChangePassword=true`; access token của account đó chỉ được dùng cho `/api/auth/change-password` (và `/api/auth/me`) cho đến khi đổi mật khẩu. Email tạo account luôn chứa username và mật khẩu tạm; lỗi SMTP làm rollback account và primary role.
+- `SUPER_ADMIN` chỉ create, update và toggle account `ADMIN_DIOCESE` qua luồng credential; nhưng vẫn có quyền đọc list/detail account toàn hệ thống để thực hiện giám sát và RBAC read scope.
 - `POST /api/auth/change-password` nhận `{oldPassword,newPassword}`; mật khẩu mới dài 8-72 ký tự, khác mật khẩu cũ, được hash trước khi lưu và thành công sẽ revoke toàn bộ Redis session của account.
 - Gmail SMTP dùng `smtp.gmail.com:587` với STARTTLS. Runtime cần `MAIL_USERNAME`, `MAIL_PASSWORD` là Google App Password, và tùy chọn `MAIL_FROM`; không commit secret vào Git.
 

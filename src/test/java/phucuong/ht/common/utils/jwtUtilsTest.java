@@ -83,4 +83,31 @@ class jwtUtilsTest {
 
         assertThrows(RuntimeException.class, () -> jwtUtils.parseAccessToken(token));
     }
+
+    @Test
+    void shouldRejectTokenWithValidSignatureButWrongIssuerOrAudience() {
+        AuthProperties wrongIssuerProperties = properties("other-issuer", "ht-management-client");
+        jwtUtils wrongIssuerSigner = new jwtUtils(wrongIssuerProperties);
+        AuthUserDetails principal = AuthUserDetails.tokenPrincipal(
+                "superadminpc", null, List.of("SUPER_ADMIN"), List.of("auth.session.manage.all"));
+
+        String wrongIssuerToken = wrongIssuerSigner.generateAccessToken(principal, "session-123", "access-123");
+        assertThrows(RuntimeException.class, () -> jwtUtils.parseAccessTokenClaims(wrongIssuerToken));
+
+        AuthProperties wrongAudienceProperties = properties("ht-management", "other-audience");
+        jwtUtils wrongAudienceSigner = new jwtUtils(wrongAudienceProperties);
+        String wrongAudienceToken = wrongAudienceSigner.generateAccessToken(principal, "session-123", "access-123");
+        assertThrows(RuntimeException.class, () -> jwtUtils.parseAccessTokenClaims(wrongAudienceToken));
+    }
+
+    private AuthProperties properties(String issuer, String audience) {
+        AuthProperties properties = new AuthProperties();
+        properties.getJwt().setAccessSecret("ht-management-access-secret-key-for-jwt-signing-2026");
+        properties.getJwt().setRefreshSecret("ht-management-refresh-secret-key-for-jwt-signing-2026");
+        properties.getJwt().setIssuer(issuer);
+        properties.getJwt().setAudience(audience);
+        properties.getJwt().setAccessTokenExpirationMs(90_000L);
+        properties.getJwt().setRefreshTokenExpirationMs(604_800_000L);
+        return properties;
+    }
 }

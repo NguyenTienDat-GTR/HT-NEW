@@ -31,14 +31,26 @@ public class CourseParticipationAccessEvaluator {
     private final TrainingWorkflowSupport trainingWorkflowSupport;
 
     public boolean canRegister(Authentication authentication, String courseCode) {
-        return securityUtils.hasAuthority(authentication, SUBMIT_PARISH)
-                && trainingCourseRepository.findByCodeWithRequirement(courseCode).isPresent();
+        if (!securityUtils.hasAuthority(authentication, SUBMIT_PARISH)) {
+            return false;
+        }
+        String username = securityUtils.currentUsername(authentication);
+        if (username == null || username.isBlank()
+                || accountRepository.findActiveParishIdByUsername(username).isEmpty()) {
+            return false;
+        }
+        return trainingCourseRepository.findByCodeWithRequirement(courseCode)
+                .map(course -> trainingWorkflowSupport.isDeaneryManaged(course.getCourseType())
+                        ? scopedDeanery(authentication, courseCode)
+                        : scopedDiocese(authentication, courseCode))
+                .orElse(false);
     }
 
     public boolean canDeanerySubmit(Authentication authentication, String courseCode) {
         return securityUtils.hasAuthority(authentication, SUBMIT_DEANERY)
                 && trainingCourseRepository.findByCodeWithRequirement(courseCode)
-                .map(course -> trainingWorkflowSupport.isDeaneryManaged(course.getCourseType()) ? false : scopedDiocese(authentication, courseCode))
+                .map(course -> trainingWorkflowSupport.isDeaneryManaged(course.getCourseType())
+                        ? false : directDeaneryInCourseDiocese(authentication, courseCode))
                 .orElse(false);
     }
 
@@ -46,7 +58,7 @@ public class CourseParticipationAccessEvaluator {
         return securityUtils.hasAuthority(authentication, APPROVE_DEANERY)
                 && courseParticipationRepository.findByIdWithLeaderAndCourse(participationId)
                 .map(participation -> trainingWorkflowSupport.isDeaneryManaged(participation.getCourse().getCourseType())
-                        && scopedDeanery(authentication, participation.getCourse().getCourseCode()))
+                        && directDeaneryOwnsCourse(authentication, participation.getCourse().getCourseCode()))
                 .orElse(false);
     }
 
@@ -54,7 +66,7 @@ public class CourseParticipationAccessEvaluator {
         return securityUtils.hasAuthority(authentication, APPROVE_DIOCESE)
                 && courseParticipationRepository.findByIdWithLeaderAndCourse(participationId)
                 .map(participation -> !trainingWorkflowSupport.isDeaneryManaged(participation.getCourse().getCourseType())
-                        && scopedDiocese(authentication, participation.getCourse().getCourseCode()))
+                        && directDioceseOwnsCourse(authentication, participation.getCourse().getCourseCode()))
                 .orElse(false);
     }
 
@@ -107,6 +119,37 @@ public class CourseParticipationAccessEvaluator {
             return false;
         }
         return accountRepository.findActiveDioceseIdByUsername(username)
+                .flatMap(activeId -> trainingCourseRepository.findDioceseIdByCourseCode(courseCode).map(activeId::equals))
+                .orElse(false);
+    }
+
+    private boolean directDeaneryInCourseDiocese(Authentication authentication, String courseCode) {
+        String username = securityUtils.currentUsername(authentication);
+        if (username == null || username.isBlank()
+                || accountRepository.findDirectActiveDeaneryIdByUsername(username).isEmpty()) {
+            return false;
+        }
+        return accountRepository.findActiveDioceseIdByUsername(username)
+                .flatMap(activeId -> trainingCourseRepository.findDioceseIdByCourseCode(courseCode).map(activeId::equals))
+                .orElse(false);
+    }
+
+    private boolean directDeaneryOwnsCourse(Authentication authentication, String courseCode) {
+        String username = securityUtils.currentUsername(authentication);
+        if (username == null || username.isBlank()) {
+            return false;
+        }
+        return accountRepository.findDirectActiveDeaneryIdByUsername(username)
+                .flatMap(activeId -> trainingCourseRepository.findDeaneryIdByCourseCode(courseCode).map(activeId::equals))
+                .orElse(false);
+    }
+
+    private boolean directDioceseOwnsCourse(Authentication authentication, String courseCode) {
+        String username = securityUtils.currentUsername(authentication);
+        if (username == null || username.isBlank()) {
+            return false;
+        }
+        return accountRepository.findDirectActiveDioceseIdByUsername(username)
                 .flatMap(activeId -> trainingCourseRepository.findDioceseIdByCourseCode(courseCode).map(activeId::equals))
                 .orElse(false);
     }
