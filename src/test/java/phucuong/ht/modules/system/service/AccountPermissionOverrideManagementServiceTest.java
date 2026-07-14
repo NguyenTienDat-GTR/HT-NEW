@@ -136,6 +136,46 @@ class AccountPermissionOverrideManagementServiceTest {
         assertThrows(RuntimeException.class, () -> service.create(request, authentication()));
     }
 
+    @Test
+    void createShouldRejectDioceseAdminAssigningPermissionItDoesNotOwn() {
+        CommonValidationHelper helper = new CommonValidationHelper(new securityUtils());
+        SystemAdminAuthorizationHelper authorizationHelper = new SystemAdminAuthorizationHelper(
+                new securityUtils(),
+                accountScopeValidationHelper,
+                accountRepository,
+                roleRepository,
+                helper
+        );
+        AccountPermissionOverrideManagementService service = new AccountPermissionOverrideManagementService(
+                accountPermissionOverrideRepository,
+                accountRepository,
+                systemPermissionRepository,
+                helper,
+                authorizationHelper
+        );
+
+        Account account = new Account();
+        account.setUsername("target");
+        account.setStatus(true);
+
+        PermissionScope scope = new PermissionScope();
+        scope.setScopeCode("diocese");
+        Permission permission = new Permission();
+        permission.setPermissionCode("system.role_permission.assign.diocese");
+        permission.setScope(scope);
+        permission.setStatus(true);
+
+        AccountPermissionOverrideCreateRequest request = new AccountPermissionOverrideCreateRequest();
+        request.setUsername("target");
+        request.setPermissionCode("system.role_permission.assign.diocese");
+        request.setEffect(PermissionEffect.ALLOW);
+
+        when(accountRepository.findActiveByUsername("target")).thenReturn(Optional.of(account));
+        when(systemPermissionRepository.findById("system.role_permission.assign.diocese")).thenReturn(Optional.of(permission));
+
+        assertThrows(RuntimeException.class, () -> service.create(request, authentication()));
+    }
+
     private UsernamePasswordAuthenticationToken authentication() {
         AuthUserDetails principal = AuthUserDetails.tokenPrincipal(
                 "admin-dio",

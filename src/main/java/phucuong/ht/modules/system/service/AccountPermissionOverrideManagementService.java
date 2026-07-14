@@ -6,6 +6,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.validation.CommonValidationHelper;
@@ -32,6 +33,7 @@ public class AccountPermissionOverrideManagementService {
     private final CommonValidationHelper commonValidationHelper;
     private final SystemAdminAuthorizationHelper authorizationHelper;
 
+    @Transactional
     public AccountPermissionOverrideResponse create(AccountPermissionOverrideCreateRequest request, Authentication authentication) {
         Account account = accountRepository.findActiveByUsername(request.getUsername())
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy tài khoản: " + request.getUsername()));
@@ -52,6 +54,7 @@ public class AccountPermissionOverrideManagementService {
         return toResponse(override);
     }
 
+    @Transactional(readOnly = true)
     public Page<AccountPermissionOverrideResponse> findAll(BaseSearchRequest request, Authentication authentication) {
         List<AccountPermissionOverride> manageable = loadAllMatching(request).stream()
                 .filter(override -> authorizationHelper.canManageAccountPermission(authentication, override.getAccount().getUsername(), override.getPermission()))
@@ -59,6 +62,7 @@ public class AccountPermissionOverrideManagementService {
         return page(request, manageable);
     }
 
+    @Transactional(readOnly = true)
     public AccountPermissionOverrideResponse findById(String id, Authentication authentication) {
         AccountPermissionOverride override = accountPermissionOverrideRepository.findById(id)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy phân quyền ghi đè của tài khoản: " + id));
@@ -68,6 +72,7 @@ public class AccountPermissionOverrideManagementService {
         return toResponse(override);
     }
 
+    @Transactional
     public AccountPermissionOverrideResponse update(String id, AccountPermissionOverrideUpdateRequest request, Authentication authentication) {
         AccountPermissionOverride override = accountPermissionOverrideRepository.findById(id)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy phân quyền ghi đè của tài khoản: " + id));
@@ -86,6 +91,7 @@ public class AccountPermissionOverrideManagementService {
         return toResponse(override);
     }
 
+    @Transactional
     public void delete(String id, Authentication authentication) {
         AccountPermissionOverride override = accountPermissionOverrideRepository.findById(id)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy phân quyền ghi đè của tài khoản: " + id));
@@ -93,6 +99,7 @@ public class AccountPermissionOverrideManagementService {
         accountPermissionOverrideRepository.delete(id);
     }
 
+    @Transactional
     public AccountPermissionOverrideResponse toggleStatus(String id, StatusToggleRequest request, Authentication authentication) {
         AccountPermissionOverride override = accountPermissionOverrideRepository.findById(id)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy phân quyền ghi đè của tài khoản: " + id));
