@@ -15,13 +15,18 @@ public class AccountCreateRequest {
     @NotBlank
     private String roleCode;
 
-    /** Leader linked to every account except the leaderless ADMIN_DIOCESE account. */
+    /**
+     * Leader linked to every account except the leaderless ADMIN_DIOCESE account.
+     */
     private UUID leaderId;
-
-    /** Required for every ADMIN_DIOCESE account, whether or not it links to a leader. */
+    /**
+     * Required for every ADMIN_DIOCESE account, whether or not it links to a leader.
+     */
     private UUID dioceseId;
 
-    /** Required only for a leaderless ADMIN_DIOCESE account and is not persisted. */
+    /**
+     * Required only for a leaderless ADMIN_DIOCESE account and is not persisted.
+     */
     @Email
     @Size(max = 100)
     private String credentialEmail;

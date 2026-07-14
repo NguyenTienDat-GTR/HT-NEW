@@ -12,6 +12,9 @@ import phucuong.ht.modules.system.model.entity.Account;
 import phucuong.ht.modules.system.model.entity.Permission;
 import phucuong.ht.modules.system.model.entity.Role;
 
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 @Component
@@ -19,7 +22,9 @@ import java.util.UUID;
 public class SystemAdminAuthorizationHelper {
     static final String ROLE_SUPER_ADMIN = "SUPER_ADMIN";
     static final String ROLE_ADMIN_DIOCESE = "ADMIN_DIOCESE";
+    static final String ROLE_PERMISSION_ASSIGN_ALL = "system.role_permission.assign.all";
     static final String ROLE_PERMISSION_ASSIGN_DIOCESE = "system.role_permission.assign.diocese";
+    static final String ROLE_PERMISSION_REVOKE_ALL = "system.role_permission.revoke.all";
     static final String ROLE_PERMISSION_REVOKE_DIOCESE = "system.role_permission.revoke.diocese";
     static final String ACCOUNT_PERMISSION_MANAGE_DIOCESE = "system.account_permission.manage.diocese";
     static final String ACCOUNT_PERMISSION_MANAGE_DEANERY = "system.account_permission.manage.deanery";
@@ -42,8 +47,13 @@ public class SystemAdminAuthorizationHelper {
         this(securityUtils, accountScopeValidationHelper, accountRepository, roleRepository, commonValidationHelper, null);
     }
 
-    public boolean isSuperAdmin(Authentication authentication) { return hasRole(authentication, ROLE_SUPER_ADMIN); }
-    public boolean hasAuthority(Authentication authentication, String authority) { return securityUtils.hasAuthority(authentication, authority); }
+    public boolean isSuperAdmin(Authentication authentication) {
+        return hasRole(authentication, ROLE_SUPER_ADMIN);
+    }
+
+    public boolean hasAuthority(Authentication authentication, String authority) {
+        return securityUtils.hasAuthority(authentication, authority);
+    }
 
     public void requireRoleManageableByDioceseAdmin(Role role) {
         Role adminRole = roleRepository.findByRoleCodeAndStatusTrue(ROLE_ADMIN_DIOCESE)
@@ -61,13 +71,19 @@ public class SystemAdminAuthorizationHelper {
         UUID actorDioceseId = accountScopeValidationHelper.requireActiveDioceseId(authentication, permissionCode);
         UUID targetDioceseId = accountRepository.findActiveDioceseIdByUsername(username)
                 .orElseThrow(() -> commonValidationHelper.forbidden("Tài khoản đích không có phạm vi giáo phận hợp lệ"));
-        if (!actorDioceseId.equals(targetDioceseId)) throw commonValidationHelper.forbidden("Tài khoản đích nằm ngoài giáo phận hiện tại");
+        if (!actorDioceseId.equals(targetDioceseId)) {
+            throw commonValidationHelper.forbidden("Tài khoản đích nằm ngoài giáo phận hiện tại");
+        }
     }
 
     public void requireRolePermissionWriteAccess(Authentication authentication, Role role, Permission permission, String authority) {
-        if (!isSuperAdmin(authentication)) {
-            throw commonValidationHelper.forbidden("Chỉ SUPER_ADMIN được thay đổi phân quyền chung của vai trò");
+        if (isSuperAdmin(authentication)) {
+            return;
         }
+        requireRolePermissionOperationAuthority(authentication, authority);
+        requireActorOwnsPermission(authentication, permission);
+        requireTargetRoleBelowActor(authentication, role);
+        requirePermissionAtOrBelowScope(permission, rolePermissionAuthorityScopeOrder(authentication, authority));
     }
 
     public boolean canReadRole(Authentication authentication, Role role) {
@@ -164,7 +180,64 @@ public class SystemAdminAuthorizationHelper {
             case "parish", "own", "none" -> 3;
             default -> 0;
         };
-        if (permissionScopeOrder < actorScopeOrder) throw commonValidationHelper.forbidden("Không thể gán quyền có phạm vi cao hơn phạm vi quản lý hiện tại");
+        if (permissionScopeOrder < actorScopeOrder) {
+            throw commonValidationHelper.forbidden("Không thể gán quyền có phạm vi cao hơn phạm vi quản lý hiện tại");
+        }
+    }
+
+    private void requireRolePermissionOperationAuthority(Authentication authentication, String authority) {
+        if (hasAuthority(authentication, authority) || hasAuthority(authentication, matchingAllScopeAuthority(authority))) {
+            return;
+        }
+        throw commonValidationHelper.forbidden("Không có quyền thay đổi phân quyền cho vai trò");
+    }
+
+    private String matchingAllScopeAuthority(String authority) {
+        if (ROLE_PERMISSION_REVOKE_DIOCESE.equals(authority)) {
+            return ROLE_PERMISSION_REVOKE_ALL;
+        }
+        return ROLE_PERMISSION_ASSIGN_ALL;
+    }
+
+    private int rolePermissionAuthorityScopeOrder(Authentication authentication, String authority) {
+        if (hasAuthority(authentication, matchingAllScopeAuthority(authority))) {
+            return 0;
+        }
+        return 1;
+    }
+
+    private void requireActorOwnsPermission(Authentication authentication, Permission permission) {
+        String permissionCode = permission == null ? null : permission.getPermissionCode();
+        if (permissionCode == null || permissionCode.isBlank() || !hasAuthority(authentication, permissionCode)) {
+            throw commonValidationHelper.forbidden("Không thể gán quyền mà tài khoản hiện tại không sở hữu");
+        }
+    }
+
+    private void requireTargetRoleBelowActor(Authentication authentication, Role targetRole) {
+        Integer targetOrder = targetRole == null ? null : targetRole.getDisplayOrder();
+        Integer actorOrder = actorRoleCodes(authentication).stream()
+                .map(roleRepository::findByRoleCodeAndStatusTrue)
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .map(Role::getDisplayOrder)
+                .filter(Objects::nonNull)
+                .min(Integer::compareTo)
+                .orElse(null);
+        if (actorOrder == null || targetOrder == null || targetOrder <= actorOrder) {
+            throw commonValidationHelper.forbidden("Chỉ được gán quyền cho vai trò thấp hơn vai trò hiện tại");
+        }
+    }
+
+    private List<String> actorRoleCodes(Authentication authentication) {
+        if (authentication == null) {
+            return List.of();
+        }
+        return authentication.getAuthorities().stream()
+                .map(grantedAuthority -> grantedAuthority.getAuthority())
+                .filter(authority -> authority != null && authority.startsWith("ROLE_"))
+                .map(authority -> authority.substring("ROLE_".length()))
+                .filter(roleCode -> !roleCode.isBlank())
+                .toList();
     }
 
     public boolean canManageAccountPermission(Authentication authentication, String username, Permission permission) {
