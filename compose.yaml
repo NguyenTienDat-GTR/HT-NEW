@@ -1,3 +1,5 @@
+name: be
+
 services:
   # ----------------------------------------------------
   # DATABASE SERVICE (POSTGRESQL)
