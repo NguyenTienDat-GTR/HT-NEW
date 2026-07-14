@@ -28,7 +28,8 @@ public class DioceseAccessEvaluator {
     }
 
     public boolean canList(Authentication authentication) {
-        return hasAuthority(authentication, READ_ALL);
+        return hasAuthority(authentication, READ_ALL)
+                || hasAuthority(authentication, READ_DIOCESE);
     }
 
     public boolean canRead(Authentication authentication, UUID dioceseId) {

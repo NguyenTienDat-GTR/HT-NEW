@@ -18,6 +18,8 @@ public class LeaderAccessEvaluator {
     public static final String CREATE_DIOCESE = "organization.leader.create.diocese";
     public static final String CREATE_DEANERY = "organization.leader.create.deanery";
     public static final String CREATE_PARISH = "organization.leader.create.parish";
+    public static final String READ_DIOCESE = "organization.leader.read.diocese";
+    public static final String READ_DEANERY = "organization.leader.read.deanery";
     public static final String READ_PARISH = "organization.leader.read.parish";
     public static final String UPDATE_PARISH = "organization.leader.update.parish";
     public static final String DELETE_PARISH = "organization.leader.delete.parish";
@@ -33,11 +35,15 @@ public class LeaderAccessEvaluator {
     }
 
     public boolean canList(Authentication authentication) {
-        return hasAuthority(authentication, READ_PARISH);
+        return hasAuthority(authentication, READ_DIOCESE)
+                || hasAuthority(authentication, READ_DEANERY)
+                || hasAuthority(authentication, READ_PARISH);
     }
 
     public boolean canRead(Authentication authentication, UUID id) {
-        return hasParishScopedAccess(authentication, id, READ_PARISH);
+        return hasDioceseScopedAccess(authentication, id, READ_DIOCESE)
+                || hasDeaneryScopedAccess(authentication, id, READ_DEANERY)
+                || hasParishScopedAccess(authentication, id, READ_PARISH);
     }
 
     public boolean canUpdate(Authentication authentication, UUID id) {
@@ -50,6 +56,38 @@ public class LeaderAccessEvaluator {
 
     public boolean canDelete(Authentication authentication, UUID id) {
         return hasParishScopedAccess(authentication, id, DELETE_PARISH);
+    }
+
+    private boolean hasDioceseScopedAccess(Authentication authentication, UUID id, String scopedAuthority) {
+        if (!hasAuthority(authentication, scopedAuthority) || id == null) {
+            return false;
+        }
+
+        String username = securityUtils.currentUsername(authentication);
+        if (username == null || username.isBlank()) {
+            return false;
+        }
+
+        return accountRepository.findActiveDioceseIdByUsername(username)
+                .flatMap(activeDioceseId -> leaderRepository.findDioceseIdByLeaderId(id)
+                        .map(activeDioceseId::equals))
+                .orElse(false);
+    }
+
+    private boolean hasDeaneryScopedAccess(Authentication authentication, UUID id, String scopedAuthority) {
+        if (!hasAuthority(authentication, scopedAuthority) || id == null) {
+            return false;
+        }
+
+        String username = securityUtils.currentUsername(authentication);
+        if (username == null || username.isBlank()) {
+            return false;
+        }
+
+        return accountRepository.findActiveDeaneryIdByUsername(username)
+                .flatMap(activeDeaneryId -> leaderRepository.findDeaneryIdByLeaderId(id)
+                        .map(activeDeaneryId::equals))
+                .orElse(false);
     }
 
     private boolean hasParishScopedAccess(Authentication authentication, UUID id, String scopedAuthority) {

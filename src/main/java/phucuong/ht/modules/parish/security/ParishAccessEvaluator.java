@@ -26,6 +26,7 @@ public class ParishAccessEvaluator {
     public static final String READ_DEANERY = "organization.parish.read.deanery";
     public static final String UPDATE_DEANERY = "organization.parish.update.deanery";
     public static final String DELETE_DEANERY = "organization.parish.delete.deanery";
+    public static final String TOGGLE_DEANERY = "organization.parish.toggle.deanery";
     public static final String READ_PARISH = "organization.parish.read.parish";
     public static final String UPDATE_PARISH = "organization.parish.update.parish";
 
@@ -35,7 +36,6 @@ public class ParishAccessEvaluator {
 
     public boolean canCreate(Authentication authentication) {
         return hasAuthority(authentication, CREATE_ALL)
-                || hasAuthority(authentication, CREATE_DIOCESE)
                 || hasAuthority(authentication, CREATE_DEANERY);
     }
 
@@ -55,21 +55,16 @@ public class ParishAccessEvaluator {
 
     public boolean canUpdate(Authentication authentication, UUID parishId) {
         return hasAuthority(authentication, UPDATE_ALL)
-                || hasDioceseScopedAccess(authentication, parishId, UPDATE_DIOCESE)
-                || hasDeaneryScopedAccess(authentication, parishId, UPDATE_DEANERY)
                 || hasParishScopedAccess(authentication, parishId, UPDATE_PARISH);
     }
 
     public boolean canDelete(Authentication authentication) {
-        return hasAuthority(authentication, DELETE_ALL)
-                || hasAuthority(authentication, DELETE_DIOCESE)
-                || hasAuthority(authentication, DELETE_DEANERY);
+        return hasAuthority(authentication, DELETE_ALL);
     }
 
     public boolean canToggle(Authentication authentication, UUID parishId) {
         return hasAuthority(authentication, UPDATE_ALL)
-                || hasDioceseScopedAccess(authentication, parishId, UPDATE_DIOCESE)
-                || hasDeaneryScopedAccess(authentication, parishId, UPDATE_DEANERY);
+                || hasDeaneryScopedAccess(authentication, parishId, TOGGLE_DEANERY);
     }
 
     private boolean hasDioceseScopedAccess(Authentication authentication, UUID parishId, String scopedAuthority) {

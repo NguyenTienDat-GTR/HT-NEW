@@ -9,7 +9,6 @@ import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.modules.auth.repository.AccountRepository;
 import phucuong.ht.modules.deanery.model.entity.Deanery;
 import phucuong.ht.modules.deanery.model.request.DeaneryCreateRequest;
-import phucuong.ht.modules.deanery.repository.DeaneryRepository;
 import phucuong.ht.modules.deanery.security.DeaneryAccessEvaluator;
 
 import java.util.UUID;
@@ -20,7 +19,6 @@ public class DeaneryScopeHelper {
 
     private final securityUtils securityUtils;
     private final AccountRepository accountRepository;
-    private final DeaneryRepository deaneryRepository;
     private final CommonValidationHelper commonValidationHelper;
 
     public void enforceCreateScope(DeaneryCreateRequest request, Authentication authentication) {
@@ -29,12 +27,12 @@ public class DeaneryScopeHelper {
         }
 
         if (!securityUtils.hasAuthority(authentication, DeaneryAccessEvaluator.CREATE_DIOCESE)) {
-            throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền tạo giáo hạt");
+            throw commonValidationHelper.forbidden("Tai khoan hien tai khong co quyen tao giao hat");
         }
 
         UUID activeDioceseId = getRequiredActiveDioceseId(authentication, DeaneryAccessEvaluator.CREATE_DIOCESE);
         if (!activeDioceseId.equals(request.getDioceseId())) {
-            throw commonValidationHelper.forbidden("Không thể tạo giáo hạt ngoài phạm vi giáo phận hiện tại");
+            throw commonValidationHelper.forbidden("Khong the tao giao hat ngoai pham vi giao phan hien tai");
         }
     }
 
@@ -43,40 +41,30 @@ public class DeaneryScopeHelper {
             return;
         }
 
-        if (!securityUtils.hasAuthority(authentication, DeaneryAccessEvaluator.DELETE_DIOCESE)) {
-            throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền xóa giáo hạt");
-        }
-
-        UUID activeDioceseId = getRequiredActiveDioceseId(authentication, DeaneryAccessEvaluator.DELETE_DIOCESE);
-        UUID targetDioceseId = deaneryRepository.findDioceseIdByDeaneryId(deanery.getId())
-                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy giáo hạt: " + deanery.getId()));
-
-        if (!activeDioceseId.equals(targetDioceseId)) {
-            throw commonValidationHelper.forbidden("Không thể xóa giáo hạt ngoài phạm vi giáo phận hiện tại");
-        }
+        throw commonValidationHelper.forbidden("Tai khoan hien tai khong co quyen xoa giao hat");
     }
 
     public UUID getRequiredActiveDioceseId(Authentication authentication, String permissionCode) {
         String username = securityUtils.currentUsername(authentication);
         if (!StringUtils.hasText(username)) {
-            throw commonValidationHelper.forbidden("Tài khoản hiện tại không xác định được tên đăng nhập cho quyền " + permissionCode);
+            throw commonValidationHelper.forbidden("Tai khoan hien tai khong xac dinh duoc ten dang nhap cho quyen " + permissionCode);
         }
 
         return accountRepository.findActiveDioceseIdByUsername(username)
                 .orElseThrow(() -> commonValidationHelper.forbidden(
-                        "Tài khoản hiện tại không có phạm vi giáo phận hợp lệ cho quyền " + permissionCode
+                        "Tai khoan hien tai khong co pham vi giao phan hop le cho quyen " + permissionCode
                 ));
     }
 
     public UUID getRequiredActiveDeaneryId(Authentication authentication, String permissionCode) {
         String username = securityUtils.currentUsername(authentication);
         if (!StringUtils.hasText(username)) {
-            throw commonValidationHelper.forbidden("Tài khoản hiện tại không xác định được tên đăng nhập cho quyền " + permissionCode);
+            throw commonValidationHelper.forbidden("Tai khoan hien tai khong xac dinh duoc ten dang nhap cho quyen " + permissionCode);
         }
 
         return accountRepository.findActiveDeaneryIdByUsername(username)
                 .orElseThrow(() -> commonValidationHelper.forbidden(
-                        "Tài khoản hiện tại không có phạm vi giáo hạt hợp lệ cho quyền " + permissionCode
+                        "Tai khoan hien tai khong co pham vi giao hat hop le cho quyen " + permissionCode
                 ));
     }
 }

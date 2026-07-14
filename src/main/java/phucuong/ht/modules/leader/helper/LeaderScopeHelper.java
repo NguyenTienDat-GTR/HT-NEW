@@ -72,6 +72,20 @@ public class LeaderScopeHelper {
                         "Tài khoản hiện tại không có phạm vi giáo xứ hợp lệ cho quyền " + permissionCode));
     }
 
+    public UUID getRequiredActiveDioceseId(Authentication authentication, String permissionCode) {
+        String username = requireUsername(authentication);
+        return accountRepository.findActiveDioceseIdByUsername(username)
+                .orElseThrow(() -> commonValidationHelper.forbidden(
+                        "Tài khoản hiện tại không có phạm vi giáo phận hợp lệ cho quyền " + permissionCode));
+    }
+
+    public UUID getRequiredActiveDeaneryId(Authentication authentication, String permissionCode) {
+        String username = requireUsername(authentication);
+        return accountRepository.findActiveDeaneryIdByUsername(username)
+                .orElseThrow(() -> commonValidationHelper.forbidden(
+                        "Tài khoản hiện tại không có phạm vi giáo hạt hợp lệ cho quyền " + permissionCode));
+    }
+
     private boolean hasAnyCreateAuthority(Authentication authentication) {
         return securityUtils.hasAuthority(authentication, LeaderAccessEvaluator.CREATE_DIOCESE)
                 || securityUtils.hasAuthority(authentication, LeaderAccessEvaluator.CREATE_DEANERY)

@@ -407,6 +407,7 @@ Current seeded administrative permissions include:
 - `organization.deanery.delete.all`
 - `organization.deanery.create.diocese`
 - `organization.deanery.read.diocese`
+- `organization.deanery.toggle.diocese`
 - `organization.deanery.update.diocese`
 - `organization.deanery.delete.diocese`
 - `organization.deanery.read.deanery`
@@ -421,6 +422,7 @@ Current seeded administrative permissions include:
 - `organization.parish.delete.diocese`
 - `organization.parish.create.deanery`
 - `organization.parish.read.deanery`
+- `organization.parish.toggle.deanery`
 - `organization.parish.update.deanery`
 - `organization.parish.delete.deanery`
 - `organization.parish.read.parish`
@@ -506,11 +508,11 @@ Diocese authorization behavior:
 - `SUPER_ADMIN` has full CRUD access across all dioceses through `organization.diocese.*.all`
 - only `SUPER_ADMIN` may call `PATCH /api/dioceses/{id}/toggle-status`
 - diocese-scoped admins use `organization.diocese.read.diocese` and `organization.diocese.update.diocese`
-- diocese-scoped admins cannot call `GET /api/dioceses`
+- diocese-scoped admins may call `GET /api/dioceses`, but the list is filtered to their own managed diocese before pagination
 - diocese-scoped admins cannot create or delete dioceses
 - diocese-scoped admins cannot toggle their own diocese status
-- diocese-scoped access is resolved from `account.leader.parish.deanery.diocese`
-- if the current account has no linked leader or no resolvable diocese, diocese-scoped access is denied
+- diocese-scoped access is resolved from direct `account.diocese` first, then fallback `account.leader.parish.deanery.diocese`
+- if the current account has no direct/fallback resolvable diocese, diocese-scoped access is denied
 
 Diocese behavior notes:
 
@@ -533,11 +535,10 @@ Deanery API endpoints:
 
 Deanery authorization behavior:
 
-- `SUPER_ADMIN` has full CRUD access across all deaneries through `organization.deanery.*.all`
-- diocese-scoped admins use `organization.deanery.create.diocese`, `organization.deanery.read.diocese`, `organization.deanery.update.diocese`, and `organization.deanery.delete.diocese`
+- `SUPER_ADMIN` has full CRUD access across all deaneries through `organization.deanery.*.all`; status toggle is allowed through `organization.deanery.update.all`
+- seeded diocese-scoped admins use `organization.deanery.read.diocese`, `organization.deanery.create.diocese`, and `organization.deanery.toggle.diocese` for direct-child deaneries inside their own diocese
 - deanery-scoped admins use `organization.deanery.read.deanery` and `organization.deanery.update.deanery`
-- diocese-scoped admins can create, read, update, delete, and list deaneries only inside their own diocese
-- diocese-scoped admins can toggle deaneries inside their own diocese
+- seeded diocese-scoped admins cannot update or delete deaneries, and cannot operate on same-level dioceses except updating their own managed diocese
 - deanery-scoped admins can read, update, and list only their own deanery
 - deanery-scoped admins cannot create or delete deaneries
 - deanery-scoped admins cannot toggle their own deanery status
@@ -545,8 +546,8 @@ Deanery authorization behavior:
 - `SUPER_ADMIN` sees all deaneries
 - diocese-scoped admins see deaneries in their own diocese
 - deanery-scoped admins see only their own deanery
-- diocese-scoped access is resolved from `account.leader.parish.deanery.diocese`
-- deanery-scoped access is resolved from `account.leader.parish.deanery`
+- diocese-scoped access is resolved from direct `account.diocese` first, then fallback `account.leader.parish.deanery.diocese`
+- deanery-scoped access is resolved from direct `account.deanery` first, then fallback `account.leader.parish.deanery`
 - if the current account has no linked leader or no resolvable scope for the granted permission, access is denied
 
 Deanery response behavior:
@@ -575,7 +576,7 @@ Deanery behavior notes:
 - `PATCH /api/deaneries/{id}/toggle-status` requires confirmation text `Xác nhận`
 - list/search/filter internals now operate on UUID-backed relations
 - create/update validation is delegated to `DeaneryValidationHelper`
-- create/delete scope checks are delegated to `DeaneryScopeHelper`
+- create/delete scope checks are delegated to `DeaneryScopeHelper`; toggle authorization is delegated to `DeaneryAccessEvaluator`
 
 ### Parish CRUD And Scope Rules
 
@@ -590,14 +591,12 @@ Parish API endpoints:
 
 Parish authorization behavior:
 
-- `SUPER_ADMIN` has full CRUD access across all parishes through `organization.parish.*.all`
-- diocese-scoped admins use `organization.parish.create.diocese`, `organization.parish.read.diocese`, `organization.parish.update.diocese`, and `organization.parish.delete.diocese`
-- deanery-scoped admins use `organization.parish.create.deanery`, `organization.parish.read.deanery`, `organization.parish.update.deanery`, and `organization.parish.delete.deanery`
+- `SUPER_ADMIN` has full CRUD access across all parishes through `organization.parish.*.all`; status toggle is allowed through `organization.parish.update.all`
+- seeded diocese-scoped admins use `organization.parish.read.diocese` to list parishes inside their own diocese
+- seeded deanery-scoped admins use `organization.parish.read.deanery`, `organization.parish.create.deanery`, and `organization.parish.toggle.deanery` for direct-child parishes inside their own deanery
 - parish-scoped admins use `organization.parish.read.parish` and `organization.parish.update.parish`
-- diocese-scoped admins can create, read, update, delete, and list parishes only inside their own diocese
-- diocese-scoped admins can toggle parishes inside their own diocese
-- deanery-scoped admins can create, read, update, delete, and list only parishes inside their own deanery
-- deanery-scoped admins can toggle parishes inside their own deanery
+- seeded diocese-scoped admins cannot create, update, delete, or toggle parishes because parish is a grandchild unit for diocese scope
+- seeded deanery-scoped admins cannot update or delete parishes
 - parish-scoped admins can read, update, and list only their own parish
 - parish-scoped admins cannot create or delete parishes
 - parish-scoped admins cannot toggle their own parish status
@@ -606,9 +605,9 @@ Parish authorization behavior:
 - diocese-scoped admins see parishes in their own diocese
 - deanery-scoped admins see parishes in their own deanery
 - parish-scoped admins see only their own parish
-- diocese-scoped access is resolved from `account.leader.parish.deanery.diocese`
-- deanery-scoped access is resolved from `account.leader.parish.deanery`
-- parish-scoped access is resolved from `account.leader.parish`
+- diocese-scoped access is resolved from direct `account.diocese` first, then fallback `account.leader.parish.deanery.diocese`
+- deanery-scoped access is resolved from direct `account.deanery` first, then fallback `account.leader.parish.deanery`
+- parish-scoped access is resolved from direct `account.parish` first, then fallback `account.leader.parish`
 - if the current account has no linked leader or no resolvable scope for the granted permission, access is denied
 
 Parish response behavior:
@@ -621,10 +620,9 @@ Parish response behavior:
 Parish update behavior:
 
 - `PUT /api/parishes/{id}` keeps `deaneryId` in `ParishUpdateRequest`
-- parish update may change `deaneryId` only when the target deanery stays inside the same diocese
-- parish-scoped admins cannot change `deaneryId`
-- deanery-scoped admins cannot move a parish outside their current deanery
-- diocese-scoped admins and higher scopes may move a parish only within the current diocese
+- scoped admins may update only their own managed parish through `organization.parish.update.parish`
+- scoped admins cannot change `deaneryId`
+- changing a parish's `deaneryId` is reserved for `SUPER_ADMIN` through `organization.parish.update.all`
 
 Parish behavior notes:
 
@@ -635,7 +633,7 @@ Parish behavior notes:
 - `PATCH /api/parishes/{id}/toggle-status` requires confirmation text `Xác nhận`
 - list/search/filter internals now operate on UUID-backed relations such as `deanery.id` and `deanery.diocese.id`
 - create/update validation is delegated to `ParishValidationHelper`
-- create/delete/deanery-change scope checks are delegated to `ParishScopeHelper`
+- create/delete/deanery-change scope checks are delegated to `ParishScopeHelper`; toggle authorization is delegated to `ParishAccessEvaluator`
 
 Leader follow-up notes:
 
@@ -663,11 +661,12 @@ Leader request/response behavior:
 
 Leader authorization behavior:
 
-- only parish-scoped leader admins may call the current Leader endpoints
-- current leader permissions are `organization.leader.create.parish`, `organization.leader.read.parish`, `organization.leader.update.parish`, and `organization.leader.delete.parish`
-- `GET /api/leaders` is scope-filtered to the active parish resolved from `account.leader.parish`
-- read, update, delete, and toggle-status are allowed only when the target leader belongs to the active parish of the current account
-- if the current account has no linked active leader or no resolvable active parish, access is denied
+- scoped leader admins may read leaders at their assigned scope: `organization.leader.read.diocese`, `organization.leader.read.deanery`, or `organization.leader.read.parish`
+- `GET /api/leaders` is scope-filtered before pagination to `parish.deanery.diocese.id`, `parish.deanery.id`, or `parish.id` according to the effective read permission
+- `GET /api/leaders/{id}` allows diocese, deanery, or parish scoped reads only when the target leader belongs to the resolved active scope of the current account
+- create supports `ADMIN_DIOCESE`, `ADMIN_DEANERY`, and `ADMIN_PARISH` through `organization.leader.create.diocese`, `organization.leader.create.deanery`, and `organization.leader.create.parish`
+- update, delete, and toggle-status remain parish-scoped through `organization.leader.update.parish` and `organization.leader.delete.parish`
+- if the current account has no active direct/fallback scope required by the granted permission, access is denied
 - this pass does not grant Leader API access to `SUPER_ADMIN`
 
 Leader validation and update behavior:
@@ -688,7 +687,7 @@ Leader validation and update behavior:
 Leader permission seed notes:
 
 - Flyway migration `V017__add_leader_gender_and_permissions.sql` seeds the new `leader` permission resource and parish-scoped leader permissions
-- the current repo does not yet define a stable seed role code for parish-admin role assignment, so this pass seeds permissions only and documents the expected parish-admin usage here
+- Flyway migration `V036__seed_scoped_organization_menu_permissions.sql` adds `organization.leader.read.diocese`, `organization.leader.read.deanery`, and backfills missing scoped organization/leader grants for `ADMIN_DIOCESE`, `ADMIN_DEANERY`, and `ADMIN_PARISH` so `/api/auth/me.permissions` can drive FE menu visibility correctly
 
 ### Executive Board Assignment Scope Rules
 
@@ -824,6 +823,7 @@ Cache implementation notes:
 - API read caching now uses Redis with key prefix `ht:api-cache:`
 - cache keys include normalized request payload, current username, authority hash, and resolved scope ids
 - scope-aware keys prevent one admin from reading another scope's cached result
+- Redis serialization keeps cached `PageImpl` list responses readable on cache hits, including Java time fields
 - audit-log APIs are intentionally not cached
 
 Current cache groups and TTLs:
@@ -1068,4 +1068,15 @@ The following work was added in this iteration:
 - Kiểm thử đã chạy: `.\gradlew.bat testClasses` thành công; `.\gradlew.bat test --tests phucuong.ht.contract.EndpointContractMatrixTest` thành công sau khi thêm route logout vào matrix; `.\gradlew.bat clean test` thành công.
 - Logout current-session hardening ngày 2026-07-14 chạy trên branch `feature/logout-current-session`: `AuthService.logout(refreshToken, accessToken)` ưu tiên session từ refresh cookie, fallback access token khi refresh thiếu; unit test xác nhận chỉ gọi `revokeSession` và không gọi `revokeAllSessions`; controller test xác nhận `/api/auth/logout` public, nhận cookie/header và clear refresh cookie. Kiểm thử đã chạy: `.\gradlew.bat test --tests phucuong.ht.modules.auth.service.AuthServiceTest`, `.\gradlew.bat test --tests phucuong.ht.modules.auth.controller.AuthControllerSecurityIntegrationTest`, và `.\gradlew.bat clean test` đều thành công.
 - BE còn thiếu so với plan V1: account `leader-options`, account `role-options`, training `registration-candidates`, outbound STOMP revalidation/ERROR close đầy đủ, heartbeat/time-to-first-message property, và targeted/full tests cho các endpoint mới.
+
+### Admin Diocese Menu Permission Fix 2026-07-14
+
+- Branch `fix/admin-diocese-menu-permissions` starts from `main`.
+- Root cause: FE sidebar reads `/api/auth/me.permissions`; `ADMIN_DIOCESE` had direct `dioceseId` scope but the role seed did not grant scoped organization read permissions or leader read permissions, so Organization and Huynh trưởng routes were hidden for real logins.
+- Added `V036__seed_scoped_organization_menu_permissions.sql` to seed `organization.leader.read.diocese`, `organization.leader.read.deanery`, and backfill scoped organization/leader grants for `ADMIN_DIOCESE`, `ADMIN_DEANERY`, and `ADMIN_PARISH`.
+- Added `V037__direct_child_organization_permissions.sql` to grant direct-child create/toggle permissions only where allowed: `ADMIN_DIOCESE` can create/toggle deaneries in its own diocese, and `ADMIN_DEANERY` can create/toggle parishes in its own deanery.
+- Scoped admin seed rule: admin roles may read descendant organization units for menu/listing and update only their own managed unit. Higher scopes may create/toggle only direct child units they manage; they cannot create/delete same-level units and cannot operate on grandchildren.
+- List cache remains enabled. Redis cache serialization now restores cached `PageImpl` responses correctly on repeated list reads.
+- `GET /api/leaders` now supports diocese/deanery/parish read scopes and filters by `parish.deanery.diocese.id`, `parish.deanery.id`, or `parish.id` before pagination; leader update/toggle remains parish-scoped.
+- Kiểm thử đã chạy: `.\gradlew.bat testClasses` thành công; targeted diocese/deanery/parish/leader tests thành công; container hiện tại đã apply Flyway tới `037` và xác nhận `/api/dioceses` cache hit trả `200`.
 
