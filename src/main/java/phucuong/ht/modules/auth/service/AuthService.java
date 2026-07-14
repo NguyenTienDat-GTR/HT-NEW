@@ -110,6 +110,55 @@ public class AuthService {
         return rotateSessionTokens(currentPrincipal, refreshClaims, refreshToken);
     }
 
+    public void logout(String refreshToken, String accessToken) {
+        String sessionId = resolveLogoutSessionId(refreshToken, accessToken);
+        if (!StringUtils.hasText(sessionId)) {
+            return;
+        }
+
+        redisTokenSessionService.revokeSession(sessionId);
+    }
+
+    private String resolveLogoutSessionId(String refreshToken, String accessToken) {
+        String refreshSessionId = tryParseRefreshSessionId(refreshToken);
+        if (StringUtils.hasText(refreshSessionId)) {
+            return refreshSessionId;
+        }
+        return tryParseAccessSessionId(accessToken);
+    }
+
+    private String tryParseRefreshSessionId(String refreshToken) {
+        if (!StringUtils.hasText(refreshToken)) {
+            return null;
+        }
+        try {
+            jwtUtils.TokenClaims refreshClaims = jwtUtils.parseRefreshTokenClaims(refreshToken);
+            return refreshClaims.sessionId();
+        } catch (ApiException exception) {
+            rethrowUnexpectedLogoutFailure(exception);
+            return null;
+        }
+    }
+
+    private String tryParseAccessSessionId(String accessToken) {
+        if (!StringUtils.hasText(accessToken)) {
+            return null;
+        }
+        try {
+            jwtUtils.TokenClaims accessClaims = jwtUtils.parseAccessTokenClaims(accessToken);
+            return accessClaims.sessionId();
+        } catch (ApiException exception) {
+            rethrowUnexpectedLogoutFailure(exception);
+            return null;
+        }
+    }
+
+    private void rethrowUnexpectedLogoutFailure(ApiException exception) {
+        if (HttpStatus.INTERNAL_SERVER_ERROR.equals(exception.getStatus())) {
+            throw exception;
+        }
+    }
+
     public AuthenticatedUserResponse currentUser(Authentication authentication) {
         if (authentication == null || !(authentication.getPrincipal() instanceof AuthUserDetails principal)) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, errorCode.AUTHENTICATION_FAILED, "Yêu cầu xác thực");

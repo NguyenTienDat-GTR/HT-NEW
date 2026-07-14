@@ -604,7 +604,9 @@ public class CourseParticipationService {
         return CourseParticipationResponse.builder()
                 .id(participation.getId())
                 .leaderId(participation.getLeader() == null ? null : participation.getLeader().getId())
+                .leaderFullName(buildFullName(participation.getLeader()))
                 .courseCode(participation.getCourse() == null ? null : participation.getCourse().getCourseCode())
+                .courseName(participation.getCourse() == null ? null : participation.getCourse().getCourseName())
                 .courseType(participation.getCourse() == null ? null : participation.getCourse().getCourseType())
                 .scoreFormulaId(participation.getCourse() == null || participation.getCourse().getScoreFormula() == null ? null : participation.getCourse().getScoreFormula().getId())
                 .registrationDate(participation.getRegistrationDate())
@@ -642,6 +644,16 @@ public class CourseParticipationService {
                         .toList())
                 .status(participation.getStatus())
                 .build();
+    }
+
+    private String buildFullName(phucuong.ht.modules.leader.model.entity.Leader leader) {
+        if (leader == null) {
+            return null;
+        }
+        if (leader.getLastName() == null || leader.getLastName().isBlank()) {
+            return leader.getFirstName();
+        }
+        return leader.getLastName() + " " + leader.getFirstName();
     }
 
     private void requirePendingManualApproval(WorkflowApprovalStatus status) {

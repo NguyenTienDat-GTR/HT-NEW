@@ -34,7 +34,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest(properties = "app.security.swagger-public-enabled=false")
+@SpringBootTest(properties = {
+        "app.security.swagger-public-enabled=false",
+        "app.rate-limit.enabled=false"
+})
 @AutoConfigureMockMvc
 class AuthControllerSecurityIntegrationTest {
 
@@ -157,6 +160,18 @@ class AuthControllerSecurityIntegrationTest {
         mockMvc.perform(post("/api/auth/refresh"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.errorCode").value("INVALID_TOKEN"));
+    }
+
+    @Test
+    void shouldAllowPublicLogoutAndClearOnlyCurrentSessionCookie() throws Exception {
+        mockMvc.perform(post("/api/auth/logout")
+                        .cookie(new jakarta.servlet.http.Cookie("refreshToken", "refresh-token-cookie"))
+                        .header("Authorization", "Bearer access-token-header"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(cookie().maxAge("refreshToken", 0));
+
+        verify(authService).logout(eq("refresh-token-cookie"), eq("access-token-header"));
     }
 
     @Test

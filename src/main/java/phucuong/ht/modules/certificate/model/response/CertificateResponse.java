@@ -4,6 +4,7 @@ import lombok.Builder;
 import lombok.Getter;
 import phucuong.ht.modules.training.enums.WorkflowApprovalStatus;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -15,7 +16,13 @@ public class CertificateResponse {
     private String oldCertificateCode;
     private String certificateName;
     private UUID leaderId;
+    private String leaderFullName;
     private String courseCode;
+    private String courseName;
+    private BigDecimal totalScore;
+    private BigDecimal passingScore;
+    private Boolean passed;
+    private Boolean approvalReasonRequired;
     private String result;
     private String signedBy;
     private LocalDate issueDate;

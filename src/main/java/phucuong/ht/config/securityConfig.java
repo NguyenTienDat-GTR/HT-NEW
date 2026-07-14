@@ -50,6 +50,7 @@ public class securityConfig {
                 ? new String[]{
                 "/api/auth/login",
                 "/api/auth/refresh",
+                "/api/auth/logout",
                 "/actuator/health",
                 "/swagger-auth-token.js",
                 "/swagger-ui.html",
@@ -60,6 +61,7 @@ public class securityConfig {
                 : new String[]{
                 "/api/auth/login",
                 "/api/auth/refresh",
+                "/api/auth/logout",
                 "/actuator/health"
         };
 

@@ -12,8 +12,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import phucuong.ht.common.dto.apiResponse;
-import phucuong.ht.modules.auth.model.request.LoginRequest;
 import phucuong.ht.modules.auth.model.request.ChangePasswordRequest;
+import phucuong.ht.modules.auth.model.request.LoginRequest;
 import phucuong.ht.modules.auth.model.response.AuthTokenResponse;
 import phucuong.ht.modules.auth.model.response.AuthenticatedUserResponse;
 import phucuong.ht.modules.auth.service.AuthCookieService;
@@ -49,6 +49,18 @@ public class AuthController {
         return apiResponse.success("Làm mới token thành công", tokens);
     }
 
+    @PostMapping("/logout")
+    public apiResponse<Void> logout(
+            HttpServletRequest httpServletRequest,
+            HttpServletResponse httpServletResponse
+    ) {
+        String refreshToken = authCookieService.resolveRefreshToken(httpServletRequest);
+        String accessToken = resolveBearerToken(httpServletRequest);
+        authService.logout(refreshToken, accessToken);
+        authCookieService.clearRefreshCookie(httpServletResponse);
+        return apiResponse.success("Đăng xuất thành công", null);
+    }
+
     @GetMapping("/me")
     public apiResponse<AuthenticatedUserResponse> me(Authentication authentication) {
         return apiResponse.success("Lấy thông tin người dùng đã xác thực thành công", authService.currentUser(authentication));
@@ -67,5 +79,13 @@ public class AuthController {
     @PreAuthorize("@securityUtils.hasAuthority(authentication, 'auth.session.manage.all')")
     public apiResponse<AuthenticatedUserResponse> adminSummary(Authentication authentication) {
         return apiResponse.success("Lấy thông tin tổng quan quản trị thành công", authService.adminSummary(authentication));
+    }
+
+    private String resolveBearerToken(HttpServletRequest request) {
+        String authorization = request.getHeader("Authorization");
+        if (authorization != null && authorization.startsWith("Bearer ")) {
+            return authorization.substring(7);
+        }
+        return null;
     }
 }
