@@ -107,4 +107,39 @@ public class LeaderRepository extends BaseRepo<Leader, UUID> {
                 .getResultList();
         return results.stream().findFirst();
     }
+
+    public Optional<UUID> findDeaneryIdByLeaderId(UUID leaderId) {
+        List<UUID> results = entityManager.createQuery(
+                        """
+                                select d.id
+                                from Leader l
+                                join l.parish p
+                                join p.deanery d
+                                where l.id = :leaderId
+                                """,
+                        UUID.class
+                )
+                .setParameter("leaderId", leaderId)
+                .setMaxResults(1)
+                .getResultList();
+        return results.stream().findFirst();
+    }
+
+    public Optional<UUID> findDioceseIdByLeaderId(UUID leaderId) {
+        List<UUID> results = entityManager.createQuery(
+                        """
+                                select di.id
+                                from Leader l
+                                join l.parish p
+                                join p.deanery d
+                                join d.diocese di
+                                where l.id = :leaderId
+                                """,
+                        UUID.class
+                )
+                .setParameter("leaderId", leaderId)
+                .setMaxResults(1)
+                .getResultList();
+        return results.stream().findFirst();
+    }
 }

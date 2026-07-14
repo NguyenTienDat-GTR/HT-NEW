@@ -37,6 +37,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class LeaderService {
 
+    private static final String DIOCESE_FILTER_FIELD = "parish.deanery.diocese.id";
+    private static final String DEANERY_FILTER_FIELD = "parish.deanery.id";
     private static final String PARISH_FILTER_FIELD = "parish.id";
 
     private final LeaderRepository leaderRepository;
@@ -87,6 +89,18 @@ public class LeaderService {
         }
 
         BaseSearchRequest scopedRequest = copyRequest(request);
+        if (hasAuthority(authentication, LeaderAccessEvaluator.READ_DIOCESE)) {
+            UUID dioceseId = leaderScopeHelper.getRequiredActiveDioceseId(authentication, LeaderAccessEvaluator.READ_DIOCESE);
+            scopedRequest.getFilters().put(DIOCESE_FILTER_FIELD, dioceseId);
+            return loadLeaderPageWithParish(scopedRequest);
+        }
+
+        if (hasAuthority(authentication, LeaderAccessEvaluator.READ_DEANERY)) {
+            UUID deaneryId = leaderScopeHelper.getRequiredActiveDeaneryId(authentication, LeaderAccessEvaluator.READ_DEANERY);
+            scopedRequest.getFilters().put(DEANERY_FILTER_FIELD, deaneryId);
+            return loadLeaderPageWithParish(scopedRequest);
+        }
+
         UUID parishId = leaderScopeHelper.getRequiredActiveParishId(authentication, LeaderAccessEvaluator.READ_PARISH);
         scopedRequest.getFilters().put(PARISH_FILTER_FIELD, parishId);
         return loadLeaderPageWithParish(scopedRequest);
@@ -143,7 +157,16 @@ public class LeaderService {
 
     private boolean hasReadAuthority(Authentication authentication) {
         return authentication != null && authentication.getAuthorities().stream()
-                .anyMatch(authority -> LeaderAccessEvaluator.READ_PARISH.equals(authority.getAuthority()));
+                .map(org.springframework.security.core.GrantedAuthority::getAuthority)
+                .anyMatch(authority -> LeaderAccessEvaluator.READ_DIOCESE.equals(authority)
+                        || LeaderAccessEvaluator.READ_DEANERY.equals(authority)
+                        || LeaderAccessEvaluator.READ_PARISH.equals(authority));
+    }
+
+    private boolean hasAuthority(Authentication authentication, String permissionCode) {
+        return authentication != null && authentication.getAuthorities().stream()
+                .map(org.springframework.security.core.GrantedAuthority::getAuthority)
+                .anyMatch(permissionCode::equals);
     }
 
     private BaseSearchRequest copyRequest(BaseSearchRequest request) {

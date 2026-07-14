@@ -53,6 +53,38 @@ class LeaderAccessEvaluatorTest {
     }
 
     @Test
+    void canReadShouldAllowDioceseScopedPermissionForMatchingLeader() {
+        UUID dioceseId = UUID.randomUUID();
+        UUID leaderId = UUID.randomUUID();
+        Authentication authentication = authentication(
+                "admin-diocese",
+                null,
+                List.of("ADMIN_DIOCESE"),
+                List.of(LeaderAccessEvaluator.READ_DIOCESE)
+        );
+        when(accountRepository.findActiveDioceseIdByUsername("admin-diocese")).thenReturn(Optional.of(dioceseId));
+        when(leaderRepository.findDioceseIdByLeaderId(leaderId)).thenReturn(Optional.of(dioceseId));
+
+        assertTrue(leaderAccessEvaluator.canRead(authentication, leaderId));
+    }
+
+    @Test
+    void canReadShouldAllowDeaneryScopedPermissionForMatchingLeader() {
+        UUID deaneryId = UUID.randomUUID();
+        UUID leaderId = UUID.randomUUID();
+        Authentication authentication = authentication(
+                "admin-deanery",
+                "LEADER1",
+                List.of("ADMIN_DEANERY"),
+                List.of(LeaderAccessEvaluator.READ_DEANERY)
+        );
+        when(accountRepository.findActiveDeaneryIdByUsername("admin-deanery")).thenReturn(Optional.of(deaneryId));
+        when(leaderRepository.findDeaneryIdByLeaderId(leaderId)).thenReturn(Optional.of(deaneryId));
+
+        assertTrue(leaderAccessEvaluator.canRead(authentication, leaderId));
+    }
+
+    @Test
     void canUpdateShouldDenyForDifferentParish() {
         UUID leaderId = UUID.randomUUID();
         Authentication authentication = authentication(
@@ -74,6 +106,18 @@ class LeaderAccessEvaluatorTest {
                 "LEADER1",
                 List.of("ADMIN_PARISH"),
                 List.of(LeaderAccessEvaluator.READ_PARISH)
+        );
+
+        assertTrue(leaderAccessEvaluator.canList(authentication));
+    }
+
+    @Test
+    void canListShouldAllowDioceseScopedAuthority() {
+        Authentication authentication = authentication(
+                "admin-diocese",
+                null,
+                List.of("ADMIN_DIOCESE"),
+                List.of(LeaderAccessEvaluator.READ_DIOCESE)
         );
 
         assertTrue(leaderAccessEvaluator.canList(authentication));

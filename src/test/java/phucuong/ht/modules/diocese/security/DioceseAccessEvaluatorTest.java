@@ -90,7 +90,7 @@ class DioceseAccessEvaluatorTest {
     }
 
     @Test
-    void canListShouldDenyDioceseScopedAuthority() {
+    void canListShouldAllowDioceseScopedAuthority() {
         Authentication authentication = authentication(
                 "admin-dio",
                 "LEADER1",
@@ -98,7 +98,7 @@ class DioceseAccessEvaluatorTest {
                 List.of(DioceseAccessEvaluator.READ_DIOCESE)
         );
 
-        assertFalse(dioceseAccessEvaluator.canList(authentication));
+        assertTrue(dioceseAccessEvaluator.canList(authentication));
     }
 
     @Test

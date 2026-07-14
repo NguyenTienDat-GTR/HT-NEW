@@ -113,7 +113,7 @@ class ParishAccessEvaluatorTest {
                 "admin-deanery",
                 "LEADER1",
                 List.of("ADMIN_DEANERY"),
-                List.of(ParishAccessEvaluator.UPDATE_DEANERY)
+                List.of(ParishAccessEvaluator.TOGGLE_DEANERY)
         );
         when(accountRepository.findActiveDeaneryIdByUsername("admin-deanery")).thenReturn(Optional.of(deaneryId));
         when(parishRepository.findDeaneryIdByParishId(parishId)).thenReturn(Optional.of(deaneryId));

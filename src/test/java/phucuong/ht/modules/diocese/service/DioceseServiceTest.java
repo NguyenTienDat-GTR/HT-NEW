@@ -13,14 +13,19 @@ import org.springframework.security.core.Authentication;
 import phucuong.ht.common.exception.errorCode;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
+import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.modules.auth.repository.AccountRepository;
 import phucuong.ht.modules.diocese.helper.DioceseValidationHelper;
 import phucuong.ht.modules.diocese.model.entity.Diocese;
 import phucuong.ht.modules.diocese.model.request.DioceseCreateRequest;
 import phucuong.ht.modules.diocese.model.request.DioceseUpdateRequest;
 import phucuong.ht.modules.diocese.repository.DioceseRepository;
+import phucuong.ht.modules.diocese.security.DioceseAccessEvaluator;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -40,6 +45,12 @@ class DioceseServiceTest {
 
     @Mock
     private DioceseValidationHelper dioceseValidationHelper;
+
+    @Mock
+    private AccountRepository accountRepository;
+
+    @Mock
+    private securityUtils securityUtils;
 
     @InjectMocks
     private DioceseService dioceseService;
@@ -68,15 +79,54 @@ class DioceseServiceTest {
     }
 
     @Test
-    void findAllShouldDelegateToRepository() {
+    void findAllShouldDelegateToRepositoryForGlobalRead() {
         BaseSearchRequest request = new BaseSearchRequest();
         Page<Diocese> page = new PageImpl<>(List.of(new Diocese()));
+        Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
 
-        when(dioceseRepository.findAll(request)).thenReturn(page);
+        when(dioceseRepository.findAll(any(BaseSearchRequest.class))).thenReturn(page);
+        when(securityUtils.hasAuthority(authentication, DioceseAccessEvaluator.READ_ALL)).thenReturn(true);
 
-        Page<Diocese> result = dioceseService.findAll(request, null);
+        Page<Diocese> result = dioceseService.findAll(request, authentication);
 
         assertSame(page, result);
+        verify(dioceseRepository).findAll(argThat(criteria -> criteria.getFilters().isEmpty()));
+    }
+
+    @Test
+    void findAllShouldApplyScopedDioceseFilter() {
+        UUID dioceseId = UUID.randomUUID();
+        BaseSearchRequest request = new BaseSearchRequest();
+        request.setFilters(new LinkedHashMap<>(java.util.Map.of("name", "Phu Cuong")));
+        Page<Diocese> page = new PageImpl<>(List.of(new Diocese()));
+        Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
+
+        when(securityUtils.hasAuthority(authentication, DioceseAccessEvaluator.READ_ALL)).thenReturn(false);
+        when(securityUtils.hasAuthority(authentication, DioceseAccessEvaluator.READ_DIOCESE)).thenReturn(true);
+        when(securityUtils.currentUsername(authentication)).thenReturn("admin-dio");
+        when(accountRepository.findActiveDioceseIdByUsername("admin-dio")).thenReturn(Optional.of(dioceseId));
+        when(dioceseRepository.findAll(any(BaseSearchRequest.class))).thenReturn(page);
+
+        Page<Diocese> result = dioceseService.findAll(request, authentication);
+
+        assertSame(page, result);
+        verify(dioceseRepository).findAll(argThat(criteria ->
+                dioceseId.equals(criteria.getFilters().get("id"))
+                        && "Phu Cuong".equals(criteria.getFilters().get("name"))
+        ));
+    }
+
+    @Test
+    void findAllShouldRejectScopedReadWithoutResolvedDiocese() {
+        Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
+        when(securityUtils.hasAuthority(authentication, DioceseAccessEvaluator.READ_ALL)).thenReturn(false);
+        when(securityUtils.hasAuthority(authentication, DioceseAccessEvaluator.READ_DIOCESE)).thenReturn(true);
+        when(securityUtils.currentUsername(authentication)).thenReturn("admin-dio");
+        when(accountRepository.findActiveDioceseIdByUsername("admin-dio")).thenReturn(Optional.empty());
+
+        ApiException exception = assertThrows(ApiException.class, () -> dioceseService.findAll(new BaseSearchRequest(), authentication));
+
+        assertEquals(HttpStatus.FORBIDDEN, exception.getStatus());
     }
 
     @Test

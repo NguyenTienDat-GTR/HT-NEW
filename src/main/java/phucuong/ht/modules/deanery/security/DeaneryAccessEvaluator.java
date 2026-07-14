@@ -22,6 +22,7 @@ public class DeaneryAccessEvaluator {
     public static final String READ_DIOCESE = "organization.deanery.read.diocese";
     public static final String UPDATE_DIOCESE = "organization.deanery.update.diocese";
     public static final String DELETE_DIOCESE = "organization.deanery.delete.diocese";
+    public static final String TOGGLE_DIOCESE = "organization.deanery.toggle.diocese";
     public static final String READ_DEANERY = "organization.deanery.read.deanery";
     public static final String UPDATE_DEANERY = "organization.deanery.update.deanery";
 
@@ -48,18 +49,16 @@ public class DeaneryAccessEvaluator {
 
     public boolean canUpdate(Authentication authentication, UUID deaneryId) {
         return hasAuthority(authentication, UPDATE_ALL)
-                || hasDioceseScopedAccess(authentication, deaneryId, UPDATE_DIOCESE)
                 || hasDeaneryScopedAccess(authentication, deaneryId, UPDATE_DEANERY);
     }
 
     public boolean canDelete(Authentication authentication) {
-        return hasAuthority(authentication, DELETE_ALL)
-                || hasAuthority(authentication, DELETE_DIOCESE);
+        return hasAuthority(authentication, DELETE_ALL);
     }
 
     public boolean canToggle(Authentication authentication, UUID deaneryId) {
         return hasAuthority(authentication, UPDATE_ALL)
-                || hasDioceseScopedAccess(authentication, deaneryId, UPDATE_DIOCESE);
+                || hasDioceseScopedAccess(authentication, deaneryId, TOGGLE_DIOCESE);
     }
 
     private boolean hasDioceseScopedAccess(Authentication authentication, UUID deaneryId, String scopedAuthority) {

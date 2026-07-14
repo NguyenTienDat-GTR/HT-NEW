@@ -128,7 +128,7 @@ class DeaneryAccessEvaluatorTest {
                 "admin-dio",
                 "LEADER1",
                 List.of("ADMIN_DIOCESE"),
-                List.of(DeaneryAccessEvaluator.UPDATE_DIOCESE)
+                List.of(DeaneryAccessEvaluator.TOGGLE_DIOCESE)
         );
         when(accountRepository.findActiveDioceseIdByUsername("admin-dio")).thenReturn(Optional.of(dioceseId));
         when(deaneryRepository.findDioceseIdByDeaneryId(deaneryId)).thenReturn(Optional.of(dioceseId));

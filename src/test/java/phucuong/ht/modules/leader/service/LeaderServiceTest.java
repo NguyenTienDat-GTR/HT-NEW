@@ -124,6 +124,50 @@ class LeaderServiceTest {
     }
 
     @Test
+    void findAllShouldApplyDioceseScopeFilter() {
+        UUID dioceseId = UUID.randomUUID();
+        UUID parishId = UUID.randomUUID();
+        UUID leaderId = UUID.randomUUID();
+        Leader summary = new Leader();
+        summary.setId(leaderId);
+        Leader hydrated = leader(leaderId, parish(parishId));
+        Authentication authentication = authenticationWithPermission(LeaderAccessEvaluator.READ_DIOCESE);
+
+        when(leaderScopeHelper.getRequiredActiveDioceseId(authentication, LeaderAccessEvaluator.READ_DIOCESE)).thenReturn(dioceseId);
+        when(leaderRepository.findAll(any(BaseSearchRequest.class))).thenReturn(new PageImpl<>(List.of(summary)));
+        when(leaderRepository.findAllByIdsWithParish(List.of(leaderId))).thenReturn(List.of(hydrated));
+
+        Page<LeaderResponse> result = leaderService.findAll(new BaseSearchRequest(), authentication);
+
+        assertEquals(leaderId, result.getContent().getFirst().getId());
+        ArgumentCaptor<BaseSearchRequest> captor = ArgumentCaptor.forClass(BaseSearchRequest.class);
+        verify(leaderRepository).findAll(captor.capture());
+        assertEquals(dioceseId, captor.getValue().getFilters().get("parish.deanery.diocese.id"));
+    }
+
+    @Test
+    void findAllShouldApplyDeaneryScopeFilter() {
+        UUID deaneryId = UUID.randomUUID();
+        UUID parishId = UUID.randomUUID();
+        UUID leaderId = UUID.randomUUID();
+        Leader summary = new Leader();
+        summary.setId(leaderId);
+        Leader hydrated = leader(leaderId, parish(parishId));
+        Authentication authentication = authenticationWithPermission(LeaderAccessEvaluator.READ_DEANERY);
+
+        when(leaderScopeHelper.getRequiredActiveDeaneryId(authentication, LeaderAccessEvaluator.READ_DEANERY)).thenReturn(deaneryId);
+        when(leaderRepository.findAll(any(BaseSearchRequest.class))).thenReturn(new PageImpl<>(List.of(summary)));
+        when(leaderRepository.findAllByIdsWithParish(List.of(leaderId))).thenReturn(List.of(hydrated));
+
+        Page<LeaderResponse> result = leaderService.findAll(new BaseSearchRequest(), authentication);
+
+        assertEquals(leaderId, result.getContent().getFirst().getId());
+        ArgumentCaptor<BaseSearchRequest> captor = ArgumentCaptor.forClass(BaseSearchRequest.class);
+        verify(leaderRepository).findAll(captor.capture());
+        assertEquals(deaneryId, captor.getValue().getFilters().get("parish.deanery.id"));
+    }
+
+    @Test
     void updateShouldNotChangeLevel() {
         UUID parishId = UUID.randomUUID();
         UUID leaderId = UUID.randomUUID();

@@ -12,23 +12,32 @@ import org.springframework.stereotype.Service;
 import phucuong.ht.common.exception.errorCode;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
+import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.config.CacheNames;
 import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.modules.auth.repository.AccountRepository;
 import phucuong.ht.modules.diocese.helper.DioceseValidationHelper;
 import phucuong.ht.modules.diocese.model.entity.Diocese;
 import phucuong.ht.modules.diocese.model.request.DioceseCreateRequest;
 import phucuong.ht.modules.diocese.model.request.DioceseUpdateRequest;
 import phucuong.ht.modules.diocese.repository.DioceseRepository;
+import phucuong.ht.modules.diocese.security.DioceseAccessEvaluator;
 
 import java.time.OffsetDateTime;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class DioceseService {
 
+    private static final String DIOCESE_FILTER_FIELD = "id";
+
     private final DioceseRepository dioceseRepository;
     private final DioceseValidationHelper dioceseValidationHelper;
+    private final AccountRepository accountRepository;
+    private final securityUtils securityUtils;
 
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
@@ -60,7 +69,24 @@ public class DioceseService {
 
     @Cacheable(cacheNames = CacheNames.DIOCESE_LIST, key = "@cacheScopeKeyHelper.listKey(#authentication, #request)")
     public Page<Diocese> findAll(BaseSearchRequest request, Authentication authentication) {
-        return dioceseRepository.findAll(request == null ? new BaseSearchRequest() : request);
+        BaseSearchRequest scopedRequest = copyRequest(request);
+
+        if (securityUtils.hasAuthority(authentication, DioceseAccessEvaluator.READ_ALL)) {
+            return dioceseRepository.findAll(scopedRequest);
+        }
+
+        if (securityUtils.hasAuthority(authentication, DioceseAccessEvaluator.READ_DIOCESE)) {
+            UUID dioceseId = accountRepository.findActiveDioceseIdByUsername(securityUtils.currentUsername(authentication))
+                    .orElseThrow(() -> new ApiException(
+                            HttpStatus.FORBIDDEN,
+                            errorCode.ACCESS_DENIED,
+                            "Tài khoản hiện tại không có phạm vi giáo phận hợp lệ"
+                    ));
+            scopedRequest.getFilters().put(DIOCESE_FILTER_FIELD, dioceseId);
+            return dioceseRepository.findAll(scopedRequest);
+        }
+
+        throw new ApiException(HttpStatus.FORBIDDEN, errorCode.ACCESS_DENIED, "Tài khoản hiện tại không có quyền xem danh sách giáo phận");
     }
 
     @Cacheable(cacheNames = CacheNames.DIOCESE_DETAIL, key = "@cacheScopeKeyHelper.detailKey(#authentication, #id)")
@@ -106,5 +132,19 @@ public class DioceseService {
         dioceseValidationHelper.validateToggleConfirmation(request == null ? null : request.getConfirmationText());
         String auditActor = dioceseValidationHelper.getRequiredAuditActor(authentication);
         return dioceseRepository.toggleStatus(id, auditActor);
+    }
+
+    private BaseSearchRequest copyRequest(BaseSearchRequest request) {
+        BaseSearchRequest source = request == null ? new BaseSearchRequest() : request;
+        BaseSearchRequest copy = new BaseSearchRequest();
+        copy.setPage(source.getPage());
+        copy.setSize(source.getSize());
+        copy.setSearch(source.getSearch());
+        copy.setSearchFields(source.getSearchFields() == null ? List.of() : List.copyOf(source.getSearchFields()));
+        copy.setFilters(source.getFilters() == null ? new LinkedHashMap<>() : new LinkedHashMap<>(source.getFilters()));
+        copy.setStatus(source.getStatus());
+        copy.setSortBy(source.getSortBy());
+        copy.setSortDirection(source.getSortDirection());
+        return copy;
     }
 }
