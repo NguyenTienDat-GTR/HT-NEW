@@ -29,6 +29,7 @@ import phucuong.ht.modules.system.model.response.AccountResponse;
 import java.security.SecureRandom;
 import java.text.Normalizer;
 import java.time.OffsetDateTime;
+import java.util.Comparator;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -282,15 +283,68 @@ public class AccountManagementService {
     }
 
     private AccountResponse response(Account account) {
+        Leader leader = account.getLeader();
         return AccountResponse.builder()
                 .username(account.getUsername())
-                .leaderId(account.getLeader() == null ? null : account.getLeader().getId())
-                .dioceseId(account.getDiocese() == null ? null : account.getDiocese().getId())
-                .deaneryId(null)
-                .parishId(null)
+                .leaderId(leader == null ? null : leader.getId())
+                .leaderFullName(buildFullName(leader))
+                .primaryRoleCode(primaryRoleCode(account.getUsername()))
+                .dioceseId(resolveDioceseId(account, leader))
+                .deaneryId(resolveDeaneryId(account, leader))
+                .parishId(resolveParishId(account, leader))
                 .authProvider(account.getAuthProvider())
                 .providerId(account.getProviderId())
                 .status(account.getStatus())
                 .build();
+    }
+
+    private String primaryRoleCode(String username) {
+        return accountRoleRepository.findActiveByUsername(username).stream()
+                .sorted(Comparator.comparing((AccountRole accountRole) -> !Boolean.TRUE.equals(accountRole.getIsPrimary()))
+                        .thenComparing(AccountRole::getAssignedAt, Comparator.nullsLast(Comparator.naturalOrder())))
+                .map(accountRole -> accountRole.getRole() == null ? null : accountRole.getRole().getRoleCode())
+                .filter(roleCode -> roleCode != null && !roleCode.isBlank())
+                .findFirst()
+                .orElse(null);
+    }
+
+    private UUID resolveDioceseId(Account account, Leader leader) {
+        if (account.getDiocese() != null) {
+            return account.getDiocese().getId();
+        }
+        if (leader == null || leader.getParish() == null || leader.getParish().getDeanery() == null || leader.getParish().getDeanery().getDiocese() == null) {
+            return null;
+        }
+        return leader.getParish().getDeanery().getDiocese().getId();
+    }
+
+    private UUID resolveDeaneryId(Account account, Leader leader) {
+        if (account.getDeanery() != null) {
+            return account.getDeanery().getId();
+        }
+        if (leader == null || leader.getParish() == null || leader.getParish().getDeanery() == null) {
+            return null;
+        }
+        return leader.getParish().getDeanery().getId();
+    }
+
+    private UUID resolveParishId(Account account, Leader leader) {
+        if (account.getParish() != null) {
+            return account.getParish().getId();
+        }
+        if (leader == null || leader.getParish() == null) {
+            return null;
+        }
+        return leader.getParish().getId();
+    }
+
+    private String buildFullName(Leader leader) {
+        if (leader == null) {
+            return null;
+        }
+        if (leader.getLastName() == null || leader.getLastName().isBlank()) {
+            return leader.getFirstName();
+        }
+        return leader.getLastName() + " " + leader.getFirstName();
     }
 }

@@ -347,12 +347,30 @@ public class CertificateService {
     }
 
     private CertificateResponse toResponse(Certificate certificate) {
+        CourseParticipation participation = null;
+        if (certificate.getLeader() != null && certificate.getCourse() != null) {
+            participation = courseParticipationRepository.findByLeaderIdAndCourseCode(
+                    certificate.getLeader().getId(),
+                    certificate.getCourse().getCourseCode()
+            ).orElse(null);
+        }
+        boolean passed = participation != null
+                && participation.getTotalScore() != null
+                && participation.getCourse() != null
+                && participation.getCourse().getScoreFormula() != null
+                && participation.getTotalScore().compareTo(participation.getCourse().getScoreFormula().getPassingScore()) >= 0;
         return CertificateResponse.builder()
                 .certificateCode(certificate.getCertificateCode())
                 .oldCertificateCode(certificate.getOldCertificateCode())
                 .certificateName(certificate.getCertificateName())
                 .leaderId(certificate.getLeader() == null ? null : certificate.getLeader().getId())
+                .leaderFullName(buildFullName(certificate.getLeader()))
                 .courseCode(certificate.getCourse() == null ? null : certificate.getCourse().getCourseCode())
+                .courseName(certificate.getCourse() == null ? null : certificate.getCourse().getCourseName())
+                .totalScore(participation == null ? null : participation.getTotalScore())
+                .passingScore(participation == null || participation.getCourse() == null || participation.getCourse().getScoreFormula() == null ? null : participation.getCourse().getScoreFormula().getPassingScore())
+                .passed(participation == null || participation.getTotalScore() == null ? null : passed)
+                .approvalReasonRequired(participation != null && participation.getTotalScore() != null && !passed)
                 .result(certificate.getResult())
                 .signedBy(certificate.getSignedBy())
                 .issueDate(certificate.getIssueDate())
@@ -365,6 +383,16 @@ public class CertificateService {
                 .approvedBy(certificate.getApprovedBy())
                 .status(certificate.getStatus())
                 .build();
+    }
+
+    private String buildFullName(Leader leader) {
+        if (leader == null) {
+            return null;
+        }
+        if (leader.getLastName() == null || leader.getLastName().isBlank()) {
+            return leader.getFirstName();
+        }
+        return leader.getLastName() + " " + leader.getFirstName();
     }
 
     private void publishEvent(String eventType, String entityType, String entityId, String actor, Map<String, Object> payload) {

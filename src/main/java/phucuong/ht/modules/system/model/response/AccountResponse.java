@@ -10,6 +10,8 @@ import java.util.UUID;
 public class AccountResponse {
     private String username;
     private UUID leaderId;
+    private String leaderFullName;
+    private String primaryRoleCode;
     private UUID dioceseId;
     private UUID deaneryId;
     private UUID parishId;

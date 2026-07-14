@@ -1053,3 +1053,19 @@ The following work was added in this iteration:
 - `POST /api/auth/change-password` nhận `{oldPassword,newPassword}`; mật khẩu mới dài 8-72 ký tự, khác mật khẩu cũ, được hash trước khi lưu và thành công sẽ revoke toàn bộ Redis session của account.
 - Gmail SMTP dùng `smtp.gmail.com:587` với STARTTLS. Runtime cần `MAIL_USERNAME`, `MAIL_PASSWORD` là Google App Password, và tùy chọn `MAIL_FROM`; không commit secret vào Git.
 
+### FE V1 backend support 2026-07-14
+
+- Auth thêm `POST /api/auth/logout` public/idempotent: đọc refresh token từ HttpOnly cookie và Bearer access token nếu client còn giữ access token trong memory; token hợp lệ đầu tiên chỉ revoke đúng Redis `sessionId` của phiên đang logout bằng `revokeSession(sessionId)`, không gọi `revokeAllSessions` nên các phiên/IP khác của cùng account vẫn giữ nguyên. Token thiếu/sai/hết hạn vẫn xem là đã logout và luôn clear refresh cookie cùng path/SameSite/Secure/HttpOnly với `MaxAge=0`.
+- Security matcher và JWT filter bỏ qua `/api/auth/logout` để FE có thể gọi logout kể cả access token trong memory đã mất hoặc hết hạn.
+- WebSocket/STOMP `/ws/notifications` yêu cầu origin exact qua `APP_WEBSOCKET_ALLOWED_ORIGINS` (`app.websocket.allowed-origins`, mặc định `http://localhost:3000`), không chấp nhận origin rỗng hoặc wildcard.
+- STOMP `CONNECT` yêu cầu native header `Authorization: Bearer <accessToken>`, parse access JWT theo issuer/audience/type, kiểm Redis `sessionId + username + jti`, chặn `mustChangePassword`, và set authenticated user cho STOMP session.
+- STOMP chỉ cho subscribe `/user/queue/notifications`; mọi `SEND` từ client bị từ chối. Outbound per-message ERROR/close hardening và time-to-first-message tuning vẫn cần pass riêng nếu muốn đạt đủ mức kiểm tra phiên trên từng outbound frame.
+- `CourseParticipationResponse` enrich thêm `leaderFullName` và `courseName`.
+- `CertificateResponse` enrich thêm `leaderFullName`, `courseName`, `totalScore`, `passingScore`, `passed`, và `approvalReasonRequired`; các field này lấy từ participation cùng leader/course và không đổi certificate workflow.
+- `ScoreFormulaTemplateResponse` thêm `locked`, tính bằng `hasScoredParticipations(id)`; rule update conflict hiện có không đổi.
+- `AccountResponse` enrich thêm `leaderFullName`, `primaryRoleCode`, và resolve `dioceseId`, `deaneryId`, `parishId` từ direct account scope hoặc fallback `Leader -> Parish -> Deanery -> Diocese`.
+- Biến môi trường mới: `APP_WEBSOCKET_ALLOWED_ORIGINS`. FE và deployment không được dùng wildcard trong production.
+- Kiểm thử đã chạy: `.\gradlew.bat testClasses` thành công; `.\gradlew.bat test --tests phucuong.ht.contract.EndpointContractMatrixTest` thành công sau khi thêm route logout vào matrix; `.\gradlew.bat clean test` thành công.
+- Logout current-session hardening ngày 2026-07-14 chạy trên branch `feature/logout-current-session`: `AuthService.logout(refreshToken, accessToken)` ưu tiên session từ refresh cookie, fallback access token khi refresh thiếu; unit test xác nhận chỉ gọi `revokeSession` và không gọi `revokeAllSessions`; controller test xác nhận `/api/auth/logout` public, nhận cookie/header và clear refresh cookie. Kiểm thử đã chạy: `.\gradlew.bat test --tests phucuong.ht.modules.auth.service.AuthServiceTest`, `.\gradlew.bat test --tests phucuong.ht.modules.auth.controller.AuthControllerSecurityIntegrationTest`, và `.\gradlew.bat clean test` đều thành công.
+- BE còn thiếu so với plan V1: account `leader-options`, account `role-options`, training `registration-candidates`, outbound STOMP revalidation/ERROR close đầy đủ, heartbeat/time-to-first-message property, và targeted/full tests cho các endpoint mới.
+

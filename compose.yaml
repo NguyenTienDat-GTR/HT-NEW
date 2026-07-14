@@ -123,11 +123,14 @@ services:
 
 volumes:
   pgdata:
-    driver: local
+    name: ht-management-new_pgdata
+    external: true
   redisdata:
-    driver: local
+    name: ht-management-new_redisdata
+    external: true
   rabbitdata:
-    driver: local
+    name: ht-management-new_rabbitdata
+    external: true
 
 networks:
   ht-network:

@@ -34,6 +34,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
@@ -186,6 +187,56 @@ class AuthServiceTest {
     void refreshShouldRejectMissingToken() {
         AuthService authService = createService();
         assertThrows(ApiException.class, () -> authService.refresh(null));
+    }
+
+    @Test
+    void logoutShouldRevokeOnlyTheRefreshTokenSession() {
+        AuthService authService = createService();
+        jwtUtils.TokenClaims tokenClaims = new jwtUtils.TokenClaims(
+                AuthUserDetails.tokenPrincipal("superadminpc", null, List.of("SUPER_ADMIN"), List.of("auth.session.manage.all")),
+                "session-logout",
+                "refresh-jti",
+                Instant.now(),
+                Instant.now().plusSeconds(600),
+                jwtUtils.REFRESH_TOKEN_TYPE
+        );
+
+        when(jwtUtils.parseRefreshTokenClaims("refresh-token")).thenReturn(tokenClaims);
+
+        authService.logout("refresh-token", "access-token");
+
+        verify(redisTokenSessionService).revokeSession("session-logout");
+        verify(redisTokenSessionService, never()).revokeAllSessions(anyString());
+        verify(jwtUtils, never()).parseAccessTokenClaims(anyString());
+    }
+
+    @Test
+    void logoutShouldFallbackToAccessTokenSessionWhenRefreshTokenIsMissing() {
+        AuthService authService = createService();
+        jwtUtils.TokenClaims tokenClaims = new jwtUtils.TokenClaims(
+                AuthUserDetails.tokenPrincipal("superadminpc", null, List.of("SUPER_ADMIN"), List.of("auth.session.manage.all")),
+                "session-from-access",
+                "access-jti",
+                Instant.now(),
+                Instant.now().plusSeconds(600),
+                jwtUtils.ACCESS_TOKEN_TYPE
+        );
+
+        when(jwtUtils.parseAccessTokenClaims("access-token")).thenReturn(tokenClaims);
+
+        authService.logout(null, "access-token");
+
+        verify(redisTokenSessionService).revokeSession("session-from-access");
+        verify(redisTokenSessionService, never()).revokeAllSessions(anyString());
+    }
+
+    @Test
+    void logoutShouldIgnoreMissingTokens() {
+        AuthService authService = createService();
+
+        authService.logout(null, null);
+
+        verifyNoInteractions(jwtUtils, redisTokenSessionService);
     }
 
     @Test

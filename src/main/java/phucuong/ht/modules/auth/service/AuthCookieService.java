@@ -26,6 +26,14 @@ public class AuthCookieService {
         ).toString());
     }
 
+    public void clearRefreshCookie(HttpServletResponse response) {
+        response.addHeader("Set-Cookie", buildCookie(
+                authProperties.getCookie().getRefreshTokenName(),
+                "",
+                0
+        ).toString());
+    }
+
     public String resolveAccessToken(HttpServletRequest request) {
         return readCookie(request, authProperties.getCookie().getAccessTokenName());
     }

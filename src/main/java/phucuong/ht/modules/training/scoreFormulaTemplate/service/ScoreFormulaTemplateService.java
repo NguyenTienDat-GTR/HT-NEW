@@ -230,6 +230,7 @@ public class ScoreFormulaTemplateService {
                 .unitType(formula.getUnitType())
                 .dioceseId(formula.getDiocese() == null ? null : formula.getDiocese().getId())
                 .deaneryId(formula.getDeanery() == null ? null : formula.getDeanery().getId())
+                .locked(repository.hasScoredParticipations(formula.getId()))
                 .status(formula.getStatus())
                 .components(formula.getComponents().stream().map(component -> ScoreFormulaComponentResponse.builder()
                         .id(component.getId())

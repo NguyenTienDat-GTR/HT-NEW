@@ -21,6 +21,7 @@ public class ScoreFormulaTemplateResponse {
     private UnitType unitType;
     private UUID dioceseId;
     private UUID deaneryId;
+    private Boolean locked;
     private Boolean status;
     private List<ScoreFormulaComponentResponse> components;
     private OffsetDateTime createdAt;
