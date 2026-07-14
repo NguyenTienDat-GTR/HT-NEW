@@ -22,14 +22,19 @@ public class RolePermissionController {
     private final RolePermissionManagementService rolePermissionManagementService;
 
     @PostMapping
-    @PreAuthorize("@systemAdminAuthorizationHelper.isSuperAdmin(authentication)")
+    @PreAuthorize(
+            "@systemAdminAuthorizationHelper.isSuperAdmin(authentication)"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.all')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.diocese')"
+    )
     public apiResponse<RolePermissionResponse> create(@Valid @RequestBody RolePermissionCreateRequest request, Authentication authentication) {
         return apiResponse.success("Gán quyền cho vai trò thành công", rolePermissionManagementService.create(request, authentication));
     }
 
     @GetMapping
     @PreAuthorize(
-            "@securityUtils.hasAuthority(authentication, 'system.role_permission.assign.all')"
+            "@systemAdminAuthorizationHelper.isSuperAdmin(authentication)"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.all')"
                     + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.diocese')"
                     + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.all')"
                     + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.diocese')"
@@ -40,7 +45,8 @@ public class RolePermissionController {
 
     @GetMapping("/{id}")
     @PreAuthorize(
-            "@securityUtils.hasAuthority(authentication, 'system.role_permission.assign.all')"
+            "@systemAdminAuthorizationHelper.isSuperAdmin(authentication)"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.all')"
                     + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.diocese')"
                     + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.all')"
                     + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.diocese')"
@@ -50,7 +56,11 @@ public class RolePermissionController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("@systemAdminAuthorizationHelper.isSuperAdmin(authentication)")
+    @PreAuthorize(
+            "@systemAdminAuthorizationHelper.isSuperAdmin(authentication)"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.all')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.diocese')"
+    )
     public apiResponse<RolePermissionResponse> update(
             @PathVariable String id,
             @Valid @RequestBody RolePermissionUpdateRequest request,
@@ -60,14 +70,22 @@ public class RolePermissionController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("@systemAdminAuthorizationHelper.isSuperAdmin(authentication)")
+    @PreAuthorize(
+            "@systemAdminAuthorizationHelper.isSuperAdmin(authentication)"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.all')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.diocese')"
+    )
     public apiResponse<Void> delete(@PathVariable String id, Authentication authentication) {
         rolePermissionManagementService.delete(id, authentication);
         return apiResponse.success("Xóa quyền của vai trò thành công", null);
     }
 
     @PatchMapping("/{id}/toggle-status")
-    @PreAuthorize("@systemAdminAuthorizationHelper.isSuperAdmin(authentication)")
+    @PreAuthorize(
+            "@systemAdminAuthorizationHelper.isSuperAdmin(authentication)"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.all')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.diocese')"
+    )
     public apiResponse<RolePermissionResponse> toggleStatus(
             @PathVariable String id,
             @Valid @RequestBody StatusToggleRequest request,
