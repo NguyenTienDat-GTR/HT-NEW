@@ -14,6 +14,7 @@ import phucuong.ht.common.utils.jwtUtils;
 import phucuong.ht.modules.auth.model.AuthUserDetails;
 import phucuong.ht.modules.auth.service.RedisTokenSessionService;
 import phucuong.ht.modules.system.model.enums.PermissionEffect;
+import phucuong.ht.modules.system.model.request.AccountPermissionOverrideBulkRequest;
 import phucuong.ht.modules.system.model.request.AccountPermissionOverrideCreateRequest;
 import phucuong.ht.modules.system.model.response.AccountPermissionOverrideResponse;
 import phucuong.ht.modules.system.service.AccountPermissionOverrideManagementService;
@@ -88,6 +89,41 @@ class AccountPermissionOverrideControllerSecurityIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void shouldAllowBulkAccountPermissionManageWithCheckboxPayload() throws Exception {
+        AccountPermissionOverrideBulkRequest request = new AccountPermissionOverrideBulkRequest();
+        request.setUsername("target");
+        request.setPermissionCodes(List.of("organization.position.read.diocese", "organization.position.update.diocese"));
+        request.setEffect(PermissionEffect.DENY);
+        request.setReason("temporary restriction");
+
+        when(accountPermissionOverrideManagementService.bulkAssign(any(AccountPermissionOverrideBulkRequest.class), any()))
+                .thenReturn(List.of(
+                        AccountPermissionOverrideResponse.builder()
+                                .id("apo-1")
+                                .username("target")
+                                .permissionCode("organization.position.read.diocese")
+                                .effect(PermissionEffect.DENY)
+                                .status(true)
+                                .build(),
+                        AccountPermissionOverrideResponse.builder()
+                                .id("apo-2")
+                                .username("target")
+                                .permissionCode("organization.position.update.diocese")
+                                .effect(PermissionEffect.DENY)
+                                .status(true)
+                                .build()
+                ));
+
+        mockMvc.perform(post("/api/system/account-permissions/bulk")
+                        .header("Authorization", bearer(token(List.of("ADMIN_DIOCESE"), List.of("system.account_permission.manage.diocese"))))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(2))
+                .andExpect(jsonPath("$.data[0].username").value("target"));
     }
 
     private String token(List<String> roles, List<String> permissions) {

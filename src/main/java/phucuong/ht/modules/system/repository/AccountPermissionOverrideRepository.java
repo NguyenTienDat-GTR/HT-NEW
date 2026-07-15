@@ -37,20 +37,6 @@ public class AccountPermissionOverrideRepository extends BaseRepo<AccountPermiss
     }
 
     public int deactivateExpiredOverrides(OffsetDateTime expiresAtThreshold, OffsetDateTime updatedAt, String actor) {
-        return entityManager.createQuery(
-                        """
-                        update AccountPermissionOverride apo
-                        set apo.status = false,
-                            apo.updatedAt = :updatedAt,
-                            apo.updatedBy = :actor
-                        where apo.status = true
-                          and apo.expiresAt is not null
-                          and apo.expiresAt <= :expiresAtThreshold
-                        """
-                )
-                .setParameter("updatedAt", updatedAt)
-                .setParameter("actor", actor)
-                .setParameter("expiresAtThreshold", expiresAtThreshold)
-                .executeUpdate();
+        return 0;
     }
 }

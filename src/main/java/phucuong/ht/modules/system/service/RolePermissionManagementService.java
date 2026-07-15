@@ -13,6 +13,7 @@ import phucuong.ht.modules.auth.repository.RoleRepository;
 import phucuong.ht.modules.system.model.entity.Permission;
 import phucuong.ht.modules.system.model.entity.Role;
 import phucuong.ht.modules.system.model.entity.RolePermission;
+import phucuong.ht.modules.system.model.request.RolePermissionBulkRequest;
 import phucuong.ht.modules.system.model.request.RolePermissionCreateRequest;
 import phucuong.ht.modules.system.model.request.RolePermissionUpdateRequest;
 import phucuong.ht.modules.system.model.response.RolePermissionResponse;
@@ -20,6 +21,8 @@ import phucuong.ht.modules.system.repository.RolePermissionRepository;
 import phucuong.ht.modules.system.repository.SystemPermissionRepository;
 
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 
@@ -56,6 +59,38 @@ public class RolePermissionManagementService {
         rolePermission.setAssignedBy(actor);
         rolePermission.setAssignedAt(request.getAssignedAt() == null ? OffsetDateTime.now() : request.getAssignedAt());
         return toResponse(rolePermission);
+    }
+
+    public List<RolePermissionResponse> bulkAssign(RolePermissionBulkRequest request, Authentication authentication) {
+        Role role = roleRepository.findById(request.getRoleCode())
+                .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay vai tro: " + request.getRoleCode()));
+        if (!Boolean.TRUE.equals(role.getStatus())) {
+            throw commonValidationHelper.conflict("Khong the gan quyen cho vai tro dang ngung hoat dong");
+        }
+
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Khong xac dinh duoc nguoi tao phan quyen cho vai tro");
+        OffsetDateTime assignedAt = request.getAssignedAt() == null ? OffsetDateTime.now() : request.getAssignedAt();
+        List<RolePermissionResponse> responses = new ArrayList<>();
+
+        for (String permissionCode : new LinkedHashSet<>(request.getPermissionCodes())) {
+            Permission permission = systemPermissionRepository.findById(permissionCode)
+                    .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay quyen: " + permissionCode));
+            if (!Boolean.TRUE.equals(permission.getStatus())) {
+                throw commonValidationHelper.conflict("Khong the gan quyen dang ngung hoat dong: " + permissionCode);
+            }
+            authorizationHelper.requireRolePermissionWriteAccess(authentication, role, permission, SystemAdminAuthorizationHelper.ROLE_PERMISSION_ASSIGN_DIOCESE);
+
+            RolePermission rolePermission = rolePermissionRepository.findByRoleCodeAndPermissionCode(request.getRoleCode(), permissionCode)
+                    .orElseGet(() -> createRolePermission(role, permission, actor, assignedAt));
+            rolePermission.setEffect(request.getEffect());
+            rolePermission.setConditions(commonValidationHelper.normalizeOptionalText(request.getConditions()));
+            rolePermission.setExpiresAt(request.getExpiresAt());
+            rolePermission.setStatus(true);
+            rolePermission.setUpdatedBy(actor);
+            responses.add(toResponse(rolePermission));
+        }
+
+        return responses;
     }
 
     public Page<RolePermissionResponse> findAll(BaseSearchRequest request, Authentication authentication) {
@@ -119,8 +154,9 @@ public class RolePermissionManagementService {
         );
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái phân quyền cho vai trò");
-        rolePermissionRepository.toggleStatus(id, actor);
-        return findById(id, authentication);
+        rolePermission.setStatus(true);
+        rolePermission.setUpdatedBy(actor);
+        return toResponse(rolePermission);
     }
 
     private BaseSearchRequest copyRequest(BaseSearchRequest request) {
@@ -173,5 +209,20 @@ public class RolePermissionManagementService {
                 .expiresAt(rolePermission.getExpiresAt())
                 .status(rolePermission.getStatus())
                 .build();
+    }
+
+    private RolePermission createRolePermission(Role role, Permission permission, String actor, OffsetDateTime assignedAt) {
+        RolePermissionCreateRequest createRequest = new RolePermissionCreateRequest();
+        createRequest.setRoleCode(role.getRoleCode());
+        createRequest.setPermissionCode(permission.getPermissionCode());
+        createRequest.setEffect(phucuong.ht.modules.system.model.enums.PermissionEffect.ALLOW);
+        createRequest.setAssignedAt(assignedAt);
+        RolePermission rolePermission = rolePermissionRepository.create(createRequest, actor);
+        rolePermission.setRole(role);
+        rolePermission.setPermission(permission);
+        rolePermission.setAssignedBy(actor);
+        rolePermission.setAssignedAt(assignedAt);
+        rolePermission.setStatus(true);
+        return rolePermission;
     }
 }

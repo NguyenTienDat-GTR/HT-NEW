@@ -12,6 +12,7 @@ import phucuong.ht.common.validation.AccountScopeValidationHelper;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.modules.auth.model.AuthUserDetails;
 import phucuong.ht.modules.auth.repository.AccountRepository;
+import phucuong.ht.modules.auth.repository.AccountRoleRepository;
 import phucuong.ht.modules.auth.repository.RoleRepository;
 import phucuong.ht.modules.system.model.entity.Account;
 import phucuong.ht.modules.system.model.entity.Permission;
@@ -39,6 +40,9 @@ class AccountPermissionOverrideManagementServiceTest {
     private AccountRepository accountRepository;
 
     @Mock
+    private AccountRoleRepository accountRoleRepository;
+
+    @Mock
     private SystemPermissionRepository systemPermissionRepository;
 
     @Mock
@@ -60,6 +64,7 @@ class AccountPermissionOverrideManagementServiceTest {
         AccountPermissionOverrideManagementService service = new AccountPermissionOverrideManagementService(
                 accountPermissionOverrideRepository,
                 accountRepository,
+                accountRoleRepository,
                 systemPermissionRepository,
                 helper,
                 authorizationHelper
@@ -107,6 +112,7 @@ class AccountPermissionOverrideManagementServiceTest {
         AccountPermissionOverrideManagementService service = new AccountPermissionOverrideManagementService(
                 accountPermissionOverrideRepository,
                 accountRepository,
+                accountRoleRepository,
                 systemPermissionRepository,
                 helper,
                 authorizationHelper
@@ -149,6 +155,7 @@ class AccountPermissionOverrideManagementServiceTest {
         AccountPermissionOverrideManagementService service = new AccountPermissionOverrideManagementService(
                 accountPermissionOverrideRepository,
                 accountRepository,
+                accountRoleRepository,
                 systemPermissionRepository,
                 helper,
                 authorizationHelper

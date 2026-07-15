@@ -1090,3 +1090,19 @@ The following work was added in this iteration:
 - Added data-only Flyway migration `V038__form_workflow_support_policy.sql` for the new analytics, leader rank-history, and permission taxonomy routes. No schema change.
 - Verification run in this session: `.\gradlew.bat compileJava`, `.\gradlew.bat testClasses`, `.\gradlew.bat test --tests phucuong.ht.contract.EndpointContractMatrixTest`, and full `.\gradlew.bat test` passed.
 
+### SUPER_ADMIN RBAC scope tightening 2026-07-15
+
+- Branch `feature/super-admin-rbac-scope` starts from `origin/main` and keeps SUPER_ADMIN scope explicit across organization, account, role, role-permission, and account-permission flows.
+- SUPER_ADMIN can read dioceses/deaneries/parishes, create dioceses, and toggle dioceses; SUPER_ADMIN cannot update/delete dioceses and cannot create/update/delete/toggle deaneries or parishes.
+- SUPER_ADMIN account list is restricted to `SUPER_ADMIN` and `ADMIN_DIOCESE`; `AccountResponse` now includes `dioceseName` while preserving `dioceseId` for filters/internal values.
+- `POST /api/system/accounts` accepts `roleCode=SUPER_ADMIN` with `credentialEmail`, rejects `leaderId`/`dioceseId` for that case, and generates username from the email local part with duplicate suffixing.
+- Role list returns system roles plus custom roles created by `super-admin`; system roles cannot be deleted or toggled.
+- Follow-up correction: the "system roles plus custom roles created by `super-admin`" list restriction applies only when the actor is `SUPER_ADMIN`; non-SUPER_ADMIN role list/detail flows continue to use the existing scoped authorization helper without this extra visibility filter.
+- Role-permission and account-permission effective state is based on `effect` plus `expiresAt`; `status` remains true and is no longer the enable/disable signal.
+- Added `POST /api/system/role-permissions/bulk` with `{roleCode, permissionCodes, effect, conditions?, assignedAt?, expiresAt?}`.
+- Added `POST /api/system/account-permissions/bulk` with `{username, permissionCodes, effect, reason, expiresAt?}`; valid targets are accounts with `ADMIN_DIOCESE`, `ADMIN_DEANERY`, `ADMIN_PARISH`, or a custom role created by `super-admin`.
+- Added `GET /api/system/accounts/permission-targets` to support the account-permission target dropdown.
+- Flyway `V039__super_admin_rbac_scope_and_effect_contract.sql` normalizes permission assignment status to true, seeds SUPER_ADMIN deny mappings for removed modules/actions, and recreates effective-permission views to derive validity from `effect`/expiry rather than assignment status.
+- Flyway `V040__super_admin_bulk_permission_api_policies.sql` registers API permission policies for permission-target and bulk permission endpoints.
+- Verification run in this session: `.\gradlew.bat compileJava`, `.\gradlew.bat testClasses`, targeted RBAC/controller tests, and `.\gradlew.bat test --tests phucuong.ht.contract.EndpointContractMatrixTest` passed; full `.\gradlew.bat test` should be re-run before merge after documentation edits are complete.
+

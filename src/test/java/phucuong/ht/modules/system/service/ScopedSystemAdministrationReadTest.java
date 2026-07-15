@@ -139,6 +139,7 @@ class ScopedSystemAdministrationReadTest {
     private Role role(String roleCode) {
         Role role = new Role();
         role.setRoleCode(roleCode);
+        role.setIsSystem(true);
         return role;
     }
 

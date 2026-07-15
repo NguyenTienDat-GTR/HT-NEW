@@ -35,6 +35,9 @@ public class ParishAccessEvaluator {
     private final securityUtils securityUtils;
 
     public boolean canCreate(Authentication authentication) {
+        if (hasRole(authentication, "SUPER_ADMIN")) {
+            return false;
+        }
         return hasAuthority(authentication, CREATE_ALL)
                 || hasAuthority(authentication, CREATE_DEANERY);
     }
@@ -54,15 +57,24 @@ public class ParishAccessEvaluator {
     }
 
     public boolean canUpdate(Authentication authentication, UUID parishId) {
+        if (hasRole(authentication, "SUPER_ADMIN")) {
+            return false;
+        }
         return hasAuthority(authentication, UPDATE_ALL)
                 || hasParishScopedAccess(authentication, parishId, UPDATE_PARISH);
     }
 
     public boolean canDelete(Authentication authentication) {
+        if (hasRole(authentication, "SUPER_ADMIN")) {
+            return false;
+        }
         return hasAuthority(authentication, DELETE_ALL);
     }
 
     public boolean canToggle(Authentication authentication, UUID parishId) {
+        if (hasRole(authentication, "SUPER_ADMIN")) {
+            return false;
+        }
         return hasAuthority(authentication, UPDATE_ALL)
                 || hasDeaneryScopedAccess(authentication, parishId, TOGGLE_DEANERY);
     }
@@ -122,5 +134,9 @@ public class ParishAccessEvaluator {
         return authentication.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
                 .anyMatch(authority::equals);
+    }
+
+    private boolean hasRole(Authentication authentication, String roleCode) {
+        return hasAuthority(authentication, "ROLE_" + roleCode);
     }
 }

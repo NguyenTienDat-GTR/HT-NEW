@@ -51,8 +51,8 @@ public class RoleController {
 
     @DeleteMapping("/{roleCode}")
     @PreAuthorize("@securityUtils.hasAuthority(authentication, 'system.role.delete.all')")
-    public apiResponse<Void> delete(@PathVariable String roleCode) {
-        roleManagementService.delete(roleCode);
+    public apiResponse<Void> delete(@PathVariable String roleCode, Authentication authentication) {
+        roleManagementService.delete(roleCode, authentication);
         return apiResponse.success("Xóa vai trò thành công", null);
     }
 

@@ -3,14 +3,16 @@ package phucuong.ht.modules.system.service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import phucuong.ht.common.enums.AuthProvider;
 import phucuong.ht.common.model.request.StatusToggleRequest;
+import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.validation.CommonValidationHelper;
+import phucuong.ht.modules.auth.model.AuthUserDetails;
 import phucuong.ht.modules.auth.repository.AccountRepository;
 import phucuong.ht.modules.auth.repository.AccountRoleRepository;
 import phucuong.ht.modules.auth.repository.RoleRepository;
@@ -30,7 +32,10 @@ import java.security.SecureRandom;
 import java.text.Normalizer;
 import java.time.OffsetDateTime;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -38,6 +43,9 @@ import java.util.UUID;
 public class AccountManagementService {
 
     private static final String ADMIN_DIOCESE = "ADMIN_DIOCESE";
+    private static final String SUPER_ADMIN = "SUPER_ADMIN";
+    private static final List<String> SUPER_ADMIN_ACCOUNT_LIST_ROLES = List.of(SUPER_ADMIN, ADMIN_DIOCESE);
+    private static final List<String> ACCOUNT_PERMISSION_ADMIN_ROLES = List.of(ADMIN_DIOCESE, "ADMIN_DEANERY", "ADMIN_PARISH");
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final AccountRepository accountRepository;
@@ -62,7 +70,14 @@ public class AccountManagementService {
         String recipientEmail;
         String recipientName;
         String usernameBase;
-        if (dioceseAdmin) {
+        if (SUPER_ADMIN.equals(role.getRoleCode())) {
+            if (request.getLeaderId() != null || request.getDioceseId() != null) {
+                throw validation.validationError("Tai khoan SUPER_ADMIN khong gan leader hoac giao phan");
+            }
+            recipientEmail = requireCredentialEmail(request.getCredentialEmail());
+            recipientName = "Super admin";
+            usernameBase = usernameBaseFromEmail(recipientEmail);
+        } else if (dioceseAdmin) {
             Diocese diocese = requireDioceseForUpdate(request.getDioceseId());
             account.setDiocese(diocese);
             if (accountRepository.existsAdminDioceseByDioceseId(diocese.getId())) {
@@ -115,14 +130,23 @@ public class AccountManagementService {
     }
 
     @Transactional(readOnly = true)
-    public Page<AccountResponse> findAll(Pageable pageable, Authentication authentication) {
-        var manageable = accountRepository.findAll().stream()
-                .filter(account -> authorizationHelper.canRead(authentication, account))
+    public Page<AccountResponse> findAll(BaseSearchRequest request, Authentication authentication) {
+        BaseSearchRequest searchRequest = request == null ? new BaseSearchRequest() : request;
+        List<AccountResponse> manageable = accountRepository.findAll().stream()
+                .filter(account -> isVisibleInAccountList(authentication, account))
+                .map(this::response)
+                .filter(response -> matchesAccountFilters(response, searchRequest))
                 .toList();
-        long offset = pageable.getOffset();
-        int start = offset >= manageable.size() ? manageable.size() : (int) offset;
-        int end = Math.min(start + pageable.getPageSize(), manageable.size());
-        return new PageImpl<>(manageable.subList(start, end).stream().map(this::response).toList(), pageable, manageable.size());
+        return page(searchRequest, manageable);
+    }
+
+    @Transactional(readOnly = true)
+    public List<AccountResponse> findAccountPermissionTargets(Authentication authentication) {
+        return accountRepository.findAll().stream()
+                .filter(account -> authorizationHelper.canRead(authentication, account))
+                .filter(this::isValidAccountPermissionTarget)
+                .map(this::response)
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -220,6 +244,16 @@ public class AccountManagementService {
         return base;
     }
 
+    private String usernameBaseFromEmail(String email) {
+        int atIndex = email.indexOf('@');
+        String localPart = atIndex > 0 ? email.substring(0, atIndex) : email;
+        String base = normalize(localPart);
+        if (base.isBlank()) {
+            throw validation.validationError("Khong the sinh username tu credentialEmail");
+        }
+        return base;
+    }
+
     private String nextAvailableUsername(String base) {
         if (base == null || base.isBlank()) {
             throw validation.validationError("Không thể sinh username từ thông tin tài khoản");
@@ -290,12 +324,80 @@ public class AccountManagementService {
                 .leaderFullName(buildFullName(leader))
                 .primaryRoleCode(primaryRoleCode(account.getUsername()))
                 .dioceseId(resolveDioceseId(account, leader))
+                .dioceseName(resolveDioceseName(account, leader))
                 .deaneryId(resolveDeaneryId(account, leader))
                 .parishId(resolveParishId(account, leader))
                 .authProvider(account.getAuthProvider())
                 .providerId(account.getProviderId())
                 .status(account.getStatus())
                 .build();
+    }
+
+    private boolean isVisibleInAccountList(Authentication authentication, Account account) {
+        if (isSuperAdmin(authentication)) {
+            List<String> roles = accountRoleRepository.findActiveRoleCodesByUsername(account.getUsername());
+            return roles.stream().anyMatch(SUPER_ADMIN_ACCOUNT_LIST_ROLES::contains);
+        }
+        return authorizationHelper.canRead(authentication, account);
+    }
+
+    private boolean isValidAccountPermissionTarget(Account account) {
+        List<AccountRole> activeRoles = accountRoleRepository.findActiveByUsername(account.getUsername());
+        return activeRoles.stream().anyMatch(accountRole -> {
+            Role role = accountRole.getRole();
+            if (role == null) return false;
+            if (ACCOUNT_PERMISSION_ADMIN_ROLES.contains(role.getRoleCode())) return true;
+            return !Boolean.TRUE.equals(role.getIsSystem()) && "super-admin".equalsIgnoreCase(role.getCreatedBy());
+        });
+    }
+
+    private boolean isSuperAdmin(Authentication authentication) {
+        return authentication != null && authentication.getPrincipal() instanceof AuthUserDetails principal
+                && principal.getRoles().contains(SUPER_ADMIN);
+    }
+
+    private boolean matchesAccountFilters(AccountResponse response, BaseSearchRequest request) {
+        if (request.getStatus() != null && !request.getStatus().equals(response.getStatus())) return false;
+        String search = request.getSearch() == null ? "" : request.getSearch().trim().toLowerCase(Locale.ROOT);
+        if (!search.isBlank()) {
+            String haystack = String.join(" ",
+                    safe(response.getUsername()),
+                    safe(response.getLeaderFullName()),
+                    safe(response.getPrimaryRoleCode()),
+                    safe(response.getDioceseName())
+            ).toLowerCase(Locale.ROOT);
+            if (!haystack.contains(search)) return false;
+        }
+
+        Map<String, Object> filters = request.getFilters() == null ? new LinkedHashMap<>() : request.getFilters();
+        for (Map.Entry<String, Object> entry : filters.entrySet()) {
+            String value = entry.getValue() == null ? "" : String.valueOf(entry.getValue()).trim();
+            if (value.isBlank()) continue;
+            switch (entry.getKey()) {
+                case "primaryRoleCode", "roleCode", "role.roleCode" -> {
+                    if (!value.equals(response.getPrimaryRoleCode())) return false;
+                }
+                case "diocese.id", "dioceseId" -> {
+                    if (response.getDioceseId() == null || !value.equals(response.getDioceseId().toString())) return false;
+                }
+                default -> {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private Page<AccountResponse> page(BaseSearchRequest request, List<AccountResponse> accounts) {
+        int page = request == null ? 0 : request.getPage();
+        int size = request == null ? 10 : request.getSize();
+        int start = Math.min(page * size, accounts.size());
+        int end = Math.min(start + size, accounts.size());
+        return new PageImpl<>(accounts.subList(start, end), PageRequest.of(page, size), accounts.size());
+    }
+
+    private String safe(String value) {
+        return value == null ? "" : value;
     }
 
     private String primaryRoleCode(String username) {
@@ -316,6 +418,16 @@ public class AccountManagementService {
             return null;
         }
         return leader.getParish().getDeanery().getDiocese().getId();
+    }
+
+    private String resolveDioceseName(Account account, Leader leader) {
+        if (account.getDiocese() != null) {
+            return account.getDiocese().getName();
+        }
+        if (leader == null || leader.getParish() == null || leader.getParish().getDeanery() == null || leader.getParish().getDeanery().getDiocese() == null) {
+            return null;
+        }
+        return leader.getParish().getDeanery().getDiocese().getName();
     }
 
     private UUID resolveDeaneryId(Account account, Leader leader) {

@@ -38,11 +38,17 @@ public class DioceseAccessEvaluator {
     }
 
     public boolean canUpdate(Authentication authentication, UUID dioceseId) {
+        if (hasRole(authentication, "SUPER_ADMIN")) {
+            return false;
+        }
         return hasAuthority(authentication, UPDATE_ALL)
                 || hasScopedAccess(authentication, dioceseId, UPDATE_DIOCESE);
     }
 
     public boolean canDelete(Authentication authentication) {
+        if (hasRole(authentication, "SUPER_ADMIN")) {
+            return false;
+        }
         return hasAuthority(authentication, DELETE_ALL);
     }
 
@@ -73,5 +79,9 @@ public class DioceseAccessEvaluator {
         return authentication.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
                 .anyMatch(authority::equals);
+    }
+
+    private boolean hasRole(Authentication authentication, String roleCode) {
+        return hasAuthority(authentication, "ROLE_" + roleCode);
     }
 }
