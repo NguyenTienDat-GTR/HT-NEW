@@ -21,6 +21,7 @@ import phucuong.ht.modules.system.model.request.AccountPermissionOverrideBulkReq
 import phucuong.ht.modules.system.model.request.AccountPermissionOverrideCreateRequest;
 import phucuong.ht.modules.system.model.request.AccountPermissionOverrideUpdateRequest;
 import phucuong.ht.modules.system.model.response.AccountPermissionOverrideResponse;
+import phucuong.ht.modules.system.model.response.PermissionResponse;
 import phucuong.ht.modules.system.repository.AccountPermissionOverrideRepository;
 import phucuong.ht.modules.system.repository.SystemPermissionRepository;
 
@@ -29,6 +30,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -55,6 +57,7 @@ public class AccountPermissionOverrideManagementService {
         }
 
         authorizationHelper.requireAccountPermissionWriteAccess(authentication, request.getUsername(), permission);
+        rejectDenyOfRequiredAccountRoleAssignment(account, request.getPermissionCode(), request.getEffect());
 
         if (accountPermissionOverrideRepository.findByUsernameAndPermissionCode(request.getUsername(), request.getPermissionCode()).isPresent()) {
             throw commonValidationHelper.conflict("Phan quyen rieng cho tai khoan da ton tai");
@@ -81,6 +84,7 @@ public class AccountPermissionOverrideManagementService {
                 throw commonValidationHelper.conflict("Khong the gan quyen dang ngung hoat dong: " + permissionCode);
             }
             authorizationHelper.requireAccountPermissionWriteAccess(authentication, request.getUsername(), permission);
+            rejectDenyOfRequiredAccountRoleAssignment(account, permissionCode, request.getEffect());
 
             AccountPermissionOverride override = accountPermissionOverrideRepository.findByUsernameAndPermissionCode(request.getUsername(), permissionCode)
                     .orElseGet(() -> createOverride(account, permission, actor));
@@ -104,6 +108,19 @@ public class AccountPermissionOverrideManagementService {
     }
 
     @Transactional(readOnly = true)
+    public List<PermissionResponse> findAssignablePermissions(String username, Authentication authentication) {
+        Account account = accountRepository.findActiveByUsername(username)
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy tài khoản: " + username));
+        requireValidSuperAdminTarget(authentication, account);
+        Set<String> assignedPermissionCodes = Set.copyOf(accountPermissionOverrideRepository.findPermissionCodesByUsername(username));
+        return systemPermissionRepository.findActivePermissions().stream()
+                .filter(permission -> !assignedPermissionCodes.contains(permission.getPermissionCode()))
+                .filter(permission -> authorizationHelper.canManageAccountPermission(authentication, username, permission))
+                .map(this::toPermissionResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
     public AccountPermissionOverrideResponse findById(String id, Authentication authentication) {
         AccountPermissionOverride override = accountPermissionOverrideRepository.findById(id)
                 .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay phan quyen rieng cua tai khoan: " + id));
@@ -121,6 +138,7 @@ public class AccountPermissionOverrideManagementService {
         authorizationHelper.requireAccountPermissionWriteAccess(authentication, override.getAccount().getUsername(), override.getPermission());
 
         if (request.getEffect() != null) {
+            rejectDenyOfRequiredAccountRoleAssignment(override.getAccount(), override.getPermission().getPermissionCode(), request.getEffect());
             override.setEffect(request.getEffect());
         }
         if (request.getReason() != null) {
@@ -205,6 +223,23 @@ public class AccountPermissionOverrideManagementService {
                 .build();
     }
 
+    private PermissionResponse toPermissionResponse(Permission permission) {
+        return PermissionResponse.builder()
+                .permissionCode(permission.getPermissionCode())
+                .permissionName(permission.getPermissionName())
+                .moduleCode(permission.getModule() == null ? null : permission.getModule().getModuleCode())
+                .resourceCode(permission.getResource() == null ? null : permission.getResource().getResourceCode())
+                .actionCode(permission.getAction() == null ? null : permission.getAction().getActionCode())
+                .scopeCode(permission.getScope() == null ? null : permission.getScope().getScopeCode())
+                .description(permission.getDescription())
+                .isSystem(permission.getIsSystem())
+                .displayOrder(permission.getDisplayOrder())
+                .status(permission.getStatus())
+                .createdAt(permission.getCreatedAt())
+                .updatedAt(permission.getUpdatedAt())
+                .build();
+    }
+
     private boolean canReadOverride(Authentication authentication, AccountPermissionOverride override) {
         if (authorizationHelper.isSuperAdmin(authentication)) {
             return isValidSuperAdminTarget(override.getAccount());
@@ -240,5 +275,29 @@ public class AccountPermissionOverrideManagementService {
         override.setUpdatedAt(OffsetDateTime.now());
         override.setUpdatedBy(actor);
         return override;
+    }
+
+    private void rejectDenyOfRequiredAccountRoleAssignment(Account account, String permissionCode, PermissionEffect effect) {
+        if (effect != PermissionEffect.DENY) {
+            return;
+        }
+        String requiredRoleCode = requiredAdminRoleForAccountRolePermission(permissionCode);
+        if (requiredRoleCode == null) {
+            return;
+        }
+        boolean hasRequiredRole = accountRoleRepository.findActiveByUsername(account.getUsername()).stream()
+                .anyMatch(accountRole -> accountRole.getRole() != null && requiredRoleCode.equals(accountRole.getRole().getRoleCode()));
+        if (hasRequiredRole) {
+            throw commonValidationHelper.conflict("Không thể DENY quyền gán vai trò nền tảng của tài khoản admin unit");
+        }
+    }
+
+    private String requiredAdminRoleForAccountRolePermission(String permissionCode) {
+        return switch (permissionCode == null ? "" : permissionCode) {
+            case "system.account_role.assign.diocese" -> "ADMIN_DIOCESE";
+            case "system.account_role.assign.deanery" -> "ADMIN_DEANERY";
+            case "system.account_role.assign.parish" -> "ADMIN_PARISH";
+            default -> null;
+        };
     }
 }

@@ -36,6 +36,19 @@ public class AccountPermissionOverrideRepository extends BaseRepo<AccountPermiss
         return results.stream().findFirst();
     }
 
+    public List<String> findPermissionCodesByUsername(String username) {
+        TypedQuery<String> query = entityManager.createQuery(
+                """
+                select apo.permission.permissionCode
+                from AccountPermissionOverride apo
+                where apo.account.username = :username
+                """,
+                String.class
+        );
+        query.setParameter("username", username);
+        return query.getResultList();
+    }
+
     public int deactivateExpiredOverrides(OffsetDateTime expiresAtThreshold, OffsetDateTime updatedAt, String actor) {
         return 0;
     }

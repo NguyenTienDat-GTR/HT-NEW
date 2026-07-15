@@ -113,4 +113,20 @@ public class SystemPermissionRepository extends BaseRepo<Permission, String> {
     public List<PermissionScope> findActiveScopes() {
         return entityManager.createQuery("select ps from PermissionScope ps where ps.status = true order by ps.displayOrder asc, ps.scopeCode", PermissionScope.class).getResultList();
     }
+
+    public List<Permission> findActivePermissions() {
+        return entityManager.createQuery(
+                """
+                select p
+                from Permission p
+                left join fetch p.module
+                left join fetch p.resource
+                left join fetch p.action
+                left join fetch p.scope
+                where p.status = true
+                order by p.displayOrder asc, p.permissionCode
+                """,
+                Permission.class
+        ).getResultList();
+    }
 }

@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import phucuong.ht.common.dto.apiResponse;
 import phucuong.ht.common.model.request.StatusToggleRequest;
@@ -22,6 +23,7 @@ import phucuong.ht.modules.system.model.request.AccountPermissionOverrideBulkReq
 import phucuong.ht.modules.system.model.request.AccountPermissionOverrideCreateRequest;
 import phucuong.ht.modules.system.model.request.AccountPermissionOverrideUpdateRequest;
 import phucuong.ht.modules.system.model.response.AccountPermissionOverrideResponse;
+import phucuong.ht.modules.system.model.response.PermissionResponse;
 import phucuong.ht.modules.system.service.AccountPermissionOverrideManagementService;
 
 import java.util.List;
@@ -49,6 +51,14 @@ public class AccountPermissionOverrideController {
     @GetMapping
     public apiResponse<Page<AccountPermissionOverrideResponse>> findAll(@ModelAttribute BaseSearchRequest request, Authentication authentication) {
         return apiResponse.success("Lay danh sach quyen cua tai khoan thanh cong", service.findAll(request, authentication));
+    }
+
+    @GetMapping("/assignable-permissions")
+    public apiResponse<List<PermissionResponse>> findAssignablePermissions(
+            @RequestParam String username,
+            Authentication authentication
+    ) {
+        return apiResponse.success("Lấy danh sách quyền chưa gán cho tài khoản thành công", service.findAssignablePermissions(username, authentication));
     }
 
     @GetMapping("/{id}")

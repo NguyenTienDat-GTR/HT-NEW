@@ -190,6 +190,31 @@ class AuthServiceTest {
     }
 
     @Test
+    void currentUserShouldReloadPermissionsFromDatabaseInsteadOfTokenSnapshot() {
+        AuthService authService = createService();
+        AuthUserDetails tokenPrincipal = AuthUserDetails.tokenPrincipal(
+                "admin-diocese",
+                null,
+                List.of("ADMIN_DIOCESE"),
+                List.of("system.account.manage.diocese")
+        );
+        AuthUserDetails databasePrincipal = AuthUserDetails.databasePrincipal(
+                "admin-diocese",
+                "encoded-password",
+                null,
+                List.of("ADMIN_DIOCESE"),
+                List.of("system.account.manage.diocese", "system.account_role.assign.diocese"),
+                true
+        );
+        Authentication authentication = new UsernamePasswordAuthenticationToken(tokenPrincipal, null, tokenPrincipal.getAuthorities());
+        when(authUserDetailsService.loadUserByUsername("admin-diocese")).thenReturn(databasePrincipal);
+
+        var response = authService.currentUser(authentication);
+
+        assertEquals(List.of("system.account.manage.diocese", "system.account_role.assign.diocese"), response.getPermissions());
+    }
+
+    @Test
     void logoutShouldRevokeOnlyTheRefreshTokenSession() {
         AuthService authService = createService();
         jwtUtils.TokenClaims tokenClaims = new jwtUtils.TokenClaims(

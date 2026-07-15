@@ -12,13 +12,20 @@ import phucuong.ht.modules.auth.model.AuthUserDetails;
 import phucuong.ht.modules.auth.repository.AccountRepository;
 import phucuong.ht.modules.auth.repository.AccountRoleRepository;
 import phucuong.ht.modules.auth.repository.RoleRepository;
+import phucuong.ht.modules.diocese.model.entity.Diocese;
 import phucuong.ht.modules.system.model.entity.Account;
+import phucuong.ht.modules.system.model.entity.AccountRole;
 import phucuong.ht.modules.system.model.entity.Role;
-import phucuong.ht.modules.system.model.request.AccountRoleCreateRequest;
+import phucuong.ht.modules.system.model.request.AccountRoleBulkRequest;
+import phucuong.ht.modules.system.model.response.AccountRoleResponse;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -37,25 +44,68 @@ class AccountRoleServiceTest {
     private AccountRoleService accountRoleService;
 
     @Test
-    void assignRoleShouldRequireSuperAdminToUseAccountCreationFlow() {
-        CommonValidationHelper helper = new CommonValidationHelper(new securityUtils());
-        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, helper);
-
-        Account account = new Account();
-        account.setUsername("diocese-admin");
-        Role targetRole = new Role();
-        targetRole.setRoleCode("ADMIN_DIOCESE");
-        targetRole.setDisplayOrder(100);
-
-        AccountRoleCreateRequest request = new AccountRoleCreateRequest();
+    void superAdminCanBulkAssignRoleToManagedAdminDioceseAccount() {
+        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()));
+        Account account = dioceseAccount("diocese-admin");
+        Role targetRole = role("ADMIN_DIOCESE", true, 100, "SYSTEM");
+        AccountRoleBulkRequest request = new AccountRoleBulkRequest();
         request.setUsername("diocese-admin");
-        request.setRoleCode("ADMIN_DIOCESE");
+        request.setRoleCodes(List.of("ADMIN_DIOCESE"));
+        request.setPrimaryRoleCode("ADMIN_DIOCESE");
 
         when(accountRepository.findById("diocese-admin")).thenReturn(Optional.of(account));
         when(roleRepository.findByRoleCodeAndStatusTrue("ADMIN_DIOCESE")).thenReturn(Optional.of(targetRole));
-        AuthUserDetails principal = AuthUserDetails.tokenPrincipal("super-admin", null, List.of("SUPER_ADMIN"), List.of("system.account_role.assign.all"));
-        UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
+        when(accountRoleRepository.findActiveRoleCodesByUsername("diocese-admin")).thenReturn(List.of("ADMIN_DIOCESE"));
+        when(accountRoleRepository.findByAccountUsernameAndRoleRoleCode("diocese-admin", "ADMIN_DIOCESE")).thenReturn(Optional.empty());
+        when(accountRoleRepository.save(any(AccountRole.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(accountRoleRepository.findByAccountUsername("diocese-admin")).thenReturn(List.of());
 
-        assertThrows(RuntimeException.class, () -> accountRoleService.assignRole(request, authentication));
+        List<AccountRoleResponse> responses = accountRoleService.bulkAssign(request, authentication("super-admin", List.of("SUPER_ADMIN"), List.of("system.account_role.assign.all")));
+
+        assertEquals(1, responses.size());
+        assertEquals("diocese-admin", responses.get(0).getUsername());
+        assertEquals("ADMIN_DIOCESE", responses.get(0).getRoleCode());
+        assertEquals(true, responses.get(0).getIsPrimary());
+    }
+
+    @Test
+    void superAdminCannotAssignSystemRoleOutsideManagedScope() {
+        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()));
+        Account account = dioceseAccount("diocese-admin");
+        Role targetRole = role("ADMIN_DEANERY", true, 200, "SYSTEM");
+        AccountRoleBulkRequest request = new AccountRoleBulkRequest();
+        request.setUsername("diocese-admin");
+        request.setRoleCodes(List.of("ADMIN_DEANERY"));
+
+        when(accountRepository.findById("diocese-admin")).thenReturn(Optional.of(account));
+        when(roleRepository.findByRoleCodeAndStatusTrue("ADMIN_DEANERY")).thenReturn(Optional.of(targetRole));
+
+        assertThrows(RuntimeException.class, () -> accountRoleService.bulkAssign(request, authentication("super-admin", List.of("SUPER_ADMIN"), List.of("system.account_role.assign.all"))));
+    }
+
+    private Account dioceseAccount(String username) {
+        Diocese diocese = new Diocese();
+        diocese.setId(UUID.randomUUID());
+        Account account = new Account();
+        account.setUsername(username);
+        account.setDiocese(diocese);
+        account.setStatus(true);
+        return account;
+    }
+
+    private Role role(String roleCode, boolean system, int displayOrder, String createdBy) {
+        Role role = new Role();
+        role.setRoleCode(roleCode);
+        role.setRoleName(roleCode);
+        role.setIsSystem(system);
+        role.setDisplayOrder(displayOrder);
+        role.setCreatedBy(createdBy);
+        role.setStatus(true);
+        return role;
+    }
+
+    private UsernamePasswordAuthenticationToken authentication(String username, List<String> roles, List<String> permissions) {
+        AuthUserDetails principal = AuthUserDetails.tokenPrincipal(username, null, roles, permissions);
+        return new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
     }
 }

@@ -16,6 +16,7 @@ import phucuong.ht.modules.system.model.entity.RolePermission;
 import phucuong.ht.modules.system.model.request.RolePermissionBulkRequest;
 import phucuong.ht.modules.system.model.request.RolePermissionCreateRequest;
 import phucuong.ht.modules.system.model.request.RolePermissionUpdateRequest;
+import phucuong.ht.modules.system.model.response.PermissionResponse;
 import phucuong.ht.modules.system.model.response.RolePermissionResponse;
 import phucuong.ht.modules.system.repository.RolePermissionRepository;
 import phucuong.ht.modules.system.repository.SystemPermissionRepository;
@@ -25,6 +26,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -63,20 +65,20 @@ public class RolePermissionManagementService {
 
     public List<RolePermissionResponse> bulkAssign(RolePermissionBulkRequest request, Authentication authentication) {
         Role role = roleRepository.findById(request.getRoleCode())
-                .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay vai tro: " + request.getRoleCode()));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy vai trò: " + request.getRoleCode()));
         if (!Boolean.TRUE.equals(role.getStatus())) {
-            throw commonValidationHelper.conflict("Khong the gan quyen cho vai tro dang ngung hoat dong");
+            throw commonValidationHelper.conflict("Không thể gán quyền cho vai trò đang ngừng hoạt động");
         }
 
-        String actor = commonValidationHelper.requireAuditActor(authentication, "Khong xac dinh duoc nguoi tao phan quyen cho vai tro");
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tạo phân quyền cho vai trò");
         OffsetDateTime assignedAt = request.getAssignedAt() == null ? OffsetDateTime.now() : request.getAssignedAt();
         List<RolePermissionResponse> responses = new ArrayList<>();
 
         for (String permissionCode : new LinkedHashSet<>(request.getPermissionCodes())) {
             Permission permission = systemPermissionRepository.findById(permissionCode)
-                    .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay quyen: " + permissionCode));
+                    .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy quyền: " + permissionCode));
             if (!Boolean.TRUE.equals(permission.getStatus())) {
-                throw commonValidationHelper.conflict("Khong the gan quyen dang ngung hoat dong: " + permissionCode);
+                throw commonValidationHelper.conflict("Không thể gán quyền đang ngừng hoạt động: " + permissionCode);
             }
             authorizationHelper.requireRolePermissionWriteAccess(authentication, role, permission, SystemAdminAuthorizationHelper.ROLE_PERMISSION_ASSIGN_DIOCESE);
 
@@ -99,6 +101,20 @@ public class RolePermissionManagementService {
                         authentication, rolePermission.getRole(), rolePermission.getPermission()))
                 .toList();
         return page(request, manageable);
+    }
+
+    public List<PermissionResponse> findAssignablePermissions(String roleCode, Authentication authentication) {
+        Role role = roleRepository.findById(roleCode)
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy vai trò: " + roleCode));
+        if (!Boolean.TRUE.equals(role.getStatus())) {
+            throw commonValidationHelper.conflict("Không thể gán quyền cho vai trò đang ngừng hoạt động");
+        }
+        Set<String> assignedPermissionCodes = Set.copyOf(rolePermissionRepository.findPermissionCodesByRoleCode(roleCode));
+        return systemPermissionRepository.findActivePermissions().stream()
+                .filter(permission -> !assignedPermissionCodes.contains(permission.getPermissionCode()))
+                .filter(permission -> canAssignPermission(authentication, role, permission))
+                .map(this::toPermissionResponse)
+                .toList();
     }
 
     public RolePermissionResponse findById(String id, Authentication authentication) {
@@ -208,6 +224,32 @@ public class RolePermissionManagementService {
                 .assignedAt(rolePermission.getAssignedAt())
                 .expiresAt(rolePermission.getExpiresAt())
                 .status(rolePermission.getStatus())
+                .build();
+    }
+
+    private boolean canAssignPermission(Authentication authentication, Role role, Permission permission) {
+        try {
+            authorizationHelper.requireRolePermissionWriteAccess(authentication, role, permission, SystemAdminAuthorizationHelper.ROLE_PERMISSION_ASSIGN_DIOCESE);
+            return true;
+        } catch (RuntimeException ignored) {
+            return false;
+        }
+    }
+
+    private PermissionResponse toPermissionResponse(Permission permission) {
+        return PermissionResponse.builder()
+                .permissionCode(permission.getPermissionCode())
+                .permissionName(permission.getPermissionName())
+                .moduleCode(permission.getModule() == null ? null : permission.getModule().getModuleCode())
+                .resourceCode(permission.getResource() == null ? null : permission.getResource().getResourceCode())
+                .actionCode(permission.getAction() == null ? null : permission.getAction().getActionCode())
+                .scopeCode(permission.getScope() == null ? null : permission.getScope().getScopeCode())
+                .description(permission.getDescription())
+                .isSystem(permission.getIsSystem())
+                .displayOrder(permission.getDisplayOrder())
+                .status(permission.getStatus())
+                .createdAt(permission.getCreatedAt())
+                .updatedAt(permission.getUpdatedAt())
                 .build();
     }
 

@@ -163,7 +163,8 @@ public class AuthService {
         if (authentication == null || !(authentication.getPrincipal() instanceof AuthUserDetails principal)) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, errorCode.AUTHENTICATION_FAILED, "Yêu cầu xác thực");
         }
-        return toUserResponse(principal);
+        AuthUserDetails currentPrincipal = authUserDetailsService.loadUserByUsername(principal.getUsername());
+        return toUserResponse(currentPrincipal);
     }
 
     @Transactional

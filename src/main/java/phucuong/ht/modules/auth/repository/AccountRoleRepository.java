@@ -6,6 +6,7 @@ import org.springframework.data.repository.query.Param;
 import phucuong.ht.modules.system.model.entity.AccountRole;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface AccountRoleRepository extends JpaRepository<AccountRole, String> {
 
@@ -29,4 +30,8 @@ public interface AccountRoleRepository extends JpaRepository<AccountRole, String
               and (ar.expiresAt is null or ar.expiresAt > CURRENT_TIMESTAMP)
             """)
     List<AccountRole> findActiveByUsername(@Param("username") String username);
+
+    Optional<AccountRole> findByAccountUsernameAndRoleRoleCode(String username, String roleCode);
+
+    List<AccountRole> findByAccountUsername(String username);
 }
