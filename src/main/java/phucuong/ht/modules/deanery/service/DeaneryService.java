@@ -201,6 +201,7 @@ public class DeaneryService {
                 .email(deanery.getEmail())
                 .associationName(deanery.getAssociationName())
                 .dioceseId(deanery.getDiocese() == null ? null : deanery.getDiocese().getId())
+                .dioceseName(deanery.getDiocese() == null ? null : deanery.getDiocese().getName())
                 .build();
     }
 }

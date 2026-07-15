@@ -24,5 +24,8 @@ public class ParishResponse {
     private String phoneNumber;
     private String email;
     private UUID deaneryId;
+    private String deaneryName;
+    private UUID dioceseId;
+    private String dioceseName;
     private String chapterName;
 }

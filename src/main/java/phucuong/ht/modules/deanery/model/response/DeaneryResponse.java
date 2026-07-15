@@ -25,4 +25,5 @@ public class DeaneryResponse {
     private final String email;
     private final String associationName;
     private final UUID dioceseId;
+    private final String dioceseName;
 }
