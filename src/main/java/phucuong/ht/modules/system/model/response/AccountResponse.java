@@ -13,6 +13,7 @@ public class AccountResponse {
     private String leaderFullName;
     private String primaryRoleCode;
     private UUID dioceseId;
+    private String dioceseName;
     private UUID deaneryId;
     private UUID parishId;
     private String authProvider;

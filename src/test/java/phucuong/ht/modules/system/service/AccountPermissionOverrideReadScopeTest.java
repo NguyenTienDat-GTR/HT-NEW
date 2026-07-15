@@ -11,6 +11,7 @@ import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.modules.auth.repository.AccountRepository;
+import phucuong.ht.modules.auth.repository.AccountRoleRepository;
 import phucuong.ht.modules.system.model.entity.Account;
 import phucuong.ht.modules.system.model.entity.AccountPermissionOverride;
 import phucuong.ht.modules.system.model.entity.Permission;
@@ -34,6 +35,9 @@ class AccountPermissionOverrideReadScopeTest {
 
     @Mock
     private AccountRepository accountRepository;
+
+    @Mock
+    private AccountRoleRepository accountRoleRepository;
 
     @Mock
     private SystemPermissionRepository permissionRepository;
@@ -75,6 +79,7 @@ class AccountPermissionOverrideReadScopeTest {
         return new AccountPermissionOverrideManagementService(
                 overrideRepository,
                 accountRepository,
+                accountRoleRepository,
                 permissionRepository,
                 new CommonValidationHelper(new securityUtils()),
                 authorizationHelper

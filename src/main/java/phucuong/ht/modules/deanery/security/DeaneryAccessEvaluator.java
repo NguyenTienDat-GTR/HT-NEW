@@ -31,6 +31,9 @@ public class DeaneryAccessEvaluator {
     private final securityUtils securityUtils;
 
     public boolean canCreate(Authentication authentication) {
+        if (hasRole(authentication, "SUPER_ADMIN")) {
+            return false;
+        }
         return hasAuthority(authentication, CREATE_ALL)
                 || hasAuthority(authentication, CREATE_DIOCESE);
     }
@@ -48,15 +51,24 @@ public class DeaneryAccessEvaluator {
     }
 
     public boolean canUpdate(Authentication authentication, UUID deaneryId) {
+        if (hasRole(authentication, "SUPER_ADMIN")) {
+            return false;
+        }
         return hasAuthority(authentication, UPDATE_ALL)
                 || hasDeaneryScopedAccess(authentication, deaneryId, UPDATE_DEANERY);
     }
 
     public boolean canDelete(Authentication authentication) {
+        if (hasRole(authentication, "SUPER_ADMIN")) {
+            return false;
+        }
         return hasAuthority(authentication, DELETE_ALL);
     }
 
     public boolean canToggle(Authentication authentication, UUID deaneryId) {
+        if (hasRole(authentication, "SUPER_ADMIN")) {
+            return false;
+        }
         return hasAuthority(authentication, UPDATE_ALL)
                 || hasDioceseScopedAccess(authentication, deaneryId, TOGGLE_DIOCESE);
     }
@@ -100,5 +112,9 @@ public class DeaneryAccessEvaluator {
         return authentication.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
                 .anyMatch(authority::equals);
+    }
+
+    private boolean hasRole(Authentication authentication, String roleCode) {
+        return hasAuthority(authentication, "ROLE_" + roleCode);
     }
 }

@@ -81,6 +81,7 @@ PATCH /api/positions/{positionCode}/toggle-status|200|401|403|400|404|N/A: statu
 # System accounts
 POST /api/system/accounts|200|401|403|400|404|409
 GET /api/system/accounts|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/system/accounts/permission-targets|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
 GET /api/system/accounts/{username}|200|401|403|N/A: username is an opaque string|404|N/A: read-only endpoint does not mutate state
 PUT /api/system/accounts/{username}|200|401|403|400|404|409
 DELETE /api/system/accounts/{username}|200|401|403|N/A: username is an opaque string|404|409
@@ -88,7 +89,9 @@ PATCH /api/system/accounts/{username}/toggle-status|200|401|403|400|404|N/A: sta
 
 # Account permission overrides
 POST /api/system/account-permissions|200|401|403|400|404|409
+POST /api/system/account-permissions/bulk|200|401|403|400|404|409
 GET /api/system/account-permissions|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/system/account-permissions/assignable-permissions|200|401|403|400|404|N/A: read-only endpoint does not mutate state
 GET /api/system/account-permissions/{id}|200|401|403|N/A: identifier is an opaque string|404|N/A: read-only endpoint does not mutate state
 PUT /api/system/account-permissions/{id}|200|401|403|400|404|409
 DELETE /api/system/account-permissions/{id}|200|401|403|N/A: identifier is an opaque string|404|409
@@ -96,7 +99,9 @@ PATCH /api/system/account-permissions/{id}/toggle-status|200|401|403|400|404|N/A
 
 # Account role assignments
 POST /api/system/account-roles|200|401|403|400|404|409
+POST /api/system/account-roles/bulk|200|401|403|400|404|409
 GET /api/system/account-roles|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/system/account-roles/assignable-roles|200|401|403|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
 GET /api/system/account-roles/{id}|200|401|403|N/A: identifier is an opaque string|404|N/A: read-only endpoint does not mutate state
 PUT /api/system/account-roles/{id}|200|401|403|400|404|409
 DELETE /api/system/account-roles/{id}|200|401|403|N/A: identifier is an opaque string|404|409
@@ -121,7 +126,9 @@ PATCH /api/system/roles/{roleCode}/toggle-status|200|401|403|400|404|N/A: status
 
 # Role permission assignments
 POST /api/system/role-permissions|200|401|403|400|404|409
+POST /api/system/role-permissions/bulk|200|401|403|400|404|409
 GET /api/system/role-permissions|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/system/role-permissions/assignable-permissions|200|401|403|400|404|N/A: read-only endpoint does not mutate state
 GET /api/system/role-permissions/{id}|200|401|403|N/A: identifier is an opaque string|404|N/A: read-only endpoint does not mutate state
 PUT /api/system/role-permissions/{id}|200|401|403|400|404|409
 DELETE /api/system/role-permissions/{id}|200|401|403|N/A: identifier is an opaque string|404|409

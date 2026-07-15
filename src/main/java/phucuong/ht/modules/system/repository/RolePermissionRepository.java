@@ -36,21 +36,20 @@ public class RolePermissionRepository extends BaseRepo<RolePermission, String> {
         return results.stream().findFirst();
     }
 
+    public List<String> findPermissionCodesByRoleCode(String roleCode) {
+        TypedQuery<String> query = entityManager.createQuery(
+                """
+                select rp.permission.permissionCode
+                from RolePermission rp
+                where rp.role.roleCode = :roleCode
+                """,
+                String.class
+        );
+        query.setParameter("roleCode", roleCode);
+        return query.getResultList();
+    }
+
     public int deactivateExpiredAssignments(OffsetDateTime expiresAtThreshold, OffsetDateTime updatedAt, String actor) {
-        return entityManager.createQuery(
-                        """
-                        update RolePermission rp
-                        set rp.status = false,
-                            rp.updatedAt = :updatedAt,
-                            rp.updatedBy = :actor
-                        where rp.status = true
-                          and rp.expiresAt is not null
-                          and rp.expiresAt <= :expiresAtThreshold
-                        """
-                )
-                .setParameter("updatedAt", updatedAt)
-                .setParameter("actor", actor)
-                .setParameter("expiresAtThreshold", expiresAtThreshold)
-                .executeUpdate();
+        return 0;
     }
 }

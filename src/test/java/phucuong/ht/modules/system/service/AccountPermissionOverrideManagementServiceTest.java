@@ -12,10 +12,13 @@ import phucuong.ht.common.validation.AccountScopeValidationHelper;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.modules.auth.model.AuthUserDetails;
 import phucuong.ht.modules.auth.repository.AccountRepository;
+import phucuong.ht.modules.auth.repository.AccountRoleRepository;
 import phucuong.ht.modules.auth.repository.RoleRepository;
 import phucuong.ht.modules.system.model.entity.Account;
+import phucuong.ht.modules.system.model.entity.AccountRole;
 import phucuong.ht.modules.system.model.entity.Permission;
 import phucuong.ht.modules.system.model.entity.PermissionScope;
+import phucuong.ht.modules.system.model.entity.Role;
 import phucuong.ht.modules.system.model.enums.PermissionEffect;
 import phucuong.ht.modules.system.model.request.AccountPermissionOverrideCreateRequest;
 import phucuong.ht.modules.system.repository.AccountPermissionOverrideRepository;
@@ -39,6 +42,9 @@ class AccountPermissionOverrideManagementServiceTest {
     private AccountRepository accountRepository;
 
     @Mock
+    private AccountRoleRepository accountRoleRepository;
+
+    @Mock
     private SystemPermissionRepository systemPermissionRepository;
 
     @Mock
@@ -60,6 +66,7 @@ class AccountPermissionOverrideManagementServiceTest {
         AccountPermissionOverrideManagementService service = new AccountPermissionOverrideManagementService(
                 accountPermissionOverrideRepository,
                 accountRepository,
+                accountRoleRepository,
                 systemPermissionRepository,
                 helper,
                 authorizationHelper
@@ -107,6 +114,7 @@ class AccountPermissionOverrideManagementServiceTest {
         AccountPermissionOverrideManagementService service = new AccountPermissionOverrideManagementService(
                 accountPermissionOverrideRepository,
                 accountRepository,
+                accountRoleRepository,
                 systemPermissionRepository,
                 helper,
                 authorizationHelper
@@ -149,6 +157,7 @@ class AccountPermissionOverrideManagementServiceTest {
         AccountPermissionOverrideManagementService service = new AccountPermissionOverrideManagementService(
                 accountPermissionOverrideRepository,
                 accountRepository,
+                accountRoleRepository,
                 systemPermissionRepository,
                 helper,
                 authorizationHelper
@@ -174,6 +183,63 @@ class AccountPermissionOverrideManagementServiceTest {
         when(systemPermissionRepository.findById("system.role_permission.assign.diocese")).thenReturn(Optional.of(permission));
 
         assertThrows(RuntimeException.class, () -> service.create(request, authentication()));
+    }
+
+    @Test
+    void createShouldRejectDenyingRequiredAccountRoleAssignmentPermissionForAdminUnitAccount() {
+        CommonValidationHelper helper = new CommonValidationHelper(new securityUtils());
+        SystemAdminAuthorizationHelper authorizationHelper = new SystemAdminAuthorizationHelper(
+                new securityUtils(),
+                accountScopeValidationHelper,
+                accountRepository,
+                roleRepository,
+                helper
+        );
+        AccountPermissionOverrideManagementService service = new AccountPermissionOverrideManagementService(
+                accountPermissionOverrideRepository,
+                accountRepository,
+                accountRoleRepository,
+                systemPermissionRepository,
+                helper,
+                authorizationHelper
+        );
+
+        Account account = new Account();
+        account.setUsername("phucuongadmin");
+        account.setStatus(true);
+
+        Role role = new Role();
+        role.setRoleCode("ADMIN_DIOCESE");
+        role.setIsSystem(true);
+        AccountRole accountRole = new AccountRole();
+        accountRole.setAccount(account);
+        accountRole.setRole(role);
+
+        PermissionScope scope = new PermissionScope();
+        scope.setScopeCode("diocese");
+        Permission permission = new Permission();
+        permission.setPermissionCode("system.account_role.assign.diocese");
+        permission.setScope(scope);
+        permission.setStatus(true);
+
+        AccountPermissionOverrideCreateRequest request = new AccountPermissionOverrideCreateRequest();
+        request.setUsername("phucuongadmin");
+        request.setPermissionCode("system.account_role.assign.diocese");
+        request.setEffect(PermissionEffect.DENY);
+
+        AuthUserDetails principal = AuthUserDetails.tokenPrincipal(
+                "superadminpc",
+                null,
+                List.of("SUPER_ADMIN"),
+                List.of("system.account_permission.manage.all")
+        );
+        var authentication = new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
+
+        when(accountRepository.findActiveByUsername("phucuongadmin")).thenReturn(Optional.of(account));
+        when(systemPermissionRepository.findById("system.account_role.assign.diocese")).thenReturn(Optional.of(permission));
+        when(accountRoleRepository.findActiveByUsername("phucuongadmin")).thenReturn(List.of(accountRole));
+
+        assertThrows(RuntimeException.class, () -> service.create(request, authentication));
     }
 
     private UsernamePasswordAuthenticationToken authentication() {

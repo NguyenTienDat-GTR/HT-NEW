@@ -11,24 +11,36 @@ import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.modules.auth.repository.AccountRepository;
+import phucuong.ht.modules.auth.repository.AccountRoleRepository;
 import phucuong.ht.modules.system.model.entity.Account;
 import phucuong.ht.modules.system.model.entity.AccountPermissionOverride;
 import phucuong.ht.modules.system.model.entity.Permission;
+import phucuong.ht.modules.system.model.entity.Role;
+import phucuong.ht.modules.system.model.enums.PermissionEffect;
+import phucuong.ht.modules.system.model.request.AccountPermissionOverrideBulkRequest;
 import phucuong.ht.modules.system.model.request.AccountPermissionOverrideCreateRequest;
 import phucuong.ht.modules.system.model.request.AccountPermissionOverrideUpdateRequest;
 import phucuong.ht.modules.system.model.response.AccountPermissionOverrideResponse;
+import phucuong.ht.modules.system.model.response.PermissionResponse;
 import phucuong.ht.modules.system.repository.AccountPermissionOverrideRepository;
 import phucuong.ht.modules.system.repository.SystemPermissionRepository;
 
+import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
 public class AccountPermissionOverrideManagementService {
 
+    private static final List<String> ADMIN_ROLE_CODES = List.of("ADMIN_DIOCESE", "ADMIN_DEANERY", "ADMIN_PARISH");
+
     private final AccountPermissionOverrideRepository accountPermissionOverrideRepository;
     private final AccountRepository accountRepository;
+    private final AccountRoleRepository accountRoleRepository;
     private final SystemPermissionRepository systemPermissionRepository;
     private final CommonValidationHelper commonValidationHelper;
     private final SystemAdminAuthorizationHelper authorizationHelper;
@@ -36,38 +48,84 @@ public class AccountPermissionOverrideManagementService {
     @Transactional
     public AccountPermissionOverrideResponse create(AccountPermissionOverrideCreateRequest request, Authentication authentication) {
         Account account = accountRepository.findActiveByUsername(request.getUsername())
-                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy tài khoản: " + request.getUsername()));
+                .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay tai khoan: " + request.getUsername()));
+        requireValidSuperAdminTarget(authentication, account);
         Permission permission = systemPermissionRepository.findById(request.getPermissionCode())
-                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy quyền: " + request.getPermissionCode()));
+                .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay quyen: " + request.getPermissionCode()));
         if (!Boolean.TRUE.equals(permission.getStatus())) {
-            throw commonValidationHelper.conflict("Không thể gán quyền đang ngừng hoạt động");
+            throw commonValidationHelper.conflict("Khong the gan quyen dang ngung hoat dong");
         }
 
         authorizationHelper.requireAccountPermissionWriteAccess(authentication, request.getUsername(), permission);
+        rejectDenyOfRequiredAccountRoleAssignment(account, request.getPermissionCode(), request.getEffect());
 
         if (accountPermissionOverrideRepository.findByUsernameAndPermissionCode(request.getUsername(), request.getPermissionCode()).isPresent()) {
-            throw commonValidationHelper.conflict("Phân quyền ghi đè cho tài khoản đã tồn tại");
+            throw commonValidationHelper.conflict("Phan quyen rieng cho tai khoan da ton tai");
         }
 
-        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tạo phân quyền cho tài khoản");
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Khong xac dinh duoc nguoi tao phan quyen cho tai khoan");
         AccountPermissionOverride override = accountPermissionOverrideRepository.create(request, actor);
+        override.setStatus(true);
         return toResponse(override);
+    }
+
+    @Transactional
+    public List<AccountPermissionOverrideResponse> bulkAssign(AccountPermissionOverrideBulkRequest request, Authentication authentication) {
+        Account account = accountRepository.findActiveByUsername(request.getUsername())
+                .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay tai khoan: " + request.getUsername()));
+        requireValidSuperAdminTarget(authentication, account);
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Khong xac dinh duoc nguoi tao phan quyen cho tai khoan");
+        List<AccountPermissionOverrideResponse> responses = new ArrayList<>();
+
+        for (String permissionCode : new LinkedHashSet<>(request.getPermissionCodes())) {
+            Permission permission = systemPermissionRepository.findById(permissionCode)
+                    .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay quyen: " + permissionCode));
+            if (!Boolean.TRUE.equals(permission.getStatus())) {
+                throw commonValidationHelper.conflict("Khong the gan quyen dang ngung hoat dong: " + permissionCode);
+            }
+            authorizationHelper.requireAccountPermissionWriteAccess(authentication, request.getUsername(), permission);
+            rejectDenyOfRequiredAccountRoleAssignment(account, permissionCode, request.getEffect());
+
+            AccountPermissionOverride override = accountPermissionOverrideRepository.findByUsernameAndPermissionCode(request.getUsername(), permissionCode)
+                    .orElseGet(() -> createOverride(account, permission, actor));
+            override.setEffect(request.getEffect());
+            override.setReason(commonValidationHelper.normalizeRequiredText(request.getReason()));
+            override.setExpiresAt(request.getExpiresAt());
+            override.setStatus(true);
+            override.setUpdatedBy(actor);
+            responses.add(toResponse(override));
+        }
+
+        return responses;
     }
 
     @Transactional(readOnly = true)
     public Page<AccountPermissionOverrideResponse> findAll(BaseSearchRequest request, Authentication authentication) {
         List<AccountPermissionOverride> manageable = loadAllMatching(request).stream()
-                .filter(override -> authorizationHelper.canManageAccountPermission(authentication, override.getAccount().getUsername(), override.getPermission()))
+                .filter(override -> canReadOverride(authentication, override))
                 .toList();
         return page(request, manageable);
     }
 
     @Transactional(readOnly = true)
+    public List<PermissionResponse> findAssignablePermissions(String username, Authentication authentication) {
+        Account account = accountRepository.findActiveByUsername(username)
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy tài khoản: " + username));
+        requireValidSuperAdminTarget(authentication, account);
+        Set<String> assignedPermissionCodes = Set.copyOf(accountPermissionOverrideRepository.findPermissionCodesByUsername(username));
+        return systemPermissionRepository.findActivePermissions().stream()
+                .filter(permission -> !assignedPermissionCodes.contains(permission.getPermissionCode()))
+                .filter(permission -> authorizationHelper.canManageAccountPermission(authentication, username, permission))
+                .map(this::toPermissionResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
     public AccountPermissionOverrideResponse findById(String id, Authentication authentication) {
         AccountPermissionOverride override = accountPermissionOverrideRepository.findById(id)
-                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy phân quyền ghi đè của tài khoản: " + id));
-        if (!authorizationHelper.canManageAccountPermission(authentication, override.getAccount().getUsername(), override.getPermission())) {
-            throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền đọc phân quyền ghi đè này");
+                .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay phan quyen rieng cua tai khoan: " + id));
+        if (!canReadOverride(authentication, override)) {
+            throw commonValidationHelper.forbidden("Tai khoan hien tai khong co quyen doc phan quyen rieng nay");
         }
         return toResponse(override);
     }
@@ -75,10 +133,12 @@ public class AccountPermissionOverrideManagementService {
     @Transactional
     public AccountPermissionOverrideResponse update(String id, AccountPermissionOverrideUpdateRequest request, Authentication authentication) {
         AccountPermissionOverride override = accountPermissionOverrideRepository.findById(id)
-                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy phân quyền ghi đè của tài khoản: " + id));
+                .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay phan quyen rieng cua tai khoan: " + id));
+        requireValidSuperAdminTarget(authentication, override.getAccount());
         authorizationHelper.requireAccountPermissionWriteAccess(authentication, override.getAccount().getUsername(), override.getPermission());
 
         if (request.getEffect() != null) {
+            rejectDenyOfRequiredAccountRoleAssignment(override.getAccount(), override.getPermission().getPermissionCode(), request.getEffect());
             override.setEffect(request.getEffect());
         }
         if (request.getReason() != null) {
@@ -87,14 +147,16 @@ public class AccountPermissionOverrideManagementService {
         if (request.getExpiresAt() != null) {
             override.setExpiresAt(request.getExpiresAt());
         }
-        override.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật phân quyền cho tài khoản"));
+        override.setStatus(true);
+        override.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Khong xac dinh duoc nguoi cap nhat phan quyen cho tai khoan"));
         return toResponse(override);
     }
 
     @Transactional
     public void delete(String id, Authentication authentication) {
         AccountPermissionOverride override = accountPermissionOverrideRepository.findById(id)
-                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy phân quyền ghi đè của tài khoản: " + id));
+                .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay phan quyen rieng cua tai khoan: " + id));
+        requireValidSuperAdminTarget(authentication, override.getAccount());
         authorizationHelper.requireAccountPermissionWriteAccess(authentication, override.getAccount().getUsername(), override.getPermission());
         accountPermissionOverrideRepository.delete(id);
     }
@@ -102,12 +164,13 @@ public class AccountPermissionOverrideManagementService {
     @Transactional
     public AccountPermissionOverrideResponse toggleStatus(String id, StatusToggleRequest request, Authentication authentication) {
         AccountPermissionOverride override = accountPermissionOverrideRepository.findById(id)
-                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy phân quyền ghi đè của tài khoản: " + id));
+                .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay phan quyen rieng cua tai khoan: " + id));
+        requireValidSuperAdminTarget(authentication, override.getAccount());
         authorizationHelper.requireAccountPermissionWriteAccess(authentication, override.getAccount().getUsername(), override.getPermission());
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
-        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái phân quyền cho tài khoản");
-        accountPermissionOverrideRepository.toggleStatus(id, actor);
-        return findById(id, authentication);
+        override.setStatus(true);
+        override.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Khong xac dinh duoc nguoi doi trang thai phan quyen cho tai khoan"));
+        return toResponse(override);
     }
 
     private BaseSearchRequest copyRequest(BaseSearchRequest request) {
@@ -125,7 +188,7 @@ public class AccountPermissionOverrideManagementService {
     }
 
     private List<AccountPermissionOverride> loadAllMatching(BaseSearchRequest request) {
-        List<AccountPermissionOverride> matches = new java.util.ArrayList<>();
+        List<AccountPermissionOverride> matches = new ArrayList<>();
         int page = 0;
         while (true) {
             BaseSearchRequest batch = copyRequest(request);
@@ -158,5 +221,83 @@ public class AccountPermissionOverrideManagementService {
                 .expiresAt(override.getExpiresAt())
                 .status(override.getStatus())
                 .build();
+    }
+
+    private PermissionResponse toPermissionResponse(Permission permission) {
+        return PermissionResponse.builder()
+                .permissionCode(permission.getPermissionCode())
+                .permissionName(permission.getPermissionName())
+                .moduleCode(permission.getModule() == null ? null : permission.getModule().getModuleCode())
+                .resourceCode(permission.getResource() == null ? null : permission.getResource().getResourceCode())
+                .actionCode(permission.getAction() == null ? null : permission.getAction().getActionCode())
+                .scopeCode(permission.getScope() == null ? null : permission.getScope().getScopeCode())
+                .description(permission.getDescription())
+                .isSystem(permission.getIsSystem())
+                .displayOrder(permission.getDisplayOrder())
+                .status(permission.getStatus())
+                .createdAt(permission.getCreatedAt())
+                .updatedAt(permission.getUpdatedAt())
+                .build();
+    }
+
+    private boolean canReadOverride(Authentication authentication, AccountPermissionOverride override) {
+        if (authorizationHelper.isSuperAdmin(authentication)) {
+            return isValidSuperAdminTarget(override.getAccount());
+        }
+        return authorizationHelper.canManageAccountPermission(authentication, override.getAccount().getUsername(), override.getPermission());
+    }
+
+    private void requireValidSuperAdminTarget(Authentication authentication, Account account) {
+        if (authorizationHelper.isSuperAdmin(authentication) && !isValidSuperAdminTarget(account)) {
+            throw commonValidationHelper.forbidden("SUPER_ADMIN chi duoc phan quyen rieng cho tai khoan admin hoac role custom do super-admin tao");
+        }
+    }
+
+    private boolean isValidSuperAdminTarget(Account account) {
+        if (account == null) return false;
+        return accountRoleRepository.findActiveByUsername(account.getUsername()).stream().anyMatch(accountRole -> {
+            Role role = accountRole.getRole();
+            if (role == null) return false;
+            if (ADMIN_ROLE_CODES.contains(role.getRoleCode())) return true;
+            return !Boolean.TRUE.equals(role.getIsSystem()) && "super-admin".equalsIgnoreCase(role.getCreatedBy());
+        });
+    }
+
+    private AccountPermissionOverride createOverride(Account account, Permission permission, String actor) {
+        AccountPermissionOverrideCreateRequest createRequest = new AccountPermissionOverrideCreateRequest();
+        createRequest.setUsername(account.getUsername());
+        createRequest.setPermissionCode(permission.getPermissionCode());
+        createRequest.setEffect(PermissionEffect.ALLOW);
+        AccountPermissionOverride override = accountPermissionOverrideRepository.create(createRequest, actor);
+        override.setAccount(account);
+        override.setPermission(permission);
+        override.setStatus(true);
+        override.setUpdatedAt(OffsetDateTime.now());
+        override.setUpdatedBy(actor);
+        return override;
+    }
+
+    private void rejectDenyOfRequiredAccountRoleAssignment(Account account, String permissionCode, PermissionEffect effect) {
+        if (effect != PermissionEffect.DENY) {
+            return;
+        }
+        String requiredRoleCode = requiredAdminRoleForAccountRolePermission(permissionCode);
+        if (requiredRoleCode == null) {
+            return;
+        }
+        boolean hasRequiredRole = accountRoleRepository.findActiveByUsername(account.getUsername()).stream()
+                .anyMatch(accountRole -> accountRole.getRole() != null && requiredRoleCode.equals(accountRole.getRole().getRoleCode()));
+        if (hasRequiredRole) {
+            throw commonValidationHelper.conflict("Không thể DENY quyền gán vai trò nền tảng của tài khoản admin unit");
+        }
+    }
+
+    private String requiredAdminRoleForAccountRolePermission(String permissionCode) {
+        return switch (permissionCode == null ? "" : permissionCode) {
+            case "system.account_role.assign.diocese" -> "ADMIN_DIOCESE";
+            case "system.account_role.assign.deanery" -> "ADMIN_DEANERY";
+            case "system.account_role.assign.parish" -> "ADMIN_PARISH";
+            default -> null;
+        };
     }
 }

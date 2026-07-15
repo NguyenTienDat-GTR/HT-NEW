@@ -40,6 +40,7 @@ public class RoleManagementService {
 
     public Page<RoleResponse> findAll(BaseSearchRequest request, Authentication authentication) {
         List<Role> manageable = loadAllMatching(request).stream()
+                .filter(role -> !authorizationHelper.isSuperAdmin(authentication) || isVisibleRole(role))
                 .filter(role -> authorizationHelper.canReadRole(authentication, role))
                 .toList();
         return page(request, manageable);
@@ -48,6 +49,9 @@ public class RoleManagementService {
     public RoleResponse findById(String roleCode, Authentication authentication) {
         Role role = systemRoleRepository.findById(roleCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy vai trò: " + roleCode));
+        if (authorizationHelper.isSuperAdmin(authentication) && !isVisibleRole(role)) {
+            throw commonValidationHelper.forbidden("Vai trò không thuộc phạm vi hiển thị của SUPER_ADMIN");
+        }
         authorizationHelper.requireRoleReadAccess(authentication, role);
         return toResponse(role);
     }
@@ -68,15 +72,29 @@ public class RoleManagementService {
         return toResponse(role);
     }
 
-    public void delete(String roleCode) {
+    public void delete(String roleCode, Authentication authentication) {
+        Role role = systemRoleRepository.findById(roleCode)
+                .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay vai tro: " + roleCode));
+        if (Boolean.TRUE.equals(role.getIsSystem())) {
+            throw commonValidationHelper.forbidden("Khong duoc xoa vai tro he thong");
+        }
         systemRoleRepository.delete(roleCode);
     }
 
     public RoleResponse toggleStatus(String roleCode, StatusToggleRequest request, Authentication authentication) {
+        Role role = systemRoleRepository.findById(roleCode)
+                .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay vai tro: " + roleCode));
+        if (Boolean.TRUE.equals(role.getIsSystem())) {
+            throw commonValidationHelper.forbidden("Khong duoc doi trang thai vai tro he thong");
+        }
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái vai trò");
         systemRoleRepository.toggleStatus(roleCode, actor);
         return findById(roleCode, authentication);
+    }
+
+    private boolean isVisibleRole(Role role) {
+        return Boolean.TRUE.equals(role.getIsSystem()) || "super-admin".equalsIgnoreCase(role.getCreatedBy());
     }
 
     private BaseSearchRequest copyRequest(BaseSearchRequest request) {

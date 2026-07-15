@@ -1090,3 +1090,34 @@ The following work was added in this iteration:
 - Added data-only Flyway migration `V038__form_workflow_support_policy.sql` for the new analytics, leader rank-history, and permission taxonomy routes. No schema change.
 - Verification run in this session: `.\gradlew.bat compileJava`, `.\gradlew.bat testClasses`, `.\gradlew.bat test --tests phucuong.ht.contract.EndpointContractMatrixTest`, and full `.\gradlew.bat test` passed.
 
+### SUPER_ADMIN RBAC scope tightening 2026-07-15
+
+- Branch `feature/super-admin-rbac-scope` starts from `origin/main` and keeps SUPER_ADMIN scope explicit across organization, account, role, role-permission, and account-permission flows.
+- SUPER_ADMIN can read dioceses/deaneries/parishes, create dioceses, and toggle dioceses; SUPER_ADMIN cannot update/delete dioceses and cannot create/update/delete/toggle deaneries or parishes.
+- SUPER_ADMIN account list is restricted to `SUPER_ADMIN` and `ADMIN_DIOCESE`; `AccountResponse` now includes `dioceseName` while preserving `dioceseId` for filters/internal values.
+- `POST /api/system/accounts` accepts `roleCode=SUPER_ADMIN` with `credentialEmail`, rejects `leaderId`/`dioceseId` for that case, and generates username from the email local part with duplicate suffixing.
+- Role list returns system roles plus custom roles created by `super-admin`; system roles cannot be deleted or toggled.
+- Follow-up correction: the "system roles plus custom roles created by `super-admin`" list restriction applies only when the actor is `SUPER_ADMIN`; non-SUPER_ADMIN role list/detail flows continue to use the existing scoped authorization helper without this extra visibility filter.
+- Role-permission and account-permission effective state is based on `effect` plus `expiresAt`; `status` remains true and is no longer the enable/disable signal.
+- Added `POST /api/system/role-permissions/bulk` with `{roleCode, permissionCodes, effect, conditions?, assignedAt?, expiresAt?}`.
+- Added `POST /api/system/account-permissions/bulk` with `{username, permissionCodes, effect, reason, expiresAt?}`; valid targets are accounts with `ADMIN_DIOCESE`, `ADMIN_DEANERY`, `ADMIN_PARISH`, or a custom role created by `super-admin`.
+- Added `GET /api/system/accounts/permission-targets` to support the account-permission target dropdown.
+- Flyway `V039__super_admin_rbac_scope_and_effect_contract.sql` normalizes permission assignment status to true, seeds SUPER_ADMIN deny mappings for removed modules/actions, and recreates effective-permission views to derive validity from `effect`/expiry rather than assignment status.
+- Flyway `V040__super_admin_bulk_permission_api_policies.sql` registers API permission policies for permission-target and bulk permission endpoints.
+- Verification run in this session: `.\gradlew.bat compileJava`, `.\gradlew.bat testClasses`, targeted RBAC/controller tests, and `.\gradlew.bat test --tests phucuong.ht.contract.EndpointContractMatrixTest` passed; full `.\gradlew.bat test` should be re-run before merge after documentation edits are complete.
+
+### Account role and role-permission assignment UX fix 2026-07-15
+
+- `POST /api/system/account-roles/bulk` accepts `{username, roleCodes, primaryRoleCode?, assignedAt?, expiresAt?}` so one account can receive multiple roles in a single request. Existing assignments are reactivated/updated instead of duplicating the `(username, role_code)` unique key.
+- `GET /api/system/account-roles/assignable-roles` returns active roles the current actor may assign. SUPER_ADMIN sees only `SUPER_ADMIN`, `ADMIN_DIOCESE`, and custom roles created by `super-admin`; scoped admins see roles at or below their assignable hierarchy.
+- SUPER_ADMIN account-role assignment now follows managed-account scope instead of being hard-blocked: target accounts must already be in the SUPER_ADMIN-managed set (`SUPER_ADMIN`, `ADMIN_DIOCESE`, or custom roles created by `super-admin`), and self-assignment is still forbidden.
+- Role-permission bulk assignment remains `POST /api/system/role-permissions/bulk`, but FE now exposes it as the default assignment action for any actor with `system.role_permission.assign.*`, not only SUPER_ADMIN.
+- API policy migration `V041__account_role_bulk_assignment_api_policies.sql` registers account-role bulk and assignable-role helper endpoints for `all`, `diocese`, `deanery`, and `parish` scopes.
+- Verification run in this session: `.\gradlew.bat compileJava`, `.\gradlew.bat testClasses`, `.\gradlew.bat test --tests phucuong.ht.modules.system.service.AccountRoleServiceTest`, `.\gradlew.bat test --tests phucuong.ht.modules.system.controller.RolePermissionControllerSecurityIntegrationTest`, `.\gradlew.bat test --tests phucuong.ht.contract.EndpointContractMatrixTest`, and full `.\gradlew.bat cleanTest test` passed.
+- Follow-up filtering correction: assign option endpoints now exclude already assigned records for the selected target. `GET /api/system/account-roles/assignable-roles?username=...` removes roles already present on the account, `GET /api/system/role-permissions/assignable-permissions?roleCode=...` removes permissions already assigned to the role, and `GET /api/system/account-permissions/assignable-permissions?username=...` removes direct overrides already assigned to the account.
+- API policy migration `V042__unassigned_assignment_option_api_policies.sql` registers the new unassigned-permission option endpoints for role-permission and account-permission forms.
+- Menu visibility for `Gán vai trò` is driven by `system.account_role.assign.*` in `/api/auth/me.permissions`; migration `V043__ensure_account_role_assignment_menu_permissions.sql` ensures `SUPER_ADMIN`, `ADMIN_DIOCESE`, `ADMIN_DEANERY`, and `ADMIN_PARISH` keep the exact scoped assign permission needed for their managed accounts.
+- `/api/auth/me` now reloads the current principal from the database before returning roles/permissions, so menu visibility reflects updated RBAC rows instead of a stale permission snapshot embedded in the current access token.
+- Root cause for `phucuongadmin` not seeing `Gán vai trò`: an `account_permission_override` direct `DENY` on `system.account_role.assign.diocese` overrode the role-level `ALLOW`. Migration `V044__remove_admin_account_role_assignment_denies.sql` removes stale direct denies for required admin-unit account-role assignment permissions, and the account-permission service now rejects recreating those denies.
+- Re-enabling a role only restores `role.status=true`; it does not recreate `role_permission` rows. If a custom role such as `LD_TRUONG` currently has zero `role_permission` records, accounts assigned to that role still resolve zero effective permissions after login until permissions are granted back through role-permission management.
+
