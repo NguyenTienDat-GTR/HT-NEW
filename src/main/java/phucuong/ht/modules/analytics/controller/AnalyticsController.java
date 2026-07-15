@@ -10,13 +10,18 @@ import org.springframework.web.bind.annotation.RestController;
 import phucuong.ht.common.dto.apiResponse;
 import phucuong.ht.modules.analytics.model.request.AnalyticsFilterRequest;
 import phucuong.ht.modules.analytics.model.response.AnalyticsResponse;
+import phucuong.ht.modules.analytics.model.response.WorkQueueItemResponse;
 import phucuong.ht.modules.analytics.service.AnalyticsService;
+
+import java.util.List;
 
 @RestController @RequestMapping("/api/analytics") @RequiredArgsConstructor
 public class AnalyticsController {
     private final AnalyticsService analyticsService;
     @GetMapping("/overview") @PreAuthorize("@analyticsAccessEvaluator.canReadOverview(authentication)")
     public apiResponse<AnalyticsResponse> overview(@ModelAttribute AnalyticsFilterRequest request, Authentication authentication) { return apiResponse.success(null, analyticsService.overview(request, authentication)); }
+    @GetMapping("/work-queue") @PreAuthorize("@analyticsAccessEvaluator.canReadOverview(authentication)")
+    public apiResponse<List<WorkQueueItemResponse>> workQueue(Authentication authentication) { return apiResponse.success(null, analyticsService.workQueue(authentication)); }
     @GetMapping("/organization") @PreAuthorize("@analyticsAccessEvaluator.canReadDetailed(authentication)")
     public apiResponse<AnalyticsResponse> organization(@ModelAttribute AnalyticsFilterRequest request, Authentication authentication) { return apiResponse.success(null, analyticsService.organization(request, authentication)); }
     @GetMapping("/leaders") @PreAuthorize("@analyticsAccessEvaluator.canReadDetailed(authentication)")

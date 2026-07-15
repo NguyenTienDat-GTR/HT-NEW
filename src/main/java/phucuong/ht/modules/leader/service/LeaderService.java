@@ -24,6 +24,9 @@ import phucuong.ht.modules.leader.model.response.LeaderResponse;
 import phucuong.ht.modules.leader.repository.LeaderRepository;
 import phucuong.ht.modules.leader.security.LeaderAccessEvaluator;
 import phucuong.ht.modules.parish.model.entity.Parish;
+import phucuong.ht.modules.rankHistory.model.entity.RankHistory;
+import phucuong.ht.modules.rankHistory.model.response.RankHistoryResponse;
+import phucuong.ht.modules.rankHistory.repository.RankHistoryRepository;
 
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
@@ -44,6 +47,7 @@ public class LeaderService {
     private final LeaderRepository leaderRepository;
     private final LeaderValidationHelper leaderValidationHelper;
     private final LeaderScopeHelper leaderScopeHelper;
+    private final RankHistoryRepository rankHistoryRepository;
 
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.LEADER_LIST, allEntries = true),
@@ -109,6 +113,12 @@ public class LeaderService {
     @Cacheable(cacheNames = CacheNames.LEADER_DETAIL, key = "@cacheScopeKeyHelper.detailKey(#authentication, #id)")
     public LeaderResponse findById(UUID id, Authentication authentication) {
         return toLeaderResponse(leaderValidationHelper.requireExistingLeaderWithParish(id));
+    }
+
+    public List<RankHistoryResponse> findRankHistory(UUID id) {
+        return rankHistoryRepository.findAllByLeaderId(id).stream()
+                .map(this::toRankHistoryResponse)
+                .toList();
     }
 
     @Caching(evict = {
@@ -224,6 +234,16 @@ public class LeaderService {
                 .gender(leader.getGender())
                 .leaderLevel(leader.getLeaderLevel())
                 .parishId(leader.getParish() == null ? null : leader.getParish().getId())
+                .build();
+    }
+
+    private RankHistoryResponse toRankHistoryResponse(RankHistory rankHistory) {
+        return RankHistoryResponse.builder()
+                .id(rankHistory.getId())
+                .oldLevel(rankHistory.getOldLevel())
+                .newLevel(rankHistory.getNewLevel())
+                .promotionDate(rankHistory.getPromotionDate())
+                .note(rankHistory.getNote())
                 .build();
     }
 

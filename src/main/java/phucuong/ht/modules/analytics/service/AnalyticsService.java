@@ -9,6 +9,7 @@ import phucuong.ht.modules.analytics.model.AnalyticsScope;
 import phucuong.ht.modules.analytics.model.AnalyticsScopeType;
 import phucuong.ht.modules.analytics.model.request.AnalyticsFilterRequest;
 import phucuong.ht.modules.analytics.model.response.AnalyticsResponse;
+import phucuong.ht.modules.analytics.model.response.WorkQueueItemResponse;
 import phucuong.ht.modules.analytics.repository.AnalyticsRepository;
 import phucuong.ht.modules.analytics.security.AnalyticsScopeResolver;
 
@@ -47,6 +48,48 @@ public class AnalyticsService {
         kpis.put("courseRegistrations", count("course_participation cp join leader l on l.id = cp.leader_id", leaderScope, date("cp.registration_date", filters, params), params));
         kpis.put("approvedCertificates", count("certificate c join leader l on l.id = c.leader_id", leaderScope + " and c.approval_status = 'APPROVED'", date("c.issue_date", filters, params), params));
         return response(scope, filters, kpis, List.of(), List.of(), List.of());
+    }
+
+    public List<WorkQueueItemResponse> workQueue(Authentication authentication) {
+        AnalyticsScope scope = scopeResolver.resolve(authentication, true);
+        Map<String, Object> params = repository.params(scope);
+        String leaderScope = repository.leaderScope(scope, "l");
+        String courseScope = repository.courseScope(scope, "c");
+        String certificateCourseScope = repository.courseScope(scope, "tc");
+        String participationFrom = "course_participation cp join training_course c on c.course_code = cp.course_id join leader l on l.id = cp.leader_id";
+        String certificateFrom = "certificate cert join training_course tc on tc.course_code = cert.course_code join leader l on l.id = cert.leader_id";
+
+        long pendingApprovals = count(
+                participationFrom,
+                leaderScope + " and " + courseScope + " and (cp.deanery_approval_status in ('PENDING','SUBMITTED') or cp.diocese_approval_status in ('PENDING','SUBMITTED'))",
+                "",
+                params
+        );
+        long pendingScoring = count(
+                participationFrom,
+                leaderScope + " and " + courseScope + " and cp.total_score is null and (cp.deanery_approval_status = 'APPROVED' or cp.diocese_approval_status = 'APPROVED')",
+                "",
+                params
+        );
+        long closingCourses = count(
+                "training_course c",
+                courseScope + " and c.registration_end_at is not null and c.registration_end_at between now() and now() + interval '7 days'",
+                "",
+                params
+        );
+        long pendingCertificates = count(
+                certificateFrom,
+                leaderScope + " and " + certificateCourseScope + " and cert.approval_status = 'PENDING'",
+                "",
+                params
+        );
+
+        return List.of(
+                workQueueItem("pending-registrations", "Đăng ký chờ duyệt", "Rà soát hồ sơ theo cấp duyệt hiện tại.", "/training/approvals", pendingApprovals, "registrations", "rose"),
+                workQueueItem("pending-scoring", "Hồ sơ chờ chấm", "Nhập điểm cho hồ sơ đã duyệt và chưa khóa chứng nhận.", "/training/scores", pendingScoring, "scoring", "blue"),
+                workQueueItem("closing-courses", "Khóa sắp đóng đăng ký", "Theo dõi cửa sổ đăng ký trong 7 ngày tới.", "/training/courses", closingCourses, "courses", "violet"),
+                workQueueItem("pending-certificates", "Chứng nhận chờ duyệt", "Kiểm tra passing score và lý do ngoại lệ.", "/certificates/approvals", pendingCertificates, "certificates", "emerald")
+        );
     }
 
     @Cacheable(cacheNames = CacheNames.ANALYTICS_ORGANIZATION, key = "@cacheScopeKeyHelper.analyticsKey(#authentication, 'organization', #request.fromDate, #request.toDate, #request.timeBucket, #request.groupBy)")
@@ -252,6 +295,9 @@ public class AnalyticsService {
     }
 
     private long count(String from, String scope, String dateFilter, Map<String, Object> params) { return repository.scalar("select count(*) from " + from + " where " + scope + dateFilter, params); }
+    private WorkQueueItemResponse workQueueItem(String key, String title, String description, String href, long count, String icon, String tone) {
+        return WorkQueueItemResponse.builder().key(key).title(title).description(description).href(href).count(count).icon(icon).tone(tone).build();
+    }
     private String date(String field, AnalyticsFilterRequest filters, Map<String, Object> params) { return repository.dateFilter(field, filters, params); }
     private AnalyticsFilterRequest validate(AnalyticsFilterRequest request) { AnalyticsFilterRequest result = request == null ? new AnalyticsFilterRequest() : request; result.validate(); return result; }
     private String parishScope(AnalyticsScope scope, String alias) { return switch (scope.type()) { case DIOCESE -> alias + ".deanery_id in (select id from deanery where diocese_id = :dioceseId)"; case DEANERY -> alias + ".deanery_id = :deaneryId"; case PARISH -> alias + ".id = :parishId"; case ALL -> "1=1"; }; }

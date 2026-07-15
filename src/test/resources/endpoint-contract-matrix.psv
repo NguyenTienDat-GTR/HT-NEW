@@ -3,6 +3,7 @@
 
 # Analytics
 GET /api/analytics/overview|200|401|403|400|N/A: aggregate endpoint has no individual resource lookup|N/A: read-only aggregate does not mutate state
+GET /api/analytics/work-queue|200|401|403|N/A: endpoint accepts no client request data|N/A: aggregate endpoint has no individual resource lookup|N/A: read-only aggregate does not mutate state
 GET /api/analytics/organization|200|401|403|400|N/A: aggregate endpoint has no individual resource lookup|N/A: read-only aggregate does not mutate state
 GET /api/analytics/leaders|200|401|403|400|N/A: aggregate endpoint has no individual resource lookup|N/A: read-only aggregate does not mutate state
 GET /api/analytics/courses|200|401|403|400|N/A: aggregate endpoint has no individual resource lookup|N/A: read-only aggregate does not mutate state
@@ -52,6 +53,7 @@ PATCH /api/executive-board/assignments/{id}/toggle-status|200|401|403|400|404|N/
 POST /api/leaders|200|401|403|400|404|409
 GET /api/leaders|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
 GET /api/leaders/{id}|200|401|403|400|404|N/A: read-only endpoint does not mutate state
+GET /api/leaders/{id}/rank-history|200|401|403|N/A: endpoint accepts no client request data|404|N/A: read-only endpoint does not mutate state
 PUT /api/leaders/{id}|200|401|403|400|404|409
 DELETE /api/leaders/{id}|200|401|403|400|404|409
 PATCH /api/leaders/{id}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict
@@ -103,6 +105,7 @@ PATCH /api/system/account-roles/{id}/toggle-status|200|401|403|400|404|N/A: stat
 # Permission catalogue
 POST /api/system/permissions|200|401|403|400|404|409
 GET /api/system/permissions|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/system/permissions/taxonomy|200|401|403|N/A: endpoint accepts no client request data|N/A: taxonomy endpoint has no individual resource lookup|N/A: read-only endpoint does not mutate state
 GET /api/system/permissions/{permissionCode}|200|401|403|N/A: permission code is an opaque string|404|N/A: read-only endpoint does not mutate state
 PUT /api/system/permissions/{permissionCode}|200|401|403|400|404|409
 DELETE /api/system/permissions/{permissionCode}|200|401|403|N/A: permission code is an opaque string|404|409
