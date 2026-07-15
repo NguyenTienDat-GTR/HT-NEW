@@ -97,4 +97,20 @@ public class SystemPermissionRepository extends BaseRepo<Permission, String> {
         query.setParameter("moduleCode", moduleCode);
         return query.getSingleResult() > 0;
     }
+
+    public List<PermissionModule> findActiveModules() {
+        return entityManager.createQuery("select pm from PermissionModule pm where pm.status = true order by pm.displayOrder asc, pm.moduleCode", PermissionModule.class).getResultList();
+    }
+
+    public List<PermissionResource> findActiveResources() {
+        return entityManager.createQuery("select pr from PermissionResource pr join fetch pr.module where pr.status = true order by pr.displayOrder asc, pr.resourceCode", PermissionResource.class).getResultList();
+    }
+
+    public List<PermissionAction> findActiveActions() {
+        return entityManager.createQuery("select pa from PermissionAction pa where pa.status = true order by pa.displayOrder asc, pa.actionCode", PermissionAction.class).getResultList();
+    }
+
+    public List<PermissionScope> findActiveScopes() {
+        return entityManager.createQuery("select ps from PermissionScope ps where ps.status = true order by ps.displayOrder asc, ps.scopeCode", PermissionScope.class).getResultList();
+    }
 }

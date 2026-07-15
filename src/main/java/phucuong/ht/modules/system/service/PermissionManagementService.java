@@ -15,6 +15,7 @@ import phucuong.ht.modules.system.model.entity.Permission;
 import phucuong.ht.modules.system.model.request.PermissionCreateRequest;
 import phucuong.ht.modules.system.model.request.PermissionUpdateRequest;
 import phucuong.ht.modules.system.model.response.PermissionResponse;
+import phucuong.ht.modules.system.model.response.PermissionTaxonomyResponse;
 import phucuong.ht.modules.system.repository.SystemPermissionRepository;
 
 import java.time.OffsetDateTime;
@@ -81,6 +82,40 @@ public class PermissionManagementService {
                 .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay quyen: " + permissionCode));
         authorizationHelper.requirePermissionReadAccess(authentication, permission);
         return toResponse(permission);
+    }
+
+    public PermissionTaxonomyResponse taxonomy() {
+        return PermissionTaxonomyResponse.builder()
+                .modules(systemPermissionRepository.findActiveModules().stream()
+                        .map(module -> PermissionTaxonomyResponse.TaxonomyOption.builder()
+                                .code(module.getModuleCode())
+                                .name(module.getModuleName())
+                                .description(module.getDescription())
+                                .build())
+                        .toList())
+                .resources(systemPermissionRepository.findActiveResources().stream()
+                        .map(resource -> PermissionTaxonomyResponse.TaxonomyOption.builder()
+                                .code(resource.getResourceCode())
+                                .name(resource.getResourceName())
+                                .parentCode(resource.getModule() == null ? null : resource.getModule().getModuleCode())
+                                .description(resource.getDescription())
+                                .build())
+                        .toList())
+                .actions(systemPermissionRepository.findActiveActions().stream()
+                        .map(action -> PermissionTaxonomyResponse.TaxonomyOption.builder()
+                                .code(action.getActionCode())
+                                .name(action.getActionName())
+                                .description(action.getDescription())
+                                .build())
+                        .toList())
+                .scopes(systemPermissionRepository.findActiveScopes().stream()
+                        .map(scope -> PermissionTaxonomyResponse.TaxonomyOption.builder()
+                                .code(scope.getScopeCode())
+                                .name(scope.getScopeName())
+                                .description(scope.getDescription())
+                                .build())
+                        .toList())
+                .build();
     }
 
     public PermissionResponse update(String permissionCode, PermissionUpdateRequest request, Authentication authentication) {

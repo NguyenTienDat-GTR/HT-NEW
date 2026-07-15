@@ -12,6 +12,7 @@ import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.modules.system.model.request.PermissionCreateRequest;
 import phucuong.ht.modules.system.model.request.PermissionUpdateRequest;
 import phucuong.ht.modules.system.model.response.PermissionResponse;
+import phucuong.ht.modules.system.model.response.PermissionTaxonomyResponse;
 import phucuong.ht.modules.system.service.PermissionManagementService;
 
 @RestController
@@ -33,6 +34,12 @@ public class PermissionController {
             + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.diocese')")
     public apiResponse<Page<PermissionResponse>> findAll(@ModelAttribute BaseSearchRequest request, Authentication authentication) {
         return apiResponse.success("Lấy danh sách quyền thành công", permissionManagementService.findAll(request, authentication));
+    }
+
+    @GetMapping("/taxonomy")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public apiResponse<PermissionTaxonomyResponse> taxonomy() {
+        return apiResponse.success("Lấy taxonomy quyền thành công", permissionManagementService.taxonomy());
     }
 
     @GetMapping("/{permissionCode}")

@@ -1080,3 +1080,13 @@ The following work was added in this iteration:
 - `GET /api/leaders` now supports diocese/deanery/parish read scopes and filters by `parish.deanery.diocese.id`, `parish.deanery.id`, or `parish.id` before pagination; leader update/toggle remains parish-scoped.
 - Kiểm thử đã chạy: `.\gradlew.bat testClasses` thành công; targeted diocese/deanery/parish/leader tests thành công; container hiện tại đã apply Flyway tới `037` và xác nhận `/api/dioceses` cache hit trả `200`.
 
+### All-module form workflow support 2026-07-15
+
+- Branch `feature/all-module-form-api-support` starts from `origin/main` and stays local until a separate commit/push request.
+- Added `GET /api/analytics/work-queue`, guarded by dashboard read permission, returning scoped real counts for pending registration approvals, pending scoring, courses closing registration within 7 days, and pending certificates.
+- Dashboard notifications continue to come from `GET /api/system/notifications`; no dashboard work-queue or notification counts should be hardcoded in FE.
+- Added `GET /api/leaders/{id}/rank-history`, guarded by existing leader read evaluator, returning read-only rank history. Promotion remains owned by certificate approval.
+- Added `GET /api/system/permissions/taxonomy`, guarded by `SUPER_ADMIN`, returning active permission modules, resources, actions, and scopes for permission create/edit forms.
+- Added data-only Flyway migration `V038__form_workflow_support_policy.sql` for the new analytics, leader rank-history, and permission taxonomy routes. No schema change.
+- Verification run in this session: `.\gradlew.bat compileJava`, `.\gradlew.bat testClasses`, `.\gradlew.bat test --tests phucuong.ht.contract.EndpointContractMatrixTest`, and full `.\gradlew.bat test` passed.
+

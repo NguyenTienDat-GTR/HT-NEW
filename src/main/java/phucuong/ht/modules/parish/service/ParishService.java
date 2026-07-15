@@ -213,6 +213,9 @@ public class ParishService {
                 .phoneNumber(parish.getPhoneNumber())
                 .email(parish.getEmail())
                 .deaneryId(parish.getDeanery() == null ? null : parish.getDeanery().getId())
+                .deaneryName(parish.getDeanery() == null ? null : parish.getDeanery().getName())
+                .dioceseId(parish.getDeanery() == null || parish.getDeanery().getDiocese() == null ? null : parish.getDeanery().getDiocese().getId())
+                .dioceseName(parish.getDeanery() == null || parish.getDeanery().getDiocese() == null ? null : parish.getDeanery().getDiocese().getName())
                 .chapterName(parish.getChapterName())
                 .build();
     }

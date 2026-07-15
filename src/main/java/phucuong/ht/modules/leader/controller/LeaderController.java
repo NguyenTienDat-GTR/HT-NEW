@@ -13,7 +13,9 @@ import phucuong.ht.modules.leader.model.request.LeaderCreateRequest;
 import phucuong.ht.modules.leader.model.request.LeaderUpdateRequest;
 import phucuong.ht.modules.leader.model.response.LeaderResponse;
 import phucuong.ht.modules.leader.service.LeaderService;
+import phucuong.ht.modules.rankHistory.model.response.RankHistoryResponse;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -39,6 +41,12 @@ public class LeaderController {
     @PreAuthorize("@leaderAccessEvaluator.canRead(authentication, #id)")
     public apiResponse<LeaderResponse> findById(@PathVariable UUID id, Authentication authentication) {
         return apiResponse.success("Lấy thông tin leader thành công", leaderService.findById(id, authentication));
+    }
+
+    @GetMapping("/{id}/rank-history")
+    @PreAuthorize("@leaderAccessEvaluator.canRead(authentication, #id)")
+    public apiResponse<List<RankHistoryResponse>> rankHistory(@PathVariable UUID id) {
+        return apiResponse.success("Lấy lịch sử cấp bậc leader thành công", leaderService.findRankHistory(id));
     }
 
     @PutMapping("/{id}")
