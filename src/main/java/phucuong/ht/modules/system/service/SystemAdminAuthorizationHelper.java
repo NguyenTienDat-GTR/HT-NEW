@@ -63,6 +63,38 @@ public class SystemAdminAuthorizationHelper {
         }
     }
 
+    public void requireRoleCreateAccess(Authentication authentication) {
+        if (isSuperAdmin(authentication)) {
+            return;
+        }
+        if (!hasRoleActionAuthority(authentication, "create")) {
+            throw commonValidationHelper.forbidden("Khong co quyen tao vai tro");
+        }
+    }
+
+    public void requireRoleDisplayOrderManageable(Authentication authentication, Integer displayOrder) {
+        if (isSuperAdmin(authentication) || displayOrder == null) {
+            return;
+        }
+        Integer actorOrder = actorRoleOrder(authentication);
+        if (actorOrder == null || displayOrder < actorOrder) {
+            throw commonValidationHelper.forbidden("Khong the quan ly vai tro co cap cao hon pham vi hien tai");
+        }
+    }
+
+    public void requireRoleWriteAccess(Authentication authentication, Role role, String actionCode) {
+        if (isSuperAdmin(authentication)) {
+            return;
+        }
+        if (!hasRoleActionAuthority(authentication, actionCode)) {
+            throw commonValidationHelper.forbidden("Khong co quyen cap nhat vai tro");
+        }
+        if (Boolean.TRUE.equals(role.getIsSystem())) {
+            throw commonValidationHelper.forbidden("Khong duoc cap nhat vai tro he thong");
+        }
+        requireRoleAtOrBelowActor(authentication, role);
+    }
+
     public void requirePermissionAssignableByDioceseAdmin(Permission permission) {
         requirePermissionAtOrBelowScope(permission, 1);
     }
@@ -99,10 +131,10 @@ public class SystemAdminAuthorizationHelper {
         if (isSuperAdmin(authentication)) {
             return;
         }
-        if (!hasAuthority(authentication, "system.role.read.all")) {
+        if (!hasRoleActionAuthority(authentication, "read")) {
             throw commonValidationHelper.forbidden("Không có quyền đọc vai trò");
         }
-        requireRoleManageableByDioceseAdmin(role);
+        requireRoleAtOrBelowActor(authentication, role);
     }
 
     public boolean canReadPermission(Authentication authentication, Permission permission) {
@@ -215,7 +247,29 @@ public class SystemAdminAuthorizationHelper {
 
     private void requireTargetRoleBelowActor(Authentication authentication, Role targetRole) {
         Integer targetOrder = targetRole == null ? null : targetRole.getDisplayOrder();
-        Integer actorOrder = actorRoleCodes(authentication).stream()
+        Integer actorOrder = actorRoleOrder(authentication);
+        if (actorOrder == null || targetOrder == null || targetOrder <= actorOrder) {
+            throw commonValidationHelper.forbidden("Chỉ được gán quyền cho vai trò thấp hơn vai trò hiện tại");
+        }
+    }
+
+    private void requireRoleAtOrBelowActor(Authentication authentication, Role targetRole) {
+        Integer actorOrder = actorRoleOrder(authentication);
+        Integer targetOrder = targetRole == null ? null : targetRole.getDisplayOrder();
+        if (actorOrder == null || (targetOrder != null && targetOrder < actorOrder)) {
+            throw commonValidationHelper.forbidden("Khong the quan ly vai tro co cap cao hon pham vi hien tai");
+        }
+    }
+
+    private boolean hasRoleActionAuthority(Authentication authentication, String actionCode) {
+        return hasAuthority(authentication, "system.role." + actionCode + ".all")
+                || hasAuthority(authentication, "system.role." + actionCode + ".diocese")
+                || hasAuthority(authentication, "system.role." + actionCode + ".deanery")
+                || hasAuthority(authentication, "system.role." + actionCode + ".parish");
+    }
+
+    private Integer actorRoleOrder(Authentication authentication) {
+        return actorRoleCodes(authentication).stream()
                 .map(roleRepository::findByRoleCodeAndStatusTrue)
                 .filter(Optional::isPresent)
                 .map(Optional::get)
@@ -223,9 +277,6 @@ public class SystemAdminAuthorizationHelper {
                 .filter(Objects::nonNull)
                 .min(Integer::compareTo)
                 .orElse(null);
-        if (actorOrder == null || targetOrder == null || targetOrder <= actorOrder) {
-            throw commonValidationHelper.forbidden("Chỉ được gán quyền cho vai trò thấp hơn vai trò hiện tại");
-        }
     }
 
     private List<String> actorRoleCodes(Authentication authentication) {

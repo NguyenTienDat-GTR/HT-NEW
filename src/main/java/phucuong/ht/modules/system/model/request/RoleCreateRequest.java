@@ -8,7 +8,6 @@ import lombok.Setter;
 @Setter
 public class RoleCreateRequest {
 
-    @NotBlank
     private String roleCode;
 
     @NotBlank

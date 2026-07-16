@@ -6,6 +6,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.validation.CommonValidationHelper;
@@ -13,26 +14,31 @@ import phucuong.ht.modules.system.model.entity.Role;
 import phucuong.ht.modules.system.model.request.RoleCreateRequest;
 import phucuong.ht.modules.system.model.request.RoleUpdateRequest;
 import phucuong.ht.modules.system.model.response.RoleResponse;
+import phucuong.ht.modules.system.repository.RolePermissionRepository;
 import phucuong.ht.modules.system.repository.SystemRoleRepository;
 
+import java.text.Normalizer;
+import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
 public class RoleManagementService {
 
     private final SystemRoleRepository systemRoleRepository;
+    private final RolePermissionRepository rolePermissionRepository;
     private final CommonValidationHelper commonValidationHelper;
     private final SystemAdminAuthorizationHelper authorizationHelper;
 
+    @Transactional
     public RoleResponse create(RoleCreateRequest request, Authentication authentication) {
-        if (systemRoleRepository.findById(request.getRoleCode()).isPresent()) {
-            throw commonValidationHelper.conflict("Vai trò đã tồn tại: " + request.getRoleCode());
-        }
+        authorizationHelper.requireRoleCreateAccess(authentication);
+        authorizationHelper.requireRoleDisplayOrderManageable(authentication, request.getDisplayOrder());
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tạo vai trò");
-        request.setRoleCode(commonValidationHelper.normalizeRequiredText(request.getRoleCode()));
         request.setRoleName(commonValidationHelper.normalizeRequiredText(request.getRoleName()));
+        request.setRoleCode(nextAvailableRoleCode(request.getRoleName()));
         request.setDescription(commonValidationHelper.normalizeOptionalText(request.getDescription()));
         Role role = systemRoleRepository.createRole(request, actor);
         return toResponse(role);
@@ -56,9 +62,12 @@ public class RoleManagementService {
         return toResponse(role);
     }
 
+    @Transactional
     public RoleResponse update(String roleCode, RoleUpdateRequest request, Authentication authentication) {
         Role role = systemRoleRepository.findById(roleCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy vai trò: " + roleCode));
+        authorizationHelper.requireRoleWriteAccess(authentication, role, "update");
+        authorizationHelper.requireRoleDisplayOrderManageable(authentication, request.getDisplayOrder());
         if (request.getRoleName() != null) {
             role.setRoleName(commonValidationHelper.normalizeRequiredText(request.getRoleName()));
         }
@@ -68,29 +77,47 @@ public class RoleManagementService {
         if (request.getDisplayOrder() != null) {
             role.setDisplayOrder(request.getDisplayOrder());
         }
+        role.setUpdatedAt(OffsetDateTime.now());
         role.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật vai trò"));
-        return toResponse(role);
+        return toResponse(systemRoleRepository.save(role));
     }
 
-    public void delete(String roleCode, Authentication authentication) {
-        Role role = systemRoleRepository.findById(roleCode)
-                .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay vai tro: " + roleCode));
-        if (Boolean.TRUE.equals(role.getIsSystem())) {
-            throw commonValidationHelper.forbidden("Khong duoc xoa vai tro he thong");
-        }
-        systemRoleRepository.delete(roleCode);
-    }
-
+    @Transactional
     public RoleResponse toggleStatus(String roleCode, StatusToggleRequest request, Authentication authentication) {
         Role role = systemRoleRepository.findById(roleCode)
-                .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay vai tro: " + roleCode));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy vai trò: " + roleCode));
+        authorizationHelper.requireRoleWriteAccess(authentication, role, "toggle");
         if (Boolean.TRUE.equals(role.getIsSystem())) {
-            throw commonValidationHelper.forbidden("Khong duoc doi trang thai vai tro he thong");
+            throw commonValidationHelper.forbidden("Không được đổi trạng thái vai trò hệ thống");
         }
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái vai trò");
-        systemRoleRepository.toggleStatus(roleCode, actor);
-        return findById(roleCode, authentication);
+        Role updatedRole = systemRoleRepository.toggleStatus(roleCode, actor);
+        rolePermissionRepository.updateStatusByRoleCode(roleCode, Boolean.TRUE.equals(updatedRole.getStatus()), OffsetDateTime.now(), actor);
+        return toResponse(updatedRole);
+    }
+
+    private String nextAvailableRoleCode(String roleName) {
+        String base = normalizeRoleCodeBase(roleName);
+        if (base.isBlank()) {
+            throw commonValidationHelper.validationError("Không thể sinh mã vai trò từ tên vai trò");
+        }
+        if (!systemRoleRepository.existsByRoleCode(base)) return base;
+        int suffix = 2;
+        while (systemRoleRepository.existsByRoleCode(base + suffix)) suffix++;
+        return base + suffix;
+    }
+
+    private String normalizeRoleCodeBase(String value) {
+        if (value == null) return "";
+        String normalized = Normalizer.normalize(value.trim(), Normalizer.Form.NFD)
+                .replace("đ", "d")
+                .replace("Đ", "D");
+        return normalized
+                .replaceAll("\\p{M}+", "")
+                .replaceAll("[^A-Za-z0-9]+", "_")
+                .replaceAll("^_+|_+$", "")
+                .toUpperCase(Locale.ROOT);
     }
 
     private boolean isVisibleRole(Role role) {
@@ -144,7 +171,9 @@ public class RoleManagementService {
                 .displayOrder(role.getDisplayOrder())
                 .status(role.getStatus())
                 .createdAt(role.getCreatedAt())
+                .createdBy(role.getCreatedBy())
                 .updatedAt(role.getUpdatedAt())
+                .updatedBy(role.getUpdatedBy())
                 .build();
     }
 }

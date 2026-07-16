@@ -1137,3 +1137,15 @@ The following work was added in this iteration:
 - FE contract follow-up: scoped admin account create should send `roleCodes`, `primaryRoleCode`, and `leaderId`; `dioceseId` and `credentialEmail` are reserved for the SUPER_ADMIN `ADMIN_DIOCESE` create flow.
 - Verification run in this session: `.\gradlew.bat test --tests phucuong.ht.modules.system.service.AccountManagementServiceTest --tests phucuong.ht.modules.system.service.AccountManagementAuthorizationHelperTest --tests phucuong.ht.modules.system.controller.AccountControllerFilterBindingTest`, `.\gradlew.bat testClasses`, and `git diff --check` passed.
 
+### Role management contract cleanup 2026-07-17
+
+- Branch `feature/role-management-contract-cleanup` starts from `origin/main`.
+- `POST /api/system/roles` no longer relies on client-provided `roleCode`; the backend derives `roleCode` from `roleName` by removing Vietnamese accents, uppercasing, replacing separators with `_`, and appending numeric suffixes `2`, `3`, ... when the generated code already exists.
+- `PUT /api/system/roles/{roleCode}` now runs inside a transaction and explicitly saves the role after applying changes, so role name, description, display order, and audit metadata persist before the success response is returned.
+- `DELETE /api/system/roles/{roleCode}` was removed from the controller and endpoint contract matrix; role management is status-based only.
+- New role toggle rule supersedes the earlier note that re-enabling a role only flips `role.status`: toggling a non-system role now also sets every attached `role_permission.status` to the same active/inactive value and updates audit metadata on those mappings.
+- `V045__seed_scoped_role_cru_toggle_permissions.sql` seeds `system.role.create/read/update/toggle.{all,diocese,deanery,parish}`, grants unit-scoped CRU/toggle permissions to `ADMIN_DIOCESE`, `ADMIN_DEANERY`, and `ADMIN_PARISH`, moves role toggle API policy to `system.role.toggle.*`, and disables the old role delete permission/policy.
+- Scoped role management now accepts unit-scoped authorities in `RoleController`; service authorization still prevents non-SUPER_ADMIN users from managing roles above their role hierarchy or mutating system roles.
+- `RoleResponse` now includes `createdBy` and `updatedBy` so FE detail drawers can show creator/updater information for role records.
+- Verification run in this session: `.\gradlew.bat testClasses`, `.\gradlew.bat test --tests phucuong.ht.modules.system.service.RoleManagementServiceTest --tests phucuong.ht.modules.system.controller.RoleControllerSecurityIntegrationTest --tests phucuong.ht.modules.system.service.ScopedSystemAdministrationReadTest`, and `git diff --check` passed. Local Docker app was rebuilt; `/api/auth/me` on port `1007` returned `401`, Flyway `045` was applied successfully, and DB verification showed 4 active scoped role CRU/toggle grants for each admin unit role.
+

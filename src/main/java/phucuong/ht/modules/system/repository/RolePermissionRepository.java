@@ -3,6 +3,7 @@ package phucuong.ht.modules.system.repository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 import phucuong.ht.common.repository.BaseRepo;
 import phucuong.ht.modules.system.model.entity.RolePermission;
 
@@ -51,5 +52,23 @@ public class RolePermissionRepository extends BaseRepo<RolePermission, String> {
 
     public int deactivateExpiredAssignments(OffsetDateTime expiresAtThreshold, OffsetDateTime updatedAt, String actor) {
         return 0;
+    }
+
+    @Transactional
+    public int updateStatusByRoleCode(String roleCode, boolean status, OffsetDateTime updatedAt, String actor) {
+        return entityManager.createQuery(
+                        """
+                        update RolePermission rp
+                        set rp.status = :status,
+                            rp.updatedAt = :updatedAt,
+                            rp.updatedBy = :actor
+                        where rp.role.roleCode = :roleCode
+                        """
+                )
+                .setParameter("status", status)
+                .setParameter("updatedAt", updatedAt)
+                .setParameter("actor", actor)
+                .setParameter("roleCode", roleCode)
+                .executeUpdate();
     }
 }

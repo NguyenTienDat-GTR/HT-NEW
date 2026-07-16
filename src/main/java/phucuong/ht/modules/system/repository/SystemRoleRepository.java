@@ -52,4 +52,18 @@ public class SystemRoleRepository extends BaseRepo<Role, String> {
         List<Integer> results = query.getResultList();
         return results.stream().findFirst();
     }
+
+    @Transactional
+    public Role save(Role role) {
+        return entityManager.merge(role);
+    }
+
+    public boolean existsByRoleCode(String roleCode) {
+        TypedQuery<Long> query = entityManager.createQuery(
+                "select count(r) from Role r where r.roleCode = :roleCode",
+                Long.class
+        );
+        query.setParameter("roleCode", roleCode);
+        return query.getSingleResult() > 0;
+    }
 }
