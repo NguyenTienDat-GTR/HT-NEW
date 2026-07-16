@@ -29,7 +29,7 @@ public class ScoreComponentTemplateController {
 
     @GetMapping
     @PreAuthorize("@scoreComponentTemplateAccessEvaluator.canList(authentication)")
-    public apiResponse<Page<ScoreComponentTemplateResponse>> findAll(@ModelAttribute BaseSearchRequest request, Authentication authentication) {
+    public apiResponse<Page<ScoreComponentTemplateResponse>> findAll(BaseSearchRequest request, Authentication authentication) {
         return apiResponse.success("Lấy danh sách thành phần điểm thành công", service.findAll(request, authentication));
     }
 

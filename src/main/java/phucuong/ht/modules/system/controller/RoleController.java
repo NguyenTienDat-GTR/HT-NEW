@@ -29,7 +29,7 @@ public class RoleController {
 
     @GetMapping
     @PreAuthorize("@securityUtils.hasAuthority(authentication, 'system.role.read.all')")
-    public apiResponse<Page<RoleResponse>> findAll(@ModelAttribute BaseSearchRequest request, Authentication authentication) {
+    public apiResponse<Page<RoleResponse>> findAll(BaseSearchRequest request, Authentication authentication) {
         return apiResponse.success("Lấy danh sách vai trò thành công", roleManagementService.findAll(request, authentication));
     }
 

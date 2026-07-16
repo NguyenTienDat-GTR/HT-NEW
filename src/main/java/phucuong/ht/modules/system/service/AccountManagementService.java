@@ -25,7 +25,6 @@ import phucuong.ht.modules.system.model.entity.Account;
 import phucuong.ht.modules.system.model.entity.AccountRole;
 import phucuong.ht.modules.system.model.entity.Role;
 import phucuong.ht.modules.system.model.request.AccountCreateRequest;
-import phucuong.ht.modules.system.model.request.AccountUpdateRequest;
 import phucuong.ht.modules.system.model.response.AccountResponse;
 
 import java.security.SecureRandom;
@@ -33,6 +32,7 @@ import java.text.Normalizer;
 import java.time.OffsetDateTime;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -61,16 +61,34 @@ public class AccountManagementService {
 
     @Transactional
     public AccountResponse create(AccountCreateRequest request, Authentication authentication) {
-        Role role = roleRepository.findByRoleCodeAndStatusTrue(request.getRoleCode())
-                .orElseThrow(() -> validation.notFound("Không tìm thấy role " + request.getRoleCode()));
-        boolean dioceseAdmin = ADMIN_DIOCESE.equals(role.getRoleCode());
+        List<String> roleCodes = normalizeCreateRoleCodes(request);
+        if (roleCodes.isEmpty()) {
+            throw validation.validationError("Vui lòng chọn ít nhất một vai trò");
+        }
+        String primaryRoleCode = resolveCreatePrimaryRole(request, roleCodes);
+        List<Role> roles = roleCodes.stream()
+                .map(roleCode -> roleRepository.findByRoleCodeAndStatusTrue(roleCode)
+                        .orElseThrow(() -> validation.notFound("Không tìm thấy role " + roleCode)))
+                .toList();
+        Role primaryRole = roles.stream()
+                .filter(role -> primaryRoleCode.equals(role.getRoleCode()))
+                .findFirst()
+                .orElseThrow(() -> validation.validationError("Vai trò chính phải nằm trong danh sách vai trò đã chọn"));
+        boolean superAdminRole = SUPER_ADMIN.equals(primaryRole.getRoleCode());
+        boolean dioceseAdmin = ADMIN_DIOCESE.equals(primaryRole.getRoleCode());
+        if ((superAdminRole || dioceseAdmin) && roles.size() != 1) {
+            throw validation.validationError("Tài khoản SUPER_ADMIN hoặc ADMIN_DIOCESE chỉ được gán một vai trò");
+        }
+        if (!superAdminRole && !dioceseAdmin && roleCodes.stream().anyMatch(roleCode -> SUPER_ADMIN.equals(roleCode) || ADMIN_DIOCESE.equals(roleCode))) {
+            throw validation.validationError("Không được chọn vai trò SUPER_ADMIN hoặc ADMIN_DIOCESE cho luồng tạo tài khoản này");
+        }
 
         Account account = new Account();
         Leader credentialLeader = null;
         String recipientEmail;
         String recipientName;
         String usernameBase;
-        if (SUPER_ADMIN.equals(role.getRoleCode())) {
+        if (superAdminRole) {
             if (request.getLeaderId() != null || request.getDioceseId() != null) {
                 throw validation.validationError("Tai khoan SUPER_ADMIN khong gan leader hoac giao phan");
             }
@@ -109,7 +127,7 @@ public class AccountManagementService {
             usernameBase = generateLeaderUsernameBase(credentialLeader);
         }
 
-        authorizationHelper.requireCanCreate(authentication, account, role);
+        roles.forEach(role -> authorizationHelper.requireCanCreate(authentication, account, role));
         String username = nextAvailableUsername(usernameBase);
         String rawPassword = generateTemporaryPassword();
         String actor = validation.requireAuditActor(authentication, "Không xác định được người tạo tài khoản");
@@ -124,7 +142,7 @@ public class AccountManagementService {
         account.setCreatedBy(actor);
         account.setUpdatedBy(actor);
         Account saved = accountRepository.save(account);
-        assignInitialRole(saved, role, actor);
+        assignInitialRoles(saved, roles, primaryRoleCode, actor);
         mailService.sendInitialCredentials(recipientEmail, recipientName, username, rawPassword);
         return response(saved);
     }
@@ -153,40 +171,6 @@ public class AccountManagementService {
     public AccountResponse findById(String username, Authentication authentication) {
         Account account = require(username);
         authorizationHelper.requireCanRead(authentication, account);
-        return response(account);
-    }
-
-    @Transactional
-    public AccountResponse update(String username, AccountUpdateRequest request, Authentication authentication) {
-        Account account = require(username);
-        authorizationHelper.requireCanManage(authentication, account);
-        boolean dioceseAdmin = isAdminDiocese(account);
-        if (dioceseAdmin) {
-            Diocese targetDiocese = account.getDiocese();
-            if (request.getDioceseId() != null) {
-                targetDiocese = requireDioceseForUpdate(request.getDioceseId());
-                if (accountRepository.existsOtherAdminDiocese(targetDiocese.getId(), username)) {
-                    throw validation.conflict("Giáo phận đích đã có account ADMIN_DIOCESE");
-                }
-                account.setDiocese(targetDiocese);
-            }
-            if (request.getLeaderId() != null) {
-                Leader leader = requireLeader(request.getLeaderId(), "Không tìm thấy leader");
-                requireLeaderInsideDiocese(leader, targetDiocese.getId());
-                account.setLeader(leader);
-            } else if (account.getLeader() != null) {
-                requireLeaderInsideDiocese(account.getLeader(), targetDiocese.getId());
-            }
-        } else {
-            if (request.getDioceseId() != null) {
-                throw validation.validationError("Chỉ account ADMIN_DIOCESE không gắn leader mới có direct dioceseId");
-            }
-            if (request.getLeaderId() != null) account.setLeader(requireLeader(request.getLeaderId(), "Không tìm thấy leader"));
-            if (account.getLeader() == null) throw validation.validationError("Account bắt buộc phải gắn với leader");
-        }
-        authorizationHelper.requireCanManage(authentication, account);
-        account.setUpdatedBy(validation.requireAuditActor(authentication, "Không xác định được người cập nhật tài khoản"));
-        redisTokenSessionService.revokeAllSessions(account.getUsername());
         return response(account);
     }
 
@@ -228,6 +212,27 @@ public class AccountManagementService {
     private Diocese requireDioceseForUpdate(UUID id) {
         if (id == null) throw validation.validationError("dioceseId là bắt buộc với ADMIN_DIOCESE");
         return dioceseRepository.findByIdForUpdate(id).orElseThrow(() -> validation.notFound("Không tìm thấy giáo phận"));
+    }
+
+    private List<String> normalizeCreateRoleCodes(AccountCreateRequest request) {
+        List<String> selectedRoles = normalizeRoleCodes(request.getRoleCodes());
+        if (!selectedRoles.isEmpty()) {
+            return selectedRoles;
+        }
+        String singleRole = validation.normalizeOptionalText(request.getRoleCode());
+        return singleRole == null || singleRole.isBlank() ? List.of() : List.of(singleRole);
+    }
+
+    private String resolveCreatePrimaryRole(AccountCreateRequest request, List<String> roleCodes) {
+        String primaryRoleCode = validation.normalizeOptionalText(request.getPrimaryRoleCode());
+        if (primaryRoleCode == null || primaryRoleCode.isBlank()) {
+            if (roleCodes.size() == 1) return roleCodes.get(0);
+            throw validation.validationError("Vui lòng chọn vai trò chính");
+        }
+        if (!roleCodes.contains(primaryRoleCode)) {
+            throw validation.validationError("Vai trò chính phải nằm trong danh sách vai trò đã chọn");
+        }
+        return primaryRoleCode;
     }
 
     private void requireLeaderInsideDiocese(Leader leader, UUID dioceseId) {
@@ -280,12 +285,6 @@ public class AccountManagementService {
         return password.toString();
     }
 
-    private boolean isAdminDiocese(Account account) {
-        return accountRoleRepository.findActiveRoleCodesByUsername(account.getUsername()).stream()
-                .allMatch(ADMIN_DIOCESE::equals)
-                && !accountRoleRepository.findActiveRoleCodesByUsername(account.getUsername()).isEmpty();
-    }
-
     private String requireCredentialEmail(String email) {
         String normalized = validation.normalizeRequiredText(email);
         if (normalized == null || normalized.isBlank()) {
@@ -300,37 +299,59 @@ public class AccountManagementService {
         return (lastName + " " + firstName).trim();
     }
 
-    private void assignInitialRole(Account account, Role role, String actor) {
+    private void assignInitialRoles(Account account, List<Role> roles, String primaryRoleCode, String actor) {
         OffsetDateTime now = OffsetDateTime.now();
-        AccountRole accountRole = new AccountRole();
-        accountRole.setAccount(account);
-        accountRole.setRole(role);
-        accountRole.setIsPrimary(true);
-        accountRole.setAssignedBy(actor);
-        accountRole.setAssignedAt(now);
-        accountRole.setStatus(true);
-        accountRole.setCreatedAt(now);
-        accountRole.setUpdatedAt(now);
-        accountRole.setCreatedBy(actor);
-        accountRole.setUpdatedBy(actor);
-        accountRoleRepository.save(accountRole);
+        for (Role role : roles) {
+            AccountRole accountRole = new AccountRole();
+            accountRole.setAccount(account);
+            accountRole.setRole(role);
+            accountRole.setIsPrimary(primaryRoleCode.equals(role.getRoleCode()));
+            accountRole.setAssignedBy(actor);
+            accountRole.setAssignedAt(now);
+            accountRole.setStatus(true);
+            accountRole.setCreatedAt(now);
+            accountRole.setUpdatedAt(now);
+            accountRole.setCreatedBy(actor);
+            accountRole.setUpdatedBy(actor);
+            accountRoleRepository.save(accountRole);
+        }
     }
 
     private AccountResponse response(Account account) {
         Leader leader = account.getLeader();
+        List<AccountRole> activeRoles = activeRoleAssignments(account.getUsername());
         return AccountResponse.builder()
                 .username(account.getUsername())
                 .leaderId(leader == null ? null : leader.getId())
                 .leaderFullName(buildFullName(leader))
-                .primaryRoleCode(primaryRoleCode(account.getUsername()))
+                .primaryRoleCode(primaryRoleCode(activeRoles))
+                .primaryRoleName(primaryRoleName(activeRoles))
+                .roleCodes(roleCodes(activeRoles))
+                .roleNames(roleNames(activeRoles))
+                .secondaryRoleNames(secondaryRoleNames(activeRoles))
                 .dioceseId(resolveDioceseId(account, leader))
                 .dioceseName(resolveDioceseName(account, leader))
                 .deaneryId(resolveDeaneryId(account, leader))
+                .deaneryName(resolveDeaneryName(account, leader))
                 .parishId(resolveParishId(account, leader))
+                .parishName(resolveParishName(account, leader))
                 .authProvider(account.getAuthProvider())
                 .providerId(account.getProviderId())
                 .status(account.getStatus())
                 .build();
+    }
+
+    private List<String> normalizeRoleCodes(List<String> roleCodes) {
+        if (roleCodes == null) {
+            return List.of();
+        }
+        return roleCodes.stream()
+                .map(validation::normalizeOptionalText)
+                .filter(roleCode -> roleCode != null && !roleCode.isBlank())
+                .collect(java.util.stream.Collectors.collectingAndThen(
+                        java.util.stream.Collectors.toCollection(LinkedHashSet::new),
+                        List::copyOf
+                ));
     }
 
     private boolean isVisibleInAccountList(Authentication authentication, Account account) {
@@ -375,10 +396,16 @@ public class AccountManagementService {
             if (value.isBlank()) continue;
             switch (entry.getKey()) {
                 case "primaryRoleCode", "roleCode", "role.roleCode" -> {
-                    if (!value.equals(response.getPrimaryRoleCode())) return false;
+                    if (response.getRoleCodes() == null || !response.getRoleCodes().contains(value)) return false;
                 }
                 case "diocese.id", "dioceseId" -> {
                     if (response.getDioceseId() == null || !value.equals(response.getDioceseId().toString())) return false;
+                }
+                case "deanery.id", "deaneryId" -> {
+                    if (response.getDeaneryId() == null || !value.equals(response.getDeaneryId().toString())) return false;
+                }
+                case "parish.id", "parishId" -> {
+                    if (response.getParishId() == null || !value.equals(response.getParishId().toString())) return false;
                 }
                 default -> {
                     return false;
@@ -400,14 +427,51 @@ public class AccountManagementService {
         return value == null ? "" : value;
     }
 
-    private String primaryRoleCode(String username) {
+    private List<AccountRole> activeRoleAssignments(String username) {
         return accountRoleRepository.findActiveByUsername(username).stream()
                 .sorted(Comparator.comparing((AccountRole accountRole) -> !Boolean.TRUE.equals(accountRole.getIsPrimary()))
                         .thenComparing(AccountRole::getAssignedAt, Comparator.nullsLast(Comparator.naturalOrder())))
+                .toList();
+    }
+
+    private String primaryRoleCode(List<AccountRole> activeRoles) {
+        return activeRoles.stream()
                 .map(accountRole -> accountRole.getRole() == null ? null : accountRole.getRole().getRoleCode())
                 .filter(roleCode -> roleCode != null && !roleCode.isBlank())
                 .findFirst()
                 .orElse(null);
+    }
+
+    private String primaryRoleName(List<AccountRole> activeRoles) {
+        return activeRoles.stream()
+                .map(this::roleDisplayName)
+                .filter(roleName -> roleName != null && !roleName.isBlank())
+                .findFirst()
+                .orElse(null);
+    }
+
+    private List<String> roleCodes(List<AccountRole> activeRoles) {
+        return activeRoles.stream()
+                .map(accountRole -> accountRole.getRole() == null ? null : accountRole.getRole().getRoleCode())
+                .filter(roleCode -> roleCode != null && !roleCode.isBlank())
+                .toList();
+    }
+
+    private List<String> roleNames(List<AccountRole> activeRoles) {
+        return activeRoles.stream()
+                .map(this::roleDisplayName)
+                .filter(roleName -> roleName != null && !roleName.isBlank())
+                .toList();
+    }
+
+    private List<String> secondaryRoleNames(List<AccountRole> activeRoles) {
+        return roleNames(activeRoles).stream().skip(1).toList();
+    }
+
+    private String roleDisplayName(AccountRole accountRole) {
+        if (accountRole == null || accountRole.getRole() == null) return null;
+        Role role = accountRole.getRole();
+        return role.getRoleName() == null || role.getRoleName().isBlank() ? role.getRoleCode() : role.getRoleName();
     }
 
     private UUID resolveDioceseId(Account account, Leader leader) {
@@ -440,6 +504,16 @@ public class AccountManagementService {
         return leader.getParish().getDeanery().getId();
     }
 
+    private String resolveDeaneryName(Account account, Leader leader) {
+        if (account.getDeanery() != null) {
+            return account.getDeanery().getName();
+        }
+        if (leader == null || leader.getParish() == null || leader.getParish().getDeanery() == null) {
+            return null;
+        }
+        return leader.getParish().getDeanery().getName();
+    }
+
     private UUID resolveParishId(Account account, Leader leader) {
         if (account.getParish() != null) {
             return account.getParish().getId();
@@ -448,6 +522,16 @@ public class AccountManagementService {
             return null;
         }
         return leader.getParish().getId();
+    }
+
+    private String resolveParishName(Account account, Leader leader) {
+        if (account.getParish() != null) {
+            return account.getParish().getName();
+        }
+        if (leader == null || leader.getParish() == null) {
+            return null;
+        }
+        return leader.getParish().getName();
     }
 
     private String buildFullName(Leader leader) {

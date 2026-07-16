@@ -29,7 +29,7 @@ public class ScoreFormulaTemplateController {
 
     @GetMapping
     @PreAuthorize("@scoreFormulaTemplateAccessEvaluator.canList(authentication)")
-    public apiResponse<Page<ScoreFormulaTemplateResponse>> findAll(@ModelAttribute BaseSearchRequest request, Authentication authentication) {
+    public apiResponse<Page<ScoreFormulaTemplateResponse>> findAll(BaseSearchRequest request, Authentication authentication) {
         return apiResponse.success("Lấy danh sách công thức tính điểm thành công", service.findAll(request, authentication));
     }
 

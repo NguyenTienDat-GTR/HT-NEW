@@ -217,6 +217,8 @@ Current org-unit contract notes:
 - `sortBy`
 - `sortDirection`
 
+Controller list endpoints accept `BaseSearchRequest` through `BaseSearchRequestArgumentResolver`; do not annotate it with `@ModelAttribute`, otherwise Spring's default `Map` binding can split the JSON `filters` payload and reject valid filter values.
+
 The request boundary limits `page` to a non-negative value (at most `1,000,000`), `size` to `1..100`, `searchFields` to 10 entries, and `filters` to 20 entries before any repository query is built.
 
 Dynamic search/filter supports nested paths such as:
@@ -1120,4 +1122,18 @@ The following work was added in this iteration:
 - `/api/auth/me` now reloads the current principal from the database before returning roles/permissions, so menu visibility reflects updated RBAC rows instead of a stale permission snapshot embedded in the current access token.
 - Root cause for `phucuongadmin` not seeing `Gán vai trò`: an `account_permission_override` direct `DENY` on `system.account_role.assign.diocese` overrode the role-level `ALLOW`. Migration `V044__remove_admin_account_role_assignment_denies.sql` removes stale direct denies for required admin-unit account-role assignment permissions, and the account-permission service now rejects recreating those denies.
 - Re-enabling a role only restores `role.status=true`; it does not recreate `role_permission` rows. If a custom role such as `LD_TRUONG` currently has zero `role_permission` records, accounts assigned to that role still resolve zero effective permissions after login until permissions are granted back through role-permission management.
+
+### Account management guard follow-up 2026-07-16
+
+- Branch `feature/super-admin-account-filter-drawer` adds an explicit service authorization guard for account management targets with active `SUPER_ADMIN` role.
+- `AccountManagementAuthorizationHelper.requireCanManage(...)` still rejects self-management first, so no role can update or toggle the currently logged-in account through account management APIs.
+- Account targets with active `SUPER_ADMIN` role are rejected before the normal SUPER_ADMIN-managed `ADMIN_DIOCESE` branch, so toggle/delete flows cannot mutate SUPER_ADMIN accounts through this service path.
+- Follow-up filter binding fix: `BaseSearchRequestArgumentResolver` now owns list query binding for `page`, `size`, `search`, `searchFields`, `filters`, `status`, `sortBy`, and `sortDirection`; account filter regression coverage verifies JSON `filters` values for `roleCode` and `dioceseId`.
+- Account edit is no longer supported by the account management API; `PUT /api/system/accounts/{username}` was removed. Account creation accepts `roleCodes` plus `primaryRoleCode` for non-super-admin management screens, rejects `SUPER_ADMIN`/`ADMIN_DIOCESE` in that multi-role flow, and guarantees one selected primary role.
+- `ADMIN_DIOCESE` uniqueness is based on active accounts only: a diocese may create another `ADMIN_DIOCESE` account when all existing admin-diocese accounts in that diocese are inactive, but creation is rejected while any active admin-diocese account exists.
+- `AccountResponse` now exposes display fields for FE tables/details: `primaryRoleName`, `roleNames`, `secondaryRoleNames`, `dioceseName`, `deaneryName`, and `parishName` alongside ids/codes for filtering and internal values.
+- `GET /api/system/accounts` accepts account filter keys `roleCode`, `dioceseId`, `deaneryId`, and `parishId`; role filtering matches any active assigned role, not only the primary role.
+- `GET /api/leaders/account-candidates` returns scoped leaders without an existing account for the account-create leader dropdown; the endpoint pages through scoped leader results until it fills the requested candidate size.
+- FE contract follow-up: scoped admin account create should send `roleCodes`, `primaryRoleCode`, and `leaderId`; `dioceseId` and `credentialEmail` are reserved for the SUPER_ADMIN `ADMIN_DIOCESE` create flow.
+- Verification run in this session: `.\gradlew.bat test --tests phucuong.ht.modules.system.service.AccountManagementServiceTest --tests phucuong.ht.modules.system.service.AccountManagementAuthorizationHelperTest --tests phucuong.ht.modules.system.controller.AccountControllerFilterBindingTest`, `.\gradlew.bat testClasses`, and `git diff --check` passed.
 

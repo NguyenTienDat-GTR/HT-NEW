@@ -32,7 +32,7 @@ public class PermissionController {
     @PreAuthorize("hasRole('SUPER_ADMIN')"
             + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.diocese')"
             + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.diocese')")
-    public apiResponse<Page<PermissionResponse>> findAll(@ModelAttribute BaseSearchRequest request, Authentication authentication) {
+    public apiResponse<Page<PermissionResponse>> findAll(BaseSearchRequest request, Authentication authentication) {
         return apiResponse.success("Lấy danh sách quyền thành công", permissionManagementService.findAll(request, authentication));
     }
 

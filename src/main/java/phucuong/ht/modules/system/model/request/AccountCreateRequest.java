@@ -1,19 +1,20 @@
 package phucuong.ht.modules.system.model.request;
 
 import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.util.List;
 import java.util.UUID;
 
 @Getter
 @Setter
 public class AccountCreateRequest {
 
-    @NotBlank
     private String roleCode;
+    private List<String> roleCodes;
+    private String primaryRoleCode;
 
     /**
      * Leader linked to every account except the leaderless ADMIN_DIOCESE account.

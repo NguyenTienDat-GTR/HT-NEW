@@ -31,7 +31,7 @@ public class DeaneryController {
 
     @GetMapping
     @PreAuthorize("@deaneryAccessEvaluator.canList(authentication)")
-    public apiResponse<Page<DeaneryResponse>> findAll(@ModelAttribute BaseSearchRequest request, Authentication authentication) {
+    public apiResponse<Page<DeaneryResponse>> findAll(BaseSearchRequest request, Authentication authentication) {
         return apiResponse.success("Lấy danh sách giáo hạt thành công", deaneryService.findAll(request, authentication));
     }
 

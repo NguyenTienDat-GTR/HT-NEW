@@ -31,7 +31,7 @@ public class DioceseController {
 
     @GetMapping
     @PreAuthorize("@dioceseAccessEvaluator.canList(authentication)")
-    public apiResponse<Page<Diocese>> findAll(@ModelAttribute BaseSearchRequest request, Authentication authentication) {
+    public apiResponse<Page<Diocese>> findAll(BaseSearchRequest request, Authentication authentication) {
         return apiResponse.success("Lấy danh sách giáo phận thành công", dioceseService.findAll(request, authentication));
     }
 

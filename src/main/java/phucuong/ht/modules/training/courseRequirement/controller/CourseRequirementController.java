@@ -29,7 +29,7 @@ public class CourseRequirementController {
 
     @GetMapping
     @PreAuthorize("@courseRequirementAccessEvaluator.canList(authentication)")
-    public apiResponse<Page<CourseRequirementResponse>> findAll(@ModelAttribute BaseSearchRequest request, Authentication authentication) {
+    public apiResponse<Page<CourseRequirementResponse>> findAll(BaseSearchRequest request, Authentication authentication) {
         return apiResponse.success("Lấy danh sách requirement thành công", courseRequirementService.findAll(request, authentication));
     }
 

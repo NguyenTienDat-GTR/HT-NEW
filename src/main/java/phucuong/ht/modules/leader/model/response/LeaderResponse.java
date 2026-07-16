@@ -30,4 +30,5 @@ public class LeaderResponse {
     private LeaderGender gender;
     private LeaderLevel leaderLevel;
     private UUID parishId;
+    private String parishName;
 }
