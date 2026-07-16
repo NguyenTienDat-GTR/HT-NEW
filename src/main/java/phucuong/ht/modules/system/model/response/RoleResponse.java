@@ -15,5 +15,7 @@ public class RoleResponse {
     private Integer displayOrder;
     private Boolean status;
     private OffsetDateTime createdAt;
+    private String createdBy;
     private OffsetDateTime updatedAt;
+    private String updatedBy;
 }

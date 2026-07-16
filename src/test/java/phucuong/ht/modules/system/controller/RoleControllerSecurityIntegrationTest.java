@@ -54,7 +54,6 @@ class RoleControllerSecurityIntegrationTest {
     @Test
     void shouldAllowCreateRoleWithAuthority() throws Exception {
         RoleCreateRequest request = new RoleCreateRequest();
-        request.setRoleCode("CUSTOM_ROLE");
         request.setRoleName("Custom Role");
 
         when(roleManagementService.create(any(RoleCreateRequest.class), any())).thenReturn(RoleResponse.builder()
@@ -74,7 +73,6 @@ class RoleControllerSecurityIntegrationTest {
     @Test
     void shouldRejectCreateRoleWithoutAuthority() throws Exception {
         RoleCreateRequest request = new RoleCreateRequest();
-        request.setRoleCode("CUSTOM_ROLE");
         request.setRoleName("Custom Role");
 
         mockMvc.perform(post("/api/system/roles")

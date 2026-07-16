@@ -19,28 +19,49 @@ import phucuong.ht.modules.system.service.RoleManagementService;
 @RequiredArgsConstructor
 public class RoleController {
 
+    private static final String CAN_CREATE_ROLE =
+            "@securityUtils.hasAuthority(authentication, 'system.role.create.all')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role.create.diocese')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role.create.deanery')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role.create.parish')";
+    private static final String CAN_READ_ROLE =
+            "@securityUtils.hasAuthority(authentication, 'system.role.read.all')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role.read.diocese')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role.read.deanery')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role.read.parish')";
+    private static final String CAN_UPDATE_ROLE =
+            "@securityUtils.hasAuthority(authentication, 'system.role.update.all')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role.update.diocese')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role.update.deanery')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role.update.parish')";
+    private static final String CAN_TOGGLE_ROLE =
+            "@securityUtils.hasAuthority(authentication, 'system.role.toggle.all')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role.toggle.diocese')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role.toggle.deanery')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role.toggle.parish')";
+
     private final RoleManagementService roleManagementService;
 
     @PostMapping
-    @PreAuthorize("@securityUtils.hasAuthority(authentication, 'system.role.create.all')")
+    @PreAuthorize(CAN_CREATE_ROLE)
     public apiResponse<RoleResponse> create(@Valid @RequestBody RoleCreateRequest request, Authentication authentication) {
         return apiResponse.success("Tạo vai trò thành công", roleManagementService.create(request, authentication));
     }
 
     @GetMapping
-    @PreAuthorize("@securityUtils.hasAuthority(authentication, 'system.role.read.all')")
+    @PreAuthorize(CAN_READ_ROLE)
     public apiResponse<Page<RoleResponse>> findAll(BaseSearchRequest request, Authentication authentication) {
         return apiResponse.success("Lấy danh sách vai trò thành công", roleManagementService.findAll(request, authentication));
     }
 
     @GetMapping("/{roleCode}")
-    @PreAuthorize("@securityUtils.hasAuthority(authentication, 'system.role.read.all')")
+    @PreAuthorize(CAN_READ_ROLE)
     public apiResponse<RoleResponse> findById(@PathVariable String roleCode, Authentication authentication) {
         return apiResponse.success("Lấy thông tin vai trò thành công", roleManagementService.findById(roleCode, authentication));
     }
 
     @PutMapping("/{roleCode}")
-    @PreAuthorize("@securityUtils.hasAuthority(authentication, 'system.role.update.all')")
+    @PreAuthorize(CAN_UPDATE_ROLE)
     public apiResponse<RoleResponse> update(
             @PathVariable String roleCode,
             @Valid @RequestBody RoleUpdateRequest request,
@@ -49,15 +70,8 @@ public class RoleController {
         return apiResponse.success("Cập nhật vai trò thành công", roleManagementService.update(roleCode, request, authentication));
     }
 
-    @DeleteMapping("/{roleCode}")
-    @PreAuthorize("@securityUtils.hasAuthority(authentication, 'system.role.delete.all')")
-    public apiResponse<Void> delete(@PathVariable String roleCode, Authentication authentication) {
-        roleManagementService.delete(roleCode, authentication);
-        return apiResponse.success("Xóa vai trò thành công", null);
-    }
-
     @PatchMapping("/{roleCode}/toggle-status")
-    @PreAuthorize("@securityUtils.hasAuthority(authentication, 'system.role.update.all')")
+    @PreAuthorize(CAN_TOGGLE_ROLE)
     public apiResponse<RoleResponse> toggleStatus(
             @PathVariable String roleCode,
             @Valid @RequestBody StatusToggleRequest request,
