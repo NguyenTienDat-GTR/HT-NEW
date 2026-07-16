@@ -15,6 +15,7 @@ import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.config.CacheNames;
 import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.modules.auth.repository.AccountRepository;
 import phucuong.ht.modules.leader.helper.LeaderScopeHelper;
 import phucuong.ht.modules.leader.helper.LeaderValidationHelper;
 import phucuong.ht.modules.leader.model.entity.Leader;
@@ -29,6 +30,7 @@ import phucuong.ht.modules.rankHistory.model.response.RankHistoryResponse;
 import phucuong.ht.modules.rankHistory.repository.RankHistoryRepository;
 
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -47,6 +49,7 @@ public class LeaderService {
     private final LeaderRepository leaderRepository;
     private final LeaderValidationHelper leaderValidationHelper;
     private final LeaderScopeHelper leaderScopeHelper;
+    private final AccountRepository accountRepository;
     private final RankHistoryRepository rankHistoryRepository;
 
     @Caching(evict = {
@@ -108,6 +111,24 @@ public class LeaderService {
         UUID parishId = leaderScopeHelper.getRequiredActiveParishId(authentication, LeaderAccessEvaluator.READ_PARISH);
         scopedRequest.getFilters().put(PARISH_FILTER_FIELD, parishId);
         return loadLeaderPageWithParish(scopedRequest);
+    }
+
+    public List<LeaderResponse> findAccountCandidates(BaseSearchRequest request, Authentication authentication) {
+        BaseSearchRequest source = request == null ? new BaseSearchRequest() : request;
+        int targetSize = Math.max(source.getSize(), 100);
+        List<LeaderResponse> candidates = new ArrayList<>();
+        int pageIndex = Math.max(source.getPage(), 0);
+        Page<LeaderResponse> page;
+        do {
+            BaseSearchRequest candidateRequest = copyRequest(source);
+            candidateRequest.setPage(pageIndex++);
+            candidateRequest.setSize(targetSize);
+            page = findAll(candidateRequest, authentication);
+            page.getContent().stream()
+                    .filter(leader -> leader.getId() != null && !accountRepository.existsByLeaderId(leader.getId()))
+                    .forEach(candidates::add);
+        } while (candidates.size() < targetSize && !page.isLast());
+        return candidates.stream().limit(targetSize).toList();
     }
 
     @Cacheable(cacheNames = CacheNames.LEADER_DETAIL, key = "@cacheScopeKeyHelper.detailKey(#authentication, #id)")
@@ -234,6 +255,7 @@ public class LeaderService {
                 .gender(leader.getGender())
                 .leaderLevel(leader.getLeaderLevel())
                 .parishId(leader.getParish() == null ? null : leader.getParish().getId())
+                .parishName(leader.getParish() == null ? null : leader.getParish().getName())
                 .build();
     }
 

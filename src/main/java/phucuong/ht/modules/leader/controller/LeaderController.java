@@ -33,8 +33,14 @@ public class LeaderController {
 
     @GetMapping
     @PreAuthorize("@leaderAccessEvaluator.canList(authentication)")
-    public apiResponse<Page<LeaderResponse>> findAll(@ModelAttribute BaseSearchRequest request, Authentication authentication) {
+    public apiResponse<Page<LeaderResponse>> findAll(BaseSearchRequest request, Authentication authentication) {
         return apiResponse.success("Lấy danh sách leader thành công", leaderService.findAll(request, authentication));
+    }
+
+    @GetMapping("/account-candidates")
+    @PreAuthorize("@leaderAccessEvaluator.canList(authentication)")
+    public apiResponse<List<LeaderResponse>> accountCandidates(BaseSearchRequest request, Authentication authentication) {
+        return apiResponse.success("Lấy danh sách leader chưa có tài khoản thành công", leaderService.findAccountCandidates(request, authentication));
     }
 
     @GetMapping("/{id}")

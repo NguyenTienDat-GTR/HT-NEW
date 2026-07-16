@@ -83,7 +83,6 @@ POST /api/system/accounts|200|401|403|400|404|409
 GET /api/system/accounts|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
 GET /api/system/accounts/permission-targets|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
 GET /api/system/accounts/{username}|200|401|403|N/A: username is an opaque string|404|N/A: read-only endpoint does not mutate state
-PUT /api/system/accounts/{username}|200|401|403|400|404|409
 DELETE /api/system/accounts/{username}|200|401|403|N/A: username is an opaque string|404|409
 PATCH /api/system/accounts/{username}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict
 

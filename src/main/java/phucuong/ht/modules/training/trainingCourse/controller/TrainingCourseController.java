@@ -29,7 +29,7 @@ public class TrainingCourseController {
 
     @GetMapping
     @PreAuthorize("@trainingCourseAccessEvaluator.canList(authentication)")
-    public apiResponse<Page<TrainingCourseResponse>> findAll(@ModelAttribute BaseSearchRequest request, Authentication authentication) {
+    public apiResponse<Page<TrainingCourseResponse>> findAll(BaseSearchRequest request, Authentication authentication) {
         return apiResponse.success("Lấy danh sách khóa huấn luyện thành công", trainingCourseService.findAll(request, authentication));
     }
 

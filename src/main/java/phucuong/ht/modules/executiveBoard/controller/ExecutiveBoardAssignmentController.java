@@ -6,7 +6,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -39,7 +38,7 @@ public class ExecutiveBoardAssignmentController {
 
     @GetMapping
     @PreAuthorize("@executiveBoardAssignmentAccessEvaluator.canList(authentication)")
-    public apiResponse<Page<ExecutiveBoardAssignmentResponse>> findAll(@ModelAttribute BaseSearchRequest request, Authentication authentication) {
+    public apiResponse<Page<ExecutiveBoardAssignmentResponse>> findAll(BaseSearchRequest request, Authentication authentication) {
         return apiResponse.success("Lấy danh sách phân công chức vụ thành công", assignmentService.findAll(request, authentication));
     }
 

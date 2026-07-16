@@ -58,6 +58,9 @@ public class AccountManagementAuthorizationHelper {
         if (currentUsername(authentication).equals(target.getUsername())) {
             throw validation.forbidden("Quan tri vien khong duoc tu cap nhat hoac doi trang thai tai khoan cua minh");
         }
+        if (hasTargetRole(target, SUPER_ADMIN)) {
+            throw validation.forbidden("Tai khoan co role SUPER_ADMIN khong duoc cap nhat tu man hinh quan tri account");
+        }
         if (hasRole(authentication, SUPER_ADMIN)) {
             boolean onlyDioceseAdmin = accountRoleRepository.findActiveRoleCodesByUsername(target.getUsername()).stream()
                     .allMatch(ADMIN_DIOCESE::equals);
@@ -173,6 +176,10 @@ public class AccountManagementAuthorizationHelper {
     private boolean hasRole(Authentication auth, String roleCode) {
         return auth != null && auth.getPrincipal() instanceof AuthUserDetails principal
                 && principal.getRoles().contains(roleCode);
+    }
+
+    private boolean hasTargetRole(Account target, String roleCode) {
+        return target != null && accountRoleRepository.findActiveRoleCodesByUsername(target.getUsername()).contains(roleCode);
     }
 
     private String currentUsername(Authentication auth) {

@@ -101,12 +101,18 @@ public interface AccountRepository extends JpaRepository<Account, String> {
 
     boolean existsByUsername(String username);
 
+    boolean existsByLeaderId(UUID leaderId);
+
     @Query("""
             select count(a) > 0
             from Account a
             join AccountRole ar on ar.account = a
             where a.diocese.id = :dioceseId
+              and a.status = true
+              and ar.status = true
+              and ar.role.status = true
               and ar.role.roleCode = 'ADMIN_DIOCESE'
+              and (ar.expiresAt is null or ar.expiresAt > CURRENT_TIMESTAMP)
             """)
     boolean existsAdminDioceseByDioceseId(@Param("dioceseId") UUID dioceseId);
 
@@ -116,7 +122,11 @@ public interface AccountRepository extends JpaRepository<Account, String> {
             join AccountRole ar on ar.account = a
             where a.diocese.id = :dioceseId
               and a.username <> :username
+              and a.status = true
+              and ar.status = true
+              and ar.role.status = true
               and ar.role.roleCode = 'ADMIN_DIOCESE'
+              and (ar.expiresAt is null or ar.expiresAt > CURRENT_TIMESTAMP)
             """)
     boolean existsOtherAdminDiocese(
             @Param("dioceseId") UUID dioceseId,

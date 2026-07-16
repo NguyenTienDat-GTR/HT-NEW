@@ -31,7 +31,7 @@ public class ParishController {
 
     @GetMapping
     @PreAuthorize("@parishAccessEvaluator.canList(authentication)")
-    public apiResponse<Page<ParishResponse>> findAll(@ModelAttribute BaseSearchRequest request, Authentication authentication) {
+    public apiResponse<Page<ParishResponse>> findAll(BaseSearchRequest request, Authentication authentication) {
         return apiResponse.success("Lấy danh sách giáo xứ thành công", parishService.findAll(request, authentication));
     }
 

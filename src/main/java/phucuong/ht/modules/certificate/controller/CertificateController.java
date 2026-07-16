@@ -30,7 +30,7 @@ public class CertificateController {
 
     @GetMapping
     @PreAuthorize("@certificateAccessEvaluator.canList(authentication)")
-    public apiResponse<Page<CertificateResponse>> findAll(@ModelAttribute BaseSearchRequest request, Authentication authentication) {
+    public apiResponse<Page<CertificateResponse>> findAll(BaseSearchRequest request, Authentication authentication) {
         return apiResponse.success("Lấy danh sách chứng chỉ thành công", certificateService.findAll(request, authentication));
     }
 

@@ -29,7 +29,7 @@ public class PositionController {
 
     @GetMapping
     @PreAuthorize("@positionAccessEvaluator.canList(authentication)")
-    public apiResponse<Page<PositionResponse>> findAll(@ModelAttribute BaseSearchRequest request, Authentication authentication) {
+    public apiResponse<Page<PositionResponse>> findAll(BaseSearchRequest request, Authentication authentication) {
         return apiResponse.success("Lấy danh sách chức vụ thành công", positionService.findAll(request, authentication));
     }
 

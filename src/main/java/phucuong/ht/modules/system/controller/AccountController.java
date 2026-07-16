@@ -6,11 +6,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -19,7 +17,6 @@ import phucuong.ht.common.dto.apiResponse;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.modules.system.model.request.AccountCreateRequest;
-import phucuong.ht.modules.system.model.request.AccountUpdateRequest;
 import phucuong.ht.modules.system.model.response.AccountResponse;
 import phucuong.ht.modules.system.service.AccountManagementService;
 
@@ -45,7 +42,7 @@ public class AccountController {
             + " || @securityUtils.hasAuthority(authentication, 'system.account.manage.diocese')"
             + " || @securityUtils.hasAuthority(authentication, 'system.account.manage.deanery')"
             + " || @securityUtils.hasAuthority(authentication, 'system.account.manage.parish')")
-    public apiResponse<Page<AccountResponse>> findAll(@ModelAttribute BaseSearchRequest request, Authentication authentication) {
+    public apiResponse<Page<AccountResponse>> findAll(BaseSearchRequest request, Authentication authentication) {
         return apiResponse.success("Lay danh sach tai khoan thanh cong", service.findAll(request, authentication));
     }
 
@@ -66,15 +63,6 @@ public class AccountController {
             + " || @securityUtils.hasAuthority(authentication, 'system.account.manage.parish')")
     public apiResponse<AccountResponse> findById(@PathVariable String username, Authentication authentication) {
         return apiResponse.success("Lay thong tin tai khoan thanh cong", service.findById(username, authentication));
-    }
-
-    @PutMapping("/{username}")
-    @PreAuthorize("@securityUtils.hasAuthority(authentication, 'system.account.manage.all')"
-            + " || @securityUtils.hasAuthority(authentication, 'system.account.manage.diocese')"
-            + " || @securityUtils.hasAuthority(authentication, 'system.account.manage.deanery')"
-            + " || @securityUtils.hasAuthority(authentication, 'system.account.manage.parish')")
-    public apiResponse<AccountResponse> update(@PathVariable String username, @RequestBody AccountUpdateRequest request, Authentication authentication) {
-        return apiResponse.success("Cap nhat tai khoan thanh cong", service.update(username, request, authentication));
     }
 
     @DeleteMapping("/{username}")

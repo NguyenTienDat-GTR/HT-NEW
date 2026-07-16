@@ -21,11 +21,13 @@ import phucuong.ht.modules.leader.model.entity.Leader;
 import phucuong.ht.modules.leader.repository.LeaderRepository;
 import phucuong.ht.modules.parish.model.entity.Parish;
 import phucuong.ht.modules.system.model.entity.Account;
+import phucuong.ht.modules.system.model.entity.AccountRole;
 import phucuong.ht.modules.system.model.entity.Role;
 import phucuong.ht.modules.system.model.request.AccountCreateRequest;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -94,6 +96,7 @@ class AccountManagementServiceTest {
         AccountCreateRequest request = new AccountCreateRequest();
         request.setRoleCode("ADMIN_PARISH");
         request.setLeaderId(leader.getId());
+        when(validation.normalizeOptionalText("ADMIN_PARISH")).thenReturn("ADMIN_PARISH");
         when(roleRepository.findByRoleCodeAndStatusTrue("ADMIN_PARISH")).thenReturn(Optional.of(role("ADMIN_PARISH")));
         when(leaderRepository.findByIdWithParish(leader.getId())).thenReturn(Optional.of(leader));
         when(validation.normalizeRequiredText(leader.getEmail())).thenReturn(leader.getEmail());
@@ -115,12 +118,13 @@ class AccountManagementServiceTest {
     }
 
     @Test
-    void createDioceseAdminShouldRejectSecondAccountEvenWhenExistingAccountIsInactive() {
+    void createDioceseAdminShouldRejectWhenDioceseAlreadyHasActiveAdmin() {
         Diocese diocese = diocese("Phú Cường");
         AccountCreateRequest request = new AccountCreateRequest();
         request.setRoleCode("ADMIN_DIOCESE");
         request.setDioceseId(diocese.getId());
         request.setCredentialEmail("admin@phucuong.vn");
+        when(validation.normalizeOptionalText("ADMIN_DIOCESE")).thenReturn("ADMIN_DIOCESE");
         when(roleRepository.findByRoleCodeAndStatusTrue("ADMIN_DIOCESE")).thenReturn(Optional.of(adminDioceseRole()));
         when(dioceseRepository.findByIdForUpdate(diocese.getId())).thenReturn(Optional.of(diocese));
         when(accountRepository.existsAdminDioceseByDioceseId(diocese.getId())).thenReturn(true);
@@ -149,7 +153,44 @@ class AccountManagementServiceTest {
         verify(redisTokenSessionService).revokeAllSessions("admin-parish");
     }
 
+    @Test
+    void createLeaderAccountShouldAssignMultipleRolesAndExactlyOnePrimaryRole() {
+        Diocese diocese = diocese("Phú Cường");
+        Leader leader = leader(diocese);
+        Role roleA = role("ROLE_A");
+        Role roleB = role("ROLE_B");
+        AccountCreateRequest request = new AccountCreateRequest();
+        request.setRoleCodes(List.of("ROLE_A", "ROLE_B"));
+        request.setPrimaryRoleCode("ROLE_B");
+        request.setLeaderId(leader.getId());
+
+        when(validation.normalizeOptionalText("ROLE_A")).thenReturn("ROLE_A");
+        when(validation.normalizeOptionalText("ROLE_B")).thenReturn("ROLE_B");
+        when(roleRepository.findByRoleCodeAndStatusTrue("ROLE_A")).thenReturn(Optional.of(roleA));
+        when(roleRepository.findByRoleCodeAndStatusTrue("ROLE_B")).thenReturn(Optional.of(roleB));
+        when(leaderRepository.findByIdWithParish(leader.getId())).thenReturn(Optional.of(leader));
+        when(validation.normalizeRequiredText(leader.getEmail())).thenReturn(leader.getEmail());
+        when(validation.requireAuditActor(any(), anyString())).thenReturn("admin");
+        when(accountRepository.existsByUsername("anchanhtoa107")).thenReturn(false);
+        when(passwordEncoder.encode(anyString())).thenReturn("bcrypt-hash");
+        when(accountRepository.save(any(Account.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(accountRoleRepository.save(any(AccountRole.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.create(request, authentication);
+
+        assertEquals("anchanhtoa107", response.getUsername());
+        ArgumentCaptor<AccountRole> assignedRoles = ArgumentCaptor.forClass(AccountRole.class);
+        verify(accountRoleRepository, org.mockito.Mockito.times(2)).save(assignedRoles.capture());
+        assertEquals(1, assignedRoles.getAllValues().stream().filter(role -> Boolean.TRUE.equals(role.getIsPrimary())).count());
+        assertEquals("ROLE_B", assignedRoles.getAllValues().stream()
+                .filter(role -> Boolean.TRUE.equals(role.getIsPrimary()))
+                .map(role -> role.getRole().getRoleCode())
+                .findFirst()
+                .orElse(null));
+    }
+
     private void stubCreate(Diocese diocese, Role role) {
+        when(validation.normalizeOptionalText(role.getRoleCode())).thenReturn(role.getRoleCode());
         when(roleRepository.findByRoleCodeAndStatusTrue(role.getRoleCode())).thenReturn(Optional.of(role));
         when(dioceseRepository.findByIdForUpdate(diocese.getId())).thenReturn(Optional.of(diocese));
         when(accountRepository.existsAdminDioceseByDioceseId(diocese.getId())).thenReturn(false);
@@ -194,5 +235,24 @@ class AccountManagementServiceTest {
         leader.setParish(parish);
         leader.setStatus(true);
         return leader;
+    }
+
+    private Account account(String username, Leader leader) {
+        Account account = new Account();
+        account.setUsername(username);
+        account.setLeader(leader);
+        account.setStatus(true);
+        return account;
+    }
+
+    private AccountRole accountRole(Account account, Role role, boolean status, boolean primary) {
+        AccountRole accountRole = new AccountRole();
+        accountRole.setId(UUID.randomUUID().toString());
+        accountRole.setAccount(account);
+        accountRole.setRole(role);
+        accountRole.setStatus(status);
+        accountRole.setIsPrimary(primary);
+        accountRole.setAssignedAt(java.time.OffsetDateTime.now());
+        return accountRole;
     }
 }

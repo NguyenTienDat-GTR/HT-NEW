@@ -7,7 +7,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -63,7 +62,7 @@ public class RolePermissionController {
                     + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.all')"
                     + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.diocese')"
     )
-    public apiResponse<Page<RolePermissionResponse>> findAll(@ModelAttribute BaseSearchRequest request, Authentication authentication) {
+    public apiResponse<Page<RolePermissionResponse>> findAll(BaseSearchRequest request, Authentication authentication) {
         return apiResponse.success("Lấy danh sách quyền của vai trò thành công", rolePermissionManagementService.findAll(request, authentication));
     }
 
