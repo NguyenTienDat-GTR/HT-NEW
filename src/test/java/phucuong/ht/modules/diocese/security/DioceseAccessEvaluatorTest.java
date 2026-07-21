@@ -107,7 +107,7 @@ class DioceseAccessEvaluatorTest {
         Authentication superAdmin = authentication(
                 "superadmin",
                 List.of("SUPER_ADMIN"),
-                List.of(DioceseAccessEvaluator.UPDATE_ALL)
+                List.of(DioceseAccessEvaluator.TOGGLE_ALL)
         );
         Authentication dioceseAdmin = authentication(
                 "admin-dio",

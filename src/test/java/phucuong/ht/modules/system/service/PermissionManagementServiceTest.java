@@ -108,19 +108,6 @@ class PermissionManagementServiceTest {
     }
 
     @Test
-    void deleteShouldRejectSystemPermission() {
-        CommonValidationHelper helper = new CommonValidationHelper(new securityUtils());
-        PermissionManagementService service = new PermissionManagementService(systemPermissionRepository, helper, authorizationHelper);
-
-        Permission permission = new Permission();
-        permission.setPermissionCode("system.permission.read.all");
-        permission.setIsSystem(true);
-        when(systemPermissionRepository.findById("system.permission.read.all")).thenReturn(Optional.of(permission));
-
-        assertThrows(ApiException.class, () -> service.delete("system.permission.read.all"));
-    }
-
-    @Test
     void updateShouldOnlyChangeMetadata() {
         CommonValidationHelper helper = new CommonValidationHelper(new securityUtils());
         PermissionManagementService service = new PermissionManagementService(systemPermissionRepository, helper, authorizationHelper);

@@ -42,8 +42,8 @@ public class CertificateAccessEvaluator {
         return hasScopedAccess(authentication, certificateCode, "update");
     }
 
-    public boolean canDelete(Authentication authentication, String certificateCode) {
-        return hasScopedAccess(authentication, certificateCode, "delete");
+    public boolean canToggle(Authentication authentication, String certificateCode) {
+        return hasScopedAccess(authentication, certificateCode, "toggle");
     }
 
     public boolean canApprove(Authentication authentication, String certificateCode) {

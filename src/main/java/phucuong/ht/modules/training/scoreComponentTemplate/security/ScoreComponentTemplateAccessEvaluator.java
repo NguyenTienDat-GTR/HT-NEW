@@ -33,8 +33,8 @@ public class ScoreComponentTemplateAccessEvaluator {
         return hasScopedAccess(authentication, id, "update");
     }
 
-    public boolean canDelete(Authentication authentication, String id) {
-        return hasScopedAccess(authentication, id, "delete");
+    public boolean canToggle(Authentication authentication, String id) {
+        return hasScopedAccess(authentication, id, "toggle");
     }
 
     private boolean hasCreateAuthority(Authentication authentication, UnitType unitType) {

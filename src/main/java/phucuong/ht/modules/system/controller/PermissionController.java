@@ -30,8 +30,18 @@ public class PermissionController {
 
     @GetMapping
     @PreAuthorize("hasRole('SUPER_ADMIN')"
+            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.read.all')"
+            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.read.diocese')"
+            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.read.deanery')"
+            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.read.parish')"
+            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.all')"
             + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.diocese')"
-            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.diocese')")
+            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.deanery')"
+            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.parish')"
+            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.all')"
+            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.diocese')"
+            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.deanery')"
+            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.parish')")
     public apiResponse<Page<PermissionResponse>> findAll(BaseSearchRequest request, Authentication authentication) {
         return apiResponse.success("Lấy danh sách quyền thành công", permissionManagementService.findAll(request, authentication));
     }
@@ -44,8 +54,18 @@ public class PermissionController {
 
     @GetMapping("/{permissionCode}")
     @PreAuthorize("hasRole('SUPER_ADMIN')"
+            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.read.all')"
+            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.read.diocese')"
+            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.read.deanery')"
+            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.read.parish')"
+            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.all')"
             + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.diocese')"
-            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.diocese')")
+            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.deanery')"
+            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.parish')"
+            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.all')"
+            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.diocese')"
+            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.deanery')"
+            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.parish')")
     public apiResponse<PermissionResponse> findById(@PathVariable String permissionCode, Authentication authentication) {
         return apiResponse.success("Lấy thông tin quyền thành công", permissionManagementService.findById(permissionCode, authentication));
     }
@@ -59,14 +79,6 @@ public class PermissionController {
     ) {
         return apiResponse.success("Cập nhật quyền thành công", permissionManagementService.update(permissionCode, request, authentication));
     }
-
-    @DeleteMapping("/{permissionCode}")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public apiResponse<Void> delete(@PathVariable String permissionCode) {
-        permissionManagementService.delete(permissionCode);
-        return apiResponse.success("Xóa quyền thành công", null);
-    }
-
     @PatchMapping("/{permissionCode}/toggle-status")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public apiResponse<PermissionResponse> toggleStatus(

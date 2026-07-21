@@ -48,16 +48,8 @@ public class PositionController {
     ) {
         return apiResponse.success("Cập nhật chức vụ thành công", positionService.update(positionCode, request, authentication));
     }
-
-    @DeleteMapping("/{positionCode}")
-    @PreAuthorize("@positionAccessEvaluator.canDelete(authentication, #positionCode)")
-    public apiResponse<Void> delete(@PathVariable String positionCode) {
-        positionService.delete(positionCode);
-        return apiResponse.success("Xóa chức vụ thành công", null);
-    }
-
     @PatchMapping("/{positionCode}/toggle-status")
-    @PreAuthorize("@positionAccessEvaluator.canUpdate(authentication, #positionCode)")
+    @PreAuthorize("@positionAccessEvaluator.canToggle(authentication, #positionCode)")
     public apiResponse<PositionResponse> toggleStatus(
             @PathVariable String positionCode,
             @Valid @RequestBody StatusToggleRequest request,

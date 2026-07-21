@@ -27,7 +27,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -108,16 +107,19 @@ class DeaneryControllerSecurityIntegrationTest {
     }
 
     @Test
-    void shouldAllowDioceseAdminCreateAndDeleteWithinScope() throws Exception {
+    void shouldAllowDioceseAdminCreateAndToggleWithinScope() throws Exception {
         UUID deaneryId = UUID.randomUUID();
         UUID dioceseId = UUID.randomUUID();
         DeaneryCreateRequest createRequest = new DeaneryCreateRequest();
         createRequest.setName("New Deanery");
         createRequest.setAssociationName("Association");
         createRequest.setDioceseId(dioceseId);
+        StatusToggleRequest toggleRequest = new StatusToggleRequest();
+        toggleRequest.setConfirmationText("Xác nhận");
         when(deaneryAccessEvaluator.canCreate(any())).thenReturn(true);
-        when(deaneryAccessEvaluator.canDelete(any())).thenReturn(true);
+        when(deaneryAccessEvaluator.canToggle(any(), eq(deaneryId))).thenReturn(true);
         when(deaneryService.create(any(DeaneryCreateRequest.class), any())).thenReturn(sampleDeanery(deaneryId, dioceseId));
+        when(deaneryService.toggleStatus(eq(deaneryId), any(StatusToggleRequest.class), any())).thenReturn(sampleDeanery(deaneryId, dioceseId));
 
         mockMvc.perform(post("/api/deaneries")
                         .header("Authorization", bearer(dioceseAdminToken(List.of(DeaneryAccessEvaluator.CREATE_DIOCESE))))
@@ -127,10 +129,12 @@ class DeaneryControllerSecurityIntegrationTest {
                 .andExpect(jsonPath("$.data.id").value(deaneryId.toString()))
                 .andExpect(jsonPath("$.data.dioceseId").value(dioceseId.toString()));
 
-        mockMvc.perform(delete("/api/deaneries/" + deaneryId)
-                        .header("Authorization", bearer(dioceseAdminToken(List.of(DeaneryAccessEvaluator.DELETE_DIOCESE)))))
+        mockMvc.perform(patch("/api/deaneries/" + deaneryId + "/toggle-status")
+                        .header("Authorization", bearer(dioceseAdminToken(List.of(DeaneryAccessEvaluator.TOGGLE_DIOCESE))))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(toggleRequest)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true));
+                .andExpect(jsonPath("$.data.id").value(deaneryId.toString()));
     }
 
     @Test
@@ -169,7 +173,7 @@ class DeaneryControllerSecurityIntegrationTest {
                         DeaneryAccessEvaluator.CREATE_ALL,
                         DeaneryAccessEvaluator.READ_ALL,
                         DeaneryAccessEvaluator.UPDATE_ALL,
-                        DeaneryAccessEvaluator.DELETE_ALL
+                        DeaneryAccessEvaluator.TOGGLE_ALL
                 )
         ));
     }

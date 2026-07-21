@@ -165,21 +165,6 @@ class DeaneryServiceTest {
     }
 
     @Test
-    void deleteShouldValidateScopeAndDelegateToRepository() {
-        UUID deaneryId = UUID.randomUUID();
-        Deanery deanery = new Deanery();
-        deanery.setId(deaneryId);
-        Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
-
-        when(deaneryValidationHelper.requireExistingDeanery(deaneryId)).thenReturn(deanery);
-
-        deaneryService.delete(deaneryId, authentication);
-
-        verify(deaneryScopeHelper).enforceDeleteScope(authentication, deanery);
-        verify(deaneryRepository).delete(deaneryId);
-    }
-
-    @Test
     void createShouldWrapDataConflict() {
         UUID dioceseId = UUID.randomUUID();
         DeaneryCreateRequest request = new DeaneryCreateRequest();

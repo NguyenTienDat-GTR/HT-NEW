@@ -7,7 +7,6 @@ import org.springframework.util.StringUtils;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.modules.auth.repository.AccountRepository;
-import phucuong.ht.modules.deanery.model.entity.Deanery;
 import phucuong.ht.modules.deanery.model.request.DeaneryCreateRequest;
 import phucuong.ht.modules.deanery.security.DeaneryAccessEvaluator;
 
@@ -34,14 +33,6 @@ public class DeaneryScopeHelper {
         if (!activeDioceseId.equals(request.getDioceseId())) {
             throw commonValidationHelper.forbidden("Khong the tao giao hat ngoai pham vi giao phan hien tai");
         }
-    }
-
-    public void enforceDeleteScope(Authentication authentication, Deanery deanery) {
-        if (securityUtils.hasAuthority(authentication, DeaneryAccessEvaluator.DELETE_ALL)) {
-            return;
-        }
-
-        throw commonValidationHelper.forbidden("Tai khoan hien tai khong co quyen xoa giao hat");
     }
 
     public UUID getRequiredActiveDioceseId(Authentication authentication, String permissionCode) {

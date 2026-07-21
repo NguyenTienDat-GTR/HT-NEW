@@ -26,7 +26,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -90,14 +89,17 @@ class DioceseControllerSecurityIntegrationTest {
     }
 
     @Test
-    void shouldAllowSuperAdminCreateAndDelete() throws Exception {
+    void shouldAllowSuperAdminCreateAndToggle() throws Exception {
         UUID dioceseId = UUID.randomUUID();
         DioceseCreateRequest createRequest = new DioceseCreateRequest();
         createRequest.setName("New Diocese");
         createRequest.setUnionName("Union");
+        StatusToggleRequest toggleRequest = new StatusToggleRequest();
+        toggleRequest.setConfirmationText("Xác nhận");
         when(dioceseAccessEvaluator.canCreate(any())).thenReturn(true);
-        when(dioceseAccessEvaluator.canDelete(any())).thenReturn(true);
+        when(dioceseAccessEvaluator.canToggle(any(), eq(dioceseId))).thenReturn(true);
         when(dioceseService.create(any(DioceseCreateRequest.class), any())).thenReturn(sampleDiocese(dioceseId));
+        when(dioceseService.toggleStatus(eq(dioceseId), any(StatusToggleRequest.class), any())).thenReturn(sampleDiocese(dioceseId));
 
         mockMvc.perform(post("/api/dioceses")
                         .header("Authorization", bearer(superAdminToken()))
@@ -106,10 +108,12 @@ class DioceseControllerSecurityIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.id").value(dioceseId.toString()));
 
-        mockMvc.perform(delete("/api/dioceses/" + dioceseId)
-                        .header("Authorization", bearer(superAdminToken())))
+        mockMvc.perform(patch("/api/dioceses/" + dioceseId + "/toggle-status")
+                        .header("Authorization", bearer(superAdminToken()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(toggleRequest)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true));
+                .andExpect(jsonPath("$.data.id").value(dioceseId.toString()));
     }
 
     @Test
@@ -172,7 +176,7 @@ class DioceseControllerSecurityIntegrationTest {
                         DioceseAccessEvaluator.CREATE_ALL,
                         DioceseAccessEvaluator.READ_ALL,
                         DioceseAccessEvaluator.UPDATE_ALL,
-                        DioceseAccessEvaluator.DELETE_ALL
+                        DioceseAccessEvaluator.TOGGLE_ALL
                 )
         ));
     }

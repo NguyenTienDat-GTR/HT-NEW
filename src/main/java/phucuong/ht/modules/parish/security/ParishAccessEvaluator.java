@@ -17,15 +17,14 @@ public class ParishAccessEvaluator {
     public static final String CREATE_ALL = "organization.parish.create.all";
     public static final String READ_ALL = "organization.parish.read.all";
     public static final String UPDATE_ALL = "organization.parish.update.all";
-    public static final String DELETE_ALL = "organization.parish.delete.all";
+    public static final String TOGGLE_ALL = "organization.parish.toggle.all";
     public static final String CREATE_DIOCESE = "organization.parish.create.diocese";
     public static final String READ_DIOCESE = "organization.parish.read.diocese";
     public static final String UPDATE_DIOCESE = "organization.parish.update.diocese";
-    public static final String DELETE_DIOCESE = "organization.parish.delete.diocese";
+    public static final String TOGGLE_DIOCESE = "organization.parish.toggle.diocese";
     public static final String CREATE_DEANERY = "organization.parish.create.deanery";
     public static final String READ_DEANERY = "organization.parish.read.deanery";
     public static final String UPDATE_DEANERY = "organization.parish.update.deanery";
-    public static final String DELETE_DEANERY = "organization.parish.delete.deanery";
     public static final String TOGGLE_DEANERY = "organization.parish.toggle.deanery";
     public static final String READ_PARISH = "organization.parish.read.parish";
     public static final String UPDATE_PARISH = "organization.parish.update.parish";
@@ -64,18 +63,12 @@ public class ParishAccessEvaluator {
                 || hasParishScopedAccess(authentication, parishId, UPDATE_PARISH);
     }
 
-    public boolean canDelete(Authentication authentication) {
-        if (hasRole(authentication, "SUPER_ADMIN")) {
-            return false;
-        }
-        return hasAuthority(authentication, DELETE_ALL);
-    }
-
     public boolean canToggle(Authentication authentication, UUID parishId) {
         if (hasRole(authentication, "SUPER_ADMIN")) {
             return false;
         }
-        return hasAuthority(authentication, UPDATE_ALL)
+        return hasAuthority(authentication, TOGGLE_ALL)
+                || hasDioceseScopedAccess(authentication, parishId, TOGGLE_DIOCESE)
                 || hasDeaneryScopedAccess(authentication, parishId, TOGGLE_DEANERY);
     }
 

@@ -5,7 +5,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -69,13 +68,6 @@ public class AccountPermissionOverrideController {
     public apiResponse<AccountPermissionOverrideResponse> update(@PathVariable String id, @Valid @RequestBody AccountPermissionOverrideUpdateRequest request, Authentication authentication) {
         return apiResponse.success("Cap nhat quyen cua tai khoan thanh cong", service.update(id, request, authentication));
     }
-
-    @DeleteMapping("/{id}")
-    public apiResponse<Void> delete(@PathVariable String id, Authentication authentication) {
-        service.delete(id, authentication);
-        return apiResponse.success("Xoa quyen cua tai khoan thanh cong", null);
-    }
-
     @PatchMapping("/{id}/toggle-status")
     public apiResponse<AccountPermissionOverrideResponse> toggleStatus(@PathVariable String id, @Valid @RequestBody StatusToggleRequest request, Authentication authentication) {
         return apiResponse.success("Doi trang thai quyen cua tai khoan thanh cong", service.toggleStatus(id, request, authentication));

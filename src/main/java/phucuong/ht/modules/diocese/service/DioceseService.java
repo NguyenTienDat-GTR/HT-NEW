@@ -114,19 +114,6 @@ public class DioceseService {
             @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true)
     })
-    public void delete(UUID id) {
-        dioceseValidationHelper.requireExistingDiocese(id);
-        try {
-            dioceseRepository.delete(id);
-        } catch (DataIntegrityViolationException exception) {
-            throw new ApiException(HttpStatus.CONFLICT, errorCode.CONFLICT, "Không thể xóa giáo phận vì đang được dữ liệu khác tham chiếu");
-        }
-    }
-
-    @Caching(evict = {
-            @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
-            @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true)
-    })
     public Diocese toggleStatus(UUID id, StatusToggleRequest request, Authentication authentication) {
         dioceseValidationHelper.requireExistingDiocese(id);
         dioceseValidationHelper.validateToggleConfirmation(request == null ? null : request.getConfirmationText());

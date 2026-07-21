@@ -145,7 +145,7 @@ class LeaderAccessEvaluatorTest {
                 "admin-parish",
                 "LEADER1",
                 List.of("ADMIN_PARISH"),
-                List.of(LeaderAccessEvaluator.UPDATE_PARISH)
+                List.of(LeaderAccessEvaluator.TOGGLE_PARISH)
         );
         when(accountRepository.findActiveParishIdByUsername("admin-parish")).thenReturn(Optional.of(parishId));
         when(leaderRepository.findParishIdByLeaderId(leaderId)).thenReturn(Optional.of(parishId));

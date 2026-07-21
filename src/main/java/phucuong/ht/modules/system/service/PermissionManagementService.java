@@ -137,15 +137,6 @@ public class PermissionManagementService {
         return toResponse(permission);
     }
 
-    public void delete(String permissionCode) {
-        Permission permission = systemPermissionRepository.findById(permissionCode)
-                .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay quyen: " + permissionCode));
-        if (Boolean.TRUE.equals(permission.getIsSystem())) {
-            throw commonValidationHelper.forbidden("Khong the xoa quyen he thong");
-        }
-        systemPermissionRepository.delete(permissionCode);
-    }
-
     public PermissionResponse toggleStatus(String permissionCode, StatusToggleRequest request, Authentication authentication) {
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
         String actor = commonValidationHelper.requireAuditActor(authentication, "Khong xac dinh duoc nguoi doi trang thai quyen");

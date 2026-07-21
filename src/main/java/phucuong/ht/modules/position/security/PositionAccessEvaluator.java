@@ -37,9 +37,9 @@ public class PositionAccessEvaluator {
                 .orElse(false);
     }
 
-    public boolean canDelete(Authentication authentication, String positionCode) {
+    public boolean canToggle(Authentication authentication, String positionCode) {
         return positionRepository.findById(positionCode)
-                .map(position -> hasAuthorityForType(authentication, position.getPositionType(), "delete"))
+                .map(position -> hasAuthorityForType(authentication, position.getPositionType(), "toggle"))
                 .orElse(false);
     }
 

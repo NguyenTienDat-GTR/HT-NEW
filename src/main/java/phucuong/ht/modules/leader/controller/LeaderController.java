@@ -64,15 +64,7 @@ public class LeaderController {
     ) {
         return apiResponse.success("Cập nhật leader thành công", leaderService.update(id, request, authentication));
     }
-
-    @DeleteMapping("/{id}")
-    @PreAuthorize("@leaderAccessEvaluator.canDelete(authentication, #id)")
-    public apiResponse<Void> delete(@PathVariable UUID id) {
-        leaderService.delete(id);
-        return apiResponse.success("Xóa leader thành công", null);
-    }
-
-    @PatchMapping("/{id}/toggle-status")
+@PatchMapping("/{id}/toggle-status")
     @PreAuthorize("@leaderAccessEvaluator.canToggle(authentication, #id)")
     public apiResponse<LeaderResponse> toggleStatus(
             @PathVariable UUID id,

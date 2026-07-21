@@ -48,16 +48,8 @@ public class CourseRequirementController {
     ) {
         return apiResponse.success("Cập nhật requirement thành công", courseRequirementService.update(requirementCode, request, authentication));
     }
-
-    @DeleteMapping("/{requirementCode}")
-    @PreAuthorize("@courseRequirementAccessEvaluator.canDelete(authentication, #requirementCode)")
-    public apiResponse<Void> delete(@PathVariable String requirementCode) {
-        courseRequirementService.delete(requirementCode);
-        return apiResponse.success("Xóa requirement thành công", null);
-    }
-
     @PatchMapping("/{requirementCode}/toggle-status")
-    @PreAuthorize("@courseRequirementAccessEvaluator.canUpdate(authentication, #requirementCode)")
+    @PreAuthorize("@courseRequirementAccessEvaluator.canToggle(authentication, #requirementCode)")
     public apiResponse<CourseRequirementResponse> toggleStatus(
             @PathVariable String requirementCode,
             @Valid @RequestBody StatusToggleRequest request,

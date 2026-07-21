@@ -44,16 +44,8 @@ public class ScoreFormulaTemplateController {
     public apiResponse<ScoreFormulaTemplateResponse> update(@PathVariable String id, @Valid @RequestBody ScoreFormulaTemplateUpdateRequest request, Authentication authentication) {
         return apiResponse.success("Cập nhật công thức tính điểm thành công", service.update(id, request, authentication));
     }
-
-    @DeleteMapping("/{id}")
-    @PreAuthorize("@scoreFormulaTemplateAccessEvaluator.canDelete(authentication, #id)")
-    public apiResponse<Void> delete(@PathVariable String id) {
-        service.delete(id);
-        return apiResponse.success("Xóa công thức tính điểm thành công", null);
-    }
-
     @PatchMapping("/{id}/toggle-status")
-    @PreAuthorize("@scoreFormulaTemplateAccessEvaluator.canUpdate(authentication, #id)")
+    @PreAuthorize("@scoreFormulaTemplateAccessEvaluator.canToggle(authentication, #id)")
     public apiResponse<ScoreFormulaTemplateResponse> toggleStatus(@PathVariable String id, @Valid @RequestBody StatusToggleRequest request, Authentication authentication) {
         return apiResponse.success("Đổi trạng thái công thức tính điểm thành công", service.toggleStatus(id, request, authentication));
     }

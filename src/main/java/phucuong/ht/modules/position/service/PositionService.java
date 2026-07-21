@@ -82,14 +82,6 @@ public class PositionService {
             @CacheEvict(cacheNames = CacheNames.POSITION_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.POSITION_DETAIL, allEntries = true)
     })
-    public void delete(String positionCode) {
-        positionRepository.delete(positionCode);
-    }
-
-    @Caching(evict = {
-            @CacheEvict(cacheNames = CacheNames.POSITION_LIST, allEntries = true),
-            @CacheEvict(cacheNames = CacheNames.POSITION_DETAIL, allEntries = true)
-    })
     public PositionResponse toggleStatus(String positionCode, StatusToggleRequest request, Authentication authentication) {
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái chức vụ");

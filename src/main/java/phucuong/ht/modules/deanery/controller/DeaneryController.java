@@ -50,15 +50,7 @@ public class DeaneryController {
     ) {
         return apiResponse.success("Cập nhật giáo hạt thành công", deaneryService.update(id, request, authentication));
     }
-
-    @DeleteMapping("/{id}")
-    @PreAuthorize("@deaneryAccessEvaluator.canDelete(authentication)")
-    public apiResponse<Void> delete(@PathVariable UUID id, Authentication authentication) {
-        deaneryService.delete(id, authentication);
-        return apiResponse.success("Xóa giáo hạt thành công", null);
-    }
-
-    @PatchMapping("/{id}/toggle-status")
+@PatchMapping("/{id}/toggle-status")
     @PreAuthorize("@deaneryAccessEvaluator.canToggle(authentication, #id)")
     public apiResponse<DeaneryResponse> toggleStatus(
             @PathVariable UUID id,

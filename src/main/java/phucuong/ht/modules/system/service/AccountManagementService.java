@@ -175,14 +175,6 @@ public class AccountManagementService {
     }
 
     @Transactional
-    public void delete(String username, Authentication authentication) {
-        Account account = require(username);
-        authorizationHelper.requireCanDelete(authentication, account);
-        redisTokenSessionService.revokeAllSessions(account.getUsername());
-        accountRepository.delete(account);
-    }
-
-    @Transactional
     public AccountResponse toggleStatus(String username, StatusToggleRequest request, Authentication authentication) {
         validation.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
         Account account = require(username);
