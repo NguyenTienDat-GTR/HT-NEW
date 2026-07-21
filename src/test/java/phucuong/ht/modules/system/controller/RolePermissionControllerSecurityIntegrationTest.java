@@ -3,13 +3,16 @@ package phucuong.ht.modules.system.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.http.MediaType;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.utils.jwtUtils;
 import phucuong.ht.modules.auth.model.AuthUserDetails;
 import phucuong.ht.modules.auth.service.RedisTokenSessionService;
@@ -21,9 +24,12 @@ import phucuong.ht.modules.system.service.RolePermissionManagementService;
 
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -122,6 +128,27 @@ class RolePermissionControllerSecurityIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.length()").value(2))
                 .andExpect(jsonPath("$.data[0].roleCode").value("ADMIN_PARISH"));
+    }
+
+    @Test
+    void shouldBindRoleAndEffectFiltersFromJsonFilters() throws Exception {
+        when(rolePermissionManagementService.findAll(any(BaseSearchRequest.class), any())).thenReturn(new PageImpl<>(List.of()));
+
+        mockMvc.perform(get("/api/system/role-permissions")
+                        .param("page", "0")
+                        .param("size", "10")
+                        .param("filters", "{\"role.roleCode\":\"ADMIN_DIOCESE\",\"effect\":\"ALLOW\"}")
+                        .header("Authorization", bearer(token(
+                                List.of("ADMIN_DIOCESE"),
+                                List.of("system.role_permission.read.diocese")
+                        ))))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<BaseSearchRequest> captor = ArgumentCaptor.forClass(BaseSearchRequest.class);
+        verify(rolePermissionManagementService).findAll(captor.capture(), any());
+        assertThat(captor.getValue().getFilters())
+                .containsEntry("role.roleCode", "ADMIN_DIOCESE")
+                .containsEntry("effect", "ALLOW");
     }
 
     private String token(List<String> roles, List<String> permissions) {
