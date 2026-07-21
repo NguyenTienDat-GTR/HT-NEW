@@ -176,12 +176,6 @@ public abstract class BaseRepo<T extends BaseModel, ID> {
      * Hard-deletes the row after loading it. If later we need soft delete, this is
      * the single method to replace without touching callers.
      */
-    @Transactional
-    public void delete(ID id) {
-        T entity = getRequired(id);
-        entityManager.remove(entityManager.contains(entity) ? entity : entityManager.merge(entity));
-    }
-
     /**
      * Flips status between active and inactive by negating the current Boolean value.
      */

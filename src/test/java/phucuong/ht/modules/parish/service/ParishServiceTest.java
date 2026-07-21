@@ -200,22 +200,6 @@ class ParishServiceTest {
         assertEquals("Bị cấm", exception.getMessage());
     }
 
-    @Test
-    void deleteShouldWrapDataConflict() {
-        UUID parishId = UUID.randomUUID();
-        Parish parish = new Parish();
-        parish.setId(parishId);
-        Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
-
-        when(parishValidationHelper.requireExistingParish(parishId)).thenReturn(parish);
-        doThrow(new DataIntegrityViolationException("fk")).when(parishRepository).delete(parishId);
-
-        ApiException exception = assertThrows(ApiException.class, () -> parishService.delete(parishId, authentication));
-
-        assertEquals(HttpStatus.CONFLICT, exception.getStatus());
-        assertEquals(errorCode.CONFLICT, exception.getErrorCode());
-    }
-
     private Parish parish(UUID parishId, Deanery deanery) {
         Parish parish = new Parish();
         parish.setId(parishId);

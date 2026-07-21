@@ -40,8 +40,8 @@ public class ScoreFormulaTemplateAccessEvaluator {
         return hasScopedAccess(authentication, id, "update");
     }
 
-    public boolean canDelete(Authentication authentication, String id) {
-        return hasScopedAccess(authentication, id, "delete");
+    public boolean canToggle(Authentication authentication, String id) {
+        return hasScopedAccess(authentication, id, "toggle");
     }
 
     private boolean hasScopedAccess(Authentication authentication, String id, String action) {

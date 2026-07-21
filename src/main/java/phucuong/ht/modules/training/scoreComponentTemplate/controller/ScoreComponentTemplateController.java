@@ -44,16 +44,8 @@ public class ScoreComponentTemplateController {
     public apiResponse<ScoreComponentTemplateResponse> update(@PathVariable String id, @Valid @RequestBody ScoreComponentTemplateUpdateRequest request, Authentication authentication) {
         return apiResponse.success("Cập nhật thành phần điểm thành công", service.update(id, request, authentication));
     }
-
-    @DeleteMapping("/{id}")
-    @PreAuthorize("@scoreComponentTemplateAccessEvaluator.canDelete(authentication, #id)")
-    public apiResponse<Void> delete(@PathVariable String id) {
-        service.delete(id);
-        return apiResponse.success("Xóa thành phần điểm thành công", null);
-    }
-
     @PatchMapping("/{id}/toggle-status")
-    @PreAuthorize("@scoreComponentTemplateAccessEvaluator.canUpdate(authentication, #id)")
+    @PreAuthorize("@scoreComponentTemplateAccessEvaluator.canToggle(authentication, #id)")
     public apiResponse<ScoreComponentTemplateResponse> toggleStatus(@PathVariable String id, @Valid @RequestBody StatusToggleRequest request, Authentication authentication) {
         return apiResponse.success("Đổi trạng thái thành phần điểm thành công", service.toggleStatus(id, request, authentication));
     }

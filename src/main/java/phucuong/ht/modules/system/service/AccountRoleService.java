@@ -1,10 +1,14 @@
 package phucuong.ht.modules.system.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import phucuong.ht.common.model.request.StatusToggleRequest;
+import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.modules.auth.model.AuthUserDetails;
 import phucuong.ht.modules.auth.repository.AccountRepository;
@@ -22,6 +26,8 @@ import phucuong.ht.modules.system.model.response.RoleResponse;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -94,11 +100,14 @@ public class AccountRoleService {
     }
 
     @Transactional(readOnly = true)
-    public List<AccountRoleResponse> findAll(Authentication authentication) {
-        return accountRoleRepository.findAll().stream()
+    public Page<AccountRoleResponse> findAll(BaseSearchRequest request, Authentication authentication) {
+        BaseSearchRequest searchRequest = request == null ? new BaseSearchRequest() : request;
+        List<AccountRoleResponse> manageable = accountRoleRepository.findAll().stream()
                 .filter(accountRole -> canManage(authentication, accountRole.getAccount(), accountRole.getRole()))
                 .map(this::toResponse)
+                .filter(response -> matchesFilters(response, searchRequest))
                 .toList();
+        return page(searchRequest, manageable);
     }
 
     @Transactional(readOnly = true)
@@ -145,13 +154,6 @@ public class AccountRoleService {
             clearOtherPrimaryRoles(account.getUsername(), role.getRoleCode(), actor);
         }
         return toResponse(entity);
-    }
-
-    @Transactional
-    public void delete(String id, Authentication authentication) {
-        AccountRole entity = require(id);
-        enforceAssignmentScope(authentication, entity.getAccount(), entity.getRole());
-        accountRoleRepository.delete(entity);
     }
 
     @Transactional
@@ -380,6 +382,52 @@ public class AccountRoleService {
                 .expiresAt(accountRole.getExpiresAt())
                 .status(accountRole.getStatus())
                 .build();
+    }
+
+    private boolean matchesFilters(AccountRoleResponse response, BaseSearchRequest request) {
+        if (request.getStatus() != null && !request.getStatus().equals(response.getStatus())) return false;
+        String search = request.getSearch() == null ? "" : request.getSearch().trim().toLowerCase(Locale.ROOT);
+        if (!search.isBlank()) {
+            String haystack = String.join(" ",
+                    safe(response.getUsername()),
+                    safe(response.getRoleCode()),
+                    safe(response.getAssignedBy())
+            ).toLowerCase(Locale.ROOT);
+            if (!haystack.contains(search)) return false;
+        }
+
+        Map<String, Object> filters = request.getFilters() == null ? Map.of() : request.getFilters();
+        for (Map.Entry<String, Object> entry : filters.entrySet()) {
+            String value = entry.getValue() == null ? "" : String.valueOf(entry.getValue()).trim();
+            if (value.isBlank()) continue;
+            switch (entry.getKey()) {
+                case "roleCode", "role.roleCode" -> {
+                    if (!value.equals(response.getRoleCode())) return false;
+                }
+                case "username", "account.username" -> {
+                    if (!value.equals(response.getUsername())) return false;
+                }
+                case "isPrimary" -> {
+                    if (!Boolean.valueOf(value).equals(Boolean.TRUE.equals(response.getIsPrimary()))) return false;
+                }
+                default -> {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private Page<AccountRoleResponse> page(BaseSearchRequest request, List<AccountRoleResponse> accountRoles) {
+        int page = request == null ? 0 : request.getPage();
+        int size = request == null ? 10 : request.getSize();
+        int start = Math.min(page * size, accountRoles.size());
+        int end = Math.min(start + size, accountRoles.size());
+        return new PageImpl<>(accountRoles.subList(start, end), PageRequest.of(page, size), accountRoles.size());
+    }
+
+    private String safe(String value) {
+        return value == null ? "" : value;
     }
 
     private RoleResponse toRoleResponse(Role role) {

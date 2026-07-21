@@ -9,7 +9,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -64,17 +63,6 @@ public class AccountController {
     public apiResponse<AccountResponse> findById(@PathVariable String username, Authentication authentication) {
         return apiResponse.success("Lay thong tin tai khoan thanh cong", service.findById(username, authentication));
     }
-
-    @DeleteMapping("/{username}")
-    @PreAuthorize("@securityUtils.hasAuthority(authentication, 'system.account.manage.all')"
-            + " || @securityUtils.hasAuthority(authentication, 'system.account.manage.diocese')"
-            + " || @securityUtils.hasAuthority(authentication, 'system.account.manage.deanery')"
-            + " || @securityUtils.hasAuthority(authentication, 'system.account.manage.parish')")
-    public apiResponse<Void> delete(@PathVariable String username, Authentication authentication) {
-        service.delete(username, authentication);
-        return apiResponse.success("Xoa tai khoan thanh cong", null);
-    }
-
     @PatchMapping("/{username}/toggle-status")
     @PreAuthorize("@securityUtils.hasAuthority(authentication, 'system.account.manage.all')"
             + " || @securityUtils.hasAuthority(authentication, 'system.account.manage.diocese')"

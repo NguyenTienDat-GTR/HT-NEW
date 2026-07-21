@@ -22,7 +22,7 @@ public class LeaderAccessEvaluator {
     public static final String READ_DEANERY = "organization.leader.read.deanery";
     public static final String READ_PARISH = "organization.leader.read.parish";
     public static final String UPDATE_PARISH = "organization.leader.update.parish";
-    public static final String DELETE_PARISH = "organization.leader.delete.parish";
+    public static final String TOGGLE_PARISH = "organization.leader.toggle.parish";
 
     private final AccountRepository accountRepository;
     private final LeaderRepository leaderRepository;
@@ -51,11 +51,7 @@ public class LeaderAccessEvaluator {
     }
 
     public boolean canToggle(Authentication authentication, UUID id) {
-        return hasRole(authentication, "ADMIN_PARISH") && hasParishScopedAccess(authentication, id, UPDATE_PARISH);
-    }
-
-    public boolean canDelete(Authentication authentication, UUID id) {
-        return hasParishScopedAccess(authentication, id, DELETE_PARISH);
+        return hasRole(authentication, "ADMIN_PARISH") && hasParishScopedAccess(authentication, id, TOGGLE_PARISH);
     }
 
     private boolean hasDioceseScopedAccess(Authentication authentication, UUID id, String scopedAuthority) {

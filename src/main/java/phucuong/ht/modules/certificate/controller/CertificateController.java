@@ -49,16 +49,8 @@ public class CertificateController {
     ) {
         return apiResponse.success("Cập nhật chứng chỉ thành công", certificateService.update(certificateCode, request, authentication));
     }
-
-    @DeleteMapping("/{certificateCode}")
-    @PreAuthorize("@certificateAccessEvaluator.canDelete(authentication, #certificateCode)")
-    public apiResponse<Void> delete(@PathVariable String certificateCode) {
-        certificateService.delete(certificateCode);
-        return apiResponse.success("Xóa chứng chỉ thành công", null);
-    }
-
     @PatchMapping("/{certificateCode}/toggle-status")
-    @PreAuthorize("@certificateAccessEvaluator.canUpdate(authentication, #certificateCode)")
+    @PreAuthorize("@certificateAccessEvaluator.canToggle(authentication, #certificateCode)")
     public apiResponse<CertificateResponse> toggleStatus(
             @PathVariable String certificateCode,
             @Valid @RequestBody StatusToggleRequest request,

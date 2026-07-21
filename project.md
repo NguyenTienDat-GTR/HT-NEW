@@ -492,7 +492,7 @@ Administration behavior:
 - role and permission create or update requests do not write `status`; active or inactive state changes only through toggle-status
 - new business roles may be created through the role API and stay permission-empty until role-permission APIs assign explicit permissions
 - direct account overrides continue to use `ALLOW` and `DENY`, with optional `expiresAt`
-- `api_permission_policy` now records API-to-permission mappings for the direct system/auth endpoints that are still protected by fixed permission codes; scope-heavy business APIs continue to rely on their existing `AccessEvaluator` classes
+- API access is enforced directly by controller `@PreAuthorize` rules and each module's scoped `AccessEvaluator`; the legacy `api_permission_policy` registry is removed
 
 ### Diocese CRUD And Scope Rules
 
@@ -1148,4 +1148,13 @@ The following work was added in this iteration:
 - Scoped role management now accepts unit-scoped authorities in `RoleController`; service authorization still prevents non-SUPER_ADMIN users from managing roles above their role hierarchy or mutating system roles.
 - `RoleResponse` now includes `createdBy` and `updatedBy` so FE detail drawers can show creator/updater information for role records.
 - Verification run in this session: `.\gradlew.bat testClasses`, `.\gradlew.bat test --tests phucuong.ht.modules.system.service.RoleManagementServiceTest --tests phucuong.ht.modules.system.controller.RoleControllerSecurityIntegrationTest --tests phucuong.ht.modules.system.service.ScopedSystemAdministrationReadTest`, and `git diff --check` passed. Local Docker app was rebuilt; `/api/auth/me` on port `1007` returned `401`, Flyway `045` was applied successfully, and DB verification showed 4 active scoped role CRU/toggle grants for each admin unit role.
+
+### Delete-to-toggle contract cleanup 2026-07-21
+
+- Branch `feature/toggle-delete-rbac-permissions` removes CRUD hard-delete entry points from module controllers/services and the shared `BaseRepo`; record lifecycle is status/effect based.
+- All former delete-gated module actions now use `PATCH .../toggle-status` with `*.toggle.*` permissions. Existing Redis session deletion and system-log retention cleanup remain non-CRUD infrastructure behavior.
+- Role-permission and account-permission rows are effect-based: toggle flips `ALLOW`/`DENY` while keeping assignment `status=true`, so effective permission views continue to derive access from `effect` and expiry.
+- Flyway `V046__replace_delete_permissions_with_toggle.sql` creates toggle permissions from existing delete permissions, copies role/account permission assignments, disables old delete permissions/policies, and registers toggle API policies.
+- Role-permission administration now includes read/assign/revoke scopes for all/diocese/deanery/parish so scoped admin roles can see and manage permission rows for roles they are allowed to manage.
+- Verification run in this session: `.\gradlew.bat testClasses`, targeted security/contract tests, and full `.\gradlew.bat test` passed.
 

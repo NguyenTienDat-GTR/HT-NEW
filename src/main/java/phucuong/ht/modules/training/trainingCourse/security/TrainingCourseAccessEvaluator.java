@@ -20,11 +20,11 @@ public class TrainingCourseAccessEvaluator {
     public static final String CREATE_DIOCESE = "training.course.create.diocese";
     public static final String READ_DIOCESE = "training.course.read.diocese";
     public static final String UPDATE_DIOCESE = "training.course.update.diocese";
-    public static final String DELETE_DIOCESE = "training.course.delete.diocese";
+    public static final String TOGGLE_DIOCESE = "training.course.toggle.diocese";
     public static final String CREATE_DEANERY = "training.course.create.deanery";
     public static final String READ_DEANERY = "training.course.read.deanery";
     public static final String UPDATE_DEANERY = "training.course.update.deanery";
-    public static final String DELETE_DEANERY = "training.course.delete.deanery";
+    public static final String TOGGLE_DEANERY = "training.course.toggle.deanery";
 
     private final securityUtils securityUtils;
     private final AccountRepository accountRepository;
@@ -50,8 +50,8 @@ public class TrainingCourseAccessEvaluator {
         return hasScopedAccess(authentication, courseCode, UPDATE_DIOCESE, UPDATE_DEANERY);
     }
 
-    public boolean canDelete(Authentication authentication, String courseCode) {
-        return hasScopedAccess(authentication, courseCode, DELETE_DIOCESE, DELETE_DEANERY);
+    public boolean canToggle(Authentication authentication, String courseCode) {
+        return hasScopedAccess(authentication, courseCode, TOGGLE_DIOCESE, TOGGLE_DEANERY);
     }
 
     private boolean hasScopedAccess(Authentication authentication, String courseCode, String dioceseAuthority, String deaneryAuthority) {

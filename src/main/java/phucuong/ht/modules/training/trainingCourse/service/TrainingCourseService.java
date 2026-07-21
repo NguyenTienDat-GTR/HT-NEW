@@ -180,15 +180,6 @@ public class TrainingCourseService {
             @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, allEntries = true)
     })
     @Transactional
-    public void delete(String courseCode) {
-        trainingCourseRepository.delete(courseCode);
-    }
-
-    @Caching(evict = {
-            @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_LIST, allEntries = true),
-            @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, allEntries = true)
-    })
-    @Transactional
     public TrainingCourseResponse toggleStatus(String courseCode, StatusToggleRequest request, Authentication authentication) {
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái khóa huấn luyện");

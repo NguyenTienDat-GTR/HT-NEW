@@ -116,10 +116,6 @@ public class ScoreFormulaTemplateService {
         return toResponse(formula);
     }
 
-    public void delete(String id) {
-        repository.delete(id);
-    }
-
     public ScoreFormulaTemplateResponse toggleStatus(String id, StatusToggleRequest request, Authentication authentication) {
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
         repository.toggleStatus(id, commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái công thức tính điểm"));

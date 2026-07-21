@@ -94,13 +94,6 @@ public class AccountManagementAuthorizationHelper {
         }
     }
 
-    public void requireCanDelete(Authentication authentication, Account target) {
-        if (hasRole(authentication, SUPER_ADMIN)) {
-            throw validation.forbidden("SUPER_ADMIN chi co quyen tao, cap nhat va doi trang thai account ADMIN_DIOCESE");
-        }
-        requireCanManage(authentication, target);
-    }
-
     private void requireScopedAccess(Authentication authentication, Account target, Role targetRole) {
         if (hasAuthority(authentication, MANAGE_DIOCESE)) {
             requireSame("giao phan", actorDiocese(authentication), dioceseId(target));

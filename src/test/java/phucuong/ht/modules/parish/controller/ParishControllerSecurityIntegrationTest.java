@@ -27,7 +27,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -77,22 +76,27 @@ class ParishControllerSecurityIntegrationTest {
     }
 
     @Test
-    void shouldAllowDioceseAdminToReadAndDeleteParishInScope() throws Exception {
+    void shouldAllowDioceseAdminToReadAndToggleParishInScope() throws Exception {
         UUID parishId = UUID.randomUUID();
         UUID deaneryId = UUID.randomUUID();
+        StatusToggleRequest toggleRequest = new StatusToggleRequest();
+        toggleRequest.setConfirmationText("Xác nhận");
         when(parishAccessEvaluator.canRead(any(), eq(parishId))).thenReturn(true);
-        when(parishAccessEvaluator.canDelete(any())).thenReturn(true);
+        when(parishAccessEvaluator.canToggle(any(), eq(parishId))).thenReturn(true);
         when(parishService.findById(eq(parishId), any())).thenReturn(sampleParish(parishId, deaneryId));
+        when(parishService.toggleStatus(eq(parishId), any(StatusToggleRequest.class), any())).thenReturn(sampleParish(parishId, deaneryId));
 
         mockMvc.perform(get("/api/parishes/" + parishId)
                         .header("Authorization", bearer(dioceseAdminToken(List.of(ParishAccessEvaluator.READ_DIOCESE)))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.id").value(parishId.toString()));
 
-        mockMvc.perform(delete("/api/parishes/" + parishId)
-                        .header("Authorization", bearer(dioceseAdminToken(List.of(ParishAccessEvaluator.DELETE_DIOCESE)))))
+        mockMvc.perform(patch("/api/parishes/" + parishId + "/toggle-status")
+                        .header("Authorization", bearer(dioceseAdminToken(List.of(ParishAccessEvaluator.TOGGLE_DIOCESE))))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(toggleRequest)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true));
+                .andExpect(jsonPath("$.data.id").value(parishId.toString()));
     }
 
     @Test
@@ -195,7 +199,7 @@ class ParishControllerSecurityIntegrationTest {
                         ParishAccessEvaluator.CREATE_ALL,
                         ParishAccessEvaluator.READ_ALL,
                         ParishAccessEvaluator.UPDATE_ALL,
-                        ParishAccessEvaluator.DELETE_ALL
+                        ParishAccessEvaluator.TOGGLE_ALL
                 )
         ));
     }

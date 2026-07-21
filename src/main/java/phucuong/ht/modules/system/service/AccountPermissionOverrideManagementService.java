@@ -153,21 +153,15 @@ public class AccountPermissionOverrideManagementService {
     }
 
     @Transactional
-    public void delete(String id, Authentication authentication) {
-        AccountPermissionOverride override = accountPermissionOverrideRepository.findById(id)
-                .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay phan quyen rieng cua tai khoan: " + id));
-        requireValidSuperAdminTarget(authentication, override.getAccount());
-        authorizationHelper.requireAccountPermissionWriteAccess(authentication, override.getAccount().getUsername(), override.getPermission());
-        accountPermissionOverrideRepository.delete(id);
-    }
-
-    @Transactional
     public AccountPermissionOverrideResponse toggleStatus(String id, StatusToggleRequest request, Authentication authentication) {
         AccountPermissionOverride override = accountPermissionOverrideRepository.findById(id)
                 .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay phan quyen rieng cua tai khoan: " + id));
         requireValidSuperAdminTarget(authentication, override.getAccount());
         authorizationHelper.requireAccountPermissionWriteAccess(authentication, override.getAccount().getUsername(), override.getPermission());
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
+        PermissionEffect nextEffect = override.getEffect() == PermissionEffect.DENY ? PermissionEffect.ALLOW : PermissionEffect.DENY;
+        rejectDenyOfRequiredAccountRoleAssignment(override.getAccount(), override.getPermission().getPermissionCode(), nextEffect);
+        override.setEffect(nextEffect);
         override.setStatus(true);
         override.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Khong xac dinh duoc nguoi doi trang thai phan quyen cho tai khoan"));
         return toResponse(override);

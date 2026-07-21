@@ -2,9 +2,9 @@ package phucuong.ht.modules.system.controller;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import phucuong.ht.common.dto.apiResponse;
 import phucuong.ht.common.model.request.StatusToggleRequest;
+import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.modules.system.model.request.AccountRoleBulkRequest;
 import phucuong.ht.modules.system.model.request.AccountRoleCreateRequest;
 import phucuong.ht.modules.system.model.request.AccountRoleUpdateRequest;
@@ -67,8 +68,8 @@ public class AccountRoleController {
                     + " || @securityUtils.hasAuthority(authentication, 'system.account_role.assign.deanery')"
                     + " || @securityUtils.hasAuthority(authentication, 'system.account_role.assign.parish')"
     )
-    public apiResponse<List<AccountRoleResponse>> findAll(Authentication authentication) {
-        return apiResponse.success("Lấy danh sách vai trò tài khoản thành công", accountRoleService.findAll(authentication));
+    public apiResponse<Page<AccountRoleResponse>> findAll(BaseSearchRequest request, Authentication authentication) {
+        return apiResponse.success("Lấy danh sách vai trò tài khoản thành công", accountRoleService.findAll(request, authentication));
     }
 
     @GetMapping("/assignable-roles")
@@ -110,19 +111,6 @@ public class AccountRoleController {
     ) {
         return apiResponse.success("Cập nhật vai trò tài khoản thành công", accountRoleService.update(id, request, authentication));
     }
-
-    @DeleteMapping("/{id}")
-    @PreAuthorize(
-            "@securityUtils.hasAuthority(authentication, 'system.account_role.assign.all')"
-                    + " || @securityUtils.hasAuthority(authentication, 'system.account_role.assign.diocese')"
-                    + " || @securityUtils.hasAuthority(authentication, 'system.account_role.assign.deanery')"
-                    + " || @securityUtils.hasAuthority(authentication, 'system.account_role.assign.parish')"
-    )
-    public apiResponse<Void> delete(@PathVariable String id, Authentication authentication) {
-        accountRoleService.delete(id, authentication);
-        return apiResponse.success("Xóa vai trò tài khoản thành công", null);
-    }
-
     @PatchMapping("/{id}/toggle-status")
     @PreAuthorize(
             "@securityUtils.hasAuthority(authentication, 'system.account_role.assign.all')"

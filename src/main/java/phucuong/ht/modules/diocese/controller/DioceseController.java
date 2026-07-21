@@ -50,15 +50,7 @@ public class DioceseController {
     ) {
         return apiResponse.success("Cập nhật giáo phận thành công", dioceseService.update(id, request, authentication));
     }
-
-    @DeleteMapping("/{id}")
-    @PreAuthorize("@dioceseAccessEvaluator.canDelete(authentication)")
-    public apiResponse<Void> delete(@PathVariable UUID id) {
-        dioceseService.delete(id);
-        return apiResponse.success("Xóa giáo phận thành công", null);
-    }
-
-    @PatchMapping("/{id}/toggle-status")
+@PatchMapping("/{id}/toggle-status")
     @PreAuthorize("@dioceseAccessEvaluator.canToggle(authentication, #id)")
     public apiResponse<Diocese> toggleStatus(
             @PathVariable UUID id,

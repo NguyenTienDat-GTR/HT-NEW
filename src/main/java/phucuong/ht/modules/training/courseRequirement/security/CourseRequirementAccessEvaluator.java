@@ -16,11 +16,11 @@ public class CourseRequirementAccessEvaluator {
     public static final String CREATE_DIOCESE = "training.requirement.create.diocese";
     public static final String READ_DIOCESE = "training.requirement.read.diocese";
     public static final String UPDATE_DIOCESE = "training.requirement.update.diocese";
-    public static final String DELETE_DIOCESE = "training.requirement.delete.diocese";
+    public static final String TOGGLE_DIOCESE = "training.requirement.toggle.diocese";
     public static final String CREATE_DEANERY = "training.requirement.create.deanery";
     public static final String READ_DEANERY = "training.requirement.read.deanery";
     public static final String UPDATE_DEANERY = "training.requirement.update.deanery";
-    public static final String DELETE_DEANERY = "training.requirement.delete.deanery";
+    public static final String TOGGLE_DEANERY = "training.requirement.toggle.deanery";
 
     private final securityUtils securityUtils;
     private final AccountRepository accountRepository;
@@ -46,8 +46,8 @@ public class CourseRequirementAccessEvaluator {
         return hasScopedAccess(authentication, requirementCode, UPDATE_DIOCESE, UPDATE_DEANERY);
     }
 
-    public boolean canDelete(Authentication authentication, String requirementCode) {
-        return hasScopedAccess(authentication, requirementCode, DELETE_DIOCESE, DELETE_DEANERY);
+    public boolean canToggle(Authentication authentication, String requirementCode) {
+        return hasScopedAccess(authentication, requirementCode, TOGGLE_DIOCESE, TOGGLE_DEANERY);
     }
 
     private boolean hasScopedAccess(Authentication authentication, String requirementCode, String dioceseAuthority, String deaneryAuthority) {

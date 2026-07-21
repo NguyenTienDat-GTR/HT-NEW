@@ -127,20 +127,6 @@ public class DeaneryService {
             @CacheEvict(cacheNames = CacheNames.DEANERY_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.DEANERY_DETAIL, allEntries = true)
     })
-    public void delete(UUID id, Authentication authentication) {
-        Deanery deanery = deaneryValidationHelper.requireExistingDeanery(id);
-        deaneryScopeHelper.enforceDeleteScope(authentication, deanery);
-        try {
-            deaneryRepository.delete(id);
-        } catch (DataIntegrityViolationException exception) {
-            throw new ApiException(HttpStatus.CONFLICT, errorCode.CONFLICT, "Không thể xóa giáo hạt vì đang được dữ liệu khác tham chiếu");
-        }
-    }
-
-    @Caching(evict = {
-            @CacheEvict(cacheNames = CacheNames.DEANERY_LIST, allEntries = true),
-            @CacheEvict(cacheNames = CacheNames.DEANERY_DETAIL, allEntries = true)
-    })
     public DeaneryResponse toggleStatus(UUID id, StatusToggleRequest request, Authentication authentication) {
         deaneryValidationHelper.requireExistingDeaneryWithDiocese(id);
         deaneryValidationHelper.validateToggleConfirmation(request == null ? null : request.getConfirmationText());

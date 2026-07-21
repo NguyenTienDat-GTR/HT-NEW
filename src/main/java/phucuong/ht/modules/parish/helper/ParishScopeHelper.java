@@ -37,14 +37,6 @@ public class ParishScopeHelper {
         }
     }
 
-    public void enforceDeleteScope(Authentication authentication, Parish parish) {
-        if (securityUtils.hasAuthority(authentication, ParishAccessEvaluator.DELETE_ALL)) {
-            return;
-        }
-
-        throw commonValidationHelper.forbidden("Tai khoan hien tai khong co quyen xoa giao xu");
-    }
-
     public void enforceDeaneryChangeScope(Authentication authentication, Parish existingParish, Deanery targetDeanery) {
         if (existingParish == null || existingParish.getDeanery() == null || targetDeanery == null) {
             return;

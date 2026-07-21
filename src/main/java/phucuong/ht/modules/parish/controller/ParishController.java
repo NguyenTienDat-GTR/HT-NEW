@@ -50,15 +50,7 @@ public class ParishController {
     ) {
         return apiResponse.success("Cập nhật giáo xứ thành công", parishService.update(id, request, authentication));
     }
-
-    @DeleteMapping("/{id}")
-    @PreAuthorize("@parishAccessEvaluator.canDelete(authentication)")
-    public apiResponse<Void> delete(@PathVariable UUID id, Authentication authentication) {
-        parishService.delete(id, authentication);
-        return apiResponse.success("Xóa giáo xứ thành công", null);
-    }
-
-    @PatchMapping("/{id}/toggle-status")
+@PatchMapping("/{id}/toggle-status")
     @PreAuthorize("@parishAccessEvaluator.canToggle(authentication, #id)")
     public apiResponse<ParishResponse> toggleStatus(
             @PathVariable UUID id,

@@ -166,18 +166,6 @@ class DioceseServiceTest {
     }
 
     @Test
-    void deleteShouldValidateAndDelegateToRepository() {
-        UUID id = UUID.randomUUID();
-        Diocese diocese = new Diocese();
-        diocese.setId(id);
-        when(dioceseValidationHelper.requireExistingDiocese(id)).thenReturn(diocese);
-
-        dioceseService.delete(id);
-
-        verify(dioceseRepository).delete(id);
-    }
-
-    @Test
     void createShouldWrapDataConflict() {
         DioceseCreateRequest request = new DioceseCreateRequest();
         request.setName("Phu Cuong");

@@ -16,7 +16,7 @@ public class DioceseAccessEvaluator {
     public static final String CREATE_ALL = "organization.diocese.create.all";
     public static final String READ_ALL = "organization.diocese.read.all";
     public static final String UPDATE_ALL = "organization.diocese.update.all";
-    public static final String DELETE_ALL = "organization.diocese.delete.all";
+    public static final String TOGGLE_ALL = "organization.diocese.toggle.all";
     public static final String READ_DIOCESE = "organization.diocese.read.diocese";
     public static final String UPDATE_DIOCESE = "organization.diocese.update.diocese";
 
@@ -45,15 +45,8 @@ public class DioceseAccessEvaluator {
                 || hasScopedAccess(authentication, dioceseId, UPDATE_DIOCESE);
     }
 
-    public boolean canDelete(Authentication authentication) {
-        if (hasRole(authentication, "SUPER_ADMIN")) {
-            return false;
-        }
-        return hasAuthority(authentication, DELETE_ALL);
-    }
-
     public boolean canToggle(Authentication authentication, UUID dioceseId) {
-        return hasAuthority(authentication, UPDATE_ALL);
+        return hasAuthority(authentication, TOGGLE_ALL);
     }
 
     private boolean hasScopedAccess(Authentication authentication, UUID dioceseId, String scopedAuthority) {

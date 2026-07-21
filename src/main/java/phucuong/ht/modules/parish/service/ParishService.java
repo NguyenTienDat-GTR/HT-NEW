@@ -140,20 +140,6 @@ public class ParishService {
             @CacheEvict(cacheNames = CacheNames.PARISH_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.PARISH_DETAIL, allEntries = true)
     })
-    public void delete(UUID id, Authentication authentication) {
-        Parish parish = parishValidationHelper.requireExistingParish(id);
-        parishScopeHelper.enforceDeleteScope(authentication, parish);
-        try {
-            parishRepository.delete(id);
-        } catch (DataIntegrityViolationException exception) {
-            throw new ApiException(HttpStatus.CONFLICT, errorCode.CONFLICT, "Không thể xóa giáo xứ vì đang được dữ liệu khác tham chiếu");
-        }
-    }
-
-    @Caching(evict = {
-            @CacheEvict(cacheNames = CacheNames.PARISH_LIST, allEntries = true),
-            @CacheEvict(cacheNames = CacheNames.PARISH_DETAIL, allEntries = true)
-    })
     public ParishResponse toggleStatus(UUID id, StatusToggleRequest request, Authentication authentication) {
         parishValidationHelper.requireExistingParishWithDeaneryAndDiocese(id);
         parishValidationHelper.validateToggleConfirmation(request == null ? null : request.getConfirmationText());

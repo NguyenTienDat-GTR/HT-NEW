@@ -167,14 +167,6 @@ public class CertificateService {
             @CacheEvict(cacheNames = CacheNames.CERTIFICATE_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.CERTIFICATE_DETAIL, allEntries = true)
     })
-    public void delete(String certificateCode) {
-        certificateRepository.delete(certificateCode);
-    }
-
-    @Caching(evict = {
-            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_LIST, allEntries = true),
-            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_DETAIL, allEntries = true)
-    })
     public CertificateResponse toggleStatus(String certificateCode, StatusToggleRequest request, Authentication authentication) {
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
         certificateRepository.toggleStatus(certificateCode, commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái chứng chỉ"));

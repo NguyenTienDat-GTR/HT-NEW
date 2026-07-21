@@ -5,7 +5,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -39,6 +38,8 @@ public class RolePermissionController {
             "@systemAdminAuthorizationHelper.isSuperAdmin(authentication)"
                     + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.all')"
                     + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.diocese')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.deanery')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.parish')"
     )
     public apiResponse<RolePermissionResponse> create(@Valid @RequestBody RolePermissionCreateRequest request, Authentication authentication) {
         return apiResponse.success("Gán quyền cho vai trò thành công", rolePermissionManagementService.create(request, authentication));
@@ -49,6 +50,8 @@ public class RolePermissionController {
             "@systemAdminAuthorizationHelper.isSuperAdmin(authentication)"
                     + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.all')"
                     + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.diocese')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.deanery')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.parish')"
     )
     public apiResponse<List<RolePermissionResponse>> bulkAssign(@Valid @RequestBody RolePermissionBulkRequest request, Authentication authentication) {
         return apiResponse.success("Gán nhiều quyền cho vai trò thành công", rolePermissionManagementService.bulkAssign(request, authentication));
@@ -57,10 +60,18 @@ public class RolePermissionController {
     @GetMapping
     @PreAuthorize(
             "@systemAdminAuthorizationHelper.isSuperAdmin(authentication)"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.read.all')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.read.diocese')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.read.deanery')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.read.parish')"
                     + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.all')"
                     + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.diocese')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.deanery')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.parish')"
                     + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.all')"
                     + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.diocese')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.deanery')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.parish')"
     )
     public apiResponse<Page<RolePermissionResponse>> findAll(BaseSearchRequest request, Authentication authentication) {
         return apiResponse.success("Lấy danh sách quyền của vai trò thành công", rolePermissionManagementService.findAll(request, authentication));
@@ -71,6 +82,8 @@ public class RolePermissionController {
             "@systemAdminAuthorizationHelper.isSuperAdmin(authentication)"
                     + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.all')"
                     + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.diocese')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.deanery')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.parish')"
     )
     public apiResponse<List<PermissionResponse>> findAssignablePermissions(
             @RequestParam String roleCode,
@@ -82,10 +95,18 @@ public class RolePermissionController {
     @GetMapping("/{id}")
     @PreAuthorize(
             "@systemAdminAuthorizationHelper.isSuperAdmin(authentication)"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.read.all')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.read.diocese')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.read.deanery')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.read.parish')"
                     + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.all')"
                     + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.diocese')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.deanery')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.parish')"
                     + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.all')"
                     + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.diocese')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.deanery')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.parish')"
     )
     public apiResponse<RolePermissionResponse> findById(@PathVariable String id, Authentication authentication) {
         return apiResponse.success("Lấy thông tin quyền của vai trò thành công", rolePermissionManagementService.findById(id, authentication));
@@ -96,6 +117,8 @@ public class RolePermissionController {
             "@systemAdminAuthorizationHelper.isSuperAdmin(authentication)"
                     + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.all')"
                     + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.diocese')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.deanery')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.parish')"
     )
     public apiResponse<RolePermissionResponse> update(
             @PathVariable String id,
@@ -104,23 +127,17 @@ public class RolePermissionController {
     ) {
         return apiResponse.success("Cập nhật quyền của vai trò thành công", rolePermissionManagementService.update(id, request, authentication));
     }
-
-    @DeleteMapping("/{id}")
-    @PreAuthorize(
-            "@systemAdminAuthorizationHelper.isSuperAdmin(authentication)"
-                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.all')"
-                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.diocese')"
-    )
-    public apiResponse<Void> delete(@PathVariable String id, Authentication authentication) {
-        rolePermissionManagementService.delete(id, authentication);
-        return apiResponse.success("Xóa quyền của vai trò thành công", null);
-    }
-
     @PatchMapping("/{id}/toggle-status")
     @PreAuthorize(
             "@systemAdminAuthorizationHelper.isSuperAdmin(authentication)"
                     + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.all')"
                     + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.diocese')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.deanery')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.parish')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.all')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.diocese')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.deanery')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.parish')"
     )
     public apiResponse<RolePermissionResponse> toggleStatus(
             @PathVariable String id,

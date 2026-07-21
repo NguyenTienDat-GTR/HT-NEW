@@ -1,6 +1,6 @@
 package phucuong.ht.modules.system.service;
 
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 import phucuong.ht.common.utils.securityUtils;
@@ -18,14 +18,21 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Component
-@RequiredArgsConstructor(onConstructor_ = @org.springframework.beans.factory.annotation.Autowired)
 public class SystemAdminAuthorizationHelper {
     static final String ROLE_SUPER_ADMIN = "SUPER_ADMIN";
     static final String ROLE_ADMIN_DIOCESE = "ADMIN_DIOCESE";
     static final String ROLE_PERMISSION_ASSIGN_ALL = "system.role_permission.assign.all";
     static final String ROLE_PERMISSION_ASSIGN_DIOCESE = "system.role_permission.assign.diocese";
+    static final String ROLE_PERMISSION_ASSIGN_DEANERY = "system.role_permission.assign.deanery";
+    static final String ROLE_PERMISSION_ASSIGN_PARISH = "system.role_permission.assign.parish";
     static final String ROLE_PERMISSION_REVOKE_ALL = "system.role_permission.revoke.all";
     static final String ROLE_PERMISSION_REVOKE_DIOCESE = "system.role_permission.revoke.diocese";
+    static final String ROLE_PERMISSION_REVOKE_DEANERY = "system.role_permission.revoke.deanery";
+    static final String ROLE_PERMISSION_REVOKE_PARISH = "system.role_permission.revoke.parish";
+    static final String ROLE_PERMISSION_READ_ALL = "system.role_permission.read.all";
+    static final String ROLE_PERMISSION_READ_DIOCESE = "system.role_permission.read.diocese";
+    static final String ROLE_PERMISSION_READ_DEANERY = "system.role_permission.read.deanery";
+    static final String ROLE_PERMISSION_READ_PARISH = "system.role_permission.read.parish";
     static final String ACCOUNT_PERMISSION_MANAGE_DIOCESE = "system.account_permission.manage.diocese";
     static final String ACCOUNT_PERMISSION_MANAGE_DEANERY = "system.account_permission.manage.deanery";
     static final String ACCOUNT_PERMISSION_MANAGE_PARISH = "system.account_permission.manage.parish";
@@ -45,6 +52,23 @@ public class SystemAdminAuthorizationHelper {
             CommonValidationHelper commonValidationHelper
     ) {
         this(securityUtils, accountScopeValidationHelper, accountRepository, roleRepository, commonValidationHelper, null);
+    }
+
+    @Autowired
+    public SystemAdminAuthorizationHelper(
+            securityUtils securityUtils,
+            AccountScopeValidationHelper accountScopeValidationHelper,
+            AccountRepository accountRepository,
+            RoleRepository roleRepository,
+            CommonValidationHelper commonValidationHelper,
+            AccountManagementAuthorizationHelper accountManagementAuthorizationHelper
+    ) {
+        this.securityUtils = securityUtils;
+        this.accountScopeValidationHelper = accountScopeValidationHelper;
+        this.accountRepository = accountRepository;
+        this.roleRepository = roleRepository;
+        this.commonValidationHelper = commonValidationHelper;
+        this.accountManagementAuthorizationHelper = accountManagementAuthorizationHelper;
     }
 
     public boolean isSuperAdmin(Authentication authentication) {
@@ -150,11 +174,11 @@ public class SystemAdminAuthorizationHelper {
         if (isSuperAdmin(authentication)) {
             return;
         }
-        if (!hasAuthority(authentication, ROLE_PERMISSION_ASSIGN_DIOCESE)
-                && !hasAuthority(authentication, ROLE_PERMISSION_REVOKE_DIOCESE)) {
-            throw commonValidationHelper.forbidden("Không có quyền đọc permission trong phạm vi quản lý");
+        int scopeOrder = rolePermissionReadScopeOrder(authentication);
+        if (scopeOrder == Integer.MAX_VALUE) {
+            throw commonValidationHelper.forbidden("Khong co quyen doc permission trong pham vi quan ly");
         }
-        requirePermissionAssignableByDioceseAdmin(permission);
+        requirePermissionAtOrBelowScope(permission, scopeOrder);
     }
 
     public boolean canReadRolePermission(Authentication authentication, Role role, Permission permission) {
@@ -170,12 +194,12 @@ public class SystemAdminAuthorizationHelper {
         if (isSuperAdmin(authentication)) {
             return;
         }
-        if (!hasAuthority(authentication, ROLE_PERMISSION_ASSIGN_DIOCESE)
-                && !hasAuthority(authentication, ROLE_PERMISSION_REVOKE_DIOCESE)) {
-            throw commonValidationHelper.forbidden("Không có quyền đọc phân quyền vai trò");
+        int scopeOrder = rolePermissionReadScopeOrder(authentication);
+        if (scopeOrder == Integer.MAX_VALUE) {
+            throw commonValidationHelper.forbidden("Khong co quyen doc phan quyen vai tro");
         }
-        requireRoleManageableByDioceseAdmin(role);
-        requirePermissionAssignableByDioceseAdmin(permission);
+        requireRoleAtOrBelowActor(authentication, role);
+        requirePermissionAtOrBelowScope(permission, scopeOrder);
     }
 
     public void requireAccountPermissionWriteAccess(Authentication authentication, String username, Permission permission) {
@@ -218,24 +242,43 @@ public class SystemAdminAuthorizationHelper {
     }
 
     private void requireRolePermissionOperationAuthority(Authentication authentication, String authority) {
-        if (hasAuthority(authentication, authority) || hasAuthority(authentication, matchingAllScopeAuthority(authority))) {
+        if (rolePermissionAuthorityScopeOrder(authentication, authority) != Integer.MAX_VALUE) {
             return;
         }
-        throw commonValidationHelper.forbidden("Không có quyền thay đổi phân quyền cho vai trò");
+        throw commonValidationHelper.forbidden("Khong co quyen thay doi phan quyen cho vai tro");
     }
 
-    private String matchingAllScopeAuthority(String authority) {
-        if (ROLE_PERMISSION_REVOKE_DIOCESE.equals(authority)) {
-            return ROLE_PERMISSION_REVOKE_ALL;
-        }
-        return ROLE_PERMISSION_ASSIGN_ALL;
+    private int rolePermissionReadScopeOrder(Authentication authentication) {
+        return List.of(
+                        rolePermissionScopeOrder(authentication, "system.role_permission.read."),
+                        rolePermissionScopeOrder(authentication, "system.role_permission.assign."),
+                        rolePermissionScopeOrder(authentication, "system.role_permission.revoke.")
+                ).stream()
+                .min(Integer::compareTo)
+                .orElse(Integer.MAX_VALUE);
     }
 
     private int rolePermissionAuthorityScopeOrder(Authentication authentication, String authority) {
-        if (hasAuthority(authentication, matchingAllScopeAuthority(authority))) {
+        String prefix = authority != null && authority.contains(".revoke.")
+                ? "system.role_permission.revoke."
+                : "system.role_permission.assign.";
+        return rolePermissionScopeOrder(authentication, prefix);
+    }
+
+    private int rolePermissionScopeOrder(Authentication authentication, String prefix) {
+        if (hasAuthority(authentication, prefix + "all")) {
             return 0;
         }
-        return 1;
+        if (hasAuthority(authentication, prefix + "diocese")) {
+            return 1;
+        }
+        if (hasAuthority(authentication, prefix + "deanery")) {
+            return 2;
+        }
+        if (hasAuthority(authentication, prefix + "parish")) {
+            return 3;
+        }
+        return Integer.MAX_VALUE;
     }
 
     private void requireActorOwnsPermission(Authentication authentication, Permission permission) {

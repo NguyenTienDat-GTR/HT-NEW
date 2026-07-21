@@ -48,16 +48,8 @@ public class TrainingCourseController {
     ) {
         return apiResponse.success("Cập nhật khóa huấn luyện thành công", trainingCourseService.update(courseCode, request, authentication));
     }
-
-    @DeleteMapping("/{courseCode}")
-    @PreAuthorize("@trainingCourseAccessEvaluator.canDelete(authentication, #courseCode)")
-    public apiResponse<Void> delete(@PathVariable String courseCode) {
-        trainingCourseService.delete(courseCode);
-        return apiResponse.success("Xóa khóa huấn luyện thành công", null);
-    }
-
     @PatchMapping("/{courseCode}/toggle-status")
-    @PreAuthorize("@trainingCourseAccessEvaluator.canUpdate(authentication, #courseCode)")
+    @PreAuthorize("@trainingCourseAccessEvaluator.canToggle(authentication, #courseCode)")
     public apiResponse<TrainingCourseResponse> toggleStatus(
             @PathVariable String courseCode,
             @Valid @RequestBody StatusToggleRequest request,

@@ -6,6 +6,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.validation.CommonValidationHelper;
@@ -13,6 +14,7 @@ import phucuong.ht.modules.auth.repository.RoleRepository;
 import phucuong.ht.modules.system.model.entity.Permission;
 import phucuong.ht.modules.system.model.entity.Role;
 import phucuong.ht.modules.system.model.entity.RolePermission;
+import phucuong.ht.modules.system.model.enums.PermissionEffect;
 import phucuong.ht.modules.system.model.request.RolePermissionBulkRequest;
 import phucuong.ht.modules.system.model.request.RolePermissionCreateRequest;
 import phucuong.ht.modules.system.model.request.RolePermissionUpdateRequest;
@@ -26,11 +28,36 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
 public class RolePermissionManagementService {
+
+    private static final Map<String, String> REPOSITORY_FIELD_ALIASES = Map.of(
+            "roleCode", "role.roleCode",
+            "roleName", "role.roleName",
+            "permissionCode", "permission.permissionCode",
+            "permissionName", "permission.permissionName"
+    );
+    private static final Set<String> REPOSITORY_FIELDS = Set.of(
+            "id",
+            "role.roleCode",
+            "role.roleName",
+            "permission.permissionCode",
+            "permission.permissionName",
+            "effect",
+            "conditions",
+            "assignedBy",
+            "assignedAt",
+            "expiresAt",
+            "status",
+            "createdAt",
+            "createdBy",
+            "updatedAt",
+            "updatedBy"
+    );
 
     private final RolePermissionRepository rolePermissionRepository;
     private final RoleRepository roleRepository;
@@ -38,6 +65,7 @@ public class RolePermissionManagementService {
     private final CommonValidationHelper commonValidationHelper;
     private final SystemAdminAuthorizationHelper authorizationHelper;
 
+    @Transactional
     public RolePermissionResponse create(RolePermissionCreateRequest request, Authentication authentication) {
         Role role = roleRepository.findById(request.getRoleCode())
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy vai trò: " + request.getRoleCode()));
@@ -63,6 +91,7 @@ public class RolePermissionManagementService {
         return toResponse(rolePermission);
     }
 
+    @Transactional
     public List<RolePermissionResponse> bulkAssign(RolePermissionBulkRequest request, Authentication authentication) {
         Role role = roleRepository.findById(request.getRoleCode())
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy vai trò: " + request.getRoleCode()));
@@ -95,6 +124,7 @@ public class RolePermissionManagementService {
         return responses;
     }
 
+    @Transactional(readOnly = true)
     public Page<RolePermissionResponse> findAll(BaseSearchRequest request, Authentication authentication) {
         List<RolePermission> manageable = loadAllMatching(request).stream()
                 .filter(rolePermission -> authorizationHelper.canReadRolePermission(
@@ -103,6 +133,7 @@ public class RolePermissionManagementService {
         return page(request, manageable);
     }
 
+    @Transactional(readOnly = true)
     public List<PermissionResponse> findAssignablePermissions(String roleCode, Authentication authentication) {
         Role role = roleRepository.findById(roleCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy vai trò: " + roleCode));
@@ -117,6 +148,7 @@ public class RolePermissionManagementService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
     public RolePermissionResponse findById(String id, Authentication authentication) {
         RolePermission rolePermission = rolePermissionRepository.findById(id)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy phân quyền cho vai trò: " + id));
@@ -124,6 +156,7 @@ public class RolePermissionManagementService {
         return toResponse(rolePermission);
     }
 
+    @Transactional
     public RolePermissionResponse update(String id, RolePermissionUpdateRequest request, Authentication authentication) {
         RolePermission rolePermission = rolePermissionRepository.findById(id)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy phân quyền cho vai trò: " + id));
@@ -147,29 +180,22 @@ public class RolePermissionManagementService {
         return toResponse(rolePermission);
     }
 
-    public void delete(String id, Authentication authentication) {
-        RolePermission rolePermission = rolePermissionRepository.findById(id)
-                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy phân quyền cho vai trò: " + id));
-        authorizationHelper.requireRolePermissionWriteAccess(
-                authentication,
-                rolePermission.getRole(),
-                rolePermission.getPermission(),
-                SystemAdminAuthorizationHelper.ROLE_PERMISSION_REVOKE_DIOCESE
-        );
-        rolePermissionRepository.delete(id);
-    }
-
+    @Transactional
     public RolePermissionResponse toggleStatus(String id, StatusToggleRequest request, Authentication authentication) {
         RolePermission rolePermission = rolePermissionRepository.findById(id)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy phân quyền cho vai trò: " + id));
+        PermissionEffect nextEffect = rolePermission.getEffect() == PermissionEffect.DENY ? PermissionEffect.ALLOW : PermissionEffect.DENY;
         authorizationHelper.requireRolePermissionWriteAccess(
                 authentication,
                 rolePermission.getRole(),
                 rolePermission.getPermission(),
-                SystemAdminAuthorizationHelper.ROLE_PERMISSION_ASSIGN_DIOCESE
+                nextEffect == PermissionEffect.DENY
+                        ? SystemAdminAuthorizationHelper.ROLE_PERMISSION_REVOKE_DIOCESE
+                        : SystemAdminAuthorizationHelper.ROLE_PERMISSION_ASSIGN_DIOCESE
         );
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái phân quyền cho vai trò");
+        rolePermission.setEffect(nextEffect);
         rolePermission.setStatus(true);
         rolePermission.setUpdatedBy(actor);
         return toResponse(rolePermission);
@@ -181,12 +207,45 @@ public class RolePermissionManagementService {
         copy.setPage(source.getPage());
         copy.setSize(source.getSize());
         copy.setSearch(source.getSearch());
-        copy.setSearchFields(source.getSearchFields() == null ? List.of() : List.copyOf(source.getSearchFields()));
-        copy.setFilters(source.getFilters() == null ? new LinkedHashMap<>() : new LinkedHashMap<>(source.getFilters()));
+        copy.setSearchFields(normalizeFieldPaths(source.getSearchFields()));
+        copy.setFilters(normalizeFilters(source.getFilters()));
         copy.setStatus(source.getStatus());
-        copy.setSortBy(source.getSortBy());
+        copy.setSortBy(toRepositoryField(source.getSortBy()));
         copy.setSortDirection(source.getSortDirection());
         return copy;
+    }
+
+    private List<String> normalizeFieldPaths(List<String> fields) {
+        if (fields == null || fields.isEmpty()) {
+            return List.of();
+        }
+        return fields.stream()
+                .map(this::toRepositoryField)
+                .filter(java.util.Objects::nonNull)
+                .toList();
+    }
+
+    private LinkedHashMap<String, Object> normalizeFilters(java.util.Map<String, Object> filters) {
+        LinkedHashMap<String, Object> normalized = new LinkedHashMap<>();
+        if (filters == null || filters.isEmpty()) {
+            return normalized;
+        }
+        filters.forEach((key, value) -> {
+            String repositoryField = toRepositoryField(key);
+            if (repositoryField != null) {
+                normalized.put(repositoryField, value);
+            }
+        });
+        return normalized;
+    }
+
+    private String toRepositoryField(String field) {
+        if (field == null) {
+            return null;
+        }
+        String normalized = field.trim();
+        String repositoryField = REPOSITORY_FIELD_ALIASES.getOrDefault(normalized, normalized);
+        return REPOSITORY_FIELDS.contains(repositoryField) ? repositoryField : null;
     }
 
     private List<RolePermission> loadAllMatching(BaseSearchRequest request) {
