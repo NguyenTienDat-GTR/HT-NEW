@@ -18,6 +18,11 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class AuthUserDetailsService implements UserDetailsService {
 
+    private static final String EFFECT_ALLOW = "ALLOW";
+    private static final String EFFECT_DENY = "DENY";
+    private static final String SOURCE_ACCOUNT_OVERRIDE = "ACCOUNT_OVERRIDE";
+    private static final String SOURCE_ROLE = "ROLE";
+
     private final AccountRepository accountRepository;
     private final AccountRoleRepository accountRoleRepository;
     private final AuthPermissionQueryRepository authPermissionQueryRepository;
@@ -42,17 +47,37 @@ public class AuthUserDetailsService implements UserDetailsService {
     }
 
     private List<String> resolveAllowedPermissions(String username) {
-        Set<String> allowed = new LinkedHashSet<>();
-        Set<String> denied = new LinkedHashSet<>();
+        Set<String> permissionCodes = new LinkedHashSet<>();
+        Set<String> accountDenied = new LinkedHashSet<>();
+        Set<String> accountAllowed = new LinkedHashSet<>();
+        Set<String> roleAllowed = new LinkedHashSet<>();
 
         for (AuthPermissionQueryRepository.EffectivePermissionRow row : authPermissionQueryRepository.findEffectivePermissionsByUsername(username)) {
-            if ("DENY".equalsIgnoreCase(row.effect())) {
-                denied.add(row.permissionCode());
-                allowed.remove(row.permissionCode());
+            String permissionCode = row.permissionCode();
+            if (permissionCode == null || permissionCode.isBlank()) {
                 continue;
             }
-            if (!denied.contains(row.permissionCode())) {
-                allowed.add(row.permissionCode());
+            permissionCodes.add(permissionCode);
+
+            if (SOURCE_ACCOUNT_OVERRIDE.equalsIgnoreCase(row.sourceType())) {
+                if (EFFECT_DENY.equalsIgnoreCase(row.effect())) {
+                    accountDenied.add(permissionCode);
+                } else if (EFFECT_ALLOW.equalsIgnoreCase(row.effect())) {
+                    accountAllowed.add(permissionCode);
+                }
+            } else if (SOURCE_ROLE.equalsIgnoreCase(row.sourceType())
+                    && EFFECT_ALLOW.equalsIgnoreCase(row.effect())) {
+                roleAllowed.add(permissionCode);
+            }
+        }
+
+        Set<String> allowed = new LinkedHashSet<>();
+        for (String permissionCode : permissionCodes) {
+            if (accountDenied.contains(permissionCode)) {
+                continue;
+            }
+            if (accountAllowed.contains(permissionCode) || roleAllowed.contains(permissionCode)) {
+                allowed.add(permissionCode);
             }
         }
 
