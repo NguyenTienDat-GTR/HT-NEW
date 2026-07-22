@@ -114,12 +114,43 @@ class AccountRoleServiceTest {
     }
 
     @Test
+    void disablingPrimaryRoleShouldPromoteHighestActiveRemainingRole() {
+        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()), accountManagementAuthorizationHelper);
+        Account account = dioceseAccount("diocese-admin");
+        AccountRole primary = accountRole(account, role("ADMIN_DIOCESE", true, 100, "SYSTEM"));
+        primary.setId("ar-primary");
+        primary.setIsPrimary(true);
+        AccountRole highestRemaining = accountRole(account, role("CUSTOM_HIGH", false, 150, "super-admin"));
+        highestRemaining.setId("ar-high");
+        highestRemaining.setIsPrimary(false);
+        AccountRole lowerRemaining = accountRole(account, role("CUSTOM_LOW", false, 250, "super-admin"));
+        lowerRemaining.setId("ar-low");
+        lowerRemaining.setIsPrimary(false);
+
+        StatusToggleRequest request = new StatusToggleRequest();
+        request.setConfirmationText("Xác nhận");
+
+        when(accountRoleRepository.findById("ar-primary")).thenReturn(Optional.of(primary));
+        when(accountRoleRepository.findByAccountUsername("diocese-admin")).thenReturn(List.of(primary, highestRemaining, lowerRemaining));
+
+        AccountRoleResponse response = accountRoleService.toggleStatus(
+                "ar-primary",
+                request,
+                authentication("super-admin", List.of("SUPER_ADMIN"), List.of("system.account_role.assign.all"))
+        );
+
+        assertEquals(false, response.getStatus());
+        assertEquals(false, primary.getIsPrimary());
+        assertEquals(true, highestRemaining.getIsPrimary());
+        assertEquals(false, lowerRemaining.getIsPrimary());
+    }
+
+    @Test
     void adminDioceseCanBulkAssignAdminDeaneryRoleToAccountInOwnDiocese() {
         accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()), accountManagementAuthorizationHelper);
         UUID dioceseId = UUID.randomUUID();
         Account account = dioceseAccount("target", dioceseId);
         Role targetRole = role("ADMIN_DEANERY", true, 200, "SYSTEM");
-        Role actorRole = role("ADMIN_DIOCESE", true, 100, "SYSTEM");
         AccountRoleBulkRequest request = new AccountRoleBulkRequest();
         request.setUsername("target");
         request.setRoleCodes(List.of("ADMIN_DEANERY"));
@@ -128,7 +159,6 @@ class AccountRoleServiceTest {
         when(roleRepository.findByRoleCodeAndStatusTrue("ADMIN_DEANERY")).thenReturn(Optional.of(targetRole));
         when(accountRepository.findActiveDioceseIdByUsername("admin-diocese")).thenReturn(Optional.of(dioceseId));
         when(accountRepository.findActiveDioceseIdByUsername("target")).thenReturn(Optional.of(dioceseId));
-        when(roleRepository.findByRoleCodeAndStatusTrue("ADMIN_DIOCESE")).thenReturn(Optional.of(actorRole));
         when(accountRoleRepository.findByAccountUsernameAndRoleRoleCode("target", "ADMIN_DEANERY")).thenReturn(Optional.empty());
         when(accountRoleRepository.save(any(AccountRole.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -155,7 +185,6 @@ class AccountRoleServiceTest {
         when(roleRepository.findAll()).thenReturn(List.of(adminDiocese, adminDeanery, adminParish));
         when(accountRepository.findActiveDioceseIdByUsername("admin-diocese")).thenReturn(Optional.of(dioceseId));
         when(accountRepository.findActiveDioceseIdByUsername("target")).thenReturn(Optional.of(dioceseId));
-        when(roleRepository.findByRoleCodeAndStatusTrue("ADMIN_DIOCESE")).thenReturn(Optional.of(adminDiocese));
 
         List<String> roleCodes = accountRoleService.findAssignableRoles(
                         "target",
@@ -182,6 +211,28 @@ class AccountRoleServiceTest {
         assertThrows(RuntimeException.class, () -> accountRoleService.bulkAssign(
                 request,
                 authentication("admin-diocese", List.of("ADMIN_DIOCESE"), List.of("system.account_role.assign.diocese"))
+        ));
+    }
+
+    @Test
+    void lowerRealRoleCannotAssignHigherCustomRoleEvenWithWideAuthority() {
+        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()), accountManagementAuthorizationHelper);
+        UUID dioceseId = UUID.randomUUID();
+        Account account = dioceseAccount("target", dioceseId);
+        Role targetRole = role("CUSTOM_HIGH", false, 100, "super-admin");
+        AccountRoleBulkRequest request = new AccountRoleBulkRequest();
+        request.setUsername("target");
+        request.setRoleCodes(List.of("CUSTOM_HIGH"));
+
+        when(accountRepository.findById("target")).thenReturn(Optional.of(account));
+        when(roleRepository.findByRoleCodeAndStatusTrue("CUSTOM_HIGH")).thenReturn(Optional.of(targetRole));
+        when(accountRepository.findActiveDioceseIdByUsername("datbung107")).thenReturn(Optional.of(dioceseId));
+        when(accountRepository.findActiveDioceseIdByUsername("target")).thenReturn(Optional.of(dioceseId));
+        when(accountManagementAuthorizationHelper.currentActorHighestRoleOrder(any())).thenReturn(200);
+
+        assertThrows(RuntimeException.class, () -> accountRoleService.bulkAssign(
+                request,
+                authentication("datbung107", List.of("ADMIN_DEANERY"), List.of("system.account_role.assign.diocese"))
         ));
     }
 

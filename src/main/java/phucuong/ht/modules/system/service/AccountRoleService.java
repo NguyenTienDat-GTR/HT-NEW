@@ -28,6 +28,7 @@ import phucuong.ht.modules.system.model.response.AccountRoleResponse;
 import phucuong.ht.modules.system.model.response.RoleResponse;
 
 import java.time.OffsetDateTime;
+import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -186,9 +187,13 @@ public class AccountRoleService {
         enforceAssignmentScope(authentication, entity.getAccount(), entity.getRole());
         String targetUsername = entity.getAccount().getUsername();
         Set<String> recipients = toggleNotificationRecipientResolver == null ? Set.of() : toggleNotificationRecipientResolver.byAccount(targetUsername);
+        boolean disablingPrimaryRole = Boolean.TRUE.equals(entity.getStatus()) && Boolean.TRUE.equals(entity.getIsPrimary());
         entity.setStatus(!Boolean.TRUE.equals(entity.getStatus()));
         entity.setUpdatedAt(OffsetDateTime.now());
         entity.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái vai trò tài khoản"));
+        if (disablingPrimaryRole) {
+            promoteHighestActiveRoleAsPrimary(targetUsername, entity.getId(), entity.getUpdatedBy(), entity.getUpdatedAt());
+        }
         notifyUsers(recipients, "ACCOUNT_ROLE_TOGGLED");
         if (toggleNotificationDispatcher != null) {
             toggleNotificationDispatcher.dispatch(recipients, "ACCOUNT_ROLE_TOGGLED", roleLabel(entity.getRole()), Boolean.TRUE.equals(entity.getStatus()), currentUsername(authentication));
@@ -273,6 +278,29 @@ public class AccountRoleService {
                 });
     }
 
+    private void promoteHighestActiveRoleAsPrimary(String username, String disabledAccountRoleId, String actor, OffsetDateTime now) {
+        List<AccountRole> accountRoles = accountRoleRepository.findByAccountUsername(username);
+        accountRoles.stream()
+                .filter(accountRole -> Boolean.TRUE.equals(accountRole.getIsPrimary()))
+                .forEach(accountRole -> {
+                    accountRole.setIsPrimary(Boolean.FALSE);
+                    accountRole.setUpdatedAt(now);
+                    accountRole.setUpdatedBy(actor);
+                });
+        accountRoles.stream()
+                .filter(accountRole -> !disabledAccountRoleId.equals(accountRole.getId()))
+                .filter(accountRole -> Boolean.TRUE.equals(accountRole.getStatus()))
+                .filter(accountRole -> accountRole.getRole() != null)
+                .filter(accountRole -> Boolean.TRUE.equals(accountRole.getRole().getStatus()))
+                .filter(accountRole -> accountRole.getExpiresAt() == null || accountRole.getExpiresAt().isAfter(now))
+                .min(Comparator.comparingInt(accountRole -> roleOrder(accountRole.getRole())))
+                .ifPresent(accountRole -> {
+                    accountRole.setIsPrimary(Boolean.TRUE);
+                    accountRole.setUpdatedAt(now);
+                    accountRole.setUpdatedBy(actor);
+                });
+    }
+
     private boolean canManage(Authentication authentication, Account targetAccount, Role targetRole) {
         try {
             enforceAssignmentScope(authentication, targetAccount, targetRole);
@@ -297,7 +325,7 @@ public class AccountRoleService {
         }
         return roleRepository.findByRoleCodeAndStatusTrue(actorRoleCode)
                 .map(actorRole -> {
-                    Integer actorOrder = actorRole.getDisplayOrder();
+                    Integer actorOrder = actorHierarchyOrder(authentication, actorRoleCode);
                     Integer targetOrder = role.getDisplayOrder();
                     return actorOrder != null && targetOrder != null && targetOrder >= actorOrder;
                 })
@@ -420,14 +448,25 @@ public class AccountRoleService {
     }
 
     private void enforceHierarchy(Authentication authentication, Role targetRole, String actorRoleCode) {
-        Role actorRole = roleRepository.findByRoleCodeAndStatusTrue(actorRoleCode)
-                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy vai trò " + actorRoleCode));
-
-        Integer actorOrder = actorRole.getDisplayOrder();
+        Integer actorOrder = actorHierarchyOrder(authentication, actorRoleCode);
         Integer targetOrder = targetRole.getDisplayOrder();
         if (actorOrder == null || targetOrder == null || targetOrder < actorOrder) {
             throw commonValidationHelper.forbidden("Không thể gán vai trò cao hơn phạm vi của tài khoản hiện tại");
         }
+    }
+
+    private Integer actorHierarchyOrder(Authentication authentication, String fallbackActorRoleCode) {
+        Integer actorOrder = accountManagementAuthorizationHelper.currentActorHighestRoleOrder(authentication);
+        if (actorOrder != null) {
+            return actorOrder;
+        }
+        return roleRepository.findByRoleCodeAndStatusTrue(fallbackActorRoleCode)
+                .map(Role::getDisplayOrder)
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy vai trò " + fallbackActorRoleCode));
+    }
+
+    private int roleOrder(Role role) {
+        return role.getDisplayOrder() == null ? Integer.MAX_VALUE : role.getDisplayOrder();
     }
 
     private boolean hasAuthority(Authentication authentication, String authority) {
