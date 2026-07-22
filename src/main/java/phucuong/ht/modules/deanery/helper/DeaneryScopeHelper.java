@@ -26,36 +26,36 @@ public class DeaneryScopeHelper {
         }
 
         if (!securityUtils.hasAuthority(authentication, DeaneryAccessEvaluator.CREATE_DIOCESE)) {
-            throw commonValidationHelper.forbidden("Tai khoan hien tai khong co quyen tao giao hat");
+            throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền tạo giáo hạt");
         }
 
         UUID activeDioceseId = getRequiredActiveDioceseId(authentication, DeaneryAccessEvaluator.CREATE_DIOCESE);
         if (!activeDioceseId.equals(request.getDioceseId())) {
-            throw commonValidationHelper.forbidden("Khong the tao giao hat ngoai pham vi giao phan hien tai");
+            throw commonValidationHelper.forbidden("Không thể tạo giáo hạt ngoài phạm vi giáo phận hiện tại");
         }
     }
 
     public UUID getRequiredActiveDioceseId(Authentication authentication, String permissionCode) {
         String username = securityUtils.currentUsername(authentication);
         if (!StringUtils.hasText(username)) {
-            throw commonValidationHelper.forbidden("Tai khoan hien tai khong xac dinh duoc ten dang nhap cho quyen " + permissionCode);
+            throw commonValidationHelper.forbidden("Tài khoản hiện tại không xác định được tên đăng nhập cho quyền " + permissionCode);
         }
 
         return accountRepository.findActiveDioceseIdByUsername(username)
                 .orElseThrow(() -> commonValidationHelper.forbidden(
-                        "Tai khoan hien tai khong co pham vi giao phan hop le cho quyen " + permissionCode
+                        "Tài khoản hiện tại không có phạm vi giáo phận hợp lệ cho quyền " + permissionCode
                 ));
     }
 
     public UUID getRequiredActiveDeaneryId(Authentication authentication, String permissionCode) {
         String username = securityUtils.currentUsername(authentication);
         if (!StringUtils.hasText(username)) {
-            throw commonValidationHelper.forbidden("Tai khoan hien tai khong xac dinh duoc ten dang nhap cho quyen " + permissionCode);
+            throw commonValidationHelper.forbidden("Tài khoản hiện tại không xác định được tên đăng nhập cho quyền " + permissionCode);
         }
 
         return accountRepository.findActiveDeaneryIdByUsername(username)
                 .orElseThrow(() -> commonValidationHelper.forbidden(
-                        "Tai khoan hien tai khong co pham vi giao hat hop le cho quyen " + permissionCode
+                        "Tài khoản hiện tại không có phạm vi giáo hạt hợp lệ cho quyền " + permissionCode
                 ));
     }
 }

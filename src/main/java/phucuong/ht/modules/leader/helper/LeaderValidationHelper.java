@@ -31,13 +31,13 @@ public class LeaderValidationHelper {
     public Leader requireExistingLeader(UUID leaderId) {
         validateLeaderId(leaderId);
         return leaderRepository.findById(leaderId)
-                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy leader: " + leaderId));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy Huynh Trưởng: " + leaderId));
     }
 
     public Leader requireExistingLeaderWithParish(UUID leaderId) {
         validateLeaderId(leaderId);
         return leaderRepository.findByIdWithParish(leaderId)
-                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy leader: " + leaderId));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy Huynh Trưởng: " + leaderId));
     }
 
     public Parish requireExistingParish(UUID parishId) {
@@ -69,7 +69,7 @@ public class LeaderValidationHelper {
 
     public void validateCreateEmailUniqueness(String email) {
         if (leaderRepository.existsByEmail(email)) {
-            throw commonValidationHelper.conflict("Email leader đã tồn tại");
+            throw commonValidationHelper.conflict("Email Huynh Trưởng đã tồn tại");
         }
     }
 
@@ -79,21 +79,21 @@ public class LeaderValidationHelper {
         }
 
         if (leaderRepository.existsByEmailAndIdNot(requestedEmail, leaderId)) {
-            throw commonValidationHelper.conflict("Email leader đã tồn tại");
+            throw commonValidationHelper.conflict("Email Huynh Trưởng đã tồn tại");
         }
     }
 
     public LeaderNameParts splitFullName(String fullName) {
         String normalized = commonValidationHelper.normalizeRequiredText(fullName);
         if (normalized == null || normalized.isBlank()) {
-            throw commonValidationHelper.validationError("Họ và tên leader là bắt buộc");
+            throw commonValidationHelper.validationError("Họ và tên Huynh Trưởng là bắt buộc");
         }
 
         String[] parts = Arrays.stream(normalized.split("\\s+"))
                 .filter(part -> !part.isBlank())
                 .toArray(String[]::new);
         if (parts.length == 0) {
-            throw commonValidationHelper.validationError("Họ và tên leader là bắt buộc");
+            throw commonValidationHelper.validationError("Họ và tên Huynh Trưởng là bắt buộc");
         }
 
         String firstName = parts[parts.length - 1];

@@ -25,10 +25,10 @@ public class LeaderScopeHelper {
 
     public void enforceCreateScope(LeaderCreateRequest request, Authentication authentication) {
         if (request == null || request.getParishId() == null) {
-            throw commonValidationHelper.validationError("parishId là bắt buộc khi tạo leader");
+            throw commonValidationHelper.validationError("parishId là bắt buộc khi tạo Huynh Trưởng");
         }
         if (!hasAnyCreateAuthority(authentication)) {
-            throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền tạo leader");
+            throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền tạo Huynh Trưởng");
         }
 
         String username = requireUsername(authentication);
@@ -61,7 +61,7 @@ public class LeaderScopeHelper {
         UUID activeParishId = getRequiredActiveParishId(authentication, LeaderAccessEvaluator.UPDATE_PARISH);
         UUID currentParishId = existingLeader.getParish().getId();
         if (!activeParishId.equals(currentParishId) || !activeParishId.equals(requestedParishId)) {
-            throw commonValidationHelper.forbidden("Không thể chuyển leader ra ngoài giáo xứ hiện tại");
+            throw commonValidationHelper.forbidden("Không thể chuyển Huynh Trưởng ra ngoài giáo xứ hiện tại");
         }
     }
 
@@ -102,7 +102,7 @@ public class LeaderScopeHelper {
 
     private void requireSameScope(UUID actorScopeId, UUID targetScopeId, String scopeName) {
         if (!actorScopeId.equals(targetScopeId)) {
-            throw commonValidationHelper.forbidden("Không thể tạo leader ngoài phạm vi " + scopeName + " hiện tại");
+            throw commonValidationHelper.forbidden("Không thể tạo Huynh Trưởng ngoài phạm vi " + scopeName + " hiện tại");
         }
     }
 }

@@ -80,7 +80,7 @@ public class RequestBindingAdvice {
             if (filters.size() == 1) {
                 return filters.get(0);
             }
-            throw new IllegalArgumentException("filters chi duoc truyen mot JSON object");
+            throw new IllegalArgumentException("filters chỉ ược truyền một JSON object");
         }
         return objectMapper.readValue(normalized, FILTER_MAP_TYPE);
     }

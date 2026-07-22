@@ -28,13 +28,7 @@ import phucuong.ht.modules.system.model.response.AccountRoleResponse;
 import phucuong.ht.modules.system.model.response.RoleResponse;
 
 import java.time.OffsetDateTime;
-import java.util.Comparator;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -141,9 +135,9 @@ public class AccountRoleService {
         Set<String> assignedRoleCodes = targetAccount == null
                 ? Set.of()
                 : accountRoleRepository.findByAccountUsername(targetAccount.getUsername()).stream()
-                        .filter(accountRole -> accountRole.getRole() != null)
-                        .map(accountRole -> accountRole.getRole().getRoleCode())
-                        .collect(java.util.stream.Collectors.toSet());
+                .filter(accountRole -> accountRole.getRole() != null)
+                .map(accountRole -> accountRole.getRole().getRoleCode())
+                .collect(java.util.stream.Collectors.toSet());
         return roleRepository.findAll().stream()
                 .filter(role -> Boolean.TRUE.equals(role.getStatus()))
                 .filter(role -> !assignedRoleCodes.contains(role.getRoleCode()))
@@ -367,11 +361,11 @@ public class AccountRoleService {
         if (hasAuthority(authentication, "system.account_role.assign.deanery")) {
             enforceScopedSystemRoleAssignment(ROLE_ADMIN_DEANERY, targetRole);
             UUID actorDeaneryId = accountRepository.findActiveDeaneryIdByUsername(currentUsername(authentication))
-                    .orElseThrow(() -> commonValidationHelper.forbidden("Tài khoản hiện tại không có scope giáo hạt hợp lệ"));
+                    .orElseThrow(() -> commonValidationHelper.forbidden("Tài khoản hiện tại không có phạm vi giáo hạt hợp lệ"));
             UUID targetDeaneryId = accountRepository.findActiveDeaneryIdByUsername(targetAccount.getUsername())
-                    .orElseThrow(() -> commonValidationHelper.forbidden("Account đích chưa có scope giáo hạt hợp lệ để gán vai trò"));
+                    .orElseThrow(() -> commonValidationHelper.forbidden("Tài khoản đích chưa có phạm vi giáo hạt hợp lệ để gán vai trò"));
             if (!actorDeaneryId.equals(targetDeaneryId)) {
-                throw commonValidationHelper.forbidden("Không thể gán vai trò cho account ngoài giáo hạt hiện tại");
+                throw commonValidationHelper.forbidden("Không thể gán vai trò cho tài khoản ngoài giáo hạt hiện tại");
             }
             enforceHierarchy(authentication, targetRole, ROLE_ADMIN_DEANERY);
             return;
@@ -380,11 +374,11 @@ public class AccountRoleService {
         if (hasAuthority(authentication, "system.account_role.assign.parish")) {
             enforceScopedSystemRoleAssignment(ROLE_ADMIN_PARISH, targetRole);
             UUID actorParishId = accountRepository.findActiveParishIdByUsername(currentUsername(authentication))
-                    .orElseThrow(() -> commonValidationHelper.forbidden("Tài khoản hiện tại không có scope giáo xứ hợp lệ"));
+                    .orElseThrow(() -> commonValidationHelper.forbidden("Tài khoản hiện tại không có phạm vi giáo xứ hợp lệ"));
             UUID targetParishId = accountRepository.findActiveParishIdByUsername(targetAccount.getUsername())
-                    .orElseThrow(() -> commonValidationHelper.forbidden("Account đích chưa có scope giáo xứ hợp lệ để gán vai trò"));
+                    .orElseThrow(() -> commonValidationHelper.forbidden("Tài khoản đích chưa có phạm vi giáo xứ hợp lệ để gán vai trò"));
             if (!actorParishId.equals(targetParishId)) {
-                throw commonValidationHelper.forbidden("Không thể gán vai trò cho account ngoài giáo xứ hiện tại");
+                throw commonValidationHelper.forbidden("Không thể gán vai trò cho tài khoản ngoài giáo xứ hiện tại");
             }
             enforceHierarchy(authentication, targetRole, ROLE_ADMIN_PARISH);
             return;
@@ -395,7 +389,7 @@ public class AccountRoleService {
 
     private void enforceScopedSystemRoleAssignment(String actorRoleCode, Role targetRole) {
         if (!canAssignSystemRole(actorRoleCode, targetRole)) {
-            throw commonValidationHelper.forbidden("Khong the gan vai tro he thong ngoai pham vi phan cap");
+            throw commonValidationHelper.forbidden("Không thể gán vai trò ngoài phạm vi phân cấp");
         }
     }
 
@@ -411,13 +405,13 @@ public class AccountRoleService {
             throw commonValidationHelper.forbidden("SUPER_ADMIN chỉ được gán vai trò SUPER_ADMIN, ADMIN_DIOCESE hoặc vai trò custom do super-admin tạo");
         }
         if (!isSuperAdminManagedAccount(targetAccount, targetRole)) {
-            throw commonValidationHelper.forbidden("SUPER_ADMIN chỉ được gán vai trò cho account SUPER_ADMIN, ADMIN_DIOCESE hoặc account có role custom do super-admin tạo");
+            throw commonValidationHelper.forbidden("SUPER_ADMIN chỉ được gán vai trò cho tài khaonr SUPER_ADMIN, ADMIN_DIOCESE hoặc tài khoản có vai trò t tạo do super-admin tạo");
         }
         if (ROLE_SUPER_ADMIN.equals(targetRole.getRoleCode()) && !isRootAccount(targetAccount)) {
-            throw commonValidationHelper.forbidden("Vai trò SUPER_ADMIN chỉ được gán cho account không trực thuộc giáo phận/giáo hạt/giáo xứ");
+            throw commonValidationHelper.forbidden("Vai trò SUPER_ADMIN chỉ được gán cho tài khoản không trực thuộc giáo phận/giáo hạt/giáo xứ");
         }
         if (ROLE_ADMIN_DIOCESE.equals(targetRole.getRoleCode()) && targetAccount.getDiocese() == null) {
-            throw commonValidationHelper.forbidden("Vai trò ADMIN_DIOCESE chỉ được gán cho account trực thuộc giáo phận");
+            throw commonValidationHelper.forbidden("Vai trò ADMIN_DIOCESE chỉ được gán cho tài khoản trực thuộc giáo phận");
         }
     }
 

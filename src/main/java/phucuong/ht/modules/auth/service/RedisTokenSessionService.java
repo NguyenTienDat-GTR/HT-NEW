@@ -18,13 +18,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HexFormat;
-import java.util.List;
-import java.util.Objects;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 @Service
 @Slf4j
@@ -180,12 +174,12 @@ public class RedisTokenSessionService {
                 throw invalidSession("Refresh token đã được sử dụng hoặc không còn hiệu lực");
             }
         } catch (JsonProcessingException exception) {
-            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode.INTERNAL_ERROR, "Khong the luu du lieu phien dang nhap");
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode.INTERNAL_ERROR, "Không thể lưu dữ liệu phiên đăng nhập");
         } catch (ApiException exception) {
             throw exception;
         } catch (RuntimeException exception) {
             log.warn("Atomic refresh-token rotation failed for session {}", sessionId, exception);
-            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode.INTERNAL_ERROR, "He thong phien dang nhap tam thoi khong kha dung");
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode.INTERNAL_ERROR, "Hệ thống phiên đăng nhập tạm thời không khả dụng");
         }
     }
 
@@ -246,7 +240,7 @@ public class RedisTokenSessionService {
         TokenSessionState sessionState = getSession(sessionId);
         if (sessionState == null || isExpired(sessionState)) {
             revokeSession(sessionId);
-            throw invalidSession("Phien dang nhap khong con hieu luc");
+            throw invalidSession("Phiên đăng nhập không còn hiệu lực");
         }
         return sessionState;
     }
@@ -270,7 +264,7 @@ public class RedisTokenSessionService {
             return new StoredSession(rawSession, sessionState);
         } catch (JsonProcessingException exception) {
             deleteSessionKeys(sessionId, null);
-            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode.INTERNAL_ERROR, "Khong the doc du lieu phien dang nhap");
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode.INTERNAL_ERROR, "Không thể đọc dữ liệu phiên đăng nhập");
         }
     }
 
@@ -289,9 +283,9 @@ public class RedisTokenSessionService {
             );
             stringRedisTemplate.expire(userSessionsKey(sessionState.getUsername()), ttl);
         } catch (JsonProcessingException exception) {
-            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode.INTERNAL_ERROR, "Khong the luu du lieu phien dang nhap");
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode.INTERNAL_ERROR, "Không thể lưu dữ liệu phiên đăng nhập");
         } catch (RuntimeException exception) {
-            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode.INTERNAL_ERROR, "He thong phien dang nhap tam thoi khong kha dung");
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode.INTERNAL_ERROR, "Hệ thống phiên đăng nhập tạm thời không khả dụng");
         }
     }
 
@@ -303,7 +297,7 @@ public class RedisTokenSessionService {
                     score(touchedAt)
             );
         } catch (RuntimeException exception) {
-            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode.INTERNAL_ERROR, "He thong phien dang nhap tam thoi khong kha dung");
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode.INTERNAL_ERROR, "Hệ thống phiên đăng nhập tạm thời không khả dụng");
         }
     }
 
@@ -328,7 +322,7 @@ public class RedisTokenSessionService {
             );
             return persistedScore == null ? score(evictionInstant(sessionState)) : persistedScore;
         } catch (RuntimeException exception) {
-            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode.INTERNAL_ERROR, "He thong phien dang nhap tam thoi khong kha dung");
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode.INTERNAL_ERROR, "Hệ thống phiên đăng nhập tạm thời không khả dụng");
         }
     }
 
@@ -368,7 +362,7 @@ public class RedisTokenSessionService {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             return HexFormat.of().formatHex(digest.digest(refreshToken.getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException exception) {
-            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode.INTERNAL_ERROR, "Khong the ma hoa refresh token");
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode.INTERNAL_ERROR, "Không thể mã hóa refresh token");
         }
     }
 
@@ -376,7 +370,7 @@ public class RedisTokenSessionService {
         try {
             return stringRedisTemplate.opsForValue().get(key);
         } catch (RuntimeException exception) {
-            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode.INTERNAL_ERROR, "He thong phien dang nhap tam thoi khong kha dung");
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode.INTERNAL_ERROR, "Hệ thống phiên đăng nhập tạm thời không khả dụng");
         }
     }
 

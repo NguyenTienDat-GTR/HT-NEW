@@ -30,11 +30,7 @@ import phucuong.ht.modules.rankHistory.model.response.RankHistoryResponse;
 import phucuong.ht.modules.rankHistory.repository.RankHistoryRepository;
 
 import java.time.OffsetDateTime;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -85,14 +81,14 @@ public class LeaderService {
             leaderRepository.save(leader);
             return toLeaderResponse(leaderValidationHelper.requireExistingLeaderWithParish(leader.getId()));
         } catch (DataIntegrityViolationException exception) {
-            throw new ApiException(HttpStatus.CONFLICT, errorCode.CONFLICT, "Dữ liệu leader bị trùng hoặc xung đột với dữ liệu hiện có");
+            throw new ApiException(HttpStatus.CONFLICT, errorCode.CONFLICT, "Dữ liệu Huynh Trưởng bị trùng hoặc xung đột với dữ liệu hiện có");
         }
     }
 
     @Cacheable(cacheNames = CacheNames.LEADER_LIST, key = "@cacheScopeKeyHelper.listKey(#authentication, #request)")
     public Page<LeaderResponse> findAll(BaseSearchRequest request, Authentication authentication) {
         if (!hasReadAuthority(authentication)) {
-            throw new ApiException(HttpStatus.FORBIDDEN, errorCode.ACCESS_DENIED, "Tài khoản hiện tại không có quyền xem danh sách leader");
+            throw new ApiException(HttpStatus.FORBIDDEN, errorCode.ACCESS_DENIED, "Tài khoản hiện tại không có quyền xem danh sách Huynh Trưởng");
         }
 
         BaseSearchRequest scopedRequest = copyRequest(request);
@@ -161,7 +157,7 @@ public class LeaderService {
             leaderRepository.update(id, request, auditActor);
             return toLeaderResponse(leaderValidationHelper.requireExistingLeaderWithParish(id));
         } catch (DataIntegrityViolationException exception) {
-            throw new ApiException(HttpStatus.CONFLICT, errorCode.CONFLICT, "Dữ liệu leader bị trùng hoặc xung đột với dữ liệu hiện có");
+            throw new ApiException(HttpStatus.CONFLICT, errorCode.CONFLICT, "Dữ liệu Huynh Trưởng bị trùng hoặc xung đột với dữ liệu hiện có");
         }
     }
 

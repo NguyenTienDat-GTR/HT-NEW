@@ -33,13 +33,7 @@ import phucuong.ht.modules.system.model.response.AccountResponse;
 import java.security.SecureRandom;
 import java.text.Normalizer;
 import java.time.OffsetDateTime;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -73,7 +67,7 @@ public class AccountManagementService {
         String primaryRoleCode = resolveCreatePrimaryRole(request, roleCodes);
         List<Role> roles = roleCodes.stream()
                 .map(roleCode -> roleRepository.findByRoleCodeAndStatusTrue(roleCode)
-                        .orElseThrow(() -> validation.notFound("Không tìm thấy role " + roleCode)))
+                        .orElseThrow(() -> validation.notFound("Không tìm thấy vai trò " + roleCode)))
                 .toList();
         Role primaryRole = roles.stream()
                 .filter(role -> primaryRoleCode.equals(role.getRoleCode()))
@@ -95,7 +89,7 @@ public class AccountManagementService {
         String usernameBase;
         if (superAdminRole) {
             if (request.getLeaderId() != null || request.getDioceseId() != null) {
-                throw validation.validationError("Tai khoan SUPER_ADMIN khong gan leader hoac giao phan");
+                throw validation.validationError("Tài khoản SUPER_ADMIN không gắn Huynh Trưởng hoặc giáo phận");
             }
             recipientEmail = requireCredentialEmail(request.getCredentialEmail());
             recipientName = "Super admin";
@@ -105,10 +99,10 @@ public class AccountManagementService {
             requireUnitOperational(UnitType.DIOCESE, diocese.getId());
             account.setDiocese(diocese);
             if (accountRepository.existsAdminDioceseByDioceseId(diocese.getId())) {
-                throw validation.conflict("Mỗi giáo phận chỉ được có một account ADMIN_DIOCESE");
+                throw validation.conflict("Mỗi giáo phận chỉ được có một tài khoản ADMIN_DIOCESE");
             }
             if (request.getLeaderId() != null) {
-                credentialLeader = requireLeader(request.getLeaderId(), "Không tìm thấy leader");
+                credentialLeader = requireLeader(request.getLeaderId(), "Không tìm thấy Huynh Trưởng");
                 requireLeaderInsideDiocese(credentialLeader, diocese.getId());
                 requireUnitOperational(UnitType.PARISH, credentialLeader.getParish().getId());
                 account.setLeader(credentialLeader);
@@ -116,7 +110,7 @@ public class AccountManagementService {
                 recipientName = fullName(credentialLeader);
                 usernameBase = generateLeaderUsernameBase(credentialLeader);
                 if (request.getCredentialEmail() != null) {
-                    throw validation.validationError("credentialEmail chỉ dùng khi ADMIN_DIOCESE không gắn leader");
+                    throw validation.validationError("credentialEmail chỉ dùng khi ADMIN_DIOCESE không gắn Huynh Trưởng");
                 }
             } else {
                 recipientEmail = requireCredentialEmail(request.getCredentialEmail());
@@ -125,9 +119,9 @@ public class AccountManagementService {
             }
         } else {
             if (request.getDioceseId() != null || request.getCredentialEmail() != null) {
-                throw validation.validationError("Account không phải ADMIN_DIOCESE không dùng dioceseId hoặc credentialEmail");
+                throw validation.validationError("Tài khoản không phải ADMIN_DIOCESE không dùng dioceseId hoặc credentialEmail");
             }
-            credentialLeader = requireLeader(request.getLeaderId(), "leaderId là bắt buộc với account không phải ADMIN_DIOCESE");
+            credentialLeader = requireLeader(request.getLeaderId(), "leaderId là bắt buộc với tài khoản không phải ADMIN_DIOCESE");
             requireUnitOperational(UnitType.PARISH, credentialLeader.getParish().getId());
             account.setLeader(credentialLeader);
             recipientEmail = requireCredentialEmail(credentialLeader.getEmail());
@@ -217,10 +211,11 @@ public class AccountManagementService {
     private Leader requireLeader(UUID id, String missingMessage) {
         if (id == null) throw validation.validationError(missingMessage);
         Leader leader = leaderRepository.findByIdWithParish(id)
-                .orElseThrow(() -> validation.notFound("Không tìm thấy leader"));
-        if (!Boolean.TRUE.equals(leader.getStatus())) throw validation.validationError("Leader phải đang hoạt động");
+                .orElseThrow(() -> validation.notFound("Không tìm thấy Huynh Trưởng"));
+        if (!Boolean.TRUE.equals(leader.getStatus()))
+            throw validation.validationError("Huynh Trưởng phải đang hoạt động");
         if (leader.getBirthDate() == null || leader.getParish() == null) {
-            throw validation.validationError("Leader phải có ngày sinh và giáo xứ để sinh username");
+            throw validation.validationError("Huynh Trưởng phải có ngày sinh và giáo xứ để sinh username");
         }
         return leader;
     }
@@ -254,14 +249,14 @@ public class AccountManagementService {
     private void requireLeaderInsideDiocese(Leader leader, UUID dioceseId) {
         UUID leaderDioceseId = leader.getParish().getDeanery().getDiocese().getId();
         if (!dioceseId.equals(leaderDioceseId)) {
-            throw validation.validationError("Leader phải thuộc giáo phận của account ADMIN_DIOCESE");
+            throw validation.validationError("Huynh Trưởng phải thuộc giáo phận của tài khoản ADMIN_DIOCESE");
         }
     }
 
     private String generateLeaderUsernameBase(Leader leader) {
         String base = normalize(leader.getFirstName()) + normalize(leader.getParish().getName())
                 + leader.getBirthDate().getDayOfMonth() + leader.getBirthDate().getMonthValue();
-        if (base.isBlank()) throw validation.validationError("Không thể sinh username từ thông tin leader");
+        if (base.isBlank()) throw validation.validationError("Không thể sinh username từ thông tin Huynh Trưởng");
         return base;
     }
 
@@ -270,7 +265,7 @@ public class AccountManagementService {
         String localPart = atIndex > 0 ? email.substring(0, atIndex) : email;
         String base = normalize(localPart);
         if (base.isBlank()) {
-            throw validation.validationError("Khong the sinh username tu credentialEmail");
+            throw validation.validationError("Không thể sinh username từ credentialEmail");
         }
         return base;
     }
@@ -420,13 +415,16 @@ public class AccountManagementService {
                     if (response.getRoleCodes() == null || !response.getRoleCodes().contains(value)) return false;
                 }
                 case "diocese.id", "dioceseId" -> {
-                    if (response.getDioceseId() == null || !value.equals(response.getDioceseId().toString())) return false;
+                    if (response.getDioceseId() == null || !value.equals(response.getDioceseId().toString()))
+                        return false;
                 }
                 case "deanery.id", "deaneryId" -> {
-                    if (response.getDeaneryId() == null || !value.equals(response.getDeaneryId().toString())) return false;
+                    if (response.getDeaneryId() == null || !value.equals(response.getDeaneryId().toString()))
+                        return false;
                 }
                 case "parish.id", "parishId" -> {
-                    if (response.getParishId() == null || !value.equals(response.getParishId().toString())) return false;
+                    if (response.getParishId() == null || !value.equals(response.getParishId().toString()))
+                        return false;
                 }
                 default -> {
                     return false;

@@ -72,7 +72,7 @@ public class ExecutiveBoardAssignmentService {
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người gán chức vụ");
 
         Leader leader = leaderRepository.findByIdWithParish(request.getLeaderId())
-                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy leader " + request.getLeaderId()));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy Huynh Trưởng " + request.getLeaderId()));
         Position position = positionRepository.findById(request.getPositionCode())
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy chức vụ " + request.getPositionCode()));
 
@@ -163,7 +163,7 @@ public class ExecutiveBoardAssignmentService {
         LocalDate targetStartDate = request.getStartDate() == null ? existing.getStartDate() : request.getStartDate();
         validateDateRange(targetStartDate, request.getEndDate());
         Leader leader = leaderRepository.findByIdWithParish(targetLeaderId)
-                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy leader " + targetLeaderId));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy Huynh Trưởng " + targetLeaderId));
         Position position = positionRepository.findById(targetPositionCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy chức vụ " + targetPositionCode));
 
@@ -230,7 +230,7 @@ public class ExecutiveBoardAssignmentService {
 
     private void enforceLeaderMembership(Leader leader, UnitType unitType, UUID unitId) {
         if (leader.getParish() == null) {
-            throw commonValidationHelper.validationError("Leader chưa thuộc giáo xứ hợp lệ");
+            throw commonValidationHelper.validationError("Huynh Trưởng chưa thuộc giáo xứ hợp lệ");
         }
 
         boolean matches = switch (unitType) {
@@ -243,7 +243,7 @@ public class ExecutiveBoardAssignmentService {
         };
 
         if (!matches) {
-            throw commonValidationHelper.forbidden("Leader không thuộc đúng đơn vị của chức vụ");
+            throw commonValidationHelper.forbidden("Huynh Trưởng không thuộc đúng đơn vị của chức vụ");
         }
     }
 
@@ -254,7 +254,7 @@ public class ExecutiveBoardAssignmentService {
         switch (unitType) {
             case DIOCESE -> {
                 if (!securityUtils.hasAuthority(authentication, dioceseAuthority)) {
-                    throw commonValidationHelper.forbidden("Khong co quyen " + action + " phan cong cap giao phan");
+                    throw commonValidationHelper.forbidden("Không có quyền " + action + " phân công cấp giáo phận");
                 }
                 UUID activeDioceseId = accountScopeValidationHelper.requireActiveDioceseId(authentication, dioceseAuthority);
                 if (!activeDioceseId.equals(scopeData.diocese().getId())) {
@@ -270,7 +270,7 @@ public class ExecutiveBoardAssignmentService {
                     return;
                 }
                 if (!securityUtils.hasAuthority(authentication, deaneryAuthority)) {
-                    throw commonValidationHelper.forbidden("Khong co quyen " + action + " phan cong cap giao hat");
+                    throw commonValidationHelper.forbidden("Không có quyền " + action + " phân công cấp giáo hạt");
                 }
                 UUID activeDeaneryId = accountScopeValidationHelper.requireActiveDeaneryId(authentication, deaneryAuthority);
                 if (!activeDeaneryId.equals(scopeData.deanery().getId())) {
@@ -293,7 +293,7 @@ public class ExecutiveBoardAssignmentService {
                     return;
                 }
                 if (!securityUtils.hasAuthority(authentication, parishAuthority)) {
-                    throw commonValidationHelper.forbidden("Khong co quyen " + action + " phan cong cap giao xu");
+                    throw commonValidationHelper.forbidden("Không có quyền " + action + " phân công cấp giáo xứ");
                 }
                 UUID activeParishId = accountScopeValidationHelper.requireActiveParishId(authentication, parishAuthority);
                 if (!activeParishId.equals(scopeData.parish().getId())) {
@@ -305,7 +305,7 @@ public class ExecutiveBoardAssignmentService {
 
     private void enforceUniqueness(UnitType unitType, UUID unitId, String positionCode, UUID excludedId) {
         if (assignmentRepository.existsActiveCurrentAssignment(unitType, unitId, positionCode, excludedId)) {
-            throw commonValidationHelper.conflict("Mỗi chức vụ chỉ được gán cho một leader trong cùng đơn vị");
+            throw commonValidationHelper.conflict("Mỗi chức vụ chỉ được gán cho một Huynh Trưởng trong cùng đơn vị");
         }
     }
 

@@ -6,11 +6,7 @@ import org.springframework.stereotype.Service;
 import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.common.validation.CommonValidationHelper;
 
-import java.util.Collection;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 @Service
 public class UnitOperationalStatusService {
@@ -29,30 +25,30 @@ public class UnitOperationalStatusService {
             return false;
         }
         Number count = (Number) entityManager.createNativeQuery("""
-                select count(1)
-                from account a
-                left join diocese ad on ad.id = a.diocese_id
-                left join deanery ade on ade.id = a.deanery_id
-                left join diocese addi on addi.id = ade.diocese_id
-                left join parish ap on ap.id = a.parish_id
-                left join deanery apde on apde.id = ap.deanery_id
-                left join diocese apdi on apdi.id = apde.diocese_id
-                left join leader l on l.id = a.leader_id
-                left join parish lp on lp.id = l.parish_id
-                left join deanery lpde on lpde.id = lp.deanery_id
-                left join diocese lpdi on lpdi.id = lpde.diocese_id
-                where a.username = :username
-                  and a.status = true
-                  and (
-                    (a.diocese_id is not null and coalesce(ad.status, false) = false)
-                    or (a.diocese_id is null and a.deanery_id is not null
-                        and (coalesce(ade.status, false) = false or coalesce(addi.status, false) = false))
-                    or (a.diocese_id is null and a.deanery_id is null and a.parish_id is not null
-                        and (coalesce(ap.status, false) = false or coalesce(apde.status, false) = false or coalesce(apdi.status, false) = false))
-                    or (a.diocese_id is null and a.deanery_id is null and a.parish_id is null and a.leader_id is not null
-                        and (coalesce(lp.status, false) = false or coalesce(lpde.status, false) = false or coalesce(lpdi.status, false) = false))
-                  )
-                """)
+                        select count(1)
+                        from account a
+                        left join diocese ad on ad.id = a.diocese_id
+                        left join deanery ade on ade.id = a.deanery_id
+                        left join diocese addi on addi.id = ade.diocese_id
+                        left join parish ap on ap.id = a.parish_id
+                        left join deanery apde on apde.id = ap.deanery_id
+                        left join diocese apdi on apdi.id = apde.diocese_id
+                        left join leader l on l.id = a.leader_id
+                        left join parish lp on lp.id = l.parish_id
+                        left join deanery lpde on lpde.id = lp.deanery_id
+                        left join diocese lpdi on lpdi.id = lpde.diocese_id
+                        where a.username = :username
+                          and a.status = true
+                          and (
+                            (a.diocese_id is not null and coalesce(ad.status, false) = false)
+                            or (a.diocese_id is null and a.deanery_id is not null
+                                and (coalesce(ade.status, false) = false or coalesce(addi.status, false) = false))
+                            or (a.diocese_id is null and a.deanery_id is null and a.parish_id is not null
+                                and (coalesce(ap.status, false) = false or coalesce(apde.status, false) = false or coalesce(apdi.status, false) = false))
+                            or (a.diocese_id is null and a.deanery_id is null and a.parish_id is null and a.leader_id is not null
+                                and (coalesce(lp.status, false) = false or coalesce(lpde.status, false) = false or coalesce(lpdi.status, false) = false))
+                          )
+                        """)
                 .setParameter("username", username)
                 .getSingleResult();
         return count.longValue() > 0;
@@ -60,7 +56,7 @@ public class UnitOperationalStatusService {
 
     public void requireAccountWritable(String username) {
         if (isAccountUnitLocked(username)) {
-            throw validationHelper.forbidden("Tai khoan thuoc don vi dang bi khoa, chi duoc dang nhap va doc thong bao");
+            throw validationHelper.forbidden("Tài khoản thuộc đơn vị đang bị khóa, chỉ được đăng nhập và đọc thông báo");
         }
     }
 
@@ -93,13 +89,13 @@ public class UnitOperationalStatusService {
 
     public void requireUnitOperational(UnitType unitType, UUID unitId) {
         if (!isUnitOperational(unitType, unitId)) {
-            throw validationHelper.forbidden("Don vi hoac don vi cha dang bi khoa, khong the thuc hien thao tac ghi");
+            throw validationHelper.forbidden("Đơn vị hoặc đơn vị cha đang bị khóa, không thể thực hiện thao tác ghi");
         }
     }
 
     public void requireUnitToggleAllowed(UnitType unitType, UUID unitId) {
         if (!areAncestorsOperational(unitType, unitId)) {
-            throw validationHelper.forbidden("Phai bat lai don vi cha truoc khi doi trang thai don vi con");
+            throw validationHelper.forbidden("Phải bật lại đơn vị cha trước khi đổi trạng thái đơn vị con");
         }
     }
 
@@ -109,33 +105,33 @@ public class UnitOperationalStatusService {
         }
         @SuppressWarnings("unchecked")
         List<Object> rows = entityManager.createNativeQuery("""
-                select distinct a.username
-                from account a
-                left join deanery ade on ade.id = a.deanery_id
-                left join parish ap on ap.id = a.parish_id
-                left join deanery apde on apde.id = ap.deanery_id
-                left join leader l on l.id = a.leader_id
-                left join parish lp on lp.id = l.parish_id
-                left join deanery lpde on lpde.id = lp.deanery_id
-                where a.status = true
-                  and (
-                    (:unitType = 'DIOCESE' and (
-                        a.diocese_id = :unitId
-                        or ade.diocese_id = :unitId
-                        or apde.diocese_id = :unitId
-                        or lpde.diocese_id = :unitId
-                    ))
-                    or (:unitType = 'DEANERY' and (
-                        a.deanery_id = :unitId
-                        or ap.deanery_id = :unitId
-                        or lp.deanery_id = :unitId
-                    ))
-                    or (:unitType = 'PARISH' and (
-                        a.parish_id = :unitId
-                        or lp.id = :unitId
-                    ))
-                  )
-                """)
+                        select distinct a.username
+                        from account a
+                        left join deanery ade on ade.id = a.deanery_id
+                        left join parish ap on ap.id = a.parish_id
+                        left join deanery apde on apde.id = ap.deanery_id
+                        left join leader l on l.id = a.leader_id
+                        left join parish lp on lp.id = l.parish_id
+                        left join deanery lpde on lpde.id = lp.deanery_id
+                        where a.status = true
+                          and (
+                            (:unitType = 'DIOCESE' and (
+                                a.diocese_id = :unitId
+                                or ade.diocese_id = :unitId
+                                or apde.diocese_id = :unitId
+                                or lpde.diocese_id = :unitId
+                            ))
+                            or (:unitType = 'DEANERY' and (
+                                a.deanery_id = :unitId
+                                or ap.deanery_id = :unitId
+                                or lp.deanery_id = :unitId
+                            ))
+                            or (:unitType = 'PARISH' and (
+                                a.parish_id = :unitId
+                                or lp.id = :unitId
+                            ))
+                          )
+                        """)
                 .setParameter("unitType", unitType.name())
                 .setParameter("unitId", unitId)
                 .getResultList();

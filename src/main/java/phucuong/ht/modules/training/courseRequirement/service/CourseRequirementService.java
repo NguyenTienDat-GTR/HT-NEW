@@ -57,7 +57,7 @@ public class CourseRequirementService {
             throw commonValidationHelper.validationError("courseType là bắt buộc");
         }
 
-        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tạo requirement");
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tạo yêu cầu");
         OffsetDateTime now = OffsetDateTime.now();
         CourseRequirement requirement = new CourseRequirement();
         requirement.setRequirementCode(request.getRequirementCode());
@@ -86,7 +86,7 @@ public class CourseRequirementService {
             UUID deaneryId = accountScopeValidationHelper.requireActiveDeaneryId(authentication, CourseRequirementAccessEvaluator.READ_DEANERY);
             scopedRequest.getFilters().put(DEANERY_FILTER_FIELD, deaneryId);
         } else {
-            throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền xem requirement");
+            throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền xem yêu cầu");
         }
 
         Page<CourseRequirement> page = courseRequirementRepository.findAll(scopedRequest);
@@ -99,7 +99,7 @@ public class CourseRequirementService {
     @Cacheable(cacheNames = CacheNames.COURSE_REQUIREMENT_DETAIL, key = "@cacheScopeKeyHelper.detailKey(#authentication, #requirementCode)")
     public CourseRequirementResponse findById(String requirementCode, Authentication authentication) {
         return toResponse(courseRequirementRepository.findByCodeWithScope(requirementCode)
-                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy requirement " + requirementCode)));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy yêu cầu " + requirementCode)));
     }
 
     @Caching(evict = {
@@ -109,7 +109,7 @@ public class CourseRequirementService {
     @Transactional
     public CourseRequirementResponse update(String requirementCode, CourseRequirementUpdateRequest request, Authentication authentication) {
         CourseRequirement requirement = courseRequirementRepository.findByCodeWithScope(requirementCode)
-                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy requirement " + requirementCode));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy yêu cầu " + requirementCode));
         CourseType courseType = request.getCourseType() == null ? requirement.getCourseType() : request.getCourseType();
         requireUpdateScope(authentication, requirement, courseType);
         if (request.getRequirementName() != null) {
@@ -128,7 +128,7 @@ public class CourseRequirementService {
             requirement.setRequiredYearsActive(request.getRequiredYearsActive());
         }
         requirement.setUpdatedAt(OffsetDateTime.now());
-        requirement.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật requirement"));
+        requirement.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật yêu cầu"));
         applyOwnerScope(requirement, courseType, authentication);
         return toResponse(requirement);
     }
@@ -139,7 +139,7 @@ public class CourseRequirementService {
     })
     public CourseRequirementResponse toggleStatus(String requirementCode, StatusToggleRequest request, Authentication authentication) {
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
-        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái requirement");
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái yêu cầu");
         courseRequirementRepository.toggleStatus(requirementCode, actor);
         return findById(requirementCode, authentication);
     }
@@ -166,7 +166,7 @@ public class CourseRequirementService {
                     CourseRequirementAccessEvaluator.UPDATE_DEANERY
             );
             if (requirement.getDeanery() == null || !activeDeaneryId.equals(requirement.getDeanery().getId())) {
-                throw commonValidationHelper.forbidden("Khong the cap nhat requirement ngoai giao hat hien tai");
+                throw commonValidationHelper.forbidden("Không thể cập nhật yêu cầu ngoài giáo hạt hiện tại");
             }
         } else {
             requireAuthority(authentication, CourseRequirementAccessEvaluator.UPDATE_DIOCESE);
@@ -175,7 +175,7 @@ public class CourseRequirementService {
                     CourseRequirementAccessEvaluator.UPDATE_DIOCESE
             );
             if (requirement.getDiocese() == null || !activeDioceseId.equals(requirement.getDiocese().getId())) {
-                throw commonValidationHelper.forbidden("Khong the cap nhat requirement ngoai giao phan hien tai");
+                throw commonValidationHelper.forbidden("Không thể cập nhật yêu cầu ngoài giáo phận hiện tại");
             }
         }
 
@@ -191,7 +191,7 @@ public class CourseRequirementService {
             );
             Deanery targetDeanery = deaneryRepository.getRequired(targetDeaneryId);
             if (targetDeanery.getDiocese() == null || !sourceDioceseId.equals(targetDeanery.getDiocese().getId())) {
-                throw commonValidationHelper.forbidden("Khong the chuyen requirement sang giao hat ngoai giao phan so huu");
+                throw commonValidationHelper.forbidden("Không thể chuyenr yêu cầu sang giáo hạt ngoài giáo phận sở hữu");
             }
             return;
         }
@@ -202,26 +202,26 @@ public class CourseRequirementService {
                 CourseRequirementAccessEvaluator.UPDATE_DIOCESE
         );
         if (!sourceDioceseId.equals(targetDioceseId)) {
-            throw commonValidationHelper.forbidden("Khong the chuyen requirement sang giao phan ngoai scope so huu");
+            throw commonValidationHelper.forbidden("Không thể chuyển yêu cầu sang giáo phận ngoài phạm vi sở hữu");
         }
     }
 
     private UUID sourceDioceseId(CourseRequirement requirement) {
         if (trainingWorkflowSupport.isDeaneryManaged(requirement.getCourseType())) {
             if (requirement.getDeanery() == null || requirement.getDeanery().getDiocese() == null) {
-                throw commonValidationHelper.conflict("Requirement DT khong co scope giao hat/giao phan hop le");
+                throw commonValidationHelper.conflict("Yêu cầu dự trưởng không có phạm vi giáo hạt / giáo phận hợp lệ");
             }
             return requirement.getDeanery().getDiocese().getId();
         }
         if (requirement.getDiocese() == null) {
-            throw commonValidationHelper.conflict("Requirement khong co scope giao phan hop le");
+            throw commonValidationHelper.conflict("Yêu cầu không có phạm vi giáo phận hợp lệ");
         }
         return requirement.getDiocese().getId();
     }
 
     private void requireAuthority(Authentication authentication, String authority) {
         if (!securityUtils.hasAuthority(authentication, authority)) {
-            throw commonValidationHelper.forbidden("Tai khoan hien tai khong co quyen cap nhat scope requirement nay");
+            throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền cập nhật phạm vi yêu cầu này");
         }
     }
 

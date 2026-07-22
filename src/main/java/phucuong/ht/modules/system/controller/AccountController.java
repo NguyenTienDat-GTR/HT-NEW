@@ -5,14 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import phucuong.ht.common.dto.apiResponse;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
@@ -34,7 +27,7 @@ public class AccountController {
             + " || @securityUtils.hasAuthority(authentication, 'system.account.manage.deanery')"
             + " || @securityUtils.hasAuthority(authentication, 'system.account.manage.parish')")
     public apiResponse<AccountResponse> create(@Valid @RequestBody AccountCreateRequest request, Authentication authentication) {
-        return apiResponse.success("Tao tai khoan thanh cong", service.create(request, authentication));
+        return apiResponse.success("Tạo tài khoản thành công", service.create(request, authentication));
     }
 
     @GetMapping
@@ -43,7 +36,7 @@ public class AccountController {
             + " || @securityUtils.hasAuthority(authentication, 'system.account.manage.deanery')"
             + " || @securityUtils.hasAuthority(authentication, 'system.account.manage.parish')")
     public apiResponse<Page<AccountResponse>> findAll(BaseSearchRequest request, Authentication authentication) {
-        return apiResponse.success("Lay danh sach tai khoan thanh cong", service.findAll(request, authentication));
+        return apiResponse.success("Lây sdanh sách tài khoản thành vông", service.findAll(request, authentication));
     }
 
     @GetMapping("/permission-targets")
@@ -56,7 +49,7 @@ public class AccountController {
             @RequestParam(required = false) String search,
             Authentication authentication
     ) {
-        return apiResponse.success("Lay danh sach tai khoan co the phan quyen thanh cong", service.findAccountPermissionTargets(authentication, search));
+        return apiResponse.success("Lấy danh sách tài khoản có thể phân quyền thành công", service.findAccountPermissionTargets(authentication, search));
     }
 
     @GetMapping("/{username}")
@@ -65,14 +58,15 @@ public class AccountController {
             + " || @securityUtils.hasAuthority(authentication, 'system.account.manage.deanery')"
             + " || @securityUtils.hasAuthority(authentication, 'system.account.manage.parish')")
     public apiResponse<AccountResponse> findById(@PathVariable String username, Authentication authentication) {
-        return apiResponse.success("Lay thong tin tai khoan thanh cong", service.findById(username, authentication));
+        return apiResponse.success("Lấy thông tin tài khoản thành công", service.findById(username, authentication));
     }
+
     @PatchMapping("/{username}/toggle-status")
     @PreAuthorize("@securityUtils.hasAuthority(authentication, 'system.account.manage.all')"
             + " || @securityUtils.hasAuthority(authentication, 'system.account.manage.diocese')"
             + " || @securityUtils.hasAuthority(authentication, 'system.account.manage.deanery')"
             + " || @securityUtils.hasAuthority(authentication, 'system.account.manage.parish')")
     public apiResponse<AccountResponse> toggle(@PathVariable String username, @Valid @RequestBody StatusToggleRequest request, Authentication authentication) {
-        return apiResponse.success("Doi trang thai tai khoan thanh cong", service.toggleStatus(username, request, authentication));
+        return apiResponse.success("Đổi trạng thái tài khoản thành công", service.toggleStatus(username, request, authentication));
     }
 }

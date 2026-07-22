@@ -10,7 +10,7 @@ import phucuong.ht.common.model.request.OrganizationUnitCreateRequest;
 @Setter
 public class DioceseCreateRequest extends OrganizationUnitCreateRequest {
 
-    @NotBlank(message = "Tên hiệp đoàn là bắt buộc")
-    @Size(max = 100, message = "Tên hiệp đoàn không được vượt quá 100 ký tự")
+    @NotBlank(message = "Tên liên đoàn là bắt buộc")
+    @Size(max = 100, message = "Tên liên đoàn không được vượt quá 100 ký tự")
     private String unionName;
 }
