@@ -78,11 +78,12 @@ public class AccountRoleService {
 
         AccountRole accountRole = accountRoleRepository.findByAccountUsernameAndRoleRoleCode(account.getUsername(), targetRole.getRoleCode())
                 .orElseGet(AccountRole::new);
-        applyAssignment(accountRole, account, targetRole, Boolean.TRUE.equals(request.getIsPrimary()), request.getAssignedAt(), request.getExpiresAt(), actor, now);
-        AccountRole saved = accountRoleRepository.save(accountRole);
-        if (Boolean.TRUE.equals(saved.getIsPrimary())) {
-            clearOtherPrimaryRoles(account.getUsername(), saved.getRole().getRoleCode(), actor);
+        boolean primary = Boolean.TRUE.equals(request.getIsPrimary());
+        if (primary) {
+            clearOtherPrimaryRolesAndFlush(account.getUsername(), targetRole.getRoleCode(), actor, now);
         }
+        applyAssignment(accountRole, account, targetRole, primary, request.getAssignedAt(), request.getExpiresAt(), actor, now);
+        AccountRole saved = accountRoleRepository.save(accountRole);
         notifyAccountRoleChanged(account.getUsername(), "ACCOUNT_ROLE_ASSIGNED");
         return toResponse(saved);
     }
@@ -102,6 +103,10 @@ public class AccountRoleService {
         OffsetDateTime now = OffsetDateTime.now();
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người gán vai trò");
 
+        if (primaryRoleCode != null) {
+            clearOtherPrimaryRolesAndFlush(account.getUsername(), primaryRoleCode, actor, now);
+        }
+
         List<AccountRoleResponse> responses = roleCodes.stream()
                 .map(roleCode -> {
                     Role targetRole = requireActiveRole(roleCode);
@@ -114,9 +119,6 @@ public class AccountRoleService {
                 })
                 .toList();
 
-        if (primaryRoleCode != null) {
-            clearOtherPrimaryRoles(account.getUsername(), primaryRoleCode, actor);
-        }
         notifyAccountRoleChanged(account.getUsername(), "ACCOUNT_ROLE_BULK_ASSIGNED");
         return responses;
     }
@@ -165,17 +167,18 @@ public class AccountRoleService {
         Account account = request.getUsername() == null ? entity.getAccount() : requireAccount(request.getUsername());
         Role role = request.getRoleCode() == null ? entity.getRole() : requireActiveRole(request.getRoleCode());
         enforceAssignmentScope(authentication, account, role);
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật vai trò tài khoản");
+        OffsetDateTime now = OffsetDateTime.now();
+        if (Boolean.TRUE.equals(request.getIsPrimary())) {
+            clearOtherPrimaryRolesAndFlush(account.getUsername(), role.getRoleCode(), actor, now);
+        }
         entity.setAccount(account);
         entity.setRole(role);
         if (request.getIsPrimary() != null) entity.setIsPrimary(request.getIsPrimary());
         if (request.getAssignedAt() != null) entity.setAssignedAt(request.getAssignedAt());
         if (request.getExpiresAt() != null) entity.setExpiresAt(request.getExpiresAt());
-        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật vai trò tài khoản");
-        entity.setUpdatedAt(OffsetDateTime.now());
+        entity.setUpdatedAt(now);
         entity.setUpdatedBy(actor);
-        if (Boolean.TRUE.equals(entity.getIsPrimary())) {
-            clearOtherPrimaryRoles(account.getUsername(), role.getRoleCode(), actor);
-        }
         notifyAccountRoleChanged(account.getUsername(), "ACCOUNT_ROLE_UPDATED");
         return toResponse(entity);
     }
@@ -266,16 +269,17 @@ public class AccountRoleService {
         }
     }
 
-    private void clearOtherPrimaryRoles(String username, String primaryRoleCode, String actor) {
+    private void clearOtherPrimaryRolesAndFlush(String username, String primaryRoleCode, String actor, OffsetDateTime now) {
         accountRoleRepository.findByAccountUsername(username).stream()
                 .filter(accountRole -> accountRole.getRole() != null)
                 .filter(accountRole -> !primaryRoleCode.equals(accountRole.getRole().getRoleCode()))
                 .filter(accountRole -> Boolean.TRUE.equals(accountRole.getIsPrimary()))
                 .forEach(accountRole -> {
                     accountRole.setIsPrimary(Boolean.FALSE);
-                    accountRole.setUpdatedAt(OffsetDateTime.now());
+                    accountRole.setUpdatedAt(now);
                     accountRole.setUpdatedBy(actor);
                 });
+        accountRoleRepository.flush();
     }
 
     private void promoteHighestActiveRoleAsPrimary(String username, String disabledAccountRoleId, String actor, OffsetDateTime now) {

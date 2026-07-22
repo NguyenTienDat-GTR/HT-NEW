@@ -18,6 +18,7 @@ import phucuong.ht.modules.system.model.entity.Account;
 import phucuong.ht.modules.system.model.entity.AccountRole;
 import phucuong.ht.modules.system.model.entity.Role;
 import phucuong.ht.modules.system.model.request.AccountRoleBulkRequest;
+import phucuong.ht.modules.system.model.request.AccountRoleUpdateRequest;
 import phucuong.ht.modules.system.model.response.AccountRoleResponse;
 import phucuong.ht.modules.system.model.response.RoleResponse;
 
@@ -143,6 +144,34 @@ class AccountRoleServiceTest {
         assertEquals(false, primary.getIsPrimary());
         assertEquals(true, highestRemaining.getIsPrimary());
         assertEquals(false, lowerRemaining.getIsPrimary());
+    }
+
+    @Test
+    void updatePrimaryRoleShouldClearExistingPrimaryBeforeSettingNewPrimary() {
+        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()), accountManagementAuthorizationHelper);
+        Account account = dioceseAccount("diocese-admin");
+        AccountRole target = accountRole(account, role("ADMIN_DIOCESE", true, 100, "SYSTEM"));
+        target.setId("ar-target");
+        target.setIsPrimary(false);
+        AccountRole currentPrimary = accountRole(account, role("CUSTOM_ROLE", false, 200, "super-admin"));
+        currentPrimary.setId("ar-current");
+        currentPrimary.setIsPrimary(true);
+        AccountRoleUpdateRequest request = new AccountRoleUpdateRequest();
+        request.setIsPrimary(true);
+
+        when(accountRoleRepository.findById("ar-target")).thenReturn(Optional.of(target));
+        when(accountRoleRepository.findByAccountUsername("diocese-admin")).thenReturn(List.of(target, currentPrimary));
+
+        AccountRoleResponse response = accountRoleService.update(
+                "ar-target",
+                request,
+                authentication("super-admin", List.of("SUPER_ADMIN"), List.of("system.account_role.assign.all"))
+        );
+
+        assertEquals(true, response.getIsPrimary());
+        assertEquals(true, target.getIsPrimary());
+        assertEquals(false, currentPrimary.getIsPrimary());
+        org.mockito.Mockito.verify(accountRoleRepository).flush();
     }
 
     @Test
