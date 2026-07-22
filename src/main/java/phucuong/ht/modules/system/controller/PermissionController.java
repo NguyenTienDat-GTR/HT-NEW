@@ -73,7 +73,7 @@ public class PermissionController {
         return apiResponse.success("Cập nhật quyền thành công", permissionManagementService.update(permissionCode, request, authentication));
     }
     @PatchMapping("/{permissionCode}/toggle-status")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') && @securityUtils.hasAuthority(authentication, 'system.permission.toggle.all')")
     public apiResponse<PermissionResponse> toggleStatus(
             @PathVariable String permissionCode,
             @Valid @RequestBody StatusToggleRequest request,

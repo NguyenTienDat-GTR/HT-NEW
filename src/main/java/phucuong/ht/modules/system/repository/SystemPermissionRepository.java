@@ -9,6 +9,7 @@ import phucuong.ht.modules.system.model.entity.PermissionModule;
 import phucuong.ht.modules.system.model.entity.PermissionResource;
 import phucuong.ht.modules.system.model.entity.PermissionScope;
 import phucuong.ht.modules.system.model.entity.Permission;
+import phucuong.ht.modules.system.model.enums.PermissionEffect;
 
 import java.util.List;
 import java.util.Optional;
@@ -92,5 +93,39 @@ public class SystemPermissionRepository extends BaseRepo<Permission, String> {
                 """,
                 Permission.class
         ).getResultList();
+    }
+
+    public boolean hasAssignmentEffect(String permissionCode, PermissionEffect effect) {
+        Long rolePermissionCount = entityManager.createQuery(
+                """
+                select count(rp)
+                from RolePermission rp
+                where rp.permission.permissionCode = :permissionCode
+                  and rp.effect = :effect
+                  and rp.status = true
+                """,
+                Long.class
+        )
+                .setParameter("permissionCode", permissionCode)
+                .setParameter("effect", effect)
+                .getSingleResult();
+        if (rolePermissionCount > 0) {
+            return true;
+        }
+
+        Long overrideCount = entityManager.createQuery(
+                """
+                select count(apo)
+                from AccountPermissionOverride apo
+                where apo.permission.permissionCode = :permissionCode
+                  and apo.effect = :effect
+                  and apo.status = true
+                """,
+                Long.class
+        )
+                .setParameter("permissionCode", permissionCode)
+                .setParameter("effect", effect)
+                .getSingleResult();
+        return overrideCount > 0;
     }
 }
