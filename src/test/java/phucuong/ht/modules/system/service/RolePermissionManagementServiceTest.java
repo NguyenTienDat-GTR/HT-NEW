@@ -46,6 +46,9 @@ class RolePermissionManagementServiceTest {
     @Mock
     private AccountScopeValidationHelper accountScopeValidationHelper;
 
+    @Mock
+    private AccountManagementAuthorizationHelper accountManagementAuthorizationHelper;
+
     @Test
     void createShouldAllowDioceseAdminAssigningOwnedPermissionToLowerRole() {
         Role targetRole = role("ADMIN_PARISH", 300);
@@ -134,6 +137,21 @@ class RolePermissionManagementServiceTest {
     }
 
     @Test
+    void createShouldRejectHigherRoleWhenActorRealRoleIsLowerThanTokenRole() {
+        Role targetRole = role("CUSTOM_DIOCESE", 100);
+        targetRole.setIsSystem(false);
+        Permission permission = permission("organization.position.read.diocese", "diocese");
+        RolePermissionCreateRequest request = request("CUSTOM_DIOCESE", "organization.position.read.diocese");
+        UsernamePasswordAuthenticationToken authentication = authentication("organization.position.read.diocese");
+
+        when(roleRepository.findById("CUSTOM_DIOCESE")).thenReturn(Optional.of(targetRole));
+        when(systemPermissionRepository.findById("organization.position.read.diocese")).thenReturn(Optional.of(permission));
+        when(accountManagementAuthorizationHelper.currentActorHighestRoleOrder(authentication)).thenReturn(200);
+
+        assertThrows(RuntimeException.class, () -> service(accountManagementAuthorizationHelper).create(request, authentication));
+    }
+
+    @Test
     void createShouldRejectDioceseAdminAssigningPermissionItDoesNotOwn() {
         Role targetRole = role("ADMIN_PARISH", 300);
         Permission permission = permission("organization.position.read.diocese", "diocese");
@@ -146,13 +164,18 @@ class RolePermissionManagementServiceTest {
     }
 
     private RolePermissionManagementService service() {
+        return service(null);
+    }
+
+    private RolePermissionManagementService service(AccountManagementAuthorizationHelper accountManagementAuthorizationHelper) {
         CommonValidationHelper helper = new CommonValidationHelper(new securityUtils());
         SystemAdminAuthorizationHelper authorizationHelper = new SystemAdminAuthorizationHelper(
                 new securityUtils(),
                 accountScopeValidationHelper,
                 null,
                 roleRepository,
-                helper
+                helper,
+                accountManagementAuthorizationHelper
         );
         return new RolePermissionManagementService(
                 rolePermissionRepository,

@@ -42,12 +42,15 @@ class AccountRoleServiceTest {
     @Mock
     private RoleRepository roleRepository;
 
+    @Mock
+    private AccountManagementAuthorizationHelper accountManagementAuthorizationHelper;
+
     @InjectMocks
     private AccountRoleService accountRoleService;
 
     @Test
     void superAdminCanBulkAssignRoleToManagedAdminDioceseAccount() {
-        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()));
+        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()), accountManagementAuthorizationHelper);
         Account account = dioceseAccount("diocese-admin");
         Role targetRole = role("ADMIN_DIOCESE", true, 100, "SYSTEM");
         AccountRoleBulkRequest request = new AccountRoleBulkRequest();
@@ -71,7 +74,7 @@ class AccountRoleServiceTest {
 
     @Test
     void superAdminCannotAssignSystemRoleOutsideManagedScope() {
-        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()));
+        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()), accountManagementAuthorizationHelper);
         Account account = dioceseAccount("diocese-admin");
         Role targetRole = role("ADMIN_DEANERY", true, 200, "SYSTEM");
         AccountRoleBulkRequest request = new AccountRoleBulkRequest();
@@ -86,7 +89,7 @@ class AccountRoleServiceTest {
 
     @Test
     void superAdminCanToggleInactiveAdminDioceseAssignment() {
-        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()));
+        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()), accountManagementAuthorizationHelper);
         Account account = dioceseAccount("diocese-admin");
         Role targetRole = role("ADMIN_DIOCESE", true, 100, "SYSTEM");
         AccountRole accountRole = new AccountRole();
@@ -112,7 +115,7 @@ class AccountRoleServiceTest {
 
     @Test
     void adminDioceseCanBulkAssignAdminDeaneryRoleToAccountInOwnDiocese() {
-        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()));
+        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()), accountManagementAuthorizationHelper);
         UUID dioceseId = UUID.randomUUID();
         Account account = dioceseAccount("target", dioceseId);
         Role targetRole = role("ADMIN_DEANERY", true, 200, "SYSTEM");
@@ -140,7 +143,7 @@ class AccountRoleServiceTest {
 
     @Test
     void adminDioceseAssignableRolesIncludeAdminDeaneryAndAdminParishButNotAdminDiocese() {
-        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()));
+        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()), accountManagementAuthorizationHelper);
         UUID dioceseId = UUID.randomUUID();
         Account account = dioceseAccount("target", dioceseId);
         Role adminDiocese = role("ADMIN_DIOCESE", true, 100, "SYSTEM");
@@ -166,7 +169,7 @@ class AccountRoleServiceTest {
 
     @Test
     void adminDioceseCannotAssignAdminDioceseRoleToAccount() {
-        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()));
+        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()), accountManagementAuthorizationHelper);
         Account account = dioceseAccount("target");
         Role targetRole = role("ADMIN_DIOCESE", true, 100, "SYSTEM");
         AccountRoleBulkRequest request = new AccountRoleBulkRequest();
@@ -179,6 +182,36 @@ class AccountRoleServiceTest {
         assertThrows(RuntimeException.class, () -> accountRoleService.bulkAssign(
                 request,
                 authentication("admin-diocese", List.of("ADMIN_DIOCESE"), List.of("system.account_role.assign.diocese"))
+        ));
+    }
+
+    @Test
+    void lowerRealRoleCannotToggleAssignmentOnHigherRoleTargetAccount() {
+        CommonValidationHelper validation = new CommonValidationHelper(new securityUtils());
+        AccountManagementAuthorizationHelper hierarchyHelper = new AccountManagementAuthorizationHelper(
+                accountRepository,
+                accountRoleRepository,
+                roleRepository,
+                validation
+        );
+        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, validation, hierarchyHelper);
+        UUID dioceseId = UUID.randomUUID();
+        Account target = dioceseAccount("phucuongadmin", dioceseId);
+        Role targetAssignmentRole = role("ADMIN_PARISH", true, 300, "SYSTEM");
+        AccountRole assignment = accountRole(target, targetAssignmentRole);
+        assignment.setId("ar-1");
+
+        when(accountRoleRepository.findById("ar-1")).thenReturn(Optional.of(assignment));
+        when(accountRoleRepository.findActiveByUsername("phucuongadmin")).thenReturn(List.of(accountRole(target, role("ADMIN_DIOCESE", true, 100, "SYSTEM"))));
+        when(accountRoleRepository.findActiveByUsername("datbung107")).thenReturn(List.of(accountRole(dioceseAccount("datbung107", dioceseId), role("ADMIN_DEANERY", true, 200, "SYSTEM"))));
+
+        StatusToggleRequest request = new StatusToggleRequest();
+        request.setConfirmationText("Xác nhận");
+
+        assertThrows(RuntimeException.class, () -> accountRoleService.toggleStatus(
+                "ar-1",
+                request,
+                authentication("datbung107", List.of("ADMIN_DEANERY"), List.of("system.account_role.assign.diocese"))
         ));
     }
 
@@ -205,6 +238,14 @@ class AccountRoleServiceTest {
         role.setCreatedBy(createdBy);
         role.setStatus(true);
         return role;
+    }
+
+    private AccountRole accountRole(Account account, Role role) {
+        AccountRole accountRole = new AccountRole();
+        accountRole.setAccount(account);
+        accountRole.setRole(role);
+        accountRole.setStatus(true);
+        return accountRole;
     }
 
     private UsernamePasswordAuthenticationToken authentication(String username, List<String> roles, List<String> permissions) {

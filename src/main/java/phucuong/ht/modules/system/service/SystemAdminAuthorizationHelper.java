@@ -315,6 +315,12 @@ public class SystemAdminAuthorizationHelper {
     }
 
     private Integer actorRoleOrder(Authentication authentication) {
+        if (accountManagementAuthorizationHelper != null) {
+            Integer databaseOrder = accountManagementAuthorizationHelper.currentActorHighestRoleOrder(authentication);
+            if (databaseOrder != null) {
+                return databaseOrder;
+            }
+        }
         return actorRoleCodes(authentication).stream()
                 .map(roleRepository::findByRoleCodeAndStatusTrue)
                 .filter(Optional::isPresent)

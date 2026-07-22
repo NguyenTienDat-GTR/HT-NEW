@@ -55,6 +55,7 @@ public class AccountRoleService {
     private final AccountRoleRepository accountRoleRepository;
     private final RoleRepository roleRepository;
     private final CommonValidationHelper commonValidationHelper;
+    private final AccountManagementAuthorizationHelper accountManagementAuthorizationHelper;
     @Autowired(required = false)
     private UnitOperationalStatusService unitOperationalStatusService;
     @Autowired(required = false)
@@ -315,6 +316,8 @@ public class AccountRoleService {
             enforceSuperAdminScope(targetAccount, targetRole);
             return;
         }
+
+        accountManagementAuthorizationHelper.requireTargetAccountNotAboveActor(authentication, targetAccount);
 
         if (hasAuthority(authentication, "system.account_role.assign.diocese")) {
             enforceScopedSystemRoleAssignment(ROLE_ADMIN_DIOCESE, targetRole);
