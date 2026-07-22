@@ -23,6 +23,7 @@ import phucuong.ht.modules.system.model.request.AccountPermissionOverrideUpdateR
 import phucuong.ht.modules.system.model.response.AccountPermissionOverrideResponse;
 import phucuong.ht.modules.system.model.response.PermissionResponse;
 import phucuong.ht.modules.system.repository.AccountPermissionOverrideRepository;
+import phucuong.ht.modules.system.repository.RolePermissionRepository;
 import phucuong.ht.modules.system.repository.SystemPermissionRepository;
 
 import java.time.OffsetDateTime;
@@ -42,6 +43,7 @@ public class AccountPermissionOverrideManagementService {
     private final AccountRepository accountRepository;
     private final AccountRoleRepository accountRoleRepository;
     private final SystemPermissionRepository systemPermissionRepository;
+    private final RolePermissionRepository rolePermissionRepository;
     private final CommonValidationHelper commonValidationHelper;
     private final SystemAdminAuthorizationHelper authorizationHelper;
 
@@ -112,7 +114,7 @@ public class AccountPermissionOverrideManagementService {
         Account account = accountRepository.findActiveByUsername(username)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy tài khoản: " + username));
         requireValidSuperAdminTarget(authentication, account);
-        Set<String> assignedPermissionCodes = Set.copyOf(accountPermissionOverrideRepository.findPermissionCodesByUsername(username));
+        Set<String> assignedPermissionCodes = assignedPermissionCodes(username);
         return systemPermissionRepository.findActivePermissions().stream()
                 .filter(permission -> !assignedPermissionCodes.contains(permission.getPermissionCode()))
                 .filter(permission -> authorizationHelper.canManageAccountPermission(authentication, username, permission))
@@ -269,6 +271,12 @@ public class AccountPermissionOverrideManagementService {
         override.setUpdatedAt(OffsetDateTime.now());
         override.setUpdatedBy(actor);
         return override;
+    }
+
+    private Set<String> assignedPermissionCodes(String username) {
+        Set<String> assignedPermissionCodes = new LinkedHashSet<>(accountPermissionOverrideRepository.findPermissionCodesByUsername(username));
+        assignedPermissionCodes.addAll(rolePermissionRepository.findActivePermissionCodesByAccountUsername(username));
+        return assignedPermissionCodes;
     }
 
     private void rejectDenyOfRequiredAccountRoleAssignment(Account account, String permissionCode, PermissionEffect effect) {

@@ -22,6 +22,7 @@ import phucuong.ht.modules.system.model.entity.Role;
 import phucuong.ht.modules.system.model.enums.PermissionEffect;
 import phucuong.ht.modules.system.model.request.AccountPermissionOverrideCreateRequest;
 import phucuong.ht.modules.system.repository.AccountPermissionOverrideRepository;
+import phucuong.ht.modules.system.repository.RolePermissionRepository;
 import phucuong.ht.modules.system.repository.SystemPermissionRepository;
 
 import java.util.List;
@@ -48,6 +49,9 @@ class AccountPermissionOverrideManagementServiceTest {
     private SystemPermissionRepository systemPermissionRepository;
 
     @Mock
+    private RolePermissionRepository rolePermissionRepository;
+
+    @Mock
     private AccountScopeValidationHelper accountScopeValidationHelper;
 
     @Mock
@@ -68,6 +72,7 @@ class AccountPermissionOverrideManagementServiceTest {
                 accountRepository,
                 accountRoleRepository,
                 systemPermissionRepository,
+                rolePermissionRepository,
                 helper,
                 authorizationHelper
         );
@@ -116,6 +121,7 @@ class AccountPermissionOverrideManagementServiceTest {
                 accountRepository,
                 accountRoleRepository,
                 systemPermissionRepository,
+                rolePermissionRepository,
                 helper,
                 authorizationHelper
         );
@@ -159,6 +165,7 @@ class AccountPermissionOverrideManagementServiceTest {
                 accountRepository,
                 accountRoleRepository,
                 systemPermissionRepository,
+                rolePermissionRepository,
                 helper,
                 authorizationHelper
         );
@@ -200,6 +207,7 @@ class AccountPermissionOverrideManagementServiceTest {
                 accountRepository,
                 accountRoleRepository,
                 systemPermissionRepository,
+                rolePermissionRepository,
                 helper,
                 authorizationHelper
         );
