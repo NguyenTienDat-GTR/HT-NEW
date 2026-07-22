@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import phucuong.ht.common.dto.apiResponse;
 import phucuong.ht.common.model.request.StatusToggleRequest;
@@ -51,8 +52,11 @@ public class AccountController {
             + " || @securityUtils.hasAuthority(authentication, 'system.account_permission.manage.diocese')"
             + " || @securityUtils.hasAuthority(authentication, 'system.account_permission.manage.deanery')"
             + " || @securityUtils.hasAuthority(authentication, 'system.account_permission.manage.parish')")
-    public apiResponse<List<AccountResponse>> permissionTargets(Authentication authentication) {
-        return apiResponse.success("Lay danh sach tai khoan co the phan quyen thanh cong", service.findAccountPermissionTargets(authentication));
+    public apiResponse<List<AccountResponse>> permissionTargets(
+            @RequestParam(required = false) String search,
+            Authentication authentication
+    ) {
+        return apiResponse.success("Lay danh sach tai khoan co the phan quyen thanh cong", service.findAccountPermissionTargets(authentication, search));
     }
 
     @GetMapping("/{username}")

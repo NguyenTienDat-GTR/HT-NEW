@@ -6,10 +6,12 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.modules.auth.model.AuthUserDetails;
 import phucuong.ht.modules.auth.repository.AccountRepository;
 import phucuong.ht.modules.auth.repository.AccountRoleRepository;
 import phucuong.ht.modules.auth.repository.RoleRepository;
@@ -189,6 +191,29 @@ class AccountManagementServiceTest {
                 .orElse(null));
     }
 
+    @Test
+    void permissionTargetsShouldUseAccountPermissionScopeAndUsernameSearch() {
+        Diocese actorDiocese = diocese("Phú Cường");
+        Diocese otherDiocese = diocese("Xuân Lộc");
+        Account target = account("target-user", leader(actorDiocese));
+        Account outside = account("outside-user", leader(otherDiocese));
+        Account current = account("admin-diocese", leader(actorDiocese));
+        Role adminDeanery = role("ADMIN_DEANERY");
+        var auth = authentication("admin-diocese", List.of("ADMIN_DIOCESE"), List.of("system.account_permission.manage.diocese"));
+
+        when(validation.normalizeOptionalText("target")).thenReturn("target");
+        when(accountRepository.findAll()).thenReturn(List.of(target, outside, current));
+        when(authorizationHelper.canRead(auth, target)).thenReturn(true);
+        when(authorizationHelper.canRead(auth, outside)).thenReturn(false);
+        when(authorizationHelper.canRead(auth, current)).thenReturn(false);
+        when(accountRoleRepository.findActiveByUsername("target-user")).thenReturn(List.of(accountRole(target, adminDeanery, true, true)));
+
+        var response = service.findAccountPermissionTargets(auth, "target");
+
+        assertEquals(1, response.size());
+        assertEquals("target-user", response.get(0).getUsername());
+    }
+
     private void stubCreate(Diocese diocese, Role role) {
         when(validation.normalizeOptionalText(role.getRoleCode())).thenReturn(role.getRoleCode());
         when(roleRepository.findByRoleCodeAndStatusTrue(role.getRoleCode())).thenReturn(Optional.of(role));
@@ -205,6 +230,13 @@ class AccountManagementServiceTest {
         Role role = new Role();
         role.setRoleCode(code);
         role.setStatus(true);
+        role.setDisplayOrder(switch (code) {
+            case "SUPER_ADMIN" -> 0;
+            case "ADMIN_DIOCESE" -> 10;
+            case "ADMIN_DEANERY" -> 20;
+            case "ADMIN_PARISH" -> 30;
+            default -> 40;
+        });
         return role;
     }
 
@@ -254,5 +286,10 @@ class AccountManagementServiceTest {
         accountRole.setIsPrimary(primary);
         accountRole.setAssignedAt(java.time.OffsetDateTime.now());
         return accountRole;
+    }
+
+    private UsernamePasswordAuthenticationToken authentication(String username, List<String> roles, List<String> permissions) {
+        AuthUserDetails principal = AuthUserDetails.tokenPrincipal(username, null, roles, permissions);
+        return new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
     }
 }
