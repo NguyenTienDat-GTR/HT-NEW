@@ -1,8 +1,6 @@
 package phucuong.ht.modules.system.service;
 
-import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import lombok.Setter;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -12,7 +10,6 @@ import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.modules.system.model.entity.Permission;
-import phucuong.ht.modules.system.model.request.PermissionCreateRequest;
 import phucuong.ht.modules.system.model.request.PermissionUpdateRequest;
 import phucuong.ht.modules.system.model.response.PermissionResponse;
 import phucuong.ht.modules.system.model.response.PermissionTaxonomyResponse;
@@ -21,7 +18,6 @@ import phucuong.ht.modules.system.repository.SystemPermissionRepository;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -30,45 +26,6 @@ public class PermissionManagementService {
     private final SystemPermissionRepository systemPermissionRepository;
     private final CommonValidationHelper commonValidationHelper;
     private final SystemAdminAuthorizationHelper authorizationHelper;
-
-    public PermissionResponse create(PermissionCreateRequest request, Authentication authentication) {
-        String moduleCode = normalizeCode(request.getModuleCode(), "Ma module khong duoc de trong");
-        String resourceCode = normalizeCode(request.getResourceCode(), "Ma resource khong duoc de trong");
-        String actionCode = normalizeCode(request.getActionCode(), "Ma action khong duoc de trong");
-        String scopeCode = normalizeCode(request.getScopeCode(), "Ma scope khong duoc de trong");
-        String permissionCode = buildPermissionCode(moduleCode, resourceCode, actionCode, scopeCode);
-
-        validateTaxonomy(moduleCode, resourceCode, actionCode, scopeCode);
-        if (systemPermissionRepository.findById(permissionCode).isPresent()) {
-            throw commonValidationHelper.conflict("Quyen da ton tai: " + permissionCode);
-        }
-
-        String actor = commonValidationHelper.requireAuditActor(authentication, "Khong xac dinh duoc nguoi tao quyen");
-        PermissionWritePayload payload = new PermissionWritePayload();
-        payload.setPermissionCode(permissionCode);
-        payload.setPermissionName(normalizeRequiredText(request.getPermissionName(), "Ten quyen khong duoc de trong"));
-        payload.setModuleCode(moduleCode);
-        payload.setResourceCode(resourceCode);
-        payload.setActionCode(actionCode);
-        payload.setScopeCode(scopeCode);
-        payload.setDescription(commonValidationHelper.normalizeOptionalText(request.getDescription()));
-        payload.setIsSystem(Boolean.FALSE);
-        payload.setDisplayOrder(request.getDisplayOrder());
-
-        Permission permission = systemPermissionRepository.createPermission(
-                payload.getPermissionCode(),
-                payload.getPermissionName(),
-                payload.getModuleCode(),
-                payload.getResourceCode(),
-                payload.getActionCode(),
-                payload.getScopeCode(),
-                payload.getDescription(),
-                payload.getIsSystem(),
-                payload.getDisplayOrder(),
-                actor
-        );
-        return toResponse(permission);
-    }
 
     public Page<PermissionResponse> findAll(BaseSearchRequest request, Authentication authentication) {
         List<Permission> manageable = loadAllMatching(request).stream()
@@ -144,29 +101,6 @@ public class PermissionManagementService {
         return findById(permissionCode, authentication);
     }
 
-    private void validateTaxonomy(String moduleCode, String resourceCode, String actionCode, String scopeCode) {
-        if (!systemPermissionRepository.existsModuleCode(moduleCode)) {
-            throw commonValidationHelper.notFound("Khong tim thay module: " + moduleCode);
-        }
-        if (!systemPermissionRepository.existsResourceCodeInModule(resourceCode, moduleCode)) {
-            throw commonValidationHelper.notFound("Khong tim thay resource " + resourceCode + " trong module " + moduleCode);
-        }
-        if (!systemPermissionRepository.existsActionCode(actionCode)) {
-            throw commonValidationHelper.notFound("Khong tim thay action: " + actionCode);
-        }
-        if (!systemPermissionRepository.existsScopeCode(scopeCode)) {
-            throw commonValidationHelper.notFound("Khong tim thay scope: " + scopeCode);
-        }
-    }
-
-    private String buildPermissionCode(String moduleCode, String resourceCode, String actionCode, String scopeCode) {
-        return String.join(".", moduleCode, resourceCode, actionCode, scopeCode);
-    }
-
-    private String normalizeCode(String value, String message) {
-        return normalizeRequiredText(value, message).toLowerCase(Locale.ROOT);
-    }
-
     private String normalizeRequiredText(String value, String message) {
         String normalized = commonValidationHelper.normalizeRequiredText(value);
         if (normalized == null || normalized.isBlank()) {
@@ -230,17 +164,4 @@ public class PermissionManagementService {
                 .build();
     }
 
-    @Getter
-    @Setter
-    private static class PermissionWritePayload {
-        private String permissionCode;
-        private String permissionName;
-        private String moduleCode;
-        private String resourceCode;
-        private String actionCode;
-        private String scopeCode;
-        private String description;
-        private Boolean isSystem;
-        private Integer displayOrder;
-    }
 }

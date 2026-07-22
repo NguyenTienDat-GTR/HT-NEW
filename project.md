@@ -458,7 +458,6 @@ System administration endpoints:
 - `PUT /api/system/roles/{roleCode}`
 - `DELETE /api/system/roles/{roleCode}`
 - `PATCH /api/system/roles/{roleCode}/toggle-status`
-- `POST /api/system/permissions`
 - `GET /api/system/permissions`
 - `GET /api/system/permissions/{permissionCode}`
 - `PUT /api/system/permissions/{permissionCode}`
@@ -1157,4 +1156,15 @@ The following work was added in this iteration:
 - Flyway `V046__replace_delete_permissions_with_toggle.sql` creates toggle permissions from existing delete permissions, copies role/account permission assignments, disables old delete permissions/policies, and registers toggle API policies.
 - Role-permission administration now includes read/assign/revoke scopes for all/diocese/deanery/parish so scoped admin roles can see and manage permission rows for roles they are allowed to manage.
 - Verification run in this session: `.\gradlew.bat testClasses`, targeted security/contract tests, and full `.\gradlew.bat test` passed.
+
+### RBAC assignment rules cleanup 2026-07-22
+
+- Branch `feature/rbac-assignment-rules` starts from up-to-date `main` in both BE and FE.
+- System roles can only be edited or receive role-permission changes from `SUPER_ADMIN`. Scoped admins cannot assign permissions to `ADMIN_DIOCESE`, `ADMIN_DEANERY`, `ADMIN_PARISH`, or any other system role.
+- Scoped admins may assign owned permissions only to custom roles whose `displayOrder` is equal to or lower than their admin role and only within their permission scope.
+- Account-role assignment keeps system role delegation hierarchical: `ADMIN_DIOCESE` may assign `ADMIN_DEANERY` and `ADMIN_PARISH` to accounts in its managed diocese, `ADMIN_DEANERY` may assign `ADMIN_PARISH` in its managed deanery, and `ADMIN_PARISH` cannot assign admin system roles. SUPER_ADMIN can still assign/toggle `SUPER_ADMIN` and `ADMIN_DIOCESE` within the managed account rules, including re-enabling an inactive `ADMIN_DIOCESE` account-role assignment for a diocese-scoped account.
+- `POST /api/system/permissions` and the backend create-permission service/repository helper were removed. Flyway `V049__disable_permission_create_contract.sql` disables `system.permission.create.all` and its role/account grants because permission rows are now managed by seed/migration, not ad-hoc API creation.
+- Account-permission bulk assignment remains `POST /api/system/account-permissions/bulk` for any actor with `system.account_permission.manage.*`, matching the multi-role assignment flow with multiple permission codes in one request.
+- `AccountRoleServiceTest` covers the scoped admin-system-role delegation rule, including `ADMIN_DIOCESE` assigning `ADMIN_DEANERY`, assignable-role options exposing `ADMIN_DEANERY`/`ADMIN_PARISH`, and rejection of `ADMIN_DIOCESE` self-level assignment.
+- Verification run in this session: `.\gradlew.bat testClasses` passed; targeted `RolePermissionManagementServiceTest`, `AccountRoleServiceTest`, `AccountPermissionOverrideManagementServiceTest`, `PermissionManagementServiceTest`, `EndpointContractMatrixTest`, `AccountPermissionOverrideControllerSecurityIntegrationTest`, `RoleControllerSecurityIntegrationTest`, and `RolePermissionControllerSecurityIntegrationTest` passed. A full `.\gradlew.bat test` attempt hit PostgreSQL `FATAL: sorry, too many clients already`; rerunning the affected controller slice separately passed.
 

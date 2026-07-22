@@ -136,6 +136,9 @@ public class SystemAdminAuthorizationHelper {
         if (isSuperAdmin(authentication)) {
             return;
         }
+        if (Boolean.TRUE.equals(role.getIsSystem())) {
+            throw commonValidationHelper.forbidden("Chi SUPER_ADMIN duoc thay doi phan quyen cua vai tro he thong");
+        }
         requireRolePermissionOperationAuthority(authentication, authority);
         requireActorOwnsPermission(authentication, permission);
         requireTargetRoleBelowActor(authentication, role);
@@ -291,8 +294,8 @@ public class SystemAdminAuthorizationHelper {
     private void requireTargetRoleBelowActor(Authentication authentication, Role targetRole) {
         Integer targetOrder = targetRole == null ? null : targetRole.getDisplayOrder();
         Integer actorOrder = actorRoleOrder(authentication);
-        if (actorOrder == null || targetOrder == null || targetOrder <= actorOrder) {
-            throw commonValidationHelper.forbidden("Chỉ được gán quyền cho vai trò thấp hơn vai trò hiện tại");
+        if (actorOrder == null || targetOrder == null || targetOrder < actorOrder) {
+            throw commonValidationHelper.forbidden("Chi duoc gan quyen cho vai tro bang hoac thap hon vai tro hien tai");
         }
     }
 
