@@ -5,6 +5,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
@@ -23,6 +24,7 @@ import phucuong.ht.modules.training.scoreFormulaTemplate.model.response.ScoreFor
 import phucuong.ht.modules.training.scoreFormulaTemplate.model.response.ScoreFormulaTemplateResponse;
 import phucuong.ht.modules.training.scoreFormulaTemplate.repository.ScoreFormulaTemplateRepository;
 
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -45,8 +47,10 @@ public class ScoreFormulaTemplateService {
     private final CommonValidationHelper commonValidationHelper;
     private final TrainingScoreFormulaEvaluator formulaEvaluator;
 
+    @Transactional
     public ScoreFormulaTemplateResponse create(ScoreFormulaTemplateCreateRequest request, Authentication authentication) {
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tạo công thức tính điểm");
+        OffsetDateTime now = OffsetDateTime.now();
         ScoreFormulaTemplate formula = new ScoreFormulaTemplate();
         formula.setCode(commonValidationHelper.normalizeRequiredText(request.getCode()));
         formula.setName(commonValidationHelper.normalizeRequiredText(request.getName()));
@@ -55,10 +59,12 @@ public class ScoreFormulaTemplateService {
         formula.setDescription(commonValidationHelper.normalizeOptionalText(request.getDescription()));
         formula.setUnitType(request.getUnitType());
         formula.setStatus(Boolean.TRUE);
+        formula.setCreatedAt(now);
+        formula.setUpdatedAt(now);
         formula.setCreatedBy(actor);
         formula.setUpdatedBy(actor);
         applyOwnerScope(formula, request.getUnitType(), authentication);
-        replaceComponents(formula, request.getComponentIds(), actor);
+        replaceComponents(formula, request.getComponentIds(), actor, now);
         validateExpressionAgainstComponents(formula);
         repository.save(formula);
         return toResponse(formula);
@@ -86,6 +92,7 @@ public class ScoreFormulaTemplateService {
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy công thức tính điểm: " + id)));
     }
 
+    @Transactional
     public ScoreFormulaTemplateResponse update(String id, ScoreFormulaTemplateUpdateRequest request, Authentication authentication) {
         if (repository.hasScoredParticipations(id)) {
             throw commonValidationHelper.conflict("Không thể sửa công thức tính điểm đã có dữ liệu chấm điểm");
@@ -108,9 +115,11 @@ public class ScoreFormulaTemplateService {
             formula.setDescription(commonValidationHelper.normalizeOptionalText(request.getDescription()));
         }
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật công thức tính điểm");
+        OffsetDateTime now = OffsetDateTime.now();
         if (request.getComponentIds() != null) {
-            replaceComponents(formula, request.getComponentIds(), actor);
+            replaceComponents(formula, request.getComponentIds(), actor, now);
         }
+        formula.setUpdatedAt(now);
         formula.setUpdatedBy(actor);
         validateExpressionAgainstComponents(formula);
         return toResponse(formula);
@@ -136,7 +145,7 @@ public class ScoreFormulaTemplateService {
         throw commonValidationHelper.validationError("unitType của công thức tính điểm phải là DIOCESE hoặc DEANERY");
     }
 
-    private void replaceComponents(ScoreFormulaTemplate formula, List<String> componentIds, String actor) {
+    private void replaceComponents(ScoreFormulaTemplate formula, List<String> componentIds, String actor, OffsetDateTime now) {
         if (componentIds == null || componentIds.isEmpty()) {
             throw commonValidationHelper.validationError("componentIds là bắt buộc");
         }
@@ -159,6 +168,8 @@ public class ScoreFormulaTemplateService {
             link.setComponent(component);
             link.setDisplayOrder(order++);
             link.setStatus(Boolean.TRUE);
+            link.setCreatedAt(now);
+            link.setUpdatedAt(now);
             link.setCreatedBy(actor);
             link.setUpdatedBy(actor);
             formula.getComponents().add(link);

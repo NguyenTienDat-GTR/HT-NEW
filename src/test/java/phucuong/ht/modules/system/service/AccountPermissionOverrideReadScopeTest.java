@@ -16,6 +16,7 @@ import phucuong.ht.modules.system.model.entity.Account;
 import phucuong.ht.modules.system.model.entity.AccountPermissionOverride;
 import phucuong.ht.modules.system.model.entity.Permission;
 import phucuong.ht.modules.system.repository.AccountPermissionOverrideRepository;
+import phucuong.ht.modules.system.repository.RolePermissionRepository;
 import phucuong.ht.modules.system.repository.SystemPermissionRepository;
 
 import java.util.List;
@@ -41,6 +42,9 @@ class AccountPermissionOverrideReadScopeTest {
 
     @Mock
     private SystemPermissionRepository permissionRepository;
+
+    @Mock
+    private RolePermissionRepository rolePermissionRepository;
 
     @Mock
     private SystemAdminAuthorizationHelper authorizationHelper;
@@ -75,12 +79,34 @@ class AccountPermissionOverrideReadScopeTest {
         assertThrows(RuntimeException.class, () -> service().findById("override-1", authentication));
     }
 
+    @Test
+    void shouldExcludeDirectAndRolePermissionsFromAssignableOptions() {
+        Account account = new Account();
+        account.setUsername("target");
+        account.setStatus(true);
+        Permission directPermission = permission("permission.direct");
+        Permission rolePermission = permission("permission.role");
+        Permission availablePermission = permission("permission.available");
+
+        when(accountRepository.findActiveByUsername("target")).thenReturn(Optional.of(account));
+        when(overrideRepository.findPermissionCodesByUsername("target")).thenReturn(List.of("permission.direct"));
+        when(rolePermissionRepository.findActivePermissionCodesByAccountUsername("target")).thenReturn(List.of("permission.role"));
+        when(permissionRepository.findActivePermissions()).thenReturn(List.of(directPermission, rolePermission, availablePermission));
+        when(authorizationHelper.canManageAccountPermission(eq(authentication), eq("target"), any(Permission.class))).thenReturn(true);
+
+        var response = service().findAssignablePermissions("target", authentication);
+
+        assertEquals(1, response.size());
+        assertEquals("permission.available", response.getFirst().getPermissionCode());
+    }
+
     private AccountPermissionOverrideManagementService service() {
         return new AccountPermissionOverrideManagementService(
                 overrideRepository,
                 accountRepository,
                 accountRoleRepository,
                 permissionRepository,
+                rolePermissionRepository,
                 new CommonValidationHelper(new securityUtils()),
                 authorizationHelper
         );
@@ -96,5 +122,12 @@ class AccountPermissionOverrideReadScopeTest {
         override.setAccount(account);
         override.setPermission(permission);
         return override;
+    }
+
+    private Permission permission(String permissionCode) {
+        Permission permission = new Permission();
+        permission.setPermissionCode(permissionCode);
+        permission.setStatus(true);
+        return permission;
     }
 }

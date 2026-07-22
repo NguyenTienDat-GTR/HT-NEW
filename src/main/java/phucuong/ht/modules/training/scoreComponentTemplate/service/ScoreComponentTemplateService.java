@@ -5,6 +5,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
@@ -18,6 +19,7 @@ import phucuong.ht.modules.training.scoreComponentTemplate.model.request.ScoreCo
 import phucuong.ht.modules.training.scoreComponentTemplate.model.response.ScoreComponentTemplateResponse;
 import phucuong.ht.modules.training.scoreComponentTemplate.repository.ScoreComponentTemplateRepository;
 
+import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.UUID;
@@ -35,8 +37,10 @@ public class ScoreComponentTemplateService {
     private final AccountScopeValidationHelper accountScopeValidationHelper;
     private final CommonValidationHelper commonValidationHelper;
 
+    @Transactional
     public ScoreComponentTemplateResponse create(ScoreComponentTemplateCreateRequest request, Authentication authentication) {
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tạo thành phần điểm");
+        OffsetDateTime now = OffsetDateTime.now();
         ScoreComponentTemplate component = new ScoreComponentTemplate();
         component.setCode(commonValidationHelper.normalizeRequiredText(request.getCode()));
         component.setName(commonValidationHelper.normalizeRequiredText(request.getName()));
@@ -45,6 +49,8 @@ public class ScoreComponentTemplateService {
         component.setDisplayOrder(request.getDisplayOrder() == null ? 0 : request.getDisplayOrder());
         component.setUnitType(request.getUnitType());
         component.setStatus(Boolean.TRUE);
+        component.setCreatedAt(now);
+        component.setUpdatedAt(now);
         component.setCreatedBy(actor);
         component.setUpdatedBy(actor);
         applyOwnerScope(component, request.getUnitType(), authentication);
@@ -72,6 +78,7 @@ public class ScoreComponentTemplateService {
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy thành phần điểm: " + id)));
     }
 
+    @Transactional
     public ScoreComponentTemplateResponse update(String id, ScoreComponentTemplateUpdateRequest request, Authentication authentication) {
         ScoreComponentTemplate component = repository.findByIdWithScope(id)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy thành phần điểm: " + id));
@@ -90,6 +97,7 @@ public class ScoreComponentTemplateService {
         if (request.getDisplayOrder() != null) {
             component.setDisplayOrder(request.getDisplayOrder());
         }
+        component.setUpdatedAt(OffsetDateTime.now());
         component.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật thành phần điểm"));
         return toResponse(component);
     }

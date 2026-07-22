@@ -31,6 +31,10 @@ public class SystemPermissionRepository extends BaseRepo<Permission, String> {
         return results.stream().findFirst();
     }
 
+    public Permission save(Permission permission) {
+        return entityManager.merge(permission);
+    }
+
     public boolean existsModuleCode(String moduleCode) {
         return entityManager.find(PermissionModule.class, moduleCode) != null;
     }

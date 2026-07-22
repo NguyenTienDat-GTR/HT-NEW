@@ -159,11 +159,13 @@ public class AccountManagementService {
     }
 
     @Transactional(readOnly = true)
-    public List<AccountResponse> findAccountPermissionTargets(Authentication authentication) {
+    public List<AccountResponse> findAccountPermissionTargets(Authentication authentication, String search) {
+        String normalizedSearch = validation.normalizeOptionalText(search);
         return accountRepository.findAll().stream()
-                .filter(account -> authorizationHelper.canRead(authentication, account))
-                .filter(this::isValidAccountPermissionTarget)
+                .filter(account -> Boolean.TRUE.equals(account.getStatus()))
+                .filter(account -> isSuperAdmin(authentication) ? isValidAccountPermissionTarget(account) : authorizationHelper.canRead(authentication, account))
                 .map(this::response)
+                .filter(response -> matchesUsernameSearch(response, normalizedSearch))
                 .toList();
     }
 
@@ -180,6 +182,7 @@ public class AccountManagementService {
         Account account = require(username);
         authorizationHelper.requireCanManage(authentication, account);
         account.setStatus(!Boolean.TRUE.equals(account.getStatus()));
+        account.setUpdatedAt(OffsetDateTime.now());
         account.setUpdatedBy(validation.requireAuditActor(authentication, "Không xác định được người đổi trạng thái tài khoản"));
         redisTokenSessionService.revokeAllSessions(account.getUsername());
         return response(account);
@@ -362,6 +365,11 @@ public class AccountManagementService {
             if (ACCOUNT_PERMISSION_ADMIN_ROLES.contains(role.getRoleCode())) return true;
             return !Boolean.TRUE.equals(role.getIsSystem()) && "super-admin".equalsIgnoreCase(role.getCreatedBy());
         });
+    }
+
+    private boolean matchesUsernameSearch(AccountResponse response, String search) {
+        if (search == null || search.isBlank()) return true;
+        return response.getUsername() != null && response.getUsername().toLowerCase(Locale.ROOT).contains(search.toLowerCase(Locale.ROOT));
     }
 
     private boolean isSuperAdmin(Authentication authentication) {

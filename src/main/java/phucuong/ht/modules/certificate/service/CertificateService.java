@@ -71,6 +71,7 @@ public class CertificateService {
             throw commonValidationHelper.conflict("Leader đã có chứng chỉ cho khóa huấn luyện này");
         }
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tạo chứng chỉ");
+        OffsetDateTime now = OffsetDateTime.now();
 
         Certificate certificate = new Certificate();
         certificate.setCertificateCode(request.getCertificateCode());
@@ -86,6 +87,8 @@ public class CertificateService {
         certificate.setSystemSuggested(Boolean.FALSE);
         certificate.setApprovedByException(Boolean.FALSE);
         certificate.setStatus(Boolean.TRUE);
+        certificate.setCreatedAt(now);
+        certificate.setUpdatedAt(now);
         certificate.setCreatedBy(actor);
         certificate.setUpdatedBy(actor);
         certificateRepository.save(certificate);
@@ -159,6 +162,7 @@ public class CertificateService {
         if (request.getImageUrl() != null) {
             certificate.setImageUrl(request.getImageUrl());
         }
+        certificate.setUpdatedAt(OffsetDateTime.now());
         certificate.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật chứng chỉ"));
         return toResponse(certificate);
     }
@@ -205,19 +209,22 @@ public class CertificateService {
         }
 
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người duyệt chứng chỉ");
+        OffsetDateTime now = OffsetDateTime.now();
         certificate.setApprovalStatus(WorkflowApprovalStatus.APPROVED);
-        certificate.setApprovedAt(OffsetDateTime.now());
+        certificate.setApprovedAt(now);
         certificate.setApprovedBy(actor);
         certificate.setApprovedByException(!passingScore);
         certificate.setExceptionApprovalReason(approvalReason);
         if (certificate.getIssueDate() == null) {
             certificate.setIssueDate(LocalDate.now());
         }
+        certificate.setUpdatedAt(now);
         certificate.setUpdatedBy(actor);
 
         participation.setCertificateApprovalStatus(WorkflowApprovalStatus.APPROVED);
-        participation.setCertificateApprovedAt(OffsetDateTime.now());
+        participation.setCertificateApprovedAt(now);
         participation.setApprovedBy(actor);
+        participation.setUpdatedAt(now);
         participation.setUpdatedBy(actor);
 
         trainingWorkflowSupport.certificateLevelFor(certificate.getCourse().getCourseType())
@@ -249,16 +256,20 @@ public class CertificateService {
         }
 
         RankHistory rankHistory = new RankHistory();
+        OffsetDateTime now = OffsetDateTime.now();
         rankHistory.setLeader(leader);
         rankHistory.setOldLevel(leader.getLeaderLevel());
         rankHistory.setNewLevel(newLevel);
         rankHistory.setPromotionDate(LocalDate.now());
         rankHistory.setNote("Duyệt từ chứng chỉ " + certificateCode);
         rankHistory.setStatus(Boolean.TRUE);
+        rankHistory.setCreatedAt(now);
+        rankHistory.setUpdatedAt(now);
         rankHistory.setCreatedBy(actor);
         rankHistory.setUpdatedBy(actor);
         rankHistoryRepository.save(rankHistory);
         leader.setLeaderLevel(newLevel);
+        leader.setUpdatedAt(now);
         leader.setUpdatedBy(actor);
     }
 

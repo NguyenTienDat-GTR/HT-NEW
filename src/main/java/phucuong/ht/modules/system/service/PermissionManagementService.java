@@ -6,6 +6,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.validation.CommonValidationHelper;
@@ -75,6 +76,7 @@ public class PermissionManagementService {
                 .build();
     }
 
+    @Transactional
     public PermissionResponse update(String permissionCode, PermissionUpdateRequest request, Authentication authentication) {
         Permission permission = systemPermissionRepository.findById(permissionCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay quyen: " + permissionCode));
@@ -91,7 +93,7 @@ public class PermissionManagementService {
 
         permission.setUpdatedAt(OffsetDateTime.now());
         permission.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Khong xac dinh duoc nguoi cap nhat quyen"));
-        return toResponse(permission);
+        return toResponse(systemPermissionRepository.save(permission));
     }
 
     public PermissionResponse toggleStatus(String permissionCode, StatusToggleRequest request, Authentication authentication) {

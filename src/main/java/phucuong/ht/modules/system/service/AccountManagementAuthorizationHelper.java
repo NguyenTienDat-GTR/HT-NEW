@@ -21,6 +21,9 @@ public class AccountManagementAuthorizationHelper {
     public static final String MANAGE_DIOCESE = "system.account.manage.diocese";
     public static final String MANAGE_DEANERY = "system.account.manage.deanery";
     public static final String MANAGE_PARISH = "system.account.manage.parish";
+    public static final String ACCOUNT_PERMISSION_MANAGE_DIOCESE = "system.account_permission.manage.diocese";
+    public static final String ACCOUNT_PERMISSION_MANAGE_DEANERY = "system.account_permission.manage.deanery";
+    public static final String ACCOUNT_PERMISSION_MANAGE_PARISH = "system.account_permission.manage.parish";
     private static final String SUPER_ADMIN = "SUPER_ADMIN";
     private static final String ADMIN_DIOCESE = "ADMIN_DIOCESE";
 
@@ -45,8 +48,8 @@ public class AccountManagementAuthorizationHelper {
         }
 
         requireScopedAccess(authentication, target, targetRole);
-        String actorRoleCode = hasAuthority(authentication, MANAGE_DIOCESE) ? "ADMIN_DIOCESE"
-                : hasAuthority(authentication, MANAGE_DEANERY) ? "ADMIN_DEANERY" : "ADMIN_PARISH";
+        String actorRoleCode = hasDioceseManageAuthority(authentication) ? "ADMIN_DIOCESE"
+                : hasDeaneryManageAuthority(authentication) ? "ADMIN_DEANERY" : "ADMIN_PARISH";
         Role actorRole = roleRepository.findByRoleCodeAndStatusTrue(actorRoleCode)
                 .orElseThrow(() -> validation.notFound("Khong tim thay role " + actorRoleCode));
         if (order(targetRole) <= order(actorRole)) {
@@ -95,17 +98,17 @@ public class AccountManagementAuthorizationHelper {
     }
 
     private void requireScopedAccess(Authentication authentication, Account target, Role targetRole) {
-        if (hasAuthority(authentication, MANAGE_DIOCESE)) {
+        if (hasDioceseManageAuthority(authentication)) {
             requireSame("giao phan", actorDiocese(authentication), dioceseId(target));
             requireHierarchy(targetRole, "ADMIN_DIOCESE");
             return;
         }
-        if (hasAuthority(authentication, MANAGE_DEANERY)) {
+        if (hasDeaneryManageAuthority(authentication)) {
             requireSame("giao hat", actorDeanery(authentication), deaneryId(target));
             requireHierarchy(targetRole, "ADMIN_DEANERY");
             return;
         }
-        if (hasAuthority(authentication, MANAGE_PARISH)) {
+        if (hasParishManageAuthority(authentication)) {
             requireSame("giao xu", actorParish(authentication), parishId(target));
             requireHierarchy(targetRole, "ADMIN_PARISH");
             return;
@@ -164,6 +167,18 @@ public class AccountManagementAuthorizationHelper {
 
     private boolean hasAuthority(Authentication auth, String permission) {
         return auth != null && auth.getAuthorities().stream().anyMatch(a -> permission.equals(a.getAuthority()));
+    }
+
+    private boolean hasDioceseManageAuthority(Authentication auth) {
+        return hasAuthority(auth, MANAGE_DIOCESE) || hasAuthority(auth, ACCOUNT_PERMISSION_MANAGE_DIOCESE);
+    }
+
+    private boolean hasDeaneryManageAuthority(Authentication auth) {
+        return hasAuthority(auth, MANAGE_DEANERY) || hasAuthority(auth, ACCOUNT_PERMISSION_MANAGE_DEANERY);
+    }
+
+    private boolean hasParishManageAuthority(Authentication auth) {
+        return hasAuthority(auth, MANAGE_PARISH) || hasAuthority(auth, ACCOUNT_PERMISSION_MANAGE_PARISH);
     }
 
     private boolean hasRole(Authentication auth, String roleCode) {

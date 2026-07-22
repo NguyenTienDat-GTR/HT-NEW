@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -43,12 +44,14 @@ class PermissionManagementServiceTest {
         request.setPermissionName("  New name  ");
         request.setDescription("  New description  ");
         request.setDisplayOrder(20);
+        when(systemPermissionRepository.save(permission)).thenReturn(permission);
 
         service.update("system.permission.read.all", request, authentication(List.of("SUPER_ADMIN")));
 
         assertEquals("New name", permission.getPermissionName());
         assertEquals("New description", permission.getDescription());
         assertEquals(20, permission.getDisplayOrder());
+        verify(systemPermissionRepository).save(permission);
     }
 
     private UsernamePasswordAuthenticationToken authentication(List<String> roles) {

@@ -50,6 +50,28 @@ public class RolePermissionRepository extends BaseRepo<RolePermission, String> {
         return query.getResultList();
     }
 
+    public List<String> findActivePermissionCodesByAccountUsername(String username) {
+        TypedQuery<String> query = entityManager.createQuery(
+                """
+                select distinct rp.permission.permissionCode
+                from AccountRole ar
+                join ar.role role
+                join RolePermission rp on rp.role = role
+                join rp.permission permission
+                where ar.account.username = :username
+                  and ar.status = true
+                  and role.status = true
+                  and rp.status = true
+                  and permission.status = true
+                  and (ar.expiresAt is null or ar.expiresAt > CURRENT_TIMESTAMP)
+                  and (rp.expiresAt is null or rp.expiresAt > CURRENT_TIMESTAMP)
+                """,
+                String.class
+        );
+        query.setParameter("username", username);
+        return query.getResultList();
+    }
+
     public int deactivateExpiredAssignments(OffsetDateTime expiresAtThreshold, OffsetDateTime updatedAt, String actor) {
         return 0;
     }

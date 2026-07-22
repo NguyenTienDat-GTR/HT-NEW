@@ -182,6 +182,7 @@ public class AuthService {
         }
         account.setPassword(passwordEncoder.encode(request.getNewPassword()));
         account.setMustChangePassword(Boolean.FALSE);
+        account.setUpdatedAt(OffsetDateTime.now());
         account.setUpdatedBy(principal.getUsername());
         accountRepository.save(account);
         redisTokenSessionService.revokeAllSessions(principal.getUsername());
