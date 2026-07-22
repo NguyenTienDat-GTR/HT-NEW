@@ -71,6 +71,30 @@ class RolePermissionManagementServiceTest {
     }
 
     @Test
+    void createShouldAllowDioceseAdminAssigningOwnedPermissionToEqualOrderCustomRole() {
+        Role targetRole = role("CUSTOM_DIOCESE", 100);
+        targetRole.setIsSystem(false);
+        Permission permission = permission("organization.position.read.diocese", "diocese");
+        RolePermission saved = new RolePermission();
+        saved.setId("rp-equal");
+        saved.setRole(targetRole);
+        saved.setPermission(permission);
+        saved.setEffect(PermissionEffect.ALLOW);
+        saved.setStatus(true);
+
+        RolePermissionCreateRequest request = request("CUSTOM_DIOCESE", "organization.position.read.diocese");
+
+        when(roleRepository.findById("CUSTOM_DIOCESE")).thenReturn(Optional.of(targetRole));
+        when(roleRepository.findByRoleCodeAndStatusTrue("ADMIN_DIOCESE")).thenReturn(Optional.of(role("ADMIN_DIOCESE", 100)));
+        when(systemPermissionRepository.findById("organization.position.read.diocese")).thenReturn(Optional.of(permission));
+        when(rolePermissionRepository.create(any(RolePermissionCreateRequest.class), anyString())).thenReturn(saved);
+
+        var response = service().create(request, authentication("organization.position.read.diocese"));
+
+        assertEquals("CUSTOM_DIOCESE", response.getRoleCode());
+    }
+
+    @Test
     void createShouldRejectDioceseAdminAssigningAllScopePermission() {
         Role targetRole = role("ADMIN_PARISH", 300);
         Permission permission = permission("system.role.read.all", "all");
@@ -91,6 +115,19 @@ class RolePermissionManagementServiceTest {
 
         when(roleRepository.findById("CUSTOM_HIGH")).thenReturn(Optional.of(targetRole));
         when(roleRepository.findByRoleCodeAndStatusTrue("ADMIN_DIOCESE")).thenReturn(Optional.of(role("ADMIN_DIOCESE", 100)));
+        when(systemPermissionRepository.findById("organization.position.read.diocese")).thenReturn(Optional.of(permission));
+
+        assertThrows(RuntimeException.class, () -> service().create(request, authentication("organization.position.read.diocese")));
+    }
+
+    @Test
+    void createShouldRejectDioceseAdminAssigningPermissionToSystemRole() {
+        Role targetRole = role("ADMIN_DEANERY", 200);
+        targetRole.setIsSystem(true);
+        Permission permission = permission("organization.position.read.diocese", "diocese");
+        RolePermissionCreateRequest request = request("ADMIN_DEANERY", "organization.position.read.diocese");
+
+        when(roleRepository.findById("ADMIN_DEANERY")).thenReturn(Optional.of(targetRole));
         when(systemPermissionRepository.findById("organization.position.read.diocese")).thenReturn(Optional.of(permission));
 
         assertThrows(RuntimeException.class, () -> service().create(request, authentication("organization.position.read.diocese")));

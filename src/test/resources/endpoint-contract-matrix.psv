@@ -99,7 +99,6 @@ PUT /api/system/account-roles/{id}|200|401|403|400|404|409
 PATCH /api/system/account-roles/{id}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict
 
 # Permission catalogue
-POST /api/system/permissions|200|401|403|400|404|409
 GET /api/system/permissions|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
 GET /api/system/permissions/taxonomy|200|401|403|N/A: endpoint accepts no client request data|N/A: taxonomy endpoint has no individual resource lookup|N/A: read-only endpoint does not mutate state
 GET /api/system/permissions/{permissionCode}|200|401|403|N/A: permission code is an opaque string|404|N/A: read-only endpoint does not mutate state

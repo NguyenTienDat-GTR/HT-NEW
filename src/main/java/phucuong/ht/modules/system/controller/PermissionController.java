@@ -9,7 +9,6 @@ import org.springframework.web.bind.annotation.*;
 import phucuong.ht.common.dto.apiResponse;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
-import phucuong.ht.modules.system.model.request.PermissionCreateRequest;
 import phucuong.ht.modules.system.model.request.PermissionUpdateRequest;
 import phucuong.ht.modules.system.model.response.PermissionResponse;
 import phucuong.ht.modules.system.model.response.PermissionTaxonomyResponse;
@@ -21,12 +20,6 @@ import phucuong.ht.modules.system.service.PermissionManagementService;
 public class PermissionController {
 
     private final PermissionManagementService permissionManagementService;
-
-    @PostMapping
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public apiResponse<PermissionResponse> create(@Valid @RequestBody PermissionCreateRequest request, Authentication authentication) {
-        return apiResponse.success("Tạo quyền thành công", permissionManagementService.create(request, authentication));
-    }
 
     @GetMapping
     @PreAuthorize("hasRole('SUPER_ADMIN')"
