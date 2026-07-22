@@ -1,6 +1,7 @@
 package phucuong.ht.modules.system.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -51,6 +52,8 @@ public class AccountRoleService {
     private final AccountRoleRepository accountRoleRepository;
     private final RoleRepository roleRepository;
     private final CommonValidationHelper commonValidationHelper;
+    @Autowired(required = false)
+    private RbacAuthRefreshNotifier authRefreshNotifier;
 
     @Transactional
     public AccountRoleResponse assignRole(AccountRoleCreateRequest request, Authentication authentication) {
@@ -69,6 +72,7 @@ public class AccountRoleService {
         if (Boolean.TRUE.equals(saved.getIsPrimary())) {
             clearOtherPrimaryRoles(account.getUsername(), saved.getRole().getRoleCode(), actor);
         }
+        notifyAccountRoleChanged(account.getUsername(), "ACCOUNT_ROLE_ASSIGNED");
         return toResponse(saved);
     }
 
@@ -102,6 +106,7 @@ public class AccountRoleService {
         if (primaryRoleCode != null) {
             clearOtherPrimaryRoles(account.getUsername(), primaryRoleCode, actor);
         }
+        notifyAccountRoleChanged(account.getUsername(), "ACCOUNT_ROLE_BULK_ASSIGNED");
         return responses;
     }
 
@@ -160,6 +165,7 @@ public class AccountRoleService {
         if (Boolean.TRUE.equals(entity.getIsPrimary())) {
             clearOtherPrimaryRoles(account.getUsername(), role.getRoleCode(), actor);
         }
+        notifyAccountRoleChanged(account.getUsername(), "ACCOUNT_ROLE_UPDATED");
         return toResponse(entity);
     }
 
@@ -171,7 +177,14 @@ public class AccountRoleService {
         entity.setStatus(!Boolean.TRUE.equals(entity.getStatus()));
         entity.setUpdatedAt(OffsetDateTime.now());
         entity.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái vai trò tài khoản"));
+        notifyAccountRoleChanged(entity.getAccount().getUsername(), "ACCOUNT_ROLE_TOGGLED");
         return toResponse(entity);
+    }
+
+    private void notifyAccountRoleChanged(String username, String reason) {
+        if (authRefreshNotifier != null) {
+            authRefreshNotifier.notifyAccount(username, reason);
+        }
     }
 
     private Account requireAccount(String username) {

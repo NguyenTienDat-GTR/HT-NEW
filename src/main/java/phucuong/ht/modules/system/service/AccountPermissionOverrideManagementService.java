@@ -1,6 +1,7 @@
 package phucuong.ht.modules.system.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -46,6 +47,8 @@ public class AccountPermissionOverrideManagementService {
     private final RolePermissionRepository rolePermissionRepository;
     private final CommonValidationHelper commonValidationHelper;
     private final SystemAdminAuthorizationHelper authorizationHelper;
+    @Autowired(required = false)
+    private RbacAuthRefreshNotifier authRefreshNotifier;
 
     @Transactional
     public AccountPermissionOverrideResponse create(AccountPermissionOverrideCreateRequest request, Authentication authentication) {
@@ -68,6 +71,7 @@ public class AccountPermissionOverrideManagementService {
         String actor = commonValidationHelper.requireAuditActor(authentication, "Khong xac dinh duoc nguoi tao phan quyen cho tai khoan");
         AccountPermissionOverride override = accountPermissionOverrideRepository.create(request, actor);
         override.setStatus(true);
+        notifyAccountPermissionChanged(request.getUsername(), "ACCOUNT_PERMISSION_CREATED");
         return toResponse(override);
     }
 
@@ -100,6 +104,7 @@ public class AccountPermissionOverrideManagementService {
             responses.add(toResponse(override));
         }
 
+        notifyAccountPermissionChanged(request.getUsername(), "ACCOUNT_PERMISSION_BULK_ASSIGNED");
         return responses;
     }
 
@@ -154,6 +159,7 @@ public class AccountPermissionOverrideManagementService {
         override.setStatus(true);
         override.setUpdatedAt(OffsetDateTime.now());
         override.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Khong xac dinh duoc nguoi cap nhat phan quyen cho tai khoan"));
+        notifyAccountPermissionChanged(override.getAccount().getUsername(), "ACCOUNT_PERMISSION_UPDATED");
         return toResponse(override);
     }
 
@@ -170,7 +176,14 @@ public class AccountPermissionOverrideManagementService {
         override.setStatus(true);
         override.setUpdatedAt(OffsetDateTime.now());
         override.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Khong xac dinh duoc nguoi doi trang thai phan quyen cho tai khoan"));
+        notifyAccountPermissionChanged(override.getAccount().getUsername(), "ACCOUNT_PERMISSION_TOGGLED");
         return toResponse(override);
+    }
+
+    private void notifyAccountPermissionChanged(String username, String reason) {
+        if (authRefreshNotifier != null) {
+            authRefreshNotifier.notifyAccount(username, reason);
+        }
     }
 
     private BaseSearchRequest copyRequest(BaseSearchRequest request) {

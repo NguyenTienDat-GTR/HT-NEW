@@ -19,8 +19,10 @@ import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 import phucuong.ht.common.utils.jwtUtils;
 import phucuong.ht.modules.auth.service.RedisTokenSessionService;
+import phucuong.ht.modules.system.service.RbacAuthRefreshNotifier;
 
 import java.util.Arrays;
+import java.util.Set;
 
 @Configuration
 @EnableWebSocketMessageBroker
@@ -28,6 +30,10 @@ import java.util.Arrays;
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private static final String NOTIFICATION_DESTINATION = "/user/queue/notifications";
+    private static final Set<String> USER_DESTINATIONS = Set.of(
+            NOTIFICATION_DESTINATION,
+            "/user" + RbacAuthRefreshNotifier.DESTINATION
+    );
 
     private final jwtUtils jwtUtils;
     private final RedisTokenSessionService redisTokenSessionService;
@@ -91,7 +97,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
             }
             if (command == StompCommand.SUBSCRIBE) {
                 requireAuthenticated(accessor);
-                if (!NOTIFICATION_DESTINATION.equals(accessor.getDestination())) {
+                if (!USER_DESTINATIONS.contains(accessor.getDestination())) {
                     throw new AccessDeniedException("Chỉ được subscribe kênh thông báo cá nhân");
                 }
                 return message;

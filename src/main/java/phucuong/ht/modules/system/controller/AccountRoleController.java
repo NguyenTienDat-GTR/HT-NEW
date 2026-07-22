@@ -113,7 +113,8 @@ public class AccountRoleController {
     }
     @PatchMapping("/{id}/toggle-status")
     @PreAuthorize(
-            "@securityUtils.hasAuthority(authentication, 'system.account_role.assign.all')"
+            "@securityUtils.hasAuthority(authentication, 'system.account_role.toggle.all')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.account_role.assign.all')"
                     + " || @securityUtils.hasAuthority(authentication, 'system.account_role.assign.diocese')"
                     + " || @securityUtils.hasAuthority(authentication, 'system.account_role.assign.deanery')"
                     + " || @securityUtils.hasAuthority(authentication, 'system.account_role.assign.parish')"

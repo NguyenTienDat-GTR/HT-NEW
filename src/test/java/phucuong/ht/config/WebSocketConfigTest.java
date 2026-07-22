@@ -22,6 +22,8 @@ class WebSocketConfigTest {
 
         Message<?> allowed = message(StompCommand.SUBSCRIBE, "/user/queue/notifications", true);
         assertSame(allowed, interceptor.preSend(allowed, null));
+        Message<?> authRefreshAllowed = message(StompCommand.SUBSCRIBE, "/user/queue/auth-events", true);
+        assertSame(authRefreshAllowed, interceptor.preSend(authRefreshAllowed, null));
 
         assertThrows(AccessDeniedException.class,
                 () -> interceptor.preSend(message(StompCommand.SUBSCRIBE, "/user/other/queue/notifications", true), null));
