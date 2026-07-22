@@ -1,6 +1,7 @@
 package phucuong.ht.modules.system.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -28,6 +29,8 @@ public class PermissionManagementService {
     private final SystemPermissionRepository systemPermissionRepository;
     private final CommonValidationHelper commonValidationHelper;
     private final SystemAdminAuthorizationHelper authorizationHelper;
+    @Autowired(required = false)
+    private RbacAuthRefreshNotifier authRefreshNotifier;
 
     public Page<PermissionResponse> findAll(BaseSearchRequest request, Authentication authentication) {
         BaseSearchRequest repositoryRequest = copyRequest(request);
@@ -97,14 +100,23 @@ public class PermissionManagementService {
 
         permission.setUpdatedAt(OffsetDateTime.now());
         permission.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Khong xac dinh duoc nguoi cap nhat quyen"));
-        return toResponse(systemPermissionRepository.save(permission));
+        Permission saved = systemPermissionRepository.save(permission);
+        notifyPermissionChanged(permissionCode, "PERMISSION_UPDATED");
+        return toResponse(saved);
     }
 
     public PermissionResponse toggleStatus(String permissionCode, StatusToggleRequest request, Authentication authentication) {
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
         String actor = commonValidationHelper.requireAuditActor(authentication, "Khong xac dinh duoc nguoi doi trang thai quyen");
         systemPermissionRepository.toggleStatus(permissionCode, actor);
+        notifyPermissionChanged(permissionCode, "PERMISSION_TOGGLED");
         return findById(permissionCode, authentication);
+    }
+
+    private void notifyPermissionChanged(String permissionCode, String reason) {
+        if (authRefreshNotifier != null) {
+            authRefreshNotifier.notifyPermissionChanged(permissionCode, reason);
+        }
     }
 
     private String normalizeRequiredText(String value, String message) {

@@ -1,6 +1,7 @@
 package phucuong.ht.modules.system.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -64,6 +65,8 @@ public class RolePermissionManagementService {
     private final SystemPermissionRepository systemPermissionRepository;
     private final CommonValidationHelper commonValidationHelper;
     private final SystemAdminAuthorizationHelper authorizationHelper;
+    @Autowired(required = false)
+    private RbacAuthRefreshNotifier authRefreshNotifier;
 
     @Transactional
     public RolePermissionResponse create(RolePermissionCreateRequest request, Authentication authentication) {
@@ -88,6 +91,7 @@ public class RolePermissionManagementService {
         RolePermission rolePermission = rolePermissionRepository.create(request, actor);
         rolePermission.setAssignedBy(actor);
         rolePermission.setAssignedAt(request.getAssignedAt() == null ? OffsetDateTime.now() : request.getAssignedAt());
+        notifyRolePermissionChanged(request.getRoleCode(), "ROLE_PERMISSION_CREATED");
         return toResponse(rolePermission);
     }
 
@@ -123,6 +127,7 @@ public class RolePermissionManagementService {
             responses.add(toResponse(rolePermission));
         }
 
+        notifyRolePermissionChanged(request.getRoleCode(), "ROLE_PERMISSION_BULK_ASSIGNED");
         return responses;
     }
 
@@ -180,6 +185,7 @@ public class RolePermissionManagementService {
         }
         rolePermission.setUpdatedAt(OffsetDateTime.now());
         rolePermission.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật phân quyền cho vai trò"));
+        notifyRolePermissionChanged(rolePermission.getRole().getRoleCode(), "ROLE_PERMISSION_UPDATED");
         return toResponse(rolePermission);
     }
 
@@ -202,7 +208,14 @@ public class RolePermissionManagementService {
         rolePermission.setStatus(true);
         rolePermission.setUpdatedAt(OffsetDateTime.now());
         rolePermission.setUpdatedBy(actor);
+        notifyRolePermissionChanged(rolePermission.getRole().getRoleCode(), "ROLE_PERMISSION_TOGGLED");
         return toResponse(rolePermission);
+    }
+
+    private void notifyRolePermissionChanged(String roleCode, String reason) {
+        if (authRefreshNotifier != null) {
+            authRefreshNotifier.notifyRoleChanged(roleCode, reason);
+        }
     }
 
     private BaseSearchRequest copyRequest(BaseSearchRequest request) {

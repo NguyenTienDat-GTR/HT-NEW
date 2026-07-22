@@ -1,6 +1,7 @@
 package phucuong.ht.modules.system.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -14,7 +15,6 @@ import phucuong.ht.modules.system.model.entity.Role;
 import phucuong.ht.modules.system.model.request.RoleCreateRequest;
 import phucuong.ht.modules.system.model.request.RoleUpdateRequest;
 import phucuong.ht.modules.system.model.response.RoleResponse;
-import phucuong.ht.modules.system.repository.RolePermissionRepository;
 import phucuong.ht.modules.system.repository.SystemRoleRepository;
 
 import java.text.Normalizer;
@@ -28,9 +28,10 @@ import java.util.Locale;
 public class RoleManagementService {
 
     private final SystemRoleRepository systemRoleRepository;
-    private final RolePermissionRepository rolePermissionRepository;
     private final CommonValidationHelper commonValidationHelper;
     private final SystemAdminAuthorizationHelper authorizationHelper;
+    @Autowired(required = false)
+    private RbacAuthRefreshNotifier authRefreshNotifier;
 
     @Transactional
     public RoleResponse create(RoleCreateRequest request, Authentication authentication) {
@@ -79,7 +80,9 @@ public class RoleManagementService {
         }
         role.setUpdatedAt(OffsetDateTime.now());
         role.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật vai trò"));
-        return toResponse(systemRoleRepository.save(role));
+        Role saved = systemRoleRepository.save(role);
+        notifyRoleChanged(roleCode, "ROLE_UPDATED");
+        return toResponse(saved);
     }
 
     @Transactional
@@ -93,8 +96,14 @@ public class RoleManagementService {
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái vai trò");
         Role updatedRole = systemRoleRepository.toggleStatus(roleCode, actor);
-        rolePermissionRepository.updateStatusByRoleCode(roleCode, Boolean.TRUE.equals(updatedRole.getStatus()), OffsetDateTime.now(), actor);
+        notifyRoleChanged(roleCode, "ROLE_TOGGLED");
         return toResponse(updatedRole);
+    }
+
+    private void notifyRoleChanged(String roleCode, String reason) {
+        if (authRefreshNotifier != null) {
+            authRefreshNotifier.notifyRoleChanged(roleCode, reason);
+        }
     }
 
     private String nextAvailableRoleCode(String roleName) {

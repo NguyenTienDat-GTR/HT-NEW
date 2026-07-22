@@ -109,7 +109,7 @@ class ScopedSystemAdministrationReadTest {
     }
 
     private RoleManagementService roleService() {
-        return new RoleManagementService(roleRepository, rolePermissionRepository, helper(), authorizationHelper);
+        return new RoleManagementService(roleRepository, helper(), authorizationHelper);
     }
 
     private PermissionManagementService permissionService() {

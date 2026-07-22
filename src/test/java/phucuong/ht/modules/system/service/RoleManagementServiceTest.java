@@ -2,7 +2,6 @@ package phucuong.ht.modules.system.service;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.Authentication;
@@ -11,10 +10,8 @@ import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.modules.system.model.entity.Role;
 import phucuong.ht.modules.system.model.request.RoleCreateRequest;
 import phucuong.ht.modules.system.model.request.RoleUpdateRequest;
-import phucuong.ht.modules.system.repository.RolePermissionRepository;
 import phucuong.ht.modules.system.repository.SystemRoleRepository;
 
-import java.time.OffsetDateTime;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -28,9 +25,6 @@ class RoleManagementServiceTest {
 
     @Mock
     private SystemRoleRepository roleRepository;
-
-    @Mock
-    private RolePermissionRepository rolePermissionRepository;
 
     @Mock
     private CommonValidationHelper validationHelper;
@@ -72,7 +66,7 @@ class RoleManagementServiceTest {
     }
 
     @Test
-    void toggleStatusShouldCascadeRolePermissionStatus() {
+    void toggleStatusShouldOnlyToggleRoleAndPreserveChildMappings() {
         Role before = role("CUSTOM_ROLE", true);
         Role after = role("CUSTOM_ROLE", false);
         StatusToggleRequest request = new StatusToggleRequest();
@@ -86,9 +80,8 @@ class RoleManagementServiceTest {
         var response = service.toggleStatus("CUSTOM_ROLE", request, authentication);
 
         assertEquals(false, response.getStatus());
-        ArgumentCaptor<OffsetDateTime> updatedAt = ArgumentCaptor.forClass(OffsetDateTime.class);
         verify(validationHelper).requireStatusToggleConfirmation("Xác nhận");
-        verify(rolePermissionRepository).updateStatusByRoleCode(eq("CUSTOM_ROLE"), eq(false), updatedAt.capture(), eq("super-admin"));
+        verify(roleRepository).toggleStatus("CUSTOM_ROLE", "super-admin");
     }
 
     @Test
@@ -117,7 +110,7 @@ class RoleManagementServiceTest {
     }
 
     private RoleManagementService service() {
-        return new RoleManagementService(roleRepository, rolePermissionRepository, validationHelper, authorizationHelper);
+        return new RoleManagementService(roleRepository, validationHelper, authorizationHelper);
     }
 
     private Role role(String roleCode, boolean status) {
