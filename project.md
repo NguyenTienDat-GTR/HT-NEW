@@ -1168,3 +1168,11 @@ The following work was added in this iteration:
 - `AccountRoleServiceTest` covers the scoped admin-system-role delegation rule, including `ADMIN_DIOCESE` assigning `ADMIN_DEANERY`, assignable-role options exposing `ADMIN_DEANERY`/`ADMIN_PARISH`, and rejection of `ADMIN_DIOCESE` self-level assignment.
 - Verification run in this session: `.\gradlew.bat testClasses` passed; targeted `RolePermissionManagementServiceTest`, `AccountRoleServiceTest`, `AccountPermissionOverrideManagementServiceTest`, `PermissionManagementServiceTest`, `EndpointContractMatrixTest`, `AccountPermissionOverrideControllerSecurityIntegrationTest`, `RoleControllerSecurityIntegrationTest`, and `RolePermissionControllerSecurityIntegrationTest` passed. A full `.\gradlew.bat test` attempt hit PostgreSQL `FATAL: sorry, too many clients already`; rerunning the affected controller slice separately passed.
 
+### Vietnamese permission metadata 2026-07-22
+
+- Branch `feature/vietnamese-permission-labels` starts from up-to-date `main` in both BE and FE.
+- Flyway `V050__vietnamese_permission_metadata.sql` translates `permission_module`, `permission_resource`, `permission_action`, `permission_scope`, and `permission.permission_name/description` into Vietnamese while preserving `permission_code`, module/resource/action/scope codes, status, and assignment semantics.
+- Permission names are derived from taxonomy codes and special-cased for session management, dashboard read, role-permission assignment/revoke/read, account-role assignment, and account-permission management so labels match the HT Management RBAC context.
+- `GET /api/system/permissions` accepts `filters.effect=ALLOW|DENY`; the service removes `effect` before repository entity filtering, then keeps only permissions with an active role-permission or account-permission assignment using that effect.
+- Verification run in this session: `git diff --check` passed; `.\gradlew.bat test --tests phucuong.ht.HtManagementNewApplicationTests` passed and loaded the new migration in the Spring test context; targeted `PermissionManagementServiceTest` and `PermissionControllerSecurityIntegrationTest` passed for effect filtering/binding.
+

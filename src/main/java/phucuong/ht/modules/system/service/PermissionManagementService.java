@@ -11,6 +11,7 @@ import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.modules.system.model.entity.Permission;
+import phucuong.ht.modules.system.model.enums.PermissionEffect;
 import phucuong.ht.modules.system.model.request.PermissionUpdateRequest;
 import phucuong.ht.modules.system.model.response.PermissionResponse;
 import phucuong.ht.modules.system.model.response.PermissionTaxonomyResponse;
@@ -29,8 +30,11 @@ public class PermissionManagementService {
     private final SystemAdminAuthorizationHelper authorizationHelper;
 
     public Page<PermissionResponse> findAll(BaseSearchRequest request, Authentication authentication) {
-        List<Permission> manageable = loadAllMatching(request).stream()
+        BaseSearchRequest repositoryRequest = copyRequest(request);
+        PermissionEffect effect = extractEffectFilter(repositoryRequest);
+        List<Permission> manageable = loadAllMatching(repositoryRequest).stream()
                 .filter(permission -> authorizationHelper.canReadPermission(authentication, permission))
+                .filter(permission -> effect == null || systemPermissionRepository.hasAssignmentEffect(permission.getPermissionCode(), effect))
                 .toList();
         return page(request, manageable);
     }
@@ -123,6 +127,18 @@ public class PermissionManagementService {
         copy.setSortBy(source.getSortBy());
         copy.setSortDirection(source.getSortDirection());
         return copy;
+    }
+
+    private PermissionEffect extractEffectFilter(BaseSearchRequest request) {
+        Object rawEffect = request.getFilters().remove("effect");
+        if (rawEffect == null || String.valueOf(rawEffect).isBlank()) {
+            return null;
+        }
+        try {
+            return PermissionEffect.valueOf(String.valueOf(rawEffect).trim().toUpperCase());
+        } catch (IllegalArgumentException exception) {
+            throw commonValidationHelper.validationError("Hiệu lực quyền không hợp lệ");
+        }
     }
 
     private List<Permission> loadAllMatching(BaseSearchRequest request) {
