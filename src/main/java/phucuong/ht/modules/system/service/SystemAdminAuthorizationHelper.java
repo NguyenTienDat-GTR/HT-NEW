@@ -92,7 +92,7 @@ public class SystemAdminAuthorizationHelper {
             return;
         }
         if (!hasRoleActionAuthority(authentication, "create")) {
-            throw commonValidationHelper.forbidden("Khong co quyen tao vai tro");
+            throw commonValidationHelper.forbidden("Không có quyền tạo vai trò");
         }
     }
 
@@ -102,7 +102,7 @@ public class SystemAdminAuthorizationHelper {
         }
         Integer actorOrder = actorRoleOrder(authentication);
         if (actorOrder == null || displayOrder < actorOrder) {
-            throw commonValidationHelper.forbidden("Khong the quan ly vai tro co cap cao hon pham vi hien tai");
+            throw commonValidationHelper.forbidden("Không thể quản lý vai trò có cấp cao hơn phạm vi hiện tại");
         }
     }
 
@@ -111,10 +111,10 @@ public class SystemAdminAuthorizationHelper {
             return;
         }
         if (!hasRoleActionAuthority(authentication, actionCode)) {
-            throw commonValidationHelper.forbidden("Khong co quyen cap nhat vai tro");
+            throw commonValidationHelper.forbidden("Không có quyền cập nhật vai trò");
         }
         if (Boolean.TRUE.equals(role.getIsSystem())) {
-            throw commonValidationHelper.forbidden("Khong duoc cap nhat vai tro he thong");
+            throw commonValidationHelper.forbidden("Không được cập nhật vai trò hệ thống");
         }
         requireRoleAtOrBelowActor(authentication, role);
     }
@@ -137,7 +137,7 @@ public class SystemAdminAuthorizationHelper {
             return;
         }
         if (Boolean.TRUE.equals(role.getIsSystem())) {
-            throw commonValidationHelper.forbidden("Chi SUPER_ADMIN duoc thay doi phan quyen cua vai tro he thong");
+            throw commonValidationHelper.forbidden("Chỉ SUPER_ADMIN được thay đổi phân quyền của vai trò hệ thống");
         }
         requireRolePermissionOperationAuthority(authentication, authority);
         requireActorOwnsPermission(authentication, permission);
@@ -179,7 +179,7 @@ public class SystemAdminAuthorizationHelper {
         }
         int scopeOrder = rolePermissionReadScopeOrder(authentication);
         if (scopeOrder == Integer.MAX_VALUE) {
-            throw commonValidationHelper.forbidden("Khong co quyen doc permission trong pham vi quan ly");
+            throw commonValidationHelper.forbidden("Không c quyền đọc quyền trong phạm vi quản lí");
         }
         requirePermissionAtOrBelowScope(permission, scopeOrder);
     }
@@ -199,7 +199,7 @@ public class SystemAdminAuthorizationHelper {
         }
         int scopeOrder = rolePermissionReadScopeOrder(authentication);
         if (scopeOrder == Integer.MAX_VALUE) {
-            throw commonValidationHelper.forbidden("Khong co quyen doc phan quyen vai tro");
+            throw commonValidationHelper.forbidden("Không có quyền đo phân quyền vai trò");
         }
         requireRoleAtOrBelowActor(authentication, role);
         requirePermissionAtOrBelowScope(permission, scopeOrder);
@@ -248,7 +248,7 @@ public class SystemAdminAuthorizationHelper {
         if (rolePermissionAuthorityScopeOrder(authentication, authority) != Integer.MAX_VALUE) {
             return;
         }
-        throw commonValidationHelper.forbidden("Khong co quyen thay doi phan quyen cho vai tro");
+        throw commonValidationHelper.forbidden("Không có quyền thay đổi phân quyền cho vai trò");
     }
 
     private int rolePermissionReadScopeOrder(Authentication authentication) {
@@ -295,7 +295,7 @@ public class SystemAdminAuthorizationHelper {
         Integer targetOrder = targetRole == null ? null : targetRole.getDisplayOrder();
         Integer actorOrder = actorRoleOrder(authentication);
         if (actorOrder == null || targetOrder == null || targetOrder < actorOrder) {
-            throw commonValidationHelper.forbidden("Chi duoc gan quyen cho vai tro bang hoac thap hon vai tro hien tai");
+            throw commonValidationHelper.forbidden("Chỉ được gán quyền cho vai trò bằng hoặc thấp hơn vai trò hiện tại");
         }
     }
 
@@ -303,7 +303,7 @@ public class SystemAdminAuthorizationHelper {
         Integer actorOrder = actorRoleOrder(authentication);
         Integer targetOrder = targetRole == null ? null : targetRole.getDisplayOrder();
         if (actorOrder == null || (targetOrder != null && targetOrder < actorOrder)) {
-            throw commonValidationHelper.forbidden("Khong the quan ly vai tro co cap cao hon pham vi hien tai");
+            throw commonValidationHelper.forbidden("Không thểquanrnr l vai trò có cấp cao hơn phạm vi hiện tại");
         }
     }
 

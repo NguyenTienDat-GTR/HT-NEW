@@ -38,7 +38,7 @@ public class TrainingNotificationRecipientResolver {
                     .toList());
             unresolved.removeAll(resolved);
             if (!unresolved.isEmpty()) {
-                throw commonValidationHelper.validationError("Nguoi nhan thong bao khong hop le: " + unresolved.iterator().next());
+                throw commonValidationHelper.validationError("Người nhận thông báo: " + unresolved.iterator().next());
             }
         }
 

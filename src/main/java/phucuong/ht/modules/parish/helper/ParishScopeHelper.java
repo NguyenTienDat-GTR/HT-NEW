@@ -28,12 +28,12 @@ public class ParishScopeHelper {
         }
 
         if (!securityUtils.hasAuthority(authentication, ParishAccessEvaluator.CREATE_DEANERY)) {
-            throw commonValidationHelper.forbidden("Tai khoan hien tai khong co quyen tao giao xu");
+            throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền tạo giáo xứ");
         }
 
         UUID activeDeaneryId = getRequiredActiveDeaneryId(authentication, ParishAccessEvaluator.CREATE_DEANERY);
         if (!activeDeaneryId.equals(request.getDeaneryId())) {
-            throw commonValidationHelper.forbidden("Khong the tao giao xu ngoai pham vi giao hat hien tai");
+            throw commonValidationHelper.forbidden("Không thể tạo giáo xứ ngoài phạm vi giáo hạt hiện tại");
         }
     }
 
@@ -52,42 +52,42 @@ public class ParishScopeHelper {
             return;
         }
 
-        throw commonValidationHelper.forbidden("Tai khoan hien tai khong co quyen thay doi giao hat cua giao xu");
+        throw commonValidationHelper.forbidden("Tài khoản hiện tại khoog có quyền thay đổi giáo hạt của giáo xứ");
     }
 
     public UUID getRequiredActiveDioceseId(Authentication authentication, String permissionCode) {
         String username = securityUtils.currentUsername(authentication);
         if (!StringUtils.hasText(username)) {
-            throw commonValidationHelper.forbidden("Tai khoan hien tai khong xac dinh duoc ten dang nhap cho quyen " + permissionCode);
+            throw commonValidationHelper.forbidden("Tài khoản hiện tại không xác định được tên đăng nhập cho quyền " + permissionCode);
         }
 
         return accountRepository.findActiveDioceseIdByUsername(username)
                 .orElseThrow(() -> commonValidationHelper.forbidden(
-                        "Tai khoan hien tai khong co pham vi giao phan hop le cho quyen " + permissionCode
+                        "Tài khoản hiện tại không có phạm vi giáo phận hợp lệ cho quyền " + permissionCode
                 ));
     }
 
     public UUID getRequiredActiveDeaneryId(Authentication authentication, String permissionCode) {
         String username = securityUtils.currentUsername(authentication);
         if (!StringUtils.hasText(username)) {
-            throw commonValidationHelper.forbidden("Tai khoan hien tai khong xac dinh duoc ten dang nhap cho quyen " + permissionCode);
+            throw commonValidationHelper.forbidden("Tài khoản hiện tại không xác định được tên đăng nhập cho quyền " + permissionCode);
         }
 
         return accountRepository.findActiveDeaneryIdByUsername(username)
                 .orElseThrow(() -> commonValidationHelper.forbidden(
-                        "Tai khoan hien tai khong co pham vi giao hat hop le cho quyen " + permissionCode
+                        "Tài khoản hiện tại không có phạm vi giáo hạt hợp lệ cho quyền " + permissionCode
                 ));
     }
 
     public UUID getRequiredActiveParishId(Authentication authentication, String permissionCode) {
         String username = securityUtils.currentUsername(authentication);
         if (!StringUtils.hasText(username)) {
-            throw commonValidationHelper.forbidden("Tai khoan hien tai khong xac dinh duoc ten dang nhap cho quyen " + permissionCode);
+            throw commonValidationHelper.forbidden("Tài khoản hiện tại không xác định được tên đăng nhập cho quyền " + permissionCode);
         }
 
         return accountRepository.findActiveParishIdByUsername(username)
                 .orElseThrow(() -> commonValidationHelper.forbidden(
-                        "Tai khoan hien tai khong co pham vi giao xu hop le cho quyen " + permissionCode
+                        "Tài khoản hiện tại không có phạm vi giáo xứ hợp lệ cho quyền " + permissionCode
                 ));
     }
 }

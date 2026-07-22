@@ -1,13 +1,13 @@
 package phucuong.ht.modules.training.courseParticipation.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.enums.UnitType;
+import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.validation.AccountScopeValidationHelper;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.config.DomainEventMessage;
@@ -28,11 +28,7 @@ import phucuong.ht.modules.training.TrainingScoreFormulaEvaluator;
 import phucuong.ht.modules.training.TrainingWorkflowSupport;
 import phucuong.ht.modules.training.courseParticipation.model.entity.CourseParticipation;
 import phucuong.ht.modules.training.courseParticipation.model.entity.CourseParticipationComponentScore;
-import phucuong.ht.modules.training.courseParticipation.model.request.ComponentScoreRequest;
-import phucuong.ht.modules.training.courseParticipation.model.request.TrainingApprovalRequest;
-import phucuong.ht.modules.training.courseParticipation.model.request.TrainingRegistrationRequest;
-import phucuong.ht.modules.training.courseParticipation.model.request.TrainingScoreRequest;
-import phucuong.ht.modules.training.courseParticipation.model.request.TrainingSubmissionRecipientRequest;
+import phucuong.ht.modules.training.courseParticipation.model.request.*;
 import phucuong.ht.modules.training.courseParticipation.model.response.ComponentScoreResponse;
 import phucuong.ht.modules.training.courseParticipation.model.response.CourseParticipationResponse;
 import phucuong.ht.modules.training.courseParticipation.model.response.TrainingRegistrationBatchResponse;
@@ -51,13 +47,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.Period;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -124,19 +114,19 @@ public class CourseParticipationService {
             Leader leader = leaderRepository.findByIdWithParish(leaderId)
                     .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy leader " + leaderId));
             if (!Boolean.TRUE.equals(leader.getStatus())) {
-                throw commonValidationHelper.validationError("Chỉ được đăng ký leader đang hoạt động");
+                throw commonValidationHelper.validationError("Chỉ được đăng ký Huynh Trưởng đang hoạt động");
             }
             if (leader.getParish() == null || !activeParishId.equals(leader.getParish().getId())) {
-                throw commonValidationHelper.forbidden("Không thể đăng ký leader ngoài giáo xứ hiện tại");
+                throw commonValidationHelper.forbidden("Không thể đăng ký Huynh Trưởng ngoài giáo xứ hiện tại");
             }
 
             if (courseParticipationRepository.existsByLeaderIdAndCourseCode(leaderId, courseCode)) {
-                throw commonValidationHelper.conflict("Leader đã có hồ sơ tham gia khóa huấn luyện này");
+                throw commonValidationHelper.conflict("Huynh Trưởng đã có hồ sơ tham gia khóa huấn luyện này");
             }
             boolean eligible = isEligible(leader, course);
             String exceptionReason = resolveExceptionReason(request.getExceptionReasonsByLeaderId(), leaderId);
             if (!eligible && (exceptionReason == null || exceptionReason.isBlank())) {
-                throw commonValidationHelper.validationError("Leader không đủ điều kiện, cần nhập exceptionReason");
+                throw commonValidationHelper.validationError("Huynh Trưởng không đủ điều kiện, cần nhập lí do đặc cách");
             }
 
             CourseParticipation participation = new CourseParticipation();
@@ -202,7 +192,7 @@ public class CourseParticipationService {
     public TrainingRegistrationBatchResponse deanerySubmit(String courseCode, TrainingSubmissionRecipientRequest request, Authentication authentication) {
         TrainingCourse course = requireCourse(courseCode);
         if (trainingWorkflowSupport.isDeaneryManaged(course.getCourseType())) {
-            throw commonValidationHelper.validationError("Khóa DT không dùng luồng deanery-submit");
+            throw commonValidationHelper.validationError("Khóa Dự trưởng không cần giáo hạt phải nộp danh sách");
         }
 
         UUID activeDeaneryId = accountScopeValidationHelper.requireActiveDeaneryId(authentication, CourseParticipationAccessEvaluator.SUBMIT_DEANERY);
@@ -259,7 +249,7 @@ public class CourseParticipationService {
         CourseParticipation participation = courseParticipationRepository.findByIdWithLeaderAndCourse(participationId)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy đăng ký khóa huấn luyện " + participationId));
         if (!trainingWorkflowSupport.isDeaneryManaged(participation.getCourse().getCourseType())) {
-            throw commonValidationHelper.validationError("Chỉ khóa DT mới dùng deanery approval");
+            throw commonValidationHelper.validationError("Chỉ khóa Dự trưởng chỉ cần giáo hạt duyệt danh sách");
         }
 
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người duyệt giáo hạt");
@@ -279,7 +269,7 @@ public class CourseParticipationService {
         CourseParticipation participation = courseParticipationRepository.findByIdWithLeaderAndCourse(participationId)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy đăng ký khóa huấn luyện " + participationId));
         if (trainingWorkflowSupport.isDeaneryManaged(participation.getCourse().getCourseType())) {
-            throw commonValidationHelper.validationError("Khóa DT không dùng diocese approval");
+            throw commonValidationHelper.validationError("Khóa Dự trưởng không không cần giáo phận duyệt danh sách");
         }
 
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người duyệt giáo phận");
@@ -319,7 +309,7 @@ public class CourseParticipationService {
                 throw commonValidationHelper.validationError("Thiếu điểm cho thành phần bắt buộc " + formulaComponent.getComponent().getCode());
             }
             if (componentRequest.getScore().compareTo(formulaComponent.getComponent().getMaxScore()) > 0) {
-                throw commonValidationHelper.validationError("Điểm vượt quá maxScore của thành phần " + formulaComponent.getComponent().getCode());
+                throw commonValidationHelper.validationError("Điểm vượt quá điểm tối đa của thành phần " + formulaComponent.getComponent().getCode());
             }
 
             CourseParticipationComponentScore persistedScore = new CourseParticipationComponentScore();
@@ -336,7 +326,7 @@ public class CourseParticipationService {
             formulaVariables.put(formulaComponent.getComponent().getCode(), componentRequest.getScore());
         }
         if (!requestedScores.isEmpty()) {
-            throw commonValidationHelper.validationError("componentScores gửi lên có thành phần ngoài công thức điểm của khóa học");
+            throw commonValidationHelper.validationError("Điểm thành phần gửi lên có thành phần ngoài công thức điểm của khóa học");
         }
 
         BigDecimal totalScore = trainingScoreFormulaEvaluator.evaluate(scoreFormula.getExpression(), formulaVariables);
@@ -375,7 +365,7 @@ public class CourseParticipationService {
 
     private Map<String, ComponentScoreRequest> normalizeComponentScores(List<ComponentScoreRequest> componentScores) {
         if (componentScores == null || componentScores.isEmpty()) {
-            throw commonValidationHelper.validationError("componentScores là bắt buộc");
+            throw commonValidationHelper.validationError("Điểm thành phần là bắt buộc");
         }
         Map<String, ComponentScoreRequest> byComponentId = new LinkedHashMap<>();
         for (ComponentScoreRequest componentScore : componentScores) {
@@ -460,12 +450,12 @@ public class CourseParticipationService {
 
     private void requireParishWithinCourseScope(TrainingCourse course, Parish parish) {
         if (parish == null || parish.getDeanery() == null) {
-            throw commonValidationHelper.forbidden("Giáo xứ hiện tại không có scope giáo hạt hợp lệ để gửi đăng ký");
+            throw commonValidationHelper.forbidden("Giáo xứ hiện tại không có phạm vi giáo hạt hợp lệ để gửi đăng ký");
         }
         if (trainingWorkflowSupport.isDeaneryManaged(course.getCourseType())) {
             if (course.getDeanery() == null || course.getDeanery().getId() == null
                     || !course.getDeanery().getId().equals(parish.getDeanery().getId())) {
-                throw commonValidationHelper.forbidden("Giáo xứ hiện tại không thuộc giáo hạt sở hữu khóa DT");
+                throw commonValidationHelper.forbidden("Giáo xứ hiện tại không thuộc giáo hạt sở hữu khóa dự trưởng");
             }
             return;
         }
@@ -690,10 +680,14 @@ public class CourseParticipationService {
     private BaseSearchRequest copySearchRequest(BaseSearchRequest request) {
         BaseSearchRequest source = request == null ? new BaseSearchRequest() : request;
         BaseSearchRequest copy = new BaseSearchRequest();
-        copy.setPage(source.getPage()); copy.setSize(source.getSize()); copy.setSearch(source.getSearch());
+        copy.setPage(source.getPage());
+        copy.setSize(source.getSize());
+        copy.setSearch(source.getSearch());
         copy.setSearchFields(source.getSearchFields() == null ? List.of() : List.copyOf(source.getSearchFields()));
         copy.setFilters(source.getFilters() == null ? new LinkedHashMap<>() : new LinkedHashMap<>(source.getFilters()));
-        copy.setStatus(source.getStatus()); copy.setSortBy(source.getSortBy()); copy.setSortDirection(source.getSortDirection());
+        copy.setStatus(source.getStatus());
+        copy.setSortBy(source.getSortBy());
+        copy.setSortDirection(source.getSortDirection());
         return copy;
     }
 

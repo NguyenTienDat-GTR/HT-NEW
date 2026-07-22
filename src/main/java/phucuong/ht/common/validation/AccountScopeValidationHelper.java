@@ -28,18 +28,18 @@ public class AccountScopeValidationHelper {
     public UUID requireActiveDioceseId(Authentication authentication, String permissionCode) {
         String username = requireCurrentUsername(authentication, "Không xác định được tài khoản hiện tại cho quyền " + permissionCode);
         return accountRepository.findActiveDioceseIdByUsername(username)
-                .orElseThrow(() -> commonValidationHelper.forbidden("Tài khoản hiện tại không có scope giáo phận hợp lệ cho quyền " + permissionCode));
+                .orElseThrow(() -> commonValidationHelper.forbidden("Tài khoản hiện tại không có phạm vi giáo phận hợp lệ cho quyền " + permissionCode));
     }
 
     public UUID requireActiveDeaneryId(Authentication authentication, String permissionCode) {
         String username = requireCurrentUsername(authentication, "Không xác định được tài khoản hiện tại cho quyền " + permissionCode);
         return accountRepository.findActiveDeaneryIdByUsername(username)
-                .orElseThrow(() -> commonValidationHelper.forbidden("Tài khoản hiện tại không có scope giáo hạt hợp lệ cho quyền " + permissionCode));
+                .orElseThrow(() -> commonValidationHelper.forbidden("Tài khoản hiện tại không có phạm vi giáo hạt hợp lệ cho quyền " + permissionCode));
     }
 
     public UUID requireActiveParishId(Authentication authentication, String permissionCode) {
         String username = requireCurrentUsername(authentication, "Không xác định được tài khoản hiện tại cho quyền " + permissionCode);
         return accountRepository.findActiveParishIdByUsername(username)
-                .orElseThrow(() -> commonValidationHelper.forbidden("Tài khoản hiện tại không có scope giáo xứ hợp lệ cho quyền " + permissionCode));
+                .orElseThrow(() -> commonValidationHelper.forbidden("Tài khoản hiện tại không có phạm vi giáo xứ hợp lệ cho quyền " + permissionCode));
     }
 }

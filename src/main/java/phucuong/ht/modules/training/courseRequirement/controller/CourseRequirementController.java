@@ -24,19 +24,19 @@ public class CourseRequirementController {
     @PostMapping
     @PreAuthorize("@courseRequirementAccessEvaluator.canCreate(authentication, #request.courseType)")
     public apiResponse<CourseRequirementResponse> create(@Valid @RequestBody CourseRequirementCreateRequest request, Authentication authentication) {
-        return apiResponse.success("Tạo requirement thành công", courseRequirementService.create(request, authentication));
+        return apiResponse.success("Tạo yêu cầu thành công", courseRequirementService.create(request, authentication));
     }
 
     @GetMapping
     @PreAuthorize("@courseRequirementAccessEvaluator.canList(authentication)")
     public apiResponse<Page<CourseRequirementResponse>> findAll(BaseSearchRequest request, Authentication authentication) {
-        return apiResponse.success("Lấy danh sách requirement thành công", courseRequirementService.findAll(request, authentication));
+        return apiResponse.success("Lấy danh sách yêu cầu thành công", courseRequirementService.findAll(request, authentication));
     }
 
     @GetMapping("/{requirementCode}")
     @PreAuthorize("@courseRequirementAccessEvaluator.canRead(authentication, #requirementCode)")
     public apiResponse<CourseRequirementResponse> findById(@PathVariable String requirementCode, Authentication authentication) {
-        return apiResponse.success("Lấy requirement thành công", courseRequirementService.findById(requirementCode, authentication));
+        return apiResponse.success("Lấy yêu cầu thành công", courseRequirementService.findById(requirementCode, authentication));
     }
 
     @PutMapping("/{requirementCode}")
@@ -46,8 +46,9 @@ public class CourseRequirementController {
             @Valid @RequestBody CourseRequirementUpdateRequest request,
             Authentication authentication
     ) {
-        return apiResponse.success("Cập nhật requirement thành công", courseRequirementService.update(requirementCode, request, authentication));
+        return apiResponse.success("Cập nhật yêu cầu thành công", courseRequirementService.update(requirementCode, request, authentication));
     }
+
     @PatchMapping("/{requirementCode}/toggle-status")
     @PreAuthorize("@courseRequirementAccessEvaluator.canToggle(authentication, #requirementCode)")
     public apiResponse<CourseRequirementResponse> toggleStatus(
@@ -55,6 +56,6 @@ public class CourseRequirementController {
             @Valid @RequestBody StatusToggleRequest request,
             Authentication authentication
     ) {
-        return apiResponse.success("Đổi trạng thái requirement thành công", courseRequirementService.toggleStatus(requirementCode, request, authentication));
+        return apiResponse.success("Đổi trạng thái yêu cầu thành công", courseRequirementService.toggleStatus(requirementCode, request, authentication));
     }
 }

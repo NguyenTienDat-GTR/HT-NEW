@@ -43,7 +43,7 @@ public class AccountManagementAuthorizationHelper {
                     && target.getParish() == null;
             boolean creatingDioceseAdmin = ADMIN_DIOCESE.equals(targetRoleCode) && target.getDiocese() != null;
             if (!creatingSuperAdmin && !creatingDioceseAdmin) {
-                throw validation.forbidden("SUPER_ADMIN chi duoc tao tai khoan SUPER_ADMIN hoac ADMIN_DIOCESE hop le");
+                throw validation.forbidden("SUPER_ADMIN chỉ ược tạo tài khoản SUPER_ADMIN hoặc ADMIN_DIOCESE hợp lệ");
             }
             return;
         }
@@ -51,23 +51,23 @@ public class AccountManagementAuthorizationHelper {
         requireScopedAccess(authentication, target, targetRole);
         Integer actorOrder = currentActorRoleOrder(authentication);
         if (actorOrder == null || order(targetRole) <= actorOrder) {
-            throw validation.forbidden("Quan tri vien chi duoc tao tai khoan co role thap hon minh");
+            throw validation.forbidden("Quản trị viên chỉ được tạo tài khoản có vai trò thấp hơn mình");
         }
     }
 
     public void requireCanManage(Authentication authentication, Account target) {
         if (currentUsername(authentication).equals(target.getUsername())) {
-            throw validation.forbidden("Quan tri vien khong duoc tu cap nhat hoac doi trang thai tai khoan cua minh");
+            throw validation.forbidden("Quản trị viên không được tự cập nhật hoặc đổi trạng thái tài khoản của mình");
         }
         if (hasTargetRole(target, SUPER_ADMIN)) {
-            throw validation.forbidden("Tai khoan co role SUPER_ADMIN khong duoc cap nhat tu man hinh quan tri account");
+            throw validation.forbidden("Tài khoản có vai trò SUPER_ADMIN không được cập nhật từ màn hình quản trị tài khoản");
         }
         if (hasRole(authentication, SUPER_ADMIN)) {
             boolean onlyDioceseAdmin = accountRoleRepository.findActiveRoleCodesByUsername(target.getUsername()).stream()
                     .allMatch(ADMIN_DIOCESE::equals);
             if (!onlyDioceseAdmin || accountRoleRepository.findActiveRoleCodesByUsername(target.getUsername()).isEmpty()
                     || target.getDiocese() == null) {
-                throw validation.forbidden("SUPER_ADMIN chi duoc quan ly tai khoan ADMIN_DIOCESE");
+                throw validation.forbidden("SUPER_ADMIN chỉ đượcc quản lý tài khoản ADMIN_DIOCESE");
             }
             return;
         }
@@ -106,7 +106,7 @@ public class AccountManagementAuthorizationHelper {
 
     public void requireCanRead(Authentication authentication, Account target) {
         if (!canRead(authentication, target)) {
-            throw validation.forbidden("Tai khoan hien tai khong co quyen doc account nay");
+            throw validation.forbidden("Tài khoản hienj tại không có quyền đọc tài khoản này");
         }
     }
 
@@ -126,7 +126,7 @@ public class AccountManagementAuthorizationHelper {
             requireTargetRoleNotAboveActor(authentication, targetRole);
             return;
         }
-        throw validation.forbidden("Tai khoan hien tai khong co quyen quan ly tai khoan");
+        throw validation.forbidden("Tài khoản hiện tại không có quyền quản lý tài khoản");
     }
 
     private void requireTargetRoleNotAboveActor(Authentication authentication, Role targetRole) {
@@ -134,7 +134,7 @@ public class AccountManagementAuthorizationHelper {
         Integer actorOrder = currentActorRoleOrder(authentication);
         Integer targetOrder = targetRole.getDisplayOrder();
         if (actorOrder == null || targetOrder == null || targetOrder < actorOrder) {
-            throw validation.forbidden("Khong the thao tac tren tai khoan co vai tro cao hon tai khoan hien tai");
+            throw validation.forbidden("Không thể thao tác trên tài khoản có vai trò cao hơn tài khoản hiện tại");
         }
     }
 
@@ -168,7 +168,7 @@ public class AccountManagementAuthorizationHelper {
 
     private void requireSame(String scopeName, UUID actorId, UUID targetId) {
         if (actorId == null || targetId == null || !actorId.equals(targetId)) {
-            throw validation.forbidden("Tai khoan dich nam ngoai " + scopeName + " hien tai");
+            throw validation.forbidden("Tài khoản đích nằm ngoài " + scopeName + " hiện tại");
         }
     }
 
@@ -229,7 +229,7 @@ public class AccountManagementAuthorizationHelper {
 
     private String currentUsername(Authentication auth) {
         if (auth == null || !(auth.getPrincipal() instanceof AuthUserDetails principal)) {
-            throw validation.forbidden("Khong xac dinh duoc tai khoan hien tai");
+            throw validation.forbidden("Không xác định được tài khoản hiện tại");
         }
         return principal.getUsername();
     }

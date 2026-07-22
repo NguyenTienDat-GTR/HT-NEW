@@ -58,7 +58,7 @@ public class PermissionManagementService {
 
     public PermissionResponse findById(String permissionCode, Authentication authentication) {
         Permission permission = systemPermissionRepository.findById(permissionCode)
-                .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay quyen: " + permissionCode));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy quyền: " + permissionCode));
         authorizationHelper.requirePermissionReadAccess(authentication, permission);
         return toResponse(permission);
     }
@@ -100,10 +100,10 @@ public class PermissionManagementService {
     @Transactional
     public PermissionResponse update(String permissionCode, PermissionUpdateRequest request, Authentication authentication) {
         Permission permission = systemPermissionRepository.findById(permissionCode)
-                .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay quyen: " + permissionCode));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy quyền: " + permissionCode));
 
         if (request.getPermissionName() != null) {
-            permission.setPermissionName(normalizeRequiredText(request.getPermissionName(), "Ten quyen khong duoc de trong"));
+            permission.setPermissionName(normalizeRequiredText(request.getPermissionName(), "Tên quyền không được để trống"));
         }
         if (request.getDescription() != null) {
             permission.setDescription(commonValidationHelper.normalizeOptionalText(request.getDescription()));
@@ -113,7 +113,7 @@ public class PermissionManagementService {
         }
 
         permission.setUpdatedAt(OffsetDateTime.now());
-        permission.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Khong xac dinh duoc nguoi cap nhat quyen"));
+        permission.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật quyền"));
         Permission saved = systemPermissionRepository.save(permission);
         notifyPermissionChanged(permissionCode, "PERMISSION_UPDATED");
         return toResponse(saved);
@@ -122,7 +122,7 @@ public class PermissionManagementService {
     @Transactional
     public PermissionResponse toggleStatus(String permissionCode, StatusToggleRequest request, Authentication authentication) {
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
-        String actor = commonValidationHelper.requireAuditActor(authentication, "Khong xac dinh duoc nguoi doi trang thai quyen");
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái quyền");
         Set<String> recipients = toggleNotificationRecipientResolver == null ? Set.of() : toggleNotificationRecipientResolver.byPermission(permissionCode);
         systemPermissionRepository.toggleStatus(permissionCode, actor);
         PermissionResponse response = findById(permissionCode, authentication);

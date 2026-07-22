@@ -60,7 +60,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     accessClaims.principal().getUsername(),
                     accessClaims.tokenId()
             )) {
-                throw new ApiException(HttpStatus.UNAUTHORIZED, errorCode.INVALID_TOKEN, "Phien dang nhap khong con hieu luc");
+                throw new ApiException(HttpStatus.UNAUTHORIZED, errorCode.INVALID_TOKEN, "Phiên đăng nhập không còn hiệu lực");
             }
             if (accessClaims.principal().isMustChangePassword() && !isTemporaryPasswordAllowedPath(request.getRequestURI())) {
                 throw new ApiException(HttpStatus.FORBIDDEN, errorCode.ACCESS_DENIED,

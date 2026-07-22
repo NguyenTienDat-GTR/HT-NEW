@@ -18,14 +18,14 @@ public class CertificateCodeGenerator {
 
     public String buildCode(String unitName, CourseType courseType, Integer hostYear, long sequence) {
         if (hostYear == null) {
-            throw commonValidationHelper.validationError("hostYear là bắt buộc để tạo mã chứng chỉ");
+            throw commonValidationHelper.validationError("Năm tổ chức là bắt buộc để tạo mã chứng chỉ");
         }
         return abbreviation(unitName) + "-" + courseShortCode(courseType) + "-" + hostYear + "-" + sequence;
     }
 
     public String buildPrefix(String unitName, CourseType courseType, Integer hostYear) {
         if (hostYear == null) {
-            throw commonValidationHelper.validationError("hostYear là bắt buộc để tạo mã chứng chỉ");
+            throw commonValidationHelper.validationError("Năm tổ chức là bắt buộc để tạo mã chứng chỉ");
         }
         return abbreviation(unitName) + "-" + courseShortCode(courseType) + "-" + hostYear + "-";
     }

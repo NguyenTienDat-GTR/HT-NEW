@@ -2,10 +2,10 @@ package phucuong.ht.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -84,7 +84,7 @@ public class securityConfig {
                             response.setCharacterEncoding(StandardCharsets.UTF_8.name());
                             objectMapper.writeValue(
                                     response.getWriter(),
-                                    apiResponse.error("Yeu cau dang nhap", errorCode.AUTHENTICATION_FAILED.name())
+                                    apiResponse.error("Yêu cầu đăng nhập", errorCode.AUTHENTICATION_FAILED.name())
                             );
                         })
                         .accessDeniedHandler((request, response, accessDeniedException) -> {
@@ -93,7 +93,7 @@ public class securityConfig {
                             response.setCharacterEncoding(StandardCharsets.UTF_8.name());
                             objectMapper.writeValue(
                                     response.getWriter(),
-                                    apiResponse.error("Ban khong co quyen truy cap tai nguyen nay", errorCode.ACCESS_DENIED.name())
+                                    apiResponse.error("Bạn không có quyền truy cập tài nguyên này", errorCode.ACCESS_DENIED.name())
                             );
                         })
                 )

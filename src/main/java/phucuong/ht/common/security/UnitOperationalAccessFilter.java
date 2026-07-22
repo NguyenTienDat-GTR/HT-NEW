@@ -45,7 +45,7 @@ public class UnitOperationalAccessFilter extends OncePerRequestFilter {
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         objectMapper.writeValue(
                 response.getWriter(),
-                apiResponse.error("Tai khoan thuoc don vi dang bi khoa, chi duoc dang nhap va doc thong bao", errorCode.ACCESS_DENIED.name())
+                apiResponse.error("Tài khoản thuộc đơn vị đang bị khóa, chỉ được đăng nhập và đọc thông báo", errorCode.ACCESS_DENIED.name())
         );
     }
 

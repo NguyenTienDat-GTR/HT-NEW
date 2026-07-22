@@ -19,9 +19,9 @@ import phucuong.ht.modules.deanery.model.entity.Deanery;
 import phucuong.ht.modules.deanery.repository.DeaneryRepository;
 import phucuong.ht.modules.diocese.repository.DioceseRepository;
 import phucuong.ht.modules.training.TrainingWorkflowSupport;
+import phucuong.ht.modules.training.courseParticipation.repository.CourseParticipationRepository;
 import phucuong.ht.modules.training.courseRequirement.model.entity.CourseRequirement;
 import phucuong.ht.modules.training.courseRequirement.repository.CourseRequirementRepository;
-import phucuong.ht.modules.training.courseParticipation.repository.CourseParticipationRepository;
 import phucuong.ht.modules.training.enums.CourseType;
 import phucuong.ht.modules.training.scoreFormulaTemplate.model.entity.ScoreFormulaTemplate;
 import phucuong.ht.modules.training.scoreFormulaTemplate.repository.ScoreFormulaTemplateRepository;
@@ -132,7 +132,7 @@ public class TrainingCourseService {
         requireUpdateScope(authentication, existing, targetCourseType);
         if (request.getCourseType() != null && request.getCourseType() != existing.getCourseType()
                 && courseParticipationRepository.existsByCourseCode(courseCode)) {
-            throw commonValidationHelper.conflict("Không thể đổi loại khóa học sau khi đã có hồ sơ tham gia");
+            throw commonValidationHelper.conflict("Không thể đổi loại khóa huấn luyện sau khi đã có hồ sơ tham gia");
         }
         if (request.getCourseType() != null && request.getCourseType() != existing.getCourseType()
                 && (request.getScoreFormulaId() == null || request.getScoreFormulaId().isBlank())) {
@@ -213,7 +213,7 @@ public class TrainingCourseService {
                     TrainingCourseAccessEvaluator.UPDATE_DEANERY
             );
             if (existing.getDeanery() == null || !activeDeaneryId.equals(existing.getDeanery().getId())) {
-                throw commonValidationHelper.forbidden("Khong the cap nhat khoa huan luyen ngoai giao hat hien tai");
+                throw commonValidationHelper.forbidden("Không thể cập nhật khóa huấn luyện ngoài giáo hạt hiện tại");
             }
         } else {
             requireAuthority(authentication, TrainingCourseAccessEvaluator.UPDATE_DIOCESE);
@@ -222,7 +222,7 @@ public class TrainingCourseService {
                     TrainingCourseAccessEvaluator.UPDATE_DIOCESE
             );
             if (existing.getDiocese() == null || !activeDioceseId.equals(existing.getDiocese().getId())) {
-                throw commonValidationHelper.forbidden("Khong the cap nhat khoa huan luyen ngoai giao phan hien tai");
+                throw commonValidationHelper.forbidden("Không thể cập nhật khóa huấn luyện ngoài giáo phận hiện tại");
             }
         }
 
@@ -238,7 +238,7 @@ public class TrainingCourseService {
             );
             Deanery targetDeanery = deaneryRepository.getRequired(targetDeaneryId);
             if (targetDeanery.getDiocese() == null || !sourceDioceseId.equals(targetDeanery.getDiocese().getId())) {
-                throw commonValidationHelper.forbidden("Khong the chuyen khoa sang giao hat ngoai giao phan so huu");
+                throw commonValidationHelper.forbidden("Không th chuyển khóa huấn luyện sang giáo hạt ngoài giáo phận sở hữu");
             }
             return;
         }
@@ -249,26 +249,26 @@ public class TrainingCourseService {
                 TrainingCourseAccessEvaluator.UPDATE_DIOCESE
         );
         if (!sourceDioceseId.equals(targetDioceseId)) {
-            throw commonValidationHelper.forbidden("Khong the chuyen khoa sang giao phan ngoai scope so huu");
+            throw commonValidationHelper.forbidden("Không thể chuyển khóa huấn luyện sang giáo phận ngoài phạm vi sở hữu");
         }
     }
 
     private UUID sourceDioceseId(TrainingCourse course) {
         if (trainingWorkflowSupport.isDeaneryManaged(course.getCourseType())) {
             if (course.getDeanery() == null || course.getDeanery().getDiocese() == null) {
-                throw commonValidationHelper.conflict("Khoa DT khong co scope giao hat/giao phan hop le");
+                throw commonValidationHelper.conflict("Khóa D trưởng không có phạm vi giáo hạt / giáo phận hơp lệ");
             }
             return course.getDeanery().getDiocese().getId();
         }
         if (course.getDiocese() == null) {
-            throw commonValidationHelper.conflict("Khoa huan luyen khong co scope giao phan hop le");
+            throw commonValidationHelper.conflict("Khóa huấn luyện không có phạm vi giáo phận hợp lệ");
         }
         return course.getDiocese().getId();
     }
 
     private void requireAuthority(Authentication authentication, String authority) {
         if (!securityUtils.hasAuthority(authentication, authority)) {
-            throw commonValidationHelper.forbidden("Tai khoan hien tai khong co quyen cap nhat scope khoa huan luyen nay");
+            throw commonValidationHelper.forbidden("Tài khoản hiện tại không cos quyê cập nhật phạm vi khóa huấn luyện này");
         }
     }
 
@@ -314,7 +314,7 @@ public class TrainingCourseService {
                 ? course.getDeanery() != null && requirement.getDeanery() != null && course.getDeanery().getId().equals(requirement.getDeanery().getId())
                 : course.getDiocese() != null && requirement.getDiocese() != null && course.getDiocese().getId().equals(requirement.getDiocese().getId());
         if (!validOwner) {
-            throw commonValidationHelper.validationError("Yêu cầu khóa học phải thuộc cùng scope quản lý với khóa huấn luyện");
+            throw commonValidationHelper.validationError("Yêu cầu khóa học phải thuộc cùng phạm vi quản lý với khóa huấn luyện");
         }
     }
 

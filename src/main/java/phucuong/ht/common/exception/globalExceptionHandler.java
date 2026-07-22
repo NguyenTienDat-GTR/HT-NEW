@@ -31,13 +31,13 @@ public class globalExceptionHandler {
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<apiResponse<Void>> handleBadCredentials(BadCredentialsException exception) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(apiResponse.error("Ten dang nhap hoac mat khau khong dung", errorCode.AUTHENTICATION_FAILED.name()));
+                .body(apiResponse.error("Tên đăng nhập hoặc mật khẩu không đúng", errorCode.AUTHENTICATION_FAILED.name()));
     }
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<apiResponse<Void>> handleAccessDenied(AccessDeniedException exception) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(apiResponse.error("Ban khong co quyen truy cap tai nguyen nay", errorCode.ACCESS_DENIED.name()));
+                .body(apiResponse.error("Bạn không có quyền truy cập taài nguyên này", errorCode.ACCESS_DENIED.name()));
     }
 
     @ExceptionHandler(EntityNotFoundException.class)
@@ -49,7 +49,7 @@ public class globalExceptionHandler {
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<apiResponse<Void>> handleNoResourceFound(NoResourceFoundException exception) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(apiResponse.error("Khong tim thay tai nguyen", errorCode.RESOURCE_NOT_FOUND.name()));
+                .body(apiResponse.error("Không tìm thấy tài nguyên", errorCode.RESOURCE_NOT_FOUND.name()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -61,7 +61,7 @@ public class globalExceptionHandler {
         return ResponseEntity.badRequest()
                 .body(apiResponse.<Map<String, String>>builder()
                         .success(false)
-                        .message("Du lieu khong hop le")
+                        .message("Dữ liệu không hợp lệ")
                         .errorCode(errorCode.VALIDATION_ERROR.name())
                         .data(errors)
                         .timestamp(java.time.OffsetDateTime.now())
@@ -77,18 +77,18 @@ public class globalExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<apiResponse<Void>> handleUnreadableMessage(HttpMessageNotReadableException exception) {
         return ResponseEntity.badRequest()
-                .body(apiResponse.error("Du lieu gui len khong hop le", errorCode.VALIDATION_ERROR.name()));
+                .body(apiResponse.error("Dữ liệu gửi lên không hợp lệ", errorCode.VALIDATION_ERROR.name()));
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<apiResponse<Void>> handleDataIntegrityViolation(DataIntegrityViolationException exception) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(apiResponse.error("Thao tac xung dot voi du lieu hien co", errorCode.CONFLICT.name()));
+                .body(apiResponse.error("Thao tác xung đột với dữ liệu hiện có", errorCode.CONFLICT.name()));
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<apiResponse<Void>> handleGenericException(Exception exception) {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(apiResponse.error("He thong tam thoi khong kha dung", errorCode.INTERNAL_ERROR.name()));
+                .body(apiResponse.error("Hệ thống tạm thời không khả dụng", errorCode.INTERNAL_ERROR.name()));
     }
 }
