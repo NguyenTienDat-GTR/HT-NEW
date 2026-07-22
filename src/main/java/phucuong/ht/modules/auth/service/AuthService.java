@@ -1,6 +1,7 @@
 package phucuong.ht.modules.auth.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -12,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import phucuong.ht.common.enums.AuthProvider;
 import phucuong.ht.common.exception.errorCode;
+import phucuong.ht.common.security.UnitOperationalStatusService;
 import phucuong.ht.common.utils.jwtUtils;
 import phucuong.ht.modules.auth.config.AuthProperties;
 import phucuong.ht.modules.auth.exception.ApiException;
@@ -46,6 +48,8 @@ public class AuthService {
     private final jwtUtils jwtUtils;
     private final AuthProperties authProperties;
     private final RedisTokenSessionService redisTokenSessionService;
+    @Autowired(required = false)
+    private UnitOperationalStatusService unitOperationalStatusService;
 
     @Transactional
     public BootstrapSuperAdminResponse bootstrapSuperAdmin() {
@@ -255,6 +259,7 @@ public class AuthService {
     }
 
     private AuthenticatedUserResponse toUserResponse(AuthUserDetails principal) {
+        boolean unitLocked = unitOperationalStatusService != null && unitOperationalStatusService.isAccountUnitLocked(principal.getUsername());
         return AuthenticatedUserResponse.builder()
                 .username(principal.getUsername())
                 .leaderId(principal.getLeaderId())
@@ -264,6 +269,7 @@ public class AuthService {
                 .roles(principal.getRoles())
                 .permissions(principal.getPermissions())
                 .mustChangePassword(principal.isMustChangePassword())
+                .unitLocked(unitLocked)
                 .build();
     }
 }

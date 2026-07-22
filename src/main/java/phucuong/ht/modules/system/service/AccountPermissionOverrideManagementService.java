@@ -10,9 +10,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
+import phucuong.ht.common.security.UnitOperationalStatusService;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.modules.auth.repository.AccountRepository;
 import phucuong.ht.modules.auth.repository.AccountRoleRepository;
+import phucuong.ht.modules.notification.service.ToggleNotificationDispatcher;
+import phucuong.ht.modules.notification.service.ToggleNotificationRecipientResolver;
 import phucuong.ht.modules.system.model.entity.Account;
 import phucuong.ht.modules.system.model.entity.AccountPermissionOverride;
 import phucuong.ht.modules.system.model.entity.Permission;
@@ -39,6 +42,15 @@ import java.util.Set;
 public class AccountPermissionOverrideManagementService {
 
     private static final List<String> ADMIN_ROLE_CODES = List.of("ADMIN_DIOCESE", "ADMIN_DEANERY", "ADMIN_PARISH");
+    private static final java.util.Map<String, String> REPOSITORY_FIELD_ALIASES = java.util.Map.ofEntries(
+            java.util.Map.entry("username", "account.username"),
+            java.util.Map.entry("permissionCode", "permission.permissionCode"),
+            java.util.Map.entry("permissionName", "permission.permissionName"),
+            java.util.Map.entry("moduleCode", "permission.module.moduleCode"),
+            java.util.Map.entry("resourceCode", "permission.resource.resourceCode"),
+            java.util.Map.entry("actionCode", "permission.action.actionCode"),
+            java.util.Map.entry("scopeCode", "permission.scope.scopeCode")
+    );
 
     private final AccountPermissionOverrideRepository accountPermissionOverrideRepository;
     private final AccountRepository accountRepository;
@@ -48,12 +60,19 @@ public class AccountPermissionOverrideManagementService {
     private final CommonValidationHelper commonValidationHelper;
     private final SystemAdminAuthorizationHelper authorizationHelper;
     @Autowired(required = false)
+    private UnitOperationalStatusService unitOperationalStatusService;
+    @Autowired(required = false)
+    private ToggleNotificationRecipientResolver toggleNotificationRecipientResolver;
+    @Autowired(required = false)
+    private ToggleNotificationDispatcher toggleNotificationDispatcher;
+    @Autowired(required = false)
     private RbacAuthRefreshNotifier authRefreshNotifier;
 
     @Transactional
     public AccountPermissionOverrideResponse create(AccountPermissionOverrideCreateRequest request, Authentication authentication) {
         Account account = accountRepository.findActiveByUsername(request.getUsername())
                 .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay tai khoan: " + request.getUsername()));
+        requireAccountWritable(account.getUsername());
         requireValidSuperAdminTarget(authentication, account);
         Permission permission = systemPermissionRepository.findById(request.getPermissionCode())
                 .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay quyen: " + request.getPermissionCode()));
@@ -79,6 +98,7 @@ public class AccountPermissionOverrideManagementService {
     public List<AccountPermissionOverrideResponse> bulkAssign(AccountPermissionOverrideBulkRequest request, Authentication authentication) {
         Account account = accountRepository.findActiveByUsername(request.getUsername())
                 .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay tai khoan: " + request.getUsername()));
+        requireAccountWritable(account.getUsername());
         requireValidSuperAdminTarget(authentication, account);
         String actor = commonValidationHelper.requireAuditActor(authentication, "Khong xac dinh duoc nguoi tao phan quyen cho tai khoan");
         OffsetDateTime now = OffsetDateTime.now();
@@ -143,6 +163,7 @@ public class AccountPermissionOverrideManagementService {
     public AccountPermissionOverrideResponse update(String id, AccountPermissionOverrideUpdateRequest request, Authentication authentication) {
         AccountPermissionOverride override = accountPermissionOverrideRepository.findById(id)
                 .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay phan quyen rieng cua tai khoan: " + id));
+        requireAccountWritable(override.getAccount().getUsername());
         requireValidSuperAdminTarget(authentication, override.getAccount());
         authorizationHelper.requireAccountPermissionWriteAccess(authentication, override.getAccount().getUsername(), override.getPermission());
 
@@ -167,16 +188,22 @@ public class AccountPermissionOverrideManagementService {
     public AccountPermissionOverrideResponse toggleStatus(String id, StatusToggleRequest request, Authentication authentication) {
         AccountPermissionOverride override = accountPermissionOverrideRepository.findById(id)
                 .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay phan quyen rieng cua tai khoan: " + id));
+        requireAccountWritable(override.getAccount().getUsername());
         requireValidSuperAdminTarget(authentication, override.getAccount());
         authorizationHelper.requireAccountPermissionWriteAccess(authentication, override.getAccount().getUsername(), override.getPermission());
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
         PermissionEffect nextEffect = override.getEffect() == PermissionEffect.DENY ? PermissionEffect.ALLOW : PermissionEffect.DENY;
         rejectDenyOfRequiredAccountRoleAssignment(override.getAccount(), override.getPermission().getPermissionCode(), nextEffect);
+        Set<String> recipients = toggleNotificationRecipientResolver == null ? Set.of() : toggleNotificationRecipientResolver.byAccount(override.getAccount().getUsername());
         override.setEffect(nextEffect);
         override.setStatus(true);
         override.setUpdatedAt(OffsetDateTime.now());
-        override.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Khong xac dinh duoc nguoi doi trang thai phan quyen cho tai khoan"));
-        notifyAccountPermissionChanged(override.getAccount().getUsername(), "ACCOUNT_PERMISSION_TOGGLED");
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Khong xac dinh duoc nguoi doi trang thai phan quyen cho tai khoan");
+        override.setUpdatedBy(actor);
+        notifyUsers(recipients, "ACCOUNT_PERMISSION_TOGGLED");
+        if (toggleNotificationDispatcher != null) {
+            toggleNotificationDispatcher.dispatch(recipients, "ACCOUNT_PERMISSION_TOGGLED", permissionLabel(override.getPermission()), nextEffect == PermissionEffect.ALLOW, actor);
+        }
         return toResponse(override);
     }
 
@@ -186,18 +213,58 @@ public class AccountPermissionOverrideManagementService {
         }
     }
 
+    private void notifyUsers(Set<String> recipients, String reason) {
+        if (authRefreshNotifier != null) {
+            authRefreshNotifier.notifyUsers(recipients, reason);
+        }
+    }
+
+    private String permissionLabel(Permission permission) {
+        if (permission == null) {
+            return "quyền chưa xác định";
+        }
+        String name = commonValidationHelper.normalizeOptionalText(permission.getPermissionName());
+        String code = commonValidationHelper.normalizeOptionalText(permission.getPermissionCode());
+        if (name != null && code != null) {
+            return name + " (" + code + ")";
+        }
+        return name != null ? name : code != null ? code : "quyền chưa xác định";
+    }
+
+    private void requireAccountWritable(String username) {
+        if (unitOperationalStatusService != null) {
+            unitOperationalStatusService.requireAccountWritable(username);
+        }
+    }
+
     private BaseSearchRequest copyRequest(BaseSearchRequest request) {
         BaseSearchRequest source = request == null ? new BaseSearchRequest() : request;
         BaseSearchRequest copy = new BaseSearchRequest();
         copy.setPage(source.getPage());
         copy.setSize(source.getSize());
         copy.setSearch(source.getSearch());
-        copy.setSearchFields(source.getSearchFields() == null ? List.of() : List.copyOf(source.getSearchFields()));
-        copy.setFilters(source.getFilters() == null ? new LinkedHashMap<>() : new LinkedHashMap<>(source.getFilters()));
+        copy.setSearchFields(source.getSearchFields() == null ? List.of() : source.getSearchFields().stream().map(this::toRepositoryField).toList());
+        copy.setFilters(normalizeFilters(source.getFilters()));
         copy.setStatus(source.getStatus());
-        copy.setSortBy(source.getSortBy());
+        copy.setSortBy(toRepositoryField(source.getSortBy()));
         copy.setSortDirection(source.getSortDirection());
         return copy;
+    }
+
+    private LinkedHashMap<String, Object> normalizeFilters(java.util.Map<String, Object> filters) {
+        LinkedHashMap<String, Object> normalized = new LinkedHashMap<>();
+        if (filters == null || filters.isEmpty()) {
+            return normalized;
+        }
+        filters.forEach((key, value) -> normalized.put(toRepositoryField(key), value));
+        return normalized;
+    }
+
+    private String toRepositoryField(String field) {
+        if (field == null || field.isBlank()) {
+            return field;
+        }
+        return REPOSITORY_FIELD_ALIASES.getOrDefault(field.trim(), field.trim());
     }
 
     private List<AccountPermissionOverride> loadAllMatching(BaseSearchRequest request) {

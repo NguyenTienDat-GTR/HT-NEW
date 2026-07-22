@@ -14,9 +14,13 @@ import phucuong.ht.modules.auth.model.AuthUserDetails;
 import phucuong.ht.modules.auth.repository.AccountRepository;
 import phucuong.ht.modules.auth.repository.AccountRoleRepository;
 import phucuong.ht.modules.auth.repository.RoleRepository;
+import phucuong.ht.modules.diocese.model.entity.Diocese;
 import phucuong.ht.modules.system.model.entity.Account;
+import phucuong.ht.modules.system.model.entity.AccountRole;
+import phucuong.ht.modules.system.model.entity.Role;
 
 import java.util.List;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -74,9 +78,48 @@ class AccountManagementAuthorizationHelperTest {
         assertThrows(ApiException.class, () -> helper.requireCanManage(authentication, target));
     }
 
+    @Test
+    void requireCanManageShouldRejectTargetWithHigherRealRoleEvenWhenActorHasWideAuthority() {
+        UUID dioceseId = UUID.randomUUID();
+        AuthUserDetails principal = AuthUserDetails.tokenPrincipal(
+                "datbung107",
+                null,
+                List.of("ADMIN_DEANERY"),
+                List.of(AccountManagementAuthorizationHelper.MANAGE_DIOCESE)
+        );
+        when(authentication.getPrincipal()).thenReturn(principal);
+        when(authentication.getAuthorities()).thenAnswer(invocation -> principal.getAuthorities());
+        Account target = account("phucuongadmin");
+        Diocese diocese = new Diocese();
+        diocese.setId(dioceseId);
+        target.setDiocese(diocese);
+
+        when(accountRoleRepository.findActiveRoleCodesByUsername("phucuongadmin")).thenReturn(List.of("ADMIN_DIOCESE"));
+        when(accountRoleRepository.findActiveByUsername("phucuongadmin")).thenReturn(List.of(accountRole(role("ADMIN_DIOCESE", 100))));
+        when(accountRoleRepository.findActiveByUsername("datbung107")).thenReturn(List.of(accountRole(role("ADMIN_DEANERY", 200))));
+        when(accountRepository.findActiveDioceseIdByUsername("datbung107")).thenReturn(java.util.Optional.of(dioceseId));
+
+        assertThrows(ApiException.class, () -> helper.requireCanManage(authentication, target));
+    }
+
     private Account account(String username) {
         Account account = new Account();
         account.setUsername(username);
         return account;
+    }
+
+    private AccountRole accountRole(Role role) {
+        AccountRole accountRole = new AccountRole();
+        accountRole.setRole(role);
+        accountRole.setStatus(true);
+        return accountRole;
+    }
+
+    private Role role(String roleCode, int displayOrder) {
+        Role role = new Role();
+        role.setRoleCode(roleCode);
+        role.setDisplayOrder(displayOrder);
+        role.setStatus(true);
+        return role;
     }
 }

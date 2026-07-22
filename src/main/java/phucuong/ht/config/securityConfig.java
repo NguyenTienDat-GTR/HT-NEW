@@ -23,6 +23,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import phucuong.ht.common.dto.apiResponse;
 import phucuong.ht.common.exception.errorCode;
+import phucuong.ht.common.security.UnitOperationalAccessFilter;
 import phucuong.ht.modules.auth.config.AuthProperties;
 import phucuong.ht.modules.auth.security.JwtAuthenticationFilter;
 import phucuong.ht.modules.auth.service.AuthUserDetailsService;
@@ -37,6 +38,7 @@ import java.nio.charset.StandardCharsets;
 public class securityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final UnitOperationalAccessFilter unitOperationalAccessFilter;
     private final ApiRateLimitFilter apiRateLimitFilter;
     private final ApiAuditLoggingFilter apiAuditLoggingFilter;
     private final AuthUserDetailsService authUserDetailsService;
@@ -96,7 +98,8 @@ public class securityConfig {
                         })
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterAfter(apiRateLimitFilter, JwtAuthenticationFilter.class)
+                .addFilterAfter(unitOperationalAccessFilter, JwtAuthenticationFilter.class)
+                .addFilterAfter(apiRateLimitFilter, UnitOperationalAccessFilter.class)
                 .addFilterAfter(apiAuditLoggingFilter, ApiRateLimitFilter.class);
 
         return http.build();

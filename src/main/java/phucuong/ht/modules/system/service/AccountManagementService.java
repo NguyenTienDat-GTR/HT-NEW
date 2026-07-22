@@ -1,6 +1,7 @@
 package phucuong.ht.modules.system.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -9,8 +10,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import phucuong.ht.common.enums.AuthProvider;
+import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
+import phucuong.ht.common.security.UnitOperationalStatusService;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.modules.auth.model.AuthUserDetails;
 import phucuong.ht.modules.auth.repository.AccountRepository;
@@ -58,6 +61,8 @@ public class AccountManagementService {
     private final AccountManagementAuthorizationHelper authorizationHelper;
     private final AccountCredentialMailService mailService;
     private final RedisTokenSessionService redisTokenSessionService;
+    @Autowired(required = false)
+    private UnitOperationalStatusService unitOperationalStatusService;
 
     @Transactional
     public AccountResponse create(AccountCreateRequest request, Authentication authentication) {
@@ -97,6 +102,7 @@ public class AccountManagementService {
             usernameBase = usernameBaseFromEmail(recipientEmail);
         } else if (dioceseAdmin) {
             Diocese diocese = requireDioceseForUpdate(request.getDioceseId());
+            requireUnitOperational(UnitType.DIOCESE, diocese.getId());
             account.setDiocese(diocese);
             if (accountRepository.existsAdminDioceseByDioceseId(diocese.getId())) {
                 throw validation.conflict("Mỗi giáo phận chỉ được có một account ADMIN_DIOCESE");
@@ -104,6 +110,7 @@ public class AccountManagementService {
             if (request.getLeaderId() != null) {
                 credentialLeader = requireLeader(request.getLeaderId(), "Không tìm thấy leader");
                 requireLeaderInsideDiocese(credentialLeader, diocese.getId());
+                requireUnitOperational(UnitType.PARISH, credentialLeader.getParish().getId());
                 account.setLeader(credentialLeader);
                 recipientEmail = requireCredentialEmail(credentialLeader.getEmail());
                 recipientName = fullName(credentialLeader);
@@ -121,6 +128,7 @@ public class AccountManagementService {
                 throw validation.validationError("Account không phải ADMIN_DIOCESE không dùng dioceseId hoặc credentialEmail");
             }
             credentialLeader = requireLeader(request.getLeaderId(), "leaderId là bắt buộc với account không phải ADMIN_DIOCESE");
+            requireUnitOperational(UnitType.PARISH, credentialLeader.getParish().getId());
             account.setLeader(credentialLeader);
             recipientEmail = requireCredentialEmail(credentialLeader.getEmail());
             recipientName = fullName(credentialLeader);
@@ -180,6 +188,7 @@ public class AccountManagementService {
     public AccountResponse toggleStatus(String username, StatusToggleRequest request, Authentication authentication) {
         validation.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
         Account account = require(username);
+        requireAccountWritable(account.getUsername());
         authorizationHelper.requireCanManage(authentication, account);
         account.setStatus(!Boolean.TRUE.equals(account.getStatus()));
         account.setUpdatedAt(OffsetDateTime.now());
@@ -191,6 +200,18 @@ public class AccountManagementService {
     private Account require(String username) {
         return accountRepository.findById(username)
                 .orElseThrow(() -> validation.notFound("Không tìm thấy tài khoản: " + username));
+    }
+
+    private void requireUnitOperational(UnitType unitType, UUID unitId) {
+        if (unitOperationalStatusService != null) {
+            unitOperationalStatusService.requireUnitOperational(unitType, unitId);
+        }
+    }
+
+    private void requireAccountWritable(String username) {
+        if (unitOperationalStatusService != null) {
+            unitOperationalStatusService.requireAccountWritable(username);
+        }
     }
 
     private Leader requireLeader(UUID id, String missingMessage) {

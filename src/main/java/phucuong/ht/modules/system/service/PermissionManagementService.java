@@ -11,6 +11,8 @@ import org.springframework.transaction.annotation.Transactional;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.validation.CommonValidationHelper;
+import phucuong.ht.modules.notification.service.ToggleNotificationDispatcher;
+import phucuong.ht.modules.notification.service.ToggleNotificationRecipientResolver;
 import phucuong.ht.modules.system.model.entity.Permission;
 import phucuong.ht.modules.system.model.enums.PermissionEffect;
 import phucuong.ht.modules.system.model.request.PermissionUpdateRequest;
@@ -21,14 +23,26 @@ import phucuong.ht.modules.system.repository.SystemPermissionRepository;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
 public class PermissionManagementService {
 
+    private static final java.util.Map<String, String> REPOSITORY_FIELD_ALIASES = java.util.Map.of(
+            "moduleCode", "module.moduleCode",
+            "resourceCode", "resource.resourceCode",
+            "actionCode", "action.actionCode",
+            "scopeCode", "scope.scopeCode"
+    );
+
     private final SystemPermissionRepository systemPermissionRepository;
     private final CommonValidationHelper commonValidationHelper;
     private final SystemAdminAuthorizationHelper authorizationHelper;
+    @Autowired(required = false)
+    private ToggleNotificationRecipientResolver toggleNotificationRecipientResolver;
+    @Autowired(required = false)
+    private ToggleNotificationDispatcher toggleNotificationDispatcher;
     @Autowired(required = false)
     private RbacAuthRefreshNotifier authRefreshNotifier;
 
@@ -105,18 +119,42 @@ public class PermissionManagementService {
         return toResponse(saved);
     }
 
+    @Transactional
     public PermissionResponse toggleStatus(String permissionCode, StatusToggleRequest request, Authentication authentication) {
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
         String actor = commonValidationHelper.requireAuditActor(authentication, "Khong xac dinh duoc nguoi doi trang thai quyen");
+        Set<String> recipients = toggleNotificationRecipientResolver == null ? Set.of() : toggleNotificationRecipientResolver.byPermission(permissionCode);
         systemPermissionRepository.toggleStatus(permissionCode, actor);
-        notifyPermissionChanged(permissionCode, "PERMISSION_TOGGLED");
-        return findById(permissionCode, authentication);
+        PermissionResponse response = findById(permissionCode, authentication);
+        notifyUsers(recipients, "PERMISSION_TOGGLED");
+        if (toggleNotificationDispatcher != null) {
+            toggleNotificationDispatcher.dispatch(recipients, "PERMISSION_TOGGLED", permissionLabel(response), Boolean.TRUE.equals(response.getStatus()), actor);
+        }
+        return response;
     }
 
     private void notifyPermissionChanged(String permissionCode, String reason) {
         if (authRefreshNotifier != null) {
             authRefreshNotifier.notifyPermissionChanged(permissionCode, reason);
         }
+    }
+
+    private void notifyUsers(Set<String> recipients, String reason) {
+        if (authRefreshNotifier != null) {
+            authRefreshNotifier.notifyUsers(recipients, reason);
+        }
+    }
+
+    private String permissionLabel(PermissionResponse permission) {
+        if (permission == null) {
+            return "quyền chưa xác định";
+        }
+        String name = commonValidationHelper.normalizeOptionalText(permission.getPermissionName());
+        String code = commonValidationHelper.normalizeOptionalText(permission.getPermissionCode());
+        if (name != null && code != null) {
+            return name + " (" + code + ")";
+        }
+        return name != null ? name : code != null ? code : "quyền chưa xác định";
     }
 
     private String normalizeRequiredText(String value, String message) {
@@ -133,12 +171,28 @@ public class PermissionManagementService {
         copy.setPage(source.getPage());
         copy.setSize(source.getSize());
         copy.setSearch(source.getSearch());
-        copy.setSearchFields(source.getSearchFields() == null ? List.of() : List.copyOf(source.getSearchFields()));
-        copy.setFilters(source.getFilters() == null ? new LinkedHashMap<>() : new LinkedHashMap<>(source.getFilters()));
+        copy.setSearchFields(source.getSearchFields() == null ? List.of() : source.getSearchFields().stream().map(this::toRepositoryField).toList());
+        copy.setFilters(normalizeFilters(source.getFilters()));
         copy.setStatus(source.getStatus());
-        copy.setSortBy(source.getSortBy());
+        copy.setSortBy(toRepositoryField(source.getSortBy()));
         copy.setSortDirection(source.getSortDirection());
         return copy;
+    }
+
+    private LinkedHashMap<String, Object> normalizeFilters(java.util.Map<String, Object> filters) {
+        LinkedHashMap<String, Object> normalized = new LinkedHashMap<>();
+        if (filters == null || filters.isEmpty()) {
+            return normalized;
+        }
+        filters.forEach((key, value) -> normalized.put(toRepositoryField(key), value));
+        return normalized;
+    }
+
+    private String toRepositoryField(String field) {
+        if (field == null || field.isBlank()) {
+            return field;
+        }
+        return REPOSITORY_FIELD_ALIASES.getOrDefault(field.trim(), field.trim());
     }
 
     private PermissionEffect extractEffectFilter(BaseSearchRequest request) {

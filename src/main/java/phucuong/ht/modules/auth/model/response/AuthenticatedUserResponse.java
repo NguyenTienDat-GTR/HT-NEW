@@ -18,4 +18,5 @@ public class AuthenticatedUserResponse {
     private final List<String> roles;
     private final List<String> permissions;
     private final boolean mustChangePassword;
+    private final boolean unitLocked;
 }

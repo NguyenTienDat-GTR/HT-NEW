@@ -11,6 +11,8 @@ import org.springframework.transaction.annotation.Transactional;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.validation.CommonValidationHelper;
+import phucuong.ht.modules.notification.service.ToggleNotificationDispatcher;
+import phucuong.ht.modules.notification.service.ToggleNotificationRecipientResolver;
 import phucuong.ht.modules.system.model.entity.Role;
 import phucuong.ht.modules.system.model.request.RoleCreateRequest;
 import phucuong.ht.modules.system.model.request.RoleUpdateRequest;
@@ -22,6 +24,7 @@ import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -30,6 +33,10 @@ public class RoleManagementService {
     private final SystemRoleRepository systemRoleRepository;
     private final CommonValidationHelper commonValidationHelper;
     private final SystemAdminAuthorizationHelper authorizationHelper;
+    @Autowired(required = false)
+    private ToggleNotificationRecipientResolver toggleNotificationRecipientResolver;
+    @Autowired(required = false)
+    private ToggleNotificationDispatcher toggleNotificationDispatcher;
     @Autowired(required = false)
     private RbacAuthRefreshNotifier authRefreshNotifier;
 
@@ -95,8 +102,12 @@ public class RoleManagementService {
         }
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái vai trò");
+        Set<String> recipients = toggleNotificationRecipientResolver == null ? Set.of() : toggleNotificationRecipientResolver.byRole(roleCode);
         Role updatedRole = systemRoleRepository.toggleStatus(roleCode, actor);
-        notifyRoleChanged(roleCode, "ROLE_TOGGLED");
+        notifyUsers(recipients, "ROLE_TOGGLED");
+        if (toggleNotificationDispatcher != null) {
+            toggleNotificationDispatcher.dispatch(recipients, "ROLE_TOGGLED", roleLabel(updatedRole), Boolean.TRUE.equals(updatedRole.getStatus()), actor);
+        }
         return toResponse(updatedRole);
     }
 
@@ -104,6 +115,24 @@ public class RoleManagementService {
         if (authRefreshNotifier != null) {
             authRefreshNotifier.notifyRoleChanged(roleCode, reason);
         }
+    }
+
+    private void notifyUsers(Set<String> recipients, String reason) {
+        if (authRefreshNotifier != null) {
+            authRefreshNotifier.notifyUsers(recipients, reason);
+        }
+    }
+
+    private String roleLabel(Role role) {
+        if (role == null) {
+            return "vai trò chưa xác định";
+        }
+        String name = commonValidationHelper.normalizeOptionalText(role.getRoleName());
+        String code = commonValidationHelper.normalizeOptionalText(role.getRoleCode());
+        if (name != null && code != null) {
+            return name + " (" + code + ")";
+        }
+        return name != null ? name : code != null ? code : "vai trò chưa xác định";
     }
 
     private String nextAvailableRoleCode(String roleName) {

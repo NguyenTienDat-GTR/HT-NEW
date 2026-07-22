@@ -57,6 +57,7 @@ PATCH /api/leaders/{id}/toggle-status|200|401|403|400|404|N/A: status change has
 
 # Notifications
 GET /api/system/notifications|200|401|403|N/A: endpoint accepts no client request data|N/A: user-scoped collection has no individual target|N/A: read-only endpoint does not mutate state
+GET /api/system/notifications/unread-count|200|401|403|N/A: endpoint accepts no client request data|N/A: user-scoped aggregate has no individual target|N/A: read-only endpoint does not mutate state
 PATCH /api/system/notifications/{id}/read|200|401|403|N/A: notification id is an opaque string|404|N/A: marking read has no uniqueness conflict
 
 # Parishes

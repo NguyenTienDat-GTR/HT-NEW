@@ -1,6 +1,7 @@
 package phucuong.ht.modules.parish.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
@@ -10,9 +11,11 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.common.exception.errorCode;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
+import phucuong.ht.common.security.UnitOperationalStatusService;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.config.CacheNames;
 import phucuong.ht.modules.auth.exception.ApiException;
@@ -25,11 +28,15 @@ import phucuong.ht.modules.parish.model.request.ParishUpdateRequest;
 import phucuong.ht.modules.parish.model.response.ParishResponse;
 import phucuong.ht.modules.parish.repository.ParishRepository;
 import phucuong.ht.modules.parish.security.ParishAccessEvaluator;
+import phucuong.ht.modules.notification.service.ToggleNotificationDispatcher;
+import phucuong.ht.modules.notification.service.ToggleNotificationRecipientResolver;
+import phucuong.ht.modules.system.service.RbacAuthRefreshNotifier;
 
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -46,6 +53,14 @@ public class ParishService {
     private final ParishValidationHelper parishValidationHelper;
     private final ParishScopeHelper parishScopeHelper;
     private final securityUtils securityUtils;
+    @Autowired(required = false)
+    private UnitOperationalStatusService unitOperationalStatusService;
+    @Autowired(required = false)
+    private ToggleNotificationRecipientResolver toggleNotificationRecipientResolver;
+    @Autowired(required = false)
+    private ToggleNotificationDispatcher toggleNotificationDispatcher;
+    @Autowired(required = false)
+    private RbacAuthRefreshNotifier authRefreshNotifier;
 
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.PARISH_LIST, allEntries = true),
@@ -57,6 +72,7 @@ public class ParishService {
         String auditActor = parishValidationHelper.getRequiredAuditActor(authentication);
         try {
             Deanery deanery = parishValidationHelper.requireExistingDeanery(request.getDeaneryId());
+            requireUnitOperational(UnitType.DEANERY, deanery.getId());
             parishValidationHelper.validateCreateNameUniqueness(request.getName(), deanery.getId());
             Parish parish = new Parish();
             parish.setDeanery(deanery);
@@ -120,11 +136,13 @@ public class ParishService {
     public ParishResponse update(UUID id, ParishUpdateRequest request, Authentication authentication) {
         parishValidationHelper.validateUpdateInput(request);
         Parish existingParish = parishValidationHelper.requireExistingParishWithDeaneryAndDiocese(id);
+        requireUnitOperational(UnitType.PARISH, id);
         String auditActor = parishValidationHelper.getRequiredAuditActor(authentication);
         parishValidationHelper.validateUpdateNameUniqueness(id, request.getName(), existingParish);
 
         if (request.getDeaneryId() != null) {
             Deanery targetDeanery = parishValidationHelper.requireExistingDeaneryWithDiocese(request.getDeaneryId());
+            requireUnitOperational(UnitType.DEANERY, targetDeanery.getId());
             parishScopeHelper.enforceDeaneryChangeScope(authentication, existingParish, targetDeanery);
         }
 
@@ -142,10 +160,44 @@ public class ParishService {
     })
     public ParishResponse toggleStatus(UUID id, StatusToggleRequest request, Authentication authentication) {
         parishValidationHelper.requireExistingParishWithDeaneryAndDiocese(id);
+        requireUnitToggleAllowed(UnitType.PARISH, id);
+        Set<String> recipients = toggleNotificationRecipientResolver == null ? Set.of() : toggleNotificationRecipientResolver.byUnit(UnitType.PARISH, id);
         parishValidationHelper.validateToggleConfirmation(request == null ? null : request.getConfirmationText());
         String auditActor = parishValidationHelper.getRequiredAuditActor(authentication);
         parishRepository.toggleStatus(id, auditActor);
-        return toParishResponse(parishValidationHelper.requireExistingParishWithDeaneryAndDiocese(id));
+        ParishResponse response = toParishResponse(parishValidationHelper.requireExistingParishWithDeaneryAndDiocese(id));
+        notifyUsers(recipients);
+        dispatchUnitToggle(recipients, unitLabel("Giáo xứ", response.getName()), Boolean.TRUE.equals(response.getStatus()), auditActor);
+        return response;
+    }
+
+    private void requireUnitOperational(UnitType unitType, UUID id) {
+        if (unitOperationalStatusService != null) {
+            unitOperationalStatusService.requireUnitOperational(unitType, id);
+        }
+    }
+
+    private void requireUnitToggleAllowed(UnitType unitType, UUID id) {
+        if (unitOperationalStatusService != null) {
+            unitOperationalStatusService.requireUnitToggleAllowed(unitType, id);
+        }
+    }
+
+    private void notifyUsers(Set<String> recipients) {
+        if (authRefreshNotifier != null) {
+            authRefreshNotifier.notifyUsers(recipients, "UNIT_STATUS_TOGGLED");
+        }
+    }
+
+    private void dispatchUnitToggle(Set<String> recipients, String targetLabel, boolean enabled, String actor) {
+        if (toggleNotificationDispatcher != null) {
+            toggleNotificationDispatcher.dispatch(recipients, "UNIT_STATUS_TOGGLED", targetLabel, enabled, actor);
+        }
+    }
+
+    private String unitLabel(String unitType, String name) {
+        String normalizedName = name == null ? null : name.trim();
+        return normalizedName == null || normalizedName.isBlank() ? unitType : unitType + " " + normalizedName;
     }
 
     private BaseSearchRequest copyRequest(BaseSearchRequest request) {

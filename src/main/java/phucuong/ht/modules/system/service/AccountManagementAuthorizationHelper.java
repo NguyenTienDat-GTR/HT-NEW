@@ -11,6 +11,7 @@ import phucuong.ht.modules.auth.repository.RoleRepository;
 import phucuong.ht.modules.system.model.entity.Account;
 import phucuong.ht.modules.system.model.entity.Role;
 
+import java.util.Objects;
 import java.util.UUID;
 
 @Component
@@ -48,11 +49,8 @@ public class AccountManagementAuthorizationHelper {
         }
 
         requireScopedAccess(authentication, target, targetRole);
-        String actorRoleCode = hasDioceseManageAuthority(authentication) ? "ADMIN_DIOCESE"
-                : hasDeaneryManageAuthority(authentication) ? "ADMIN_DEANERY" : "ADMIN_PARISH";
-        Role actorRole = roleRepository.findByRoleCodeAndStatusTrue(actorRoleCode)
-                .orElseThrow(() -> validation.notFound("Khong tim thay role " + actorRoleCode));
-        if (order(targetRole) <= order(actorRole)) {
+        Integer actorOrder = currentActorRoleOrder(authentication);
+        if (actorOrder == null || order(targetRole) <= actorOrder) {
             throw validation.forbidden("Quan tri vien chi duoc tao tai khoan co role thap hon minh");
         }
     }
@@ -81,6 +79,21 @@ public class AccountManagementAuthorizationHelper {
         requireScopedAccess(authentication, target, highestTargetRole);
     }
 
+    public void requireTargetAccountNotAboveActor(Authentication authentication, Account target) {
+        if (hasRole(authentication, SUPER_ADMIN)) {
+            return;
+        }
+        Role highestTargetRole = accountRoleRepository.findActiveByUsername(target.getUsername()).stream()
+                .map(accountRole -> accountRole.getRole())
+                .min((left, right) -> Integer.compare(order(left), order(right)))
+                .orElse(null);
+        requireTargetRoleNotAboveActor(authentication, highestTargetRole);
+    }
+
+    public Integer currentActorHighestRoleOrder(Authentication authentication) {
+        return currentActorRoleOrder(authentication);
+    }
+
     public boolean canRead(Authentication authentication, Account target) {
         if (hasRole(authentication, SUPER_ADMIN)) return true;
         try {
@@ -100,29 +113,53 @@ public class AccountManagementAuthorizationHelper {
     private void requireScopedAccess(Authentication authentication, Account target, Role targetRole) {
         if (hasDioceseManageAuthority(authentication)) {
             requireSame("giao phan", actorDiocese(authentication), dioceseId(target));
-            requireHierarchy(targetRole, "ADMIN_DIOCESE");
+            requireTargetRoleNotAboveActor(authentication, targetRole);
             return;
         }
         if (hasDeaneryManageAuthority(authentication)) {
             requireSame("giao hat", actorDeanery(authentication), deaneryId(target));
-            requireHierarchy(targetRole, "ADMIN_DEANERY");
+            requireTargetRoleNotAboveActor(authentication, targetRole);
             return;
         }
         if (hasParishManageAuthority(authentication)) {
             requireSame("giao xu", actorParish(authentication), parishId(target));
-            requireHierarchy(targetRole, "ADMIN_PARISH");
+            requireTargetRoleNotAboveActor(authentication, targetRole);
             return;
         }
         throw validation.forbidden("Tai khoan hien tai khong co quyen quan ly tai khoan");
     }
 
-    private void requireHierarchy(Role targetRole, String actorRoleCode) {
+    private void requireTargetRoleNotAboveActor(Authentication authentication, Role targetRole) {
         if (targetRole == null) return;
-        Role actorRole = roleRepository.findByRoleCodeAndStatusTrue(actorRoleCode)
-                .orElseThrow(() -> validation.notFound("Khong tim thay role " + actorRoleCode));
-        if (order(targetRole) < order(actorRole)) {
-            throw validation.forbidden("Khong the quan ly tai khoan co role cao hon pham vi hien tai");
+        Integer actorOrder = currentActorRoleOrder(authentication);
+        Integer targetOrder = targetRole.getDisplayOrder();
+        if (actorOrder == null || targetOrder == null || targetOrder < actorOrder) {
+            throw validation.forbidden("Khong the thao tac tren tai khoan co vai tro cao hon tai khoan hien tai");
         }
+    }
+
+    private Integer currentActorRoleOrder(Authentication authentication) {
+        String username = currentUsername(authentication);
+        Integer databaseOrder = accountRoleRepository.findActiveByUsername(username).stream()
+                .map(accountRole -> accountRole.getRole())
+                .map(Role::getDisplayOrder)
+                .filter(Objects::nonNull)
+                .min(Integer::compareTo)
+                .orElse(null);
+        if (databaseOrder != null) {
+            return databaseOrder;
+        }
+        if (!(authentication.getPrincipal() instanceof AuthUserDetails principal)) {
+            return null;
+        }
+        return principal.getRoles().stream()
+                .map(roleRepository::findByRoleCodeAndStatusTrue)
+                .filter(java.util.Optional::isPresent)
+                .map(java.util.Optional::get)
+                .map(Role::getDisplayOrder)
+                .filter(Objects::nonNull)
+                .min(Integer::compareTo)
+                .orElse(null);
     }
 
     private int order(Role role) {
