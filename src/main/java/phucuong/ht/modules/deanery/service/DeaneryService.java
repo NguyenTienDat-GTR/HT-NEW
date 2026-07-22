@@ -1,6 +1,7 @@
 package phucuong.ht.modules.deanery.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
@@ -10,9 +11,11 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.common.exception.errorCode;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
+import phucuong.ht.common.security.UnitOperationalStatusService;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.config.CacheNames;
 import phucuong.ht.modules.auth.exception.ApiException;
@@ -25,11 +28,15 @@ import phucuong.ht.modules.deanery.model.response.DeaneryResponse;
 import phucuong.ht.modules.deanery.repository.DeaneryRepository;
 import phucuong.ht.modules.deanery.security.DeaneryAccessEvaluator;
 import phucuong.ht.modules.diocese.model.entity.Diocese;
+import phucuong.ht.modules.notification.service.ToggleNotificationDispatcher;
+import phucuong.ht.modules.notification.service.ToggleNotificationRecipientResolver;
+import phucuong.ht.modules.system.service.RbacAuthRefreshNotifier;
 
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -45,6 +52,14 @@ public class DeaneryService {
     private final DeaneryValidationHelper deaneryValidationHelper;
     private final DeaneryScopeHelper deaneryScopeHelper;
     private final securityUtils securityUtils;
+    @Autowired(required = false)
+    private UnitOperationalStatusService unitOperationalStatusService;
+    @Autowired(required = false)
+    private ToggleNotificationRecipientResolver toggleNotificationRecipientResolver;
+    @Autowired(required = false)
+    private ToggleNotificationDispatcher toggleNotificationDispatcher;
+    @Autowired(required = false)
+    private RbacAuthRefreshNotifier authRefreshNotifier;
 
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.DEANERY_LIST, allEntries = true),
@@ -56,6 +71,7 @@ public class DeaneryService {
         String auditActor = deaneryValidationHelper.getRequiredAuditActor(authentication);
         try {
             Diocese diocese = deaneryValidationHelper.requireExistingDiocese(request.getDioceseId());
+            requireUnitOperational(UnitType.DIOCESE, diocese.getId());
             deaneryValidationHelper.validateCreateNameUniqueness(request.getName(), diocese.getId());
             Deanery deanery = new Deanery();
             deanery.setDiocese(diocese);
@@ -113,6 +129,7 @@ public class DeaneryService {
     public DeaneryResponse update(UUID id, DeaneryUpdateRequest request, Authentication authentication) {
         deaneryValidationHelper.validateUpdateInput(request);
         Deanery existingDeanery = deaneryValidationHelper.requireExistingDeaneryWithDiocese(id);
+        requireUnitOperational(UnitType.DEANERY, id);
         String auditActor = deaneryValidationHelper.getRequiredAuditActor(authentication);
         deaneryValidationHelper.validateUpdateNameUniqueness(id, request.getName(), existingDeanery);
         try {
@@ -129,10 +146,44 @@ public class DeaneryService {
     })
     public DeaneryResponse toggleStatus(UUID id, StatusToggleRequest request, Authentication authentication) {
         deaneryValidationHelper.requireExistingDeaneryWithDiocese(id);
+        requireUnitToggleAllowed(UnitType.DEANERY, id);
+        Set<String> recipients = toggleNotificationRecipientResolver == null ? Set.of() : toggleNotificationRecipientResolver.byUnit(UnitType.DEANERY, id);
         deaneryValidationHelper.validateToggleConfirmation(request == null ? null : request.getConfirmationText());
         String auditActor = deaneryValidationHelper.getRequiredAuditActor(authentication);
         deaneryRepository.toggleStatus(id, auditActor);
-        return toDeaneryResponse(deaneryValidationHelper.requireExistingDeaneryWithDiocese(id));
+        DeaneryResponse response = toDeaneryResponse(deaneryValidationHelper.requireExistingDeaneryWithDiocese(id));
+        notifyUsers(recipients);
+        dispatchUnitToggle(recipients, unitLabel("Giáo hạt", response.getName()), Boolean.TRUE.equals(response.getStatus()), auditActor);
+        return response;
+    }
+
+    private void requireUnitOperational(UnitType unitType, UUID id) {
+        if (unitOperationalStatusService != null) {
+            unitOperationalStatusService.requireUnitOperational(unitType, id);
+        }
+    }
+
+    private void requireUnitToggleAllowed(UnitType unitType, UUID id) {
+        if (unitOperationalStatusService != null) {
+            unitOperationalStatusService.requireUnitToggleAllowed(unitType, id);
+        }
+    }
+
+    private void notifyUsers(Set<String> recipients) {
+        if (authRefreshNotifier != null) {
+            authRefreshNotifier.notifyUsers(recipients, "UNIT_STATUS_TOGGLED");
+        }
+    }
+
+    private void dispatchUnitToggle(Set<String> recipients, String targetLabel, boolean enabled, String actor) {
+        if (toggleNotificationDispatcher != null) {
+            toggleNotificationDispatcher.dispatch(recipients, "UNIT_STATUS_TOGGLED", targetLabel, enabled, actor);
+        }
+    }
+
+    private String unitLabel(String unitType, String name) {
+        String normalizedName = name == null ? null : name.trim();
+        return normalizedName == null || normalizedName.isBlank() ? unitType : unitType + " " + normalizedName;
     }
 
     private BaseSearchRequest copyRequest(BaseSearchRequest request) {

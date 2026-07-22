@@ -12,6 +12,8 @@ import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.modules.auth.repository.RoleRepository;
+import phucuong.ht.modules.notification.service.ToggleNotificationDispatcher;
+import phucuong.ht.modules.notification.service.ToggleNotificationRecipientResolver;
 import phucuong.ht.modules.system.model.entity.Permission;
 import phucuong.ht.modules.system.model.entity.Role;
 import phucuong.ht.modules.system.model.entity.RolePermission;
@@ -48,6 +50,10 @@ public class RolePermissionManagementService {
             "role.roleName",
             "permission.permissionCode",
             "permission.permissionName",
+            "permission.module.moduleCode",
+            "permission.resource.resourceCode",
+            "permission.action.actionCode",
+            "permission.scope.scopeCode",
             "effect",
             "conditions",
             "assignedBy",
@@ -65,6 +71,10 @@ public class RolePermissionManagementService {
     private final SystemPermissionRepository systemPermissionRepository;
     private final CommonValidationHelper commonValidationHelper;
     private final SystemAdminAuthorizationHelper authorizationHelper;
+    @Autowired(required = false)
+    private ToggleNotificationRecipientResolver toggleNotificationRecipientResolver;
+    @Autowired(required = false)
+    private ToggleNotificationDispatcher toggleNotificationDispatcher;
     @Autowired(required = false)
     private RbacAuthRefreshNotifier authRefreshNotifier;
 
@@ -204,11 +214,16 @@ public class RolePermissionManagementService {
         );
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái phân quyền cho vai trò");
+        String roleCode = rolePermission.getRole().getRoleCode();
+        Set<String> recipients = toggleNotificationRecipientResolver == null ? Set.of() : toggleNotificationRecipientResolver.byRole(roleCode);
         rolePermission.setEffect(nextEffect);
         rolePermission.setStatus(true);
         rolePermission.setUpdatedAt(OffsetDateTime.now());
         rolePermission.setUpdatedBy(actor);
-        notifyRolePermissionChanged(rolePermission.getRole().getRoleCode(), "ROLE_PERMISSION_TOGGLED");
+        notifyUsers(recipients, "ROLE_PERMISSION_TOGGLED");
+        if (toggleNotificationDispatcher != null) {
+            toggleNotificationDispatcher.dispatch(recipients, "ROLE_PERMISSION_TOGGLED", rolePermissionLabel(rolePermission), nextEffect == PermissionEffect.ALLOW, actor);
+        }
         return toResponse(rolePermission);
     }
 
@@ -216,6 +231,42 @@ public class RolePermissionManagementService {
         if (authRefreshNotifier != null) {
             authRefreshNotifier.notifyRoleChanged(roleCode, reason);
         }
+    }
+
+    private void notifyUsers(Set<String> recipients, String reason) {
+        if (authRefreshNotifier != null) {
+            authRefreshNotifier.notifyUsers(recipients, reason);
+        }
+    }
+
+    private String rolePermissionLabel(RolePermission rolePermission) {
+        return permissionLabel(rolePermission == null ? null : rolePermission.getPermission())
+                + " trong vai trò "
+                + roleLabel(rolePermission == null ? null : rolePermission.getRole());
+    }
+
+    private String roleLabel(Role role) {
+        if (role == null) {
+            return "vai trò chưa xác định";
+        }
+        String name = commonValidationHelper.normalizeOptionalText(role.getRoleName());
+        String code = commonValidationHelper.normalizeOptionalText(role.getRoleCode());
+        if (name != null && code != null) {
+            return name + " (" + code + ")";
+        }
+        return name != null ? name : code != null ? code : "vai trò chưa xác định";
+    }
+
+    private String permissionLabel(Permission permission) {
+        if (permission == null) {
+            return "quyền chưa xác định";
+        }
+        String name = commonValidationHelper.normalizeOptionalText(permission.getPermissionName());
+        String code = commonValidationHelper.normalizeOptionalText(permission.getPermissionCode());
+        if (name != null && code != null) {
+            return name + " (" + code + ")";
+        }
+        return name != null ? name : code != null ? code : "quyền chưa xác định";
     }
 
     private BaseSearchRequest copyRequest(BaseSearchRequest request) {

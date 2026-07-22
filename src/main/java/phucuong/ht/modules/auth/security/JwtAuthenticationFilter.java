@@ -90,7 +90,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private boolean isTemporaryPasswordAllowedPath(String path) {
-        return "/api/auth/change-password".equals(path) || "/api/auth/me".equals(path);
+        return "/api/auth/change-password".equals(path)
+                || "/api/auth/me".equals(path)
+                || path.startsWith("/api/system/notifications")
+                || path.startsWith("/ws/notifications");
     }
 
     @Override

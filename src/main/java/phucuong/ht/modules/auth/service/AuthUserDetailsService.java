@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
+import phucuong.ht.common.security.UnitOperationalStatusService;
 import phucuong.ht.modules.auth.model.AuthUserDetails;
 import phucuong.ht.modules.auth.repository.AccountRepository;
 import phucuong.ht.modules.auth.repository.AccountRoleRepository;
@@ -26,14 +27,16 @@ public class AuthUserDetailsService implements UserDetailsService {
     private final AccountRepository accountRepository;
     private final AccountRoleRepository accountRoleRepository;
     private final AuthPermissionQueryRepository authPermissionQueryRepository;
+    private final UnitOperationalStatusService unitOperationalStatusService;
 
     @Override
     public AuthUserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         Account account = accountRepository.findActiveByUsername(username)
                 .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy tài khoản: " + username));
 
-        List<String> roles = accountRoleRepository.findActiveRoleCodesByUsername(username);
-        List<String> permissions = resolveAllowedPermissions(username);
+        boolean unitLocked = unitOperationalStatusService.isAccountUnitLocked(username);
+        List<String> roles = unitLocked ? List.of() : accountRoleRepository.findActiveRoleCodesByUsername(username);
+        List<String> permissions = unitLocked ? List.of() : resolveAllowedPermissions(username);
 
         return AuthUserDetails.databasePrincipal(
                 account.getUsername(),

@@ -1,23 +1,33 @@
 package phucuong.ht.modules.notification.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.modules.notification.model.entity.TrainingNotification;
 import phucuong.ht.modules.notification.model.response.TrainingNotificationResponse;
+import phucuong.ht.modules.notification.model.response.UnreadNotificationCountResponse;
 import phucuong.ht.modules.notification.repository.TrainingNotificationRepository;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
 public class TrainingNotificationService {
+
+    private static final int RETENTION_DAYS = 30;
 
     private final TrainingNotificationRepository trainingNotificationRepository;
     private final SimpMessagingTemplate simpMessagingTemplate;
@@ -30,8 +40,11 @@ public class TrainingNotificationService {
             return List.of();
         }
 
+        purgeExpiredNotifications();
+        Set<String> uniqueUsernames = normalizeUsernames(usernames);
         List<TrainingNotificationResponse> responses = new ArrayList<>();
-        for (String username : usernames) {
+        List<Delivery> deliveries = new ArrayList<>();
+        for (String username : uniqueUsernames) {
             OffsetDateTime now = OffsetDateTime.now();
             TrainingNotification notification = new TrainingNotification();
             notification.setUsername(username);
@@ -52,24 +65,31 @@ public class TrainingNotificationService {
             TrainingNotification saved = trainingNotificationRepository.save(notification);
             TrainingNotificationResponse response = toResponse(saved);
             responses.add(response);
-            simpMessagingTemplate.convertAndSendToUser(username, "/queue/notifications", response);
+            deliveries.add(new Delivery(username, response));
         }
 
+        publishAfterCommit(deliveries);
         return responses;
     }
 
-    @Transactional(readOnly = true)
-    public List<TrainingNotificationResponse> findCurrentUserNotifications(Authentication authentication) {
+    @Transactional
+    public Page<TrainingNotificationResponse> findCurrentUserNotifications(BaseSearchRequest request, Authentication authentication) {
+        purgeExpiredNotifications();
         String username = currentUsername(authentication);
-        return trainingNotificationRepository.findAllByUsernameAndStatusTrueOrderByCreatedAtDesc(username).stream()
-                .map(this::toResponse)
-                .toList();
+        BaseSearchRequest criteria = request == null ? new BaseSearchRequest() : request;
+        return trainingNotificationRepository.findAllByUsernameAndStatusTrueAndCreatedAtGreaterThanEqualOrderByCreatedAtDesc(
+                        username,
+                        retentionCutoff(),
+                        PageRequest.of(criteria.getPage(), criteria.getSize())
+                )
+                .map(this::toResponse);
     }
 
     @Transactional
     public TrainingNotificationResponse markRead(String id, Authentication authentication) {
+        purgeExpiredNotifications();
         String username = currentUsername(authentication);
-        TrainingNotification notification = trainingNotificationRepository.findByIdAndUsernameAndStatusTrue(id, username)
+        TrainingNotification notification = trainingNotificationRepository.findByIdAndUsernameAndStatusTrueAndCreatedAtGreaterThanEqual(id, username, retentionCutoff())
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy thông báo " + id));
         if (notification.getReadAt() == null) {
             notification.setReadAt(OffsetDateTime.now());
@@ -77,6 +97,14 @@ public class TrainingNotificationService {
             notification.setUpdatedBy(username);
         }
         return toResponse(notification);
+    }
+
+    @Transactional
+    public UnreadNotificationCountResponse unreadCount(Authentication authentication) {
+        purgeExpiredNotifications();
+        return UnreadNotificationCountResponse.builder()
+                .unreadCount(trainingNotificationRepository.countByUsernameAndStatusTrueAndReadAtIsNullAndCreatedAtGreaterThanEqual(currentUsername(authentication), retentionCutoff()))
+                .build();
     }
 
     private String currentUsername(Authentication authentication) {
@@ -103,5 +131,49 @@ public class TrainingNotificationService {
                 .createdAt(notification.getCreatedAt())
                 .status(notification.getStatus())
                 .build();
+    }
+
+    private Set<String> normalizeUsernames(List<String> usernames) {
+        Set<String> normalized = new LinkedHashSet<>();
+        if (usernames == null) {
+            return normalized;
+        }
+        for (String username : usernames) {
+            if (username != null && !username.isBlank()) {
+                normalized.add(username);
+            }
+        }
+        return normalized;
+    }
+
+    private void publishAfterCommit(List<Delivery> deliveries) {
+        if (deliveries.isEmpty()) {
+            return;
+        }
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    deliveries.forEach(TrainingNotificationService.this::sendNow);
+                }
+            });
+            return;
+        }
+        deliveries.forEach(this::sendNow);
+    }
+
+    private void sendNow(Delivery delivery) {
+        simpMessagingTemplate.convertAndSendToUser(delivery.username(), "/queue/notifications", delivery.response());
+    }
+
+    private OffsetDateTime retentionCutoff() {
+        return OffsetDateTime.now().minusDays(RETENTION_DAYS);
+    }
+
+    private void purgeExpiredNotifications() {
+        trainingNotificationRepository.deleteByCreatedAtBefore(retentionCutoff());
+    }
+
+    private record Delivery(String username, TrainingNotificationResponse response) {
     }
 }

@@ -1178,3 +1178,18 @@ The following work was added in this iteration:
 - Other roles cannot toggle permission catalog rows even if they carry stale `system.permission.toggle.*` or `system.permission.update.*` authorities.
 - Verification run in this session: `git diff --check` passed; `.\gradlew.bat test --tests phucuong.ht.HtManagementNewApplicationTests` passed and loaded the new migration in the Spring test context; targeted `PermissionManagementServiceTest` and `PermissionControllerSecurityIntegrationTest` passed for effect filtering/binding and non-super-admin toggle rejection.
 
+### Unit status lock and toggle notifications 2026-07-22
+
+- Branch `feature/unit-status-lock-notifications` starts from `origin/main` in both BE and FE.
+- Diocese, Deanery, and Parish disable behavior is effective/inherited only. Toggling a parent does not rewrite child `status`; descendants become usable again automatically when all ancestors are active, except objects directly disabled on their own row.
+- `UnitOperationalStatusService` resolves account scope from direct `Account.diocese/deanery/parish` first and then `Account -> Leader -> Parish`. If any unit in that chain is inactive, `/api/auth/me` returns `unitLocked=true` and empty `roles`/`permissions`.
+- Locked accounts may still login, refresh, call `GET /api/auth/me`, connect notification WebSocket, call `GET /api/system/notifications`, `GET /api/system/notifications/unread-count`, and `PATCH /api/system/notifications/{id}/read`; business APIs return `403`.
+- Writes targeting data in a locked unit are blocked for organization unit management and account/account-role/account-permission target flows. Unit toggles are allowed only when ancestors are active, so child units must be re-enabled from parent to child.
+- Toggle notifications are persisted in `training_notification` for role, permission, account-role, role-permission, account-permission override, Diocese, Deanery, and Parish toggles. Recipients are captured before the status/effect change, deduplicated, limited to active accounts, and reused for auth-refresh STOMP events.
+- `TrainingNotificationService` now saves notifications in the current transaction and publishes `/user/queue/notifications` only after commit; existing training notification history and payload fields remain compatible.
+- Added `GET /api/system/notifications/unread-count` returning `{ unreadCount }`.
+- `GET /api/system/notifications` now returns a paged `Page<TrainingNotificationResponse>` using `BaseSearchRequest` paging. Notification reads and unread counts only include rows from the last 30 days; older `training_notification` rows are purged on notification list/count/read/dispatch paths.
+- Permission catalog, role-permission, and account-permission search/filter/sort normalize FE-facing fields to entity paths (`module.moduleCode`, `permission.module.moduleCode`, `account.username`, etc.) so permission search and taxonomy filters do not trigger repository path errors.
+- Verification run in this session: `.\gradlew.bat compileJava`, `.\gradlew.bat testClasses`, targeted `AuthUserDetailsServiceTest`/`TrainingNotificationServiceTest`, and `EndpointContractMatrixTest` passed. Full `.\gradlew.bat test` was attempted but local PostgreSQL/RabbitMQ-backed Spring contexts failed during infrastructure startup; rerun the full suite when those services are healthy.
+- Follow-up verification: `.\gradlew.bat compileJava`, `.\gradlew.bat test --tests phucuong.ht.modules.notification.service.TrainingNotificationServiceTest --tests phucuong.ht.modules.notification.service.ToggleNotificationDispatcherTest --tests phucuong.ht.contract.EndpointContractMatrixTest` passed after notification paging/retention and permission filter mapping updates.
+

@@ -10,11 +10,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
+import phucuong.ht.common.security.UnitOperationalStatusService;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.modules.auth.model.AuthUserDetails;
 import phucuong.ht.modules.auth.repository.AccountRepository;
 import phucuong.ht.modules.auth.repository.AccountRoleRepository;
 import phucuong.ht.modules.auth.repository.RoleRepository;
+import phucuong.ht.modules.notification.service.ToggleNotificationDispatcher;
+import phucuong.ht.modules.notification.service.ToggleNotificationRecipientResolver;
 import phucuong.ht.modules.system.model.entity.Account;
 import phucuong.ht.modules.system.model.entity.AccountRole;
 import phucuong.ht.modules.system.model.entity.Role;
@@ -52,6 +55,12 @@ public class AccountRoleService {
     private final AccountRoleRepository accountRoleRepository;
     private final RoleRepository roleRepository;
     private final CommonValidationHelper commonValidationHelper;
+    @Autowired(required = false)
+    private UnitOperationalStatusService unitOperationalStatusService;
+    @Autowired(required = false)
+    private ToggleNotificationRecipientResolver toggleNotificationRecipientResolver;
+    @Autowired(required = false)
+    private ToggleNotificationDispatcher toggleNotificationDispatcher;
     @Autowired(required = false)
     private RbacAuthRefreshNotifier authRefreshNotifier;
 
@@ -174,10 +183,15 @@ public class AccountRoleService {
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
         AccountRole entity = require(id);
         enforceAssignmentScope(authentication, entity.getAccount(), entity.getRole());
+        String targetUsername = entity.getAccount().getUsername();
+        Set<String> recipients = toggleNotificationRecipientResolver == null ? Set.of() : toggleNotificationRecipientResolver.byAccount(targetUsername);
         entity.setStatus(!Boolean.TRUE.equals(entity.getStatus()));
         entity.setUpdatedAt(OffsetDateTime.now());
         entity.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái vai trò tài khoản"));
-        notifyAccountRoleChanged(entity.getAccount().getUsername(), "ACCOUNT_ROLE_TOGGLED");
+        notifyUsers(recipients, "ACCOUNT_ROLE_TOGGLED");
+        if (toggleNotificationDispatcher != null) {
+            toggleNotificationDispatcher.dispatch(recipients, "ACCOUNT_ROLE_TOGGLED", roleLabel(entity.getRole()), Boolean.TRUE.equals(entity.getStatus()), currentUsername(authentication));
+        }
         return toResponse(entity);
     }
 
@@ -185,6 +199,24 @@ public class AccountRoleService {
         if (authRefreshNotifier != null) {
             authRefreshNotifier.notifyAccount(username, reason);
         }
+    }
+
+    private void notifyUsers(Set<String> recipients, String reason) {
+        if (authRefreshNotifier != null) {
+            authRefreshNotifier.notifyUsers(recipients, reason);
+        }
+    }
+
+    private String roleLabel(Role role) {
+        if (role == null) {
+            return "vai trò chưa xác định";
+        }
+        String name = commonValidationHelper.normalizeOptionalText(role.getRoleName());
+        String code = commonValidationHelper.normalizeOptionalText(role.getRoleCode());
+        if (name != null && code != null) {
+            return name + " (" + code + ")";
+        }
+        return name != null ? name : code != null ? code : "vai trò chưa xác định";
     }
 
     private Account requireAccount(String username) {
@@ -272,6 +304,9 @@ public class AccountRoleService {
     }
 
     private void enforceAssignmentScope(Authentication authentication, Account targetAccount, Role targetRole) {
+        if (unitOperationalStatusService != null) {
+            unitOperationalStatusService.requireAccountWritable(targetAccount.getUsername());
+        }
         if (currentUsername(authentication).equals(targetAccount.getUsername())) {
             throw commonValidationHelper.forbidden("Quản trị viên không được tự gán vai trò cho tài khoản của mình");
         }
