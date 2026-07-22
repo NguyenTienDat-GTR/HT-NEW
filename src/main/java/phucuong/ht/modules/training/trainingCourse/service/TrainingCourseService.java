@@ -67,6 +67,7 @@ public class TrainingCourseService {
 
         CourseRequirement requirement = resolveRequirement(request.getRequirementCode());
         String auditActor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tạo khóa huấn luyện");
+        OffsetDateTime now = OffsetDateTime.now();
 
         TrainingCourse course = new TrainingCourse();
         course.setCourseCode(request.getCourseCode());
@@ -81,6 +82,8 @@ public class TrainingCourseService {
         course.setCourseType(request.getCourseType());
         course.setAdditionalNotes(request.getAdditionalNotes());
         course.setStatus(Boolean.TRUE);
+        course.setCreatedAt(now);
+        course.setUpdatedAt(now);
         course.setCreatedBy(auditActor);
         course.setUpdatedBy(auditActor);
         validateRegistrationWindow(course.getRegistrationStartAt(), course.getRegistrationEndAt());
@@ -168,6 +171,7 @@ public class TrainingCourseService {
         if (request.getAdditionalNotes() != null) {
             existing.setAdditionalNotes(request.getAdditionalNotes());
         }
+        existing.setUpdatedAt(OffsetDateTime.now());
         existing.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật khóa huấn luyện"));
         validateRegistrationWindow(existing.getRegistrationStartAt(), existing.getRegistrationEndAt());
         applyOwnerScope(existing, targetCourseType, authentication);

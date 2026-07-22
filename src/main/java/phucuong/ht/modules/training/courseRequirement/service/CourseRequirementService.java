@@ -27,6 +27,7 @@ import phucuong.ht.modules.training.courseRequirement.repository.CourseRequireme
 import phucuong.ht.modules.training.courseRequirement.security.CourseRequirementAccessEvaluator;
 import phucuong.ht.modules.training.enums.CourseType;
 
+import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.UUID;
@@ -50,12 +51,14 @@ public class CourseRequirementService {
             @CacheEvict(cacheNames = CacheNames.COURSE_REQUIREMENT_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.COURSE_REQUIREMENT_DETAIL, allEntries = true)
     })
+    @Transactional
     public CourseRequirementResponse create(CourseRequirementCreateRequest request, Authentication authentication) {
         if (request.getCourseType() == null) {
             throw commonValidationHelper.validationError("courseType là bắt buộc");
         }
 
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tạo requirement");
+        OffsetDateTime now = OffsetDateTime.now();
         CourseRequirement requirement = new CourseRequirement();
         requirement.setRequirementCode(request.getRequirementCode());
         requirement.setRequirementName(request.getRequirementName());
@@ -64,6 +67,8 @@ public class CourseRequirementService {
         requirement.setRequiredMinAge(request.getRequiredMinAge());
         requirement.setRequiredYearsActive(request.getRequiredYearsActive());
         requirement.setStatus(Boolean.TRUE);
+        requirement.setCreatedAt(now);
+        requirement.setUpdatedAt(now);
         requirement.setCreatedBy(actor);
         requirement.setUpdatedBy(actor);
         applyOwnerScope(requirement, request.getCourseType(), authentication);
@@ -122,6 +127,7 @@ public class CourseRequirementService {
         if (request.getRequiredYearsActive() != null) {
             requirement.setRequiredYearsActive(request.getRequiredYearsActive());
         }
+        requirement.setUpdatedAt(OffsetDateTime.now());
         requirement.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật requirement"));
         applyOwnerScope(requirement, courseType, authentication);
         return toResponse(requirement);

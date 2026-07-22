@@ -182,6 +182,7 @@ public class AccountManagementService {
         Account account = require(username);
         authorizationHelper.requireCanManage(authentication, account);
         account.setStatus(!Boolean.TRUE.equals(account.getStatus()));
+        account.setUpdatedAt(OffsetDateTime.now());
         account.setUpdatedBy(validation.requireAuditActor(authentication, "Không xác định được người đổi trạng thái tài khoản"));
         redisTokenSessionService.revokeAllSessions(account.getUsername());
         return response(account);

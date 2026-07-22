@@ -8,6 +8,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
@@ -20,6 +21,7 @@ import phucuong.ht.modules.position.model.request.PositionUpdateRequest;
 import phucuong.ht.modules.position.model.response.PositionResponse;
 import phucuong.ht.modules.position.repository.PositionRepository;
 
+import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 
@@ -35,12 +37,16 @@ public class PositionService {
             @CacheEvict(cacheNames = CacheNames.POSITION_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.POSITION_DETAIL, allEntries = true)
     })
+    @Transactional
     public PositionResponse create(PositionCreateRequest request, Authentication authentication) {
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tạo chức vụ");
+        OffsetDateTime now = OffsetDateTime.now();
         Position position = new Position();
         position.setPositionName(commonValidationHelper.normalizeRequiredText(request.getPositionName()));
         position.setPositionType(request.getPositionType());
         position.setStatus(Boolean.TRUE);
+        position.setCreatedAt(now);
+        position.setUpdatedAt(now);
         position.setCreatedBy(actor);
         position.setUpdatedBy(actor);
         positionRepository.save(position);
@@ -65,6 +71,7 @@ public class PositionService {
             @CacheEvict(cacheNames = CacheNames.POSITION_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.POSITION_DETAIL, allEntries = true)
     })
+    @Transactional
     public PositionResponse update(String positionCode, PositionUpdateRequest request, Authentication authentication) {
         Position position = positionRepository.findById(positionCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy chức vụ " + positionCode));
@@ -74,6 +81,7 @@ public class PositionService {
         if (request.getPositionType() != null) {
             position.setPositionType(request.getPositionType());
         }
+        position.setUpdatedAt(OffsetDateTime.now());
         position.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật chức vụ"));
         return toResponse(position);
     }

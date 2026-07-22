@@ -101,6 +101,7 @@ public class RolePermissionManagementService {
 
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tạo phân quyền cho vai trò");
         OffsetDateTime assignedAt = request.getAssignedAt() == null ? OffsetDateTime.now() : request.getAssignedAt();
+        OffsetDateTime now = OffsetDateTime.now();
         List<RolePermissionResponse> responses = new ArrayList<>();
 
         for (String permissionCode : new LinkedHashSet<>(request.getPermissionCodes())) {
@@ -117,6 +118,7 @@ public class RolePermissionManagementService {
             rolePermission.setConditions(commonValidationHelper.normalizeOptionalText(request.getConditions()));
             rolePermission.setExpiresAt(request.getExpiresAt());
             rolePermission.setStatus(true);
+            rolePermission.setUpdatedAt(now);
             rolePermission.setUpdatedBy(actor);
             responses.add(toResponse(rolePermission));
         }
@@ -176,6 +178,7 @@ public class RolePermissionManagementService {
         if (request.getExpiresAt() != null) {
             rolePermission.setExpiresAt(request.getExpiresAt());
         }
+        rolePermission.setUpdatedAt(OffsetDateTime.now());
         rolePermission.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật phân quyền cho vai trò"));
         return toResponse(rolePermission);
     }
@@ -197,6 +200,7 @@ public class RolePermissionManagementService {
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái phân quyền cho vai trò");
         rolePermission.setEffect(nextEffect);
         rolePermission.setStatus(true);
+        rolePermission.setUpdatedAt(OffsetDateTime.now());
         rolePermission.setUpdatedBy(actor);
         return toResponse(rolePermission);
     }
@@ -324,6 +328,8 @@ public class RolePermissionManagementService {
         rolePermission.setAssignedBy(actor);
         rolePermission.setAssignedAt(assignedAt);
         rolePermission.setStatus(true);
+        rolePermission.setUpdatedAt(OffsetDateTime.now());
+        rolePermission.setUpdatedBy(actor);
         return rolePermission;
     }
 }

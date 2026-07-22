@@ -150,6 +150,8 @@ public class CourseParticipationService {
             participation.setExceptionReason(commonValidationHelper.normalizeOptionalText(exceptionReason));
             participation.setParishSubmittedAt(submittedAt);
             participation.setCertificateApprovalStatus(WorkflowApprovalStatus.NOT_REQUIRED);
+            participation.setCreatedAt(submittedAt);
+            participation.setUpdatedAt(submittedAt);
             participation.setCreatedBy(actor);
             participation.setUpdatedBy(actor);
             participation.setStatus(Boolean.TRUE);
@@ -216,6 +218,7 @@ public class CourseParticipationService {
 
         participations.forEach(participation -> {
             participation.setDeanerySubmittedAt(submittedAt);
+            participation.setUpdatedAt(submittedAt);
             participation.setUpdatedBy(actor);
         });
 
@@ -260,10 +263,12 @@ public class CourseParticipationService {
         }
 
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người duyệt giáo hạt");
+        OffsetDateTime now = OffsetDateTime.now();
         requirePendingManualApproval(participation.getDeaneryApprovalStatus());
         participation.setDeaneryApprovalStatus(Boolean.TRUE.equals(request.getApproved()) ? WorkflowApprovalStatus.APPROVED : WorkflowApprovalStatus.REJECTED);
         participation.setReview(request.getReview());
         participation.setApprovedBy(actor);
+        participation.setUpdatedAt(now);
         participation.setUpdatedBy(actor);
         publishEvent("training.registration.deanery_approved", "courseParticipation", participationId, actor, Map.of("approved", request.getApproved()));
         return toResponse(participation);
@@ -278,10 +283,12 @@ public class CourseParticipationService {
         }
 
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người duyệt giáo phận");
+        OffsetDateTime now = OffsetDateTime.now();
         requirePendingManualApproval(participation.getDioceseApprovalStatus());
         participation.setDioceseApprovalStatus(Boolean.TRUE.equals(request.getApproved()) ? WorkflowApprovalStatus.APPROVED : WorkflowApprovalStatus.REJECTED);
         participation.setReview(request.getReview());
         participation.setApprovedBy(actor);
+        participation.setUpdatedAt(now);
         participation.setUpdatedBy(actor);
         publishEvent("training.registration.diocese_approved", "courseParticipation", participationId, actor, Map.of("approved", request.getApproved()));
         return toResponse(participation);
@@ -292,6 +299,7 @@ public class CourseParticipationService {
         CourseParticipation participation = courseParticipationRepository.findByIdWithLeaderAndCourse(participationId)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy đăng ký khóa huấn luyện " + participationId));
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người nhập điểm");
+        OffsetDateTime now = OffsetDateTime.now();
 
         if (participation.getCertificateApprovalStatus() == WorkflowApprovalStatus.APPROVED) {
             throw commonValidationHelper.conflict("Không thể sửa điểm sau khi chứng chỉ đã được duyệt");
@@ -320,6 +328,8 @@ public class CourseParticipationService {
             persistedScore.setScore(componentRequest.getScore());
             persistedScore.setNote(commonValidationHelper.normalizeOptionalText(componentRequest.getNote()));
             persistedScore.setStatus(Boolean.TRUE);
+            persistedScore.setCreatedAt(now);
+            persistedScore.setUpdatedAt(now);
             persistedScore.setCreatedBy(actor);
             persistedScore.setUpdatedBy(actor);
             participation.getComponentScores().add(persistedScore);
@@ -332,13 +342,14 @@ public class CourseParticipationService {
         BigDecimal totalScore = trainingScoreFormulaEvaluator.evaluate(scoreFormula.getExpression(), formulaVariables);
         participation.setTotalScore(totalScore);
         participation.setReview(request.getReview());
+        participation.setUpdatedAt(now);
         participation.setUpdatedBy(actor);
         if (totalScore.compareTo(scoreFormula.getPassingScore()) >= 0) {
             participation.setResult(CourseResult.COMPLETED);
             participation.setParticipationStatus(ParticipationStatus.COMPLETED);
             participation.setCertificateApprovalStatus(WorkflowApprovalStatus.PENDING);
             if (participation.getCertificateRequestedAt() == null) {
-                participation.setCertificateRequestedAt(OffsetDateTime.now());
+                participation.setCertificateRequestedAt(now);
             }
             ensureSuggestedCertificateExists(participation, actor);
         } else {
@@ -382,6 +393,7 @@ public class CourseParticipationService {
         if (certificateRepository.findByLeaderIdAndCourseCode(participation.getLeader().getId(), participation.getCourse().getCourseCode()).isPresent()) {
             return;
         }
+        OffsetDateTime now = OffsetDateTime.now();
         Certificate certificate = new Certificate();
         certificate.setCertificateCode(nextCertificateCode(participation));
         certificate.setCertificateName(participation.getCourse().getCourseName());
@@ -391,6 +403,8 @@ public class CourseParticipationService {
         certificate.setSystemSuggested(Boolean.TRUE);
         certificate.setApprovedByException(Boolean.FALSE);
         certificate.setStatus(Boolean.TRUE);
+        certificate.setCreatedAt(now);
+        certificate.setUpdatedAt(now);
         certificate.setCreatedBy(actor);
         certificate.setUpdatedBy(actor);
         certificateRepository.save(certificate);

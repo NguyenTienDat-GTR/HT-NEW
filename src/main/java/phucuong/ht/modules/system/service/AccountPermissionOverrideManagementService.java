@@ -77,6 +77,7 @@ public class AccountPermissionOverrideManagementService {
                 .orElseThrow(() -> commonValidationHelper.notFound("Khong tim thay tai khoan: " + request.getUsername()));
         requireValidSuperAdminTarget(authentication, account);
         String actor = commonValidationHelper.requireAuditActor(authentication, "Khong xac dinh duoc nguoi tao phan quyen cho tai khoan");
+        OffsetDateTime now = OffsetDateTime.now();
         List<AccountPermissionOverrideResponse> responses = new ArrayList<>();
 
         for (String permissionCode : new LinkedHashSet<>(request.getPermissionCodes())) {
@@ -94,6 +95,7 @@ public class AccountPermissionOverrideManagementService {
             override.setReason(commonValidationHelper.normalizeRequiredText(request.getReason()));
             override.setExpiresAt(request.getExpiresAt());
             override.setStatus(true);
+            override.setUpdatedAt(now);
             override.setUpdatedBy(actor);
             responses.add(toResponse(override));
         }
@@ -150,6 +152,7 @@ public class AccountPermissionOverrideManagementService {
             override.setExpiresAt(request.getExpiresAt());
         }
         override.setStatus(true);
+        override.setUpdatedAt(OffsetDateTime.now());
         override.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Khong xac dinh duoc nguoi cap nhat phan quyen cho tai khoan"));
         return toResponse(override);
     }
@@ -165,6 +168,7 @@ public class AccountPermissionOverrideManagementService {
         rejectDenyOfRequiredAccountRoleAssignment(override.getAccount(), override.getPermission().getPermissionCode(), nextEffect);
         override.setEffect(nextEffect);
         override.setStatus(true);
+        override.setUpdatedAt(OffsetDateTime.now());
         override.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Khong xac dinh duoc nguoi doi trang thai phan quyen cho tai khoan"));
         return toResponse(override);
     }

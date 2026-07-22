@@ -155,6 +155,7 @@ public class AccountRoleService {
         if (request.getAssignedAt() != null) entity.setAssignedAt(request.getAssignedAt());
         if (request.getExpiresAt() != null) entity.setExpiresAt(request.getExpiresAt());
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật vai trò tài khoản");
+        entity.setUpdatedAt(OffsetDateTime.now());
         entity.setUpdatedBy(actor);
         if (Boolean.TRUE.equals(entity.getIsPrimary())) {
             clearOtherPrimaryRoles(account.getUsername(), role.getRoleCode(), actor);
@@ -168,6 +169,7 @@ public class AccountRoleService {
         AccountRole entity = require(id);
         enforceAssignmentScope(authentication, entity.getAccount(), entity.getRole());
         entity.setStatus(!Boolean.TRUE.equals(entity.getStatus()));
+        entity.setUpdatedAt(OffsetDateTime.now());
         entity.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái vai trò tài khoản"));
         return toResponse(entity);
     }
@@ -220,6 +222,7 @@ public class AccountRoleService {
                 .filter(accountRole -> Boolean.TRUE.equals(accountRole.getIsPrimary()))
                 .forEach(accountRole -> {
                     accountRole.setIsPrimary(Boolean.FALSE);
+                    accountRole.setUpdatedAt(OffsetDateTime.now());
                     accountRole.setUpdatedBy(actor);
                 });
     }
