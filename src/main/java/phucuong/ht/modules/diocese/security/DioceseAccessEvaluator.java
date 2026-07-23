@@ -46,7 +46,8 @@ public class DioceseAccessEvaluator {
     }
 
     public boolean canToggle(Authentication authentication, UUID dioceseId) {
-        return hasAuthority(authentication, TOGGLE_ALL);
+        return hasRole(authentication, "SUPER_ADMIN")
+                && hasAuthority(authentication, TOGGLE_ALL);
     }
 
     private boolean hasScopedAccess(Authentication authentication, UUID dioceseId, String scopedAuthority) {

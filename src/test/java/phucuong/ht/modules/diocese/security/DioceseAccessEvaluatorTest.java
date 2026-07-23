@@ -113,7 +113,7 @@ class DioceseAccessEvaluatorTest {
                 "admin-dio",
                 "LEADER1",
                 List.of("ADMIN_DIOCESE"),
-                List.of(DioceseAccessEvaluator.UPDATE_DIOCESE)
+                List.of(DioceseAccessEvaluator.UPDATE_DIOCESE, DioceseAccessEvaluator.TOGGLE_ALL)
         );
 
         assertTrue(dioceseAccessEvaluator.canToggle(superAdmin, dioceseId));

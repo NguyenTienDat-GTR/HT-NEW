@@ -29,6 +29,8 @@ public class LeaderResponse {
     private String imageUrl;
     private LeaderGender gender;
     private LeaderLevel leaderLevel;
+    private UUID deaneryId;
+    private String deaneryName;
     private UUID parishId;
     private String parishName;
 }

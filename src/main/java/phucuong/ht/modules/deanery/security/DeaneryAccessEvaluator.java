@@ -58,11 +58,10 @@ public class DeaneryAccessEvaluator {
     }
 
     public boolean canToggle(Authentication authentication, UUID deaneryId) {
-        if (hasRole(authentication, "SUPER_ADMIN")) {
+        if (!hasRole(authentication, "ADMIN_DIOCESE")) {
             return false;
         }
-        return hasAuthority(authentication, TOGGLE_ALL)
-                || hasDioceseScopedAccess(authentication, deaneryId, TOGGLE_DIOCESE);
+        return hasDioceseScopedAccess(authentication, deaneryId, TOGGLE_DIOCESE);
     }
 
     private boolean hasDioceseScopedAccess(Authentication authentication, UUID deaneryId, String scopedAuthority) {

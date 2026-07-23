@@ -245,6 +245,8 @@ public class LeaderService {
                 .imageUrl(leader.getImageUrl())
                 .gender(leader.getGender())
                 .leaderLevel(leader.getLeaderLevel())
+                .deaneryId(leader.getParish() == null || leader.getParish().getDeanery() == null ? null : leader.getParish().getDeanery().getId())
+                .deaneryName(leader.getParish() == null || leader.getParish().getDeanery() == null ? null : leader.getParish().getDeanery().getName())
                 .parishId(leader.getParish() == null ? null : leader.getParish().getId())
                 .parishName(leader.getParish() == null ? null : leader.getParish().getName())
                 .build();

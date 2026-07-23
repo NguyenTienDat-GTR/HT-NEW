@@ -143,10 +143,23 @@ class DeaneryAccessEvaluatorTest {
                 "admin-deanery",
                 "LEADER1",
                 List.of("ADMIN_DEANERY"),
-                List.of(DeaneryAccessEvaluator.UPDATE_DEANERY)
+                List.of(DeaneryAccessEvaluator.UPDATE_DEANERY, DeaneryAccessEvaluator.TOGGLE_DIOCESE)
         );
 
         assertFalse(deaneryAccessEvaluator.canToggle(authentication, deaneryId));
+    }
+
+    @Test
+    void canToggleShouldDenySuperAdminEvenWithSystemWideTogglePermission() {
+        UUID deaneryId = UUID.randomUUID();
+        Authentication authentication = authentication(
+                "superadmin",
+                List.of("SUPER_ADMIN"),
+                List.of(DeaneryAccessEvaluator.TOGGLE_ALL)
+        );
+
+        assertFalse(deaneryAccessEvaluator.canToggle(authentication, deaneryId));
+        verifyNoInteractions(accountRepository, deaneryRepository);
     }
 
     private Authentication authentication(String username, List<String> roles, List<String> permissions) {
