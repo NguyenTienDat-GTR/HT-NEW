@@ -28,4 +28,5 @@ public class ParishResponse {
     private UUID dioceseId;
     private String dioceseName;
     private String chapterName;
+    private Long leaderCount;
 }

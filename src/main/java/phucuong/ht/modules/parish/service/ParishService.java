@@ -63,6 +63,10 @@ public class ParishService {
     private RbacAuthRefreshNotifier authRefreshNotifier;
 
     @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DEANERY_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DEANERY_DETAIL, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.PARISH_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.PARISH_DETAIL, allEntries = true)
     })
@@ -130,6 +134,10 @@ public class ParishService {
     }
 
     @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DEANERY_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DEANERY_DETAIL, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.PARISH_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.PARISH_DETAIL, allEntries = true)
     })
@@ -155,6 +163,10 @@ public class ParishService {
     }
 
     @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DEANERY_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DEANERY_DETAIL, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.PARISH_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.PARISH_DETAIL, allEntries = true)
     })
@@ -226,17 +238,23 @@ public class ParishService {
 
         Map<UUID, Parish> parishById = parishRepository.findAllByIdsWithDeaneryAndDiocese(parishIds).stream()
                 .collect(Collectors.toMap(Parish::getId, Function.identity()));
+        Map<UUID, Long> leaderCounts = parishRepository.countLeadersByParishIds(parishIds);
 
         List<ParishResponse> hydratedContent = parishIds.stream()
                 .map(parishById::get)
                 .filter(java.util.Objects::nonNull)
-                .map(this::toParishResponse)
+                .map(parish -> toParishResponse(parish, leaderCounts.getOrDefault(parish.getId(), 0L)))
                 .toList();
 
         return new PageImpl<>(hydratedContent, page.getPageable(), page.getTotalElements());
     }
 
     private ParishResponse toParishResponse(Parish parish) {
+        UUID id = parish.getId();
+        return toParishResponse(parish, id == null ? 0L : parishRepository.countLeadersByParishIds(List.of(id)).getOrDefault(id, 0L));
+    }
+
+    private ParishResponse toParishResponse(Parish parish, long leaderCount) {
         return ParishResponse.builder()
                 .id(parish.getId())
                 .createdAt(parish.getCreatedAt())
@@ -255,6 +273,7 @@ public class ParishService {
                 .dioceseId(parish.getDeanery() == null || parish.getDeanery().getDiocese() == null ? null : parish.getDeanery().getDiocese().getId())
                 .dioceseName(parish.getDeanery() == null || parish.getDeanery().getDiocese() == null ? null : parish.getDeanery().getDiocese().getName())
                 .chapterName(parish.getChapterName())
+                .leaderCount(leaderCount)
                 .build();
     }
 }

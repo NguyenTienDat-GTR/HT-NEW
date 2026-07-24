@@ -7,7 +7,9 @@ import phucuong.ht.common.repository.BaseRepo;
 import phucuong.ht.modules.deanery.model.entity.Deanery;
 import phucuong.ht.modules.diocese.model.entity.Diocese;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -110,5 +112,38 @@ public class DeaneryRepository extends BaseRepo<Deanery, UUID> {
 
     public Diocese getDioceseReference(UUID dioceseId) {
         return entityManager.getReference(Diocese.class, dioceseId);
+    }
+
+    public Map<UUID, Long> countParishesByDeaneryIds(List<UUID> ids) {
+        return countByDeaneryIds(ids, """
+                select p.deanery.id, count(p)
+                from Parish p
+                where p.deanery.id in :ids
+                group by p.deanery.id
+                """);
+    }
+
+    public Map<UUID, Long> countLeadersByDeaneryIds(List<UUID> ids) {
+        return countByDeaneryIds(ids, """
+                select l.parish.deanery.id, count(l)
+                from Leader l
+                where l.parish.deanery.id in :ids
+                group by l.parish.deanery.id
+                """);
+    }
+
+    private Map<UUID, Long> countByDeaneryIds(List<UUID> ids, String queryText) {
+        if (ids == null || ids.isEmpty()) {
+            return Map.of();
+        }
+
+        List<Object[]> rows = entityManager.createQuery(queryText, Object[].class)
+                .setParameter("ids", ids)
+                .getResultList();
+        Map<UUID, Long> counts = new HashMap<>();
+        for (Object[] row : rows) {
+            counts.put((UUID) row[0], (Long) row[1]);
+        }
+        return counts;
     }
 }

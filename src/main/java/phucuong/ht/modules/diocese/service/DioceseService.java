@@ -7,6 +7,7 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -23,6 +24,7 @@ import phucuong.ht.modules.diocese.helper.DioceseValidationHelper;
 import phucuong.ht.modules.diocese.model.entity.Diocese;
 import phucuong.ht.modules.diocese.model.request.DioceseCreateRequest;
 import phucuong.ht.modules.diocese.model.request.DioceseUpdateRequest;
+import phucuong.ht.modules.diocese.model.response.DioceseResponse;
 import phucuong.ht.modules.diocese.repository.DioceseRepository;
 import phucuong.ht.modules.diocese.security.DioceseAccessEvaluator;
 import phucuong.ht.modules.notification.service.ToggleNotificationDispatcher;
@@ -32,6 +34,7 @@ import phucuong.ht.modules.system.service.RbacAuthRefreshNotifier;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -58,7 +61,7 @@ public class DioceseService {
             @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true)
     })
-    public Diocese create(DioceseCreateRequest request, Authentication authentication) {
+    public DioceseResponse create(DioceseCreateRequest request, Authentication authentication) {
         dioceseValidationHelper.validateCreateInput(request);
         String auditActor = dioceseValidationHelper.getRequiredAuditActor(authentication);
         dioceseValidationHelper.validateCreateNameUniqueness(request.getName());
@@ -76,18 +79,18 @@ public class DioceseService {
             diocese.setUpdatedAt(diocese.getCreatedAt());
             diocese.setCreatedBy(auditActor);
             diocese.setUpdatedBy(auditActor);
-            return dioceseRepository.save(diocese);
+            return toDioceseResponse(dioceseRepository.save(diocese));
         } catch (DataIntegrityViolationException exception) {
             throw new ApiException(HttpStatus.CONFLICT, errorCode.CONFLICT, "Dữ liệu giáo phận bị trùng hoặc xung đột với dữ liệu hiện có");
         }
     }
 
     @Cacheable(cacheNames = CacheNames.DIOCESE_LIST, key = "@cacheScopeKeyHelper.listKey(#authentication, #request)")
-    public Page<Diocese> findAll(BaseSearchRequest request, Authentication authentication) {
+    public Page<DioceseResponse> findAll(BaseSearchRequest request, Authentication authentication) {
         BaseSearchRequest scopedRequest = copyRequest(request);
 
         if (securityUtils.hasAuthority(authentication, DioceseAccessEvaluator.READ_ALL)) {
-            return dioceseRepository.findAll(scopedRequest);
+            return loadDiocesePage(scopedRequest);
         }
 
         if (securityUtils.hasAuthority(authentication, DioceseAccessEvaluator.READ_DIOCESE)) {
@@ -98,29 +101,29 @@ public class DioceseService {
                             "Tài khoản hiện tại không có phạm vi giáo phận hợp lệ"
                     ));
             scopedRequest.getFilters().put(DIOCESE_FILTER_FIELD, dioceseId);
-            return dioceseRepository.findAll(scopedRequest);
+            return loadDiocesePage(scopedRequest);
         }
 
         throw new ApiException(HttpStatus.FORBIDDEN, errorCode.ACCESS_DENIED, "Tài khoản hiện tại không có quyền xem danh sách giáo phận");
     }
 
     @Cacheable(cacheNames = CacheNames.DIOCESE_DETAIL, key = "@cacheScopeKeyHelper.detailKey(#authentication, #id)")
-    public Diocese findById(UUID id, Authentication authentication) {
-        return dioceseValidationHelper.requireExistingDiocese(id);
+    public DioceseResponse findById(UUID id, Authentication authentication) {
+        return toDioceseResponse(dioceseValidationHelper.requireExistingDiocese(id));
     }
 
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true)
     })
-    public Diocese update(UUID id, DioceseUpdateRequest request, Authentication authentication) {
+    public DioceseResponse update(UUID id, DioceseUpdateRequest request, Authentication authentication) {
         Diocese existingDiocese = dioceseValidationHelper.requireExistingDiocese(id);
         requireUnitOperational(UnitType.DIOCESE, id);
         dioceseValidationHelper.validateUpdateInput(request);
         String auditActor = dioceseValidationHelper.getRequiredAuditActor(authentication);
         dioceseValidationHelper.validateUpdateNameUniqueness(id, request.getName(), existingDiocese.getName());
         try {
-            return dioceseRepository.update(id, request, auditActor);
+            return toDioceseResponse(dioceseRepository.update(id, request, auditActor));
         } catch (DataIntegrityViolationException exception) {
             throw new ApiException(HttpStatus.CONFLICT, errorCode.CONFLICT, "Dữ liệu giáo phận bị trùng hoặc xung đột với dữ liệu hiện có");
         }
@@ -130,7 +133,7 @@ public class DioceseService {
             @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true)
     })
-    public Diocese toggleStatus(UUID id, StatusToggleRequest request, Authentication authentication) {
+    public DioceseResponse toggleStatus(UUID id, StatusToggleRequest request, Authentication authentication) {
         dioceseValidationHelper.requireExistingDiocese(id);
         requireUnitToggleAllowed(UnitType.DIOCESE, id);
         Set<String> recipients = toggleNotificationRecipientResolver == null ? Set.of() : toggleNotificationRecipientResolver.byUnit(UnitType.DIOCESE, id);
@@ -139,7 +142,7 @@ public class DioceseService {
         Diocese updated = dioceseRepository.toggleStatus(id, auditActor);
         notifyUsers(recipients);
         dispatchUnitToggle(recipients, unitLabel("Giáo phận", updated.getName()), Boolean.TRUE.equals(updated.getStatus()), auditActor);
-        return updated;
+        return toDioceseResponse(updated);
     }
 
     private void requireUnitOperational(UnitType unitType, UUID id) {
@@ -183,5 +186,60 @@ public class DioceseService {
         copy.setSortBy(source.getSortBy());
         copy.setSortDirection(source.getSortDirection());
         return copy;
+    }
+
+    private Page<DioceseResponse> loadDiocesePage(BaseSearchRequest request) {
+        Page<Diocese> page = dioceseRepository.findAll(request);
+        if (page.isEmpty()) {
+            return new PageImpl<>(List.of(), page.getPageable(), page.getTotalElements());
+        }
+
+        List<UUID> ids = page.getContent().stream()
+                .map(Diocese::getId)
+                .toList();
+        Map<UUID, Long> deaneryCounts = dioceseRepository.countDeaneriesByDioceseIds(ids);
+        Map<UUID, Long> parishCounts = dioceseRepository.countParishesByDioceseIds(ids);
+        Map<UUID, Long> leaderCounts = dioceseRepository.countLeadersByDioceseIds(ids);
+
+        List<DioceseResponse> content = page.getContent().stream()
+                .map(diocese -> toDioceseResponse(
+                        diocese,
+                        deaneryCounts.getOrDefault(diocese.getId(), 0L),
+                        parishCounts.getOrDefault(diocese.getId(), 0L),
+                        leaderCounts.getOrDefault(diocese.getId(), 0L)
+                ))
+                .toList();
+        return new PageImpl<>(content, page.getPageable(), page.getTotalElements());
+    }
+
+    private DioceseResponse toDioceseResponse(Diocese diocese) {
+        UUID id = diocese.getId();
+        return toDioceseResponse(
+                diocese,
+                id == null ? 0L : dioceseRepository.countDeaneriesByDioceseIds(List.of(id)).getOrDefault(id, 0L),
+                id == null ? 0L : dioceseRepository.countParishesByDioceseIds(List.of(id)).getOrDefault(id, 0L),
+                id == null ? 0L : dioceseRepository.countLeadersByDioceseIds(List.of(id)).getOrDefault(id, 0L)
+        );
+    }
+
+    private DioceseResponse toDioceseResponse(Diocese diocese, long deaneryCount, long parishCount, long leaderCount) {
+        return DioceseResponse.builder()
+                .id(diocese.getId())
+                .createdAt(diocese.getCreatedAt())
+                .createdBy(diocese.getCreatedBy())
+                .updatedAt(diocese.getUpdatedAt())
+                .updatedBy(diocese.getUpdatedBy())
+                .status(diocese.getStatus())
+                .name(diocese.getName())
+                .patronSaintDay(diocese.getPatronSaintDay())
+                .establishmentDate(diocese.getEstablishmentDate())
+                .chaplain(diocese.getChaplain())
+                .phoneNumber(diocese.getPhoneNumber())
+                .email(diocese.getEmail())
+                .unionName(diocese.getUnionName())
+                .deaneryCount(deaneryCount)
+                .parishCount(parishCount)
+                .leaderCount(leaderCount)
+                .build();
     }
 }

@@ -26,4 +26,6 @@ public class DeaneryResponse {
     private final String associationName;
     private final UUID dioceseId;
     private final String dioceseName;
+    private final Long parishCount;
+    private final Long leaderCount;
 }
