@@ -62,6 +62,8 @@ public class DeaneryService {
     private RbacAuthRefreshNotifier authRefreshNotifier;
 
     @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.DEANERY_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.DEANERY_DETAIL, allEntries = true)
     })
@@ -123,6 +125,8 @@ public class DeaneryService {
     }
 
     @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.DEANERY_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.DEANERY_DETAIL, allEntries = true)
     })
@@ -141,6 +145,8 @@ public class DeaneryService {
     }
 
     @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.DEANERY_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.DEANERY_DETAIL, allEntries = true)
     })
@@ -212,17 +218,32 @@ public class DeaneryService {
 
         Map<UUID, Deanery> deaneryById = deaneryRepository.findAllByIdsWithDiocese(deaneryIds).stream()
                 .collect(Collectors.toMap(Deanery::getId, Function.identity()));
+        Map<UUID, Long> parishCounts = deaneryRepository.countParishesByDeaneryIds(deaneryIds);
+        Map<UUID, Long> leaderCounts = deaneryRepository.countLeadersByDeaneryIds(deaneryIds);
 
         List<DeaneryResponse> hydratedContent = deaneryIds.stream()
                 .map(deaneryById::get)
                 .filter(java.util.Objects::nonNull)
-                .map(this::toDeaneryResponse)
+                .map(deanery -> toDeaneryResponse(
+                        deanery,
+                        parishCounts.getOrDefault(deanery.getId(), 0L),
+                        leaderCounts.getOrDefault(deanery.getId(), 0L)
+                ))
                 .toList();
 
         return new PageImpl<>(hydratedContent, page.getPageable(), page.getTotalElements());
     }
 
     private DeaneryResponse toDeaneryResponse(Deanery deanery) {
+        UUID id = deanery.getId();
+        return toDeaneryResponse(
+                deanery,
+                id == null ? 0L : deaneryRepository.countParishesByDeaneryIds(List.of(id)).getOrDefault(id, 0L),
+                id == null ? 0L : deaneryRepository.countLeadersByDeaneryIds(List.of(id)).getOrDefault(id, 0L)
+        );
+    }
+
+    private DeaneryResponse toDeaneryResponse(Deanery deanery, long parishCount, long leaderCount) {
         return DeaneryResponse.builder()
                 .id(deanery.getId())
                 .createdAt(deanery.getCreatedAt())
@@ -239,6 +260,8 @@ public class DeaneryService {
                 .associationName(deanery.getAssociationName())
                 .dioceseId(deanery.getDiocese() == null ? null : deanery.getDiocese().getId())
                 .dioceseName(deanery.getDiocese() == null ? null : deanery.getDiocese().getName())
+                .parishCount(parishCount)
+                .leaderCount(leaderCount)
                 .build();
     }
 }

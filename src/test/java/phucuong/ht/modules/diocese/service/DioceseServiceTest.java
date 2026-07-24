@@ -20,16 +20,17 @@ import phucuong.ht.modules.diocese.helper.DioceseValidationHelper;
 import phucuong.ht.modules.diocese.model.entity.Diocese;
 import phucuong.ht.modules.diocese.model.request.DioceseCreateRequest;
 import phucuong.ht.modules.diocese.model.request.DioceseUpdateRequest;
+import phucuong.ht.modules.diocese.model.response.DioceseResponse;
 import phucuong.ht.modules.diocese.repository.DioceseRepository;
 import phucuong.ht.modules.diocese.security.DioceseAccessEvaluator;
 
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -56,11 +57,12 @@ class DioceseServiceTest {
     private DioceseService dioceseService;
 
     @Test
-    void createShouldValidateAndDelegateToRepository() {
+    void createShouldValidateDelegateAndReturnResponseCounts() {
         DioceseCreateRequest request = new DioceseCreateRequest();
         request.setName("Phu Cuong");
         request.setUnionName("Phu Cuong");
-        Diocese created = new Diocese();
+        UUID id = UUID.randomUUID();
+        Diocese created = sampleDiocese(id);
         Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
 
         when(dioceseValidationHelper.getRequiredAuditActor(authentication)).thenReturn("LEADER1");
@@ -70,35 +72,48 @@ class DioceseServiceTest {
                         && "LEADER1".equals(entity.getCreatedBy())
                         && "LEADER1".equals(entity.getUpdatedBy())
         ))).thenReturn(created);
+        stubCounts(id, 2L, 5L, 20L);
 
-        Diocese result = dioceseService.create(request, authentication);
+        DioceseResponse result = dioceseService.create(request, authentication);
 
-        assertSame(created, result);
+        assertEquals(id, result.getId());
+        assertEquals("Sample Diocese", result.getName());
+        assertEquals(2L, result.getDeaneryCount());
+        assertEquals(5L, result.getParishCount());
+        assertEquals(20L, result.getLeaderCount());
         verify(dioceseValidationHelper).validateCreateInput(request);
         verify(dioceseValidationHelper).validateCreateNameUniqueness("Phu Cuong");
     }
 
     @Test
-    void findAllShouldDelegateToRepositoryForGlobalRead() {
+    void findAllShouldDelegateToRepositoryForGlobalReadAndHydrateCounts() {
+        UUID id = UUID.randomUUID();
         BaseSearchRequest request = new BaseSearchRequest();
-        Page<Diocese> page = new PageImpl<>(List.of(new Diocese()));
+        Page<Diocese> page = new PageImpl<>(List.of(sampleDiocese(id)));
         Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
 
         when(dioceseRepository.findAll(any(BaseSearchRequest.class))).thenReturn(page);
+        when(dioceseRepository.countDeaneriesByDioceseIds(List.of(id))).thenReturn(Map.of(id, 2L));
+        when(dioceseRepository.countParishesByDioceseIds(List.of(id))).thenReturn(Map.of(id, 5L));
+        when(dioceseRepository.countLeadersByDioceseIds(List.of(id))).thenReturn(Map.of(id, 20L));
         when(securityUtils.hasAuthority(authentication, DioceseAccessEvaluator.READ_ALL)).thenReturn(true);
 
-        Page<Diocese> result = dioceseService.findAll(request, authentication);
+        Page<DioceseResponse> result = dioceseService.findAll(request, authentication);
 
-        assertSame(page, result);
+        assertEquals(id, result.getContent().getFirst().getId());
+        assertEquals(2L, result.getContent().getFirst().getDeaneryCount());
+        assertEquals(5L, result.getContent().getFirst().getParishCount());
+        assertEquals(20L, result.getContent().getFirst().getLeaderCount());
         verify(dioceseRepository).findAll(argThat(criteria -> criteria.getFilters().isEmpty()));
     }
 
     @Test
     void findAllShouldApplyScopedDioceseFilter() {
         UUID dioceseId = UUID.randomUUID();
+        UUID rowId = UUID.randomUUID();
         BaseSearchRequest request = new BaseSearchRequest();
-        request.setFilters(new LinkedHashMap<>(java.util.Map.of("name", "Phu Cuong")));
-        Page<Diocese> page = new PageImpl<>(List.of(new Diocese()));
+        request.setFilters(new LinkedHashMap<>(Map.of("name", "Phu Cuong")));
+        Page<Diocese> page = new PageImpl<>(List.of(sampleDiocese(rowId)));
         Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
 
         when(securityUtils.hasAuthority(authentication, DioceseAccessEvaluator.READ_ALL)).thenReturn(false);
@@ -106,10 +121,11 @@ class DioceseServiceTest {
         when(securityUtils.currentUsername(authentication)).thenReturn("admin-dio");
         when(accountRepository.findActiveDioceseIdByUsername("admin-dio")).thenReturn(Optional.of(dioceseId));
         when(dioceseRepository.findAll(any(BaseSearchRequest.class))).thenReturn(page);
+        stubEmptyCounts(rowId);
 
-        Page<Diocese> result = dioceseService.findAll(request, authentication);
+        Page<DioceseResponse> result = dioceseService.findAll(request, authentication);
 
-        assertSame(page, result);
+        assertEquals(rowId, result.getContent().getFirst().getId());
         verify(dioceseRepository).findAll(argThat(criteria ->
                 dioceseId.equals(criteria.getFilters().get("id"))
                         && "Phu Cuong".equals(criteria.getFilters().get("name"))
@@ -130,22 +146,23 @@ class DioceseServiceTest {
     }
 
     @Test
-    void findByIdShouldLoadRequiredEntityFromHelper() {
+    void findByIdShouldLoadRequiredEntityFromHelperAndHydrateCounts() {
         UUID id = UUID.randomUUID();
-        Diocese diocese = new Diocese();
-        diocese.setId(id);
-        when(dioceseValidationHelper.requireExistingDiocese(id)).thenReturn(diocese);
+        when(dioceseValidationHelper.requireExistingDiocese(id)).thenReturn(sampleDiocese(id));
+        stubCounts(id, 1L, 3L, 9L);
 
-        Diocese result = dioceseService.findById(id, null);
+        DioceseResponse result = dioceseService.findById(id, null);
 
-        assertSame(diocese, result);
+        assertEquals(id, result.getId());
+        assertEquals(1L, result.getDeaneryCount());
+        assertEquals(3L, result.getParishCount());
+        assertEquals(9L, result.getLeaderCount());
     }
 
     @Test
-    void updateShouldValidateAndDelegateToRepository() {
+    void updateShouldValidateDelegateAndReturnResponse() {
         UUID id = UUID.randomUUID();
-        Diocese existing = new Diocese();
-        existing.setId(id);
+        Diocese existing = sampleDiocese(id);
         existing.setName("Old Name");
         DioceseUpdateRequest request = new DioceseUpdateRequest();
         request.setName("New Name");
@@ -157,10 +174,12 @@ class DioceseServiceTest {
             existing.setName("New Name");
             return existing;
         });
+        stubEmptyCounts(id);
 
-        Diocese result = dioceseService.update(id, request, authentication);
+        DioceseResponse result = dioceseService.update(id, request, authentication);
 
-        assertSame(existing, result);
+        assertEquals(id, result.getId());
+        assertEquals("New Name", result.getName());
         verify(dioceseValidationHelper).validateUpdateInput(request);
         verify(dioceseValidationHelper).validateUpdateNameUniqueness(id, "New Name", "Old Name");
     }
@@ -183,8 +202,7 @@ class DioceseServiceTest {
     @Test
     void toggleStatusShouldValidateConfirmationAndDelegateToRepository() {
         UUID id = UUID.randomUUID();
-        Diocese diocese = new Diocese();
-        diocese.setId(id);
+        Diocese diocese = sampleDiocese(id);
         StatusToggleRequest request = new StatusToggleRequest();
         request.setConfirmationText("Xác nhận");
         Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
@@ -192,10 +210,11 @@ class DioceseServiceTest {
         when(dioceseValidationHelper.requireExistingDiocese(id)).thenReturn(diocese);
         when(dioceseValidationHelper.getRequiredAuditActor(authentication)).thenReturn("LEADER1");
         when(dioceseRepository.toggleStatus(id, "LEADER1")).thenReturn(diocese);
+        stubEmptyCounts(id);
 
-        Diocese result = dioceseService.toggleStatus(id, request, authentication);
+        DioceseResponse result = dioceseService.toggleStatus(id, request, authentication);
 
-        assertSame(diocese, result);
+        assertEquals(id, result.getId());
         verify(dioceseValidationHelper).validateToggleConfirmation("Xác nhận");
         verify(dioceseRepository).toggleStatus(id, "LEADER1");
     }
@@ -215,5 +234,23 @@ class DioceseServiceTest {
         ApiException exception = assertThrows(ApiException.class, () -> dioceseService.toggleStatus(id, request, authentication));
 
         assertEquals("Không hợp lệ", exception.getMessage());
+    }
+
+    private Diocese sampleDiocese(UUID id) {
+        Diocese diocese = new Diocese();
+        diocese.setId(id);
+        diocese.setName("Sample Diocese");
+        diocese.setUnionName("Sample Union");
+        return diocese;
+    }
+
+    private void stubEmptyCounts(UUID id) {
+        stubCounts(id, 0L, 0L, 0L);
+    }
+
+    private void stubCounts(UUID id, long deaneries, long parishes, long leaders) {
+        when(dioceseRepository.countDeaneriesByDioceseIds(List.of(id))).thenReturn(Map.of(id, deaneries));
+        when(dioceseRepository.countParishesByDioceseIds(List.of(id))).thenReturn(Map.of(id, parishes));
+        when(dioceseRepository.countLeadersByDioceseIds(List.of(id))).thenReturn(Map.of(id, leaders));
     }
 }

@@ -6,7 +6,9 @@ import org.springframework.stereotype.Repository;
 import phucuong.ht.common.repository.BaseRepo;
 import phucuong.ht.modules.parish.model.entity.Parish;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -122,5 +124,28 @@ public class ParishRepository extends BaseRepo<Parish, UUID> {
                 .setMaxResults(1)
                 .getResultList();
         return results.stream().findFirst();
+    }
+
+    public Map<UUID, Long> countLeadersByParishIds(List<UUID> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return Map.of();
+        }
+
+        List<Object[]> rows = entityManager.createQuery(
+                        """
+                                select l.parish.id, count(l)
+                                from Leader l
+                                where l.parish.id in :ids
+                                group by l.parish.id
+                                """,
+                        Object[].class
+                )
+                .setParameter("ids", ids)
+                .getResultList();
+        Map<UUID, Long> counts = new HashMap<>();
+        for (Object[] row : rows) {
+            counts.put((UUID) row[0], (Long) row[1]);
+        }
+        return counts;
     }
 }

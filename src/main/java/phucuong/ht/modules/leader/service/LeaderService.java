@@ -49,6 +49,12 @@ public class LeaderService {
     private final RankHistoryRepository rankHistoryRepository;
 
     @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DEANERY_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DEANERY_DETAIL, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.PARISH_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.PARISH_DETAIL, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.LEADER_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.LEADER_DETAIL, allEntries = true)
     })
@@ -139,6 +145,12 @@ public class LeaderService {
     }
 
     @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DEANERY_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DEANERY_DETAIL, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.PARISH_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.PARISH_DETAIL, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.LEADER_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.LEADER_DETAIL, allEntries = true)
     })
@@ -162,6 +174,12 @@ public class LeaderService {
     }
 
     @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DEANERY_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DEANERY_DETAIL, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.PARISH_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.PARISH_DETAIL, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.LEADER_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.LEADER_DETAIL, allEntries = true)
     })

@@ -13,9 +13,9 @@ import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.utils.jwtUtils;
 import phucuong.ht.modules.auth.model.AuthUserDetails;
 import phucuong.ht.modules.auth.service.RedisTokenSessionService;
-import phucuong.ht.modules.diocese.model.entity.Diocese;
 import phucuong.ht.modules.diocese.model.request.DioceseCreateRequest;
 import phucuong.ht.modules.diocese.model.request.DioceseUpdateRequest;
+import phucuong.ht.modules.diocese.model.response.DioceseResponse;
 import phucuong.ht.modules.diocese.security.DioceseAccessEvaluator;
 import phucuong.ht.modules.diocese.service.DioceseService;
 
@@ -159,12 +159,15 @@ class DioceseControllerSecurityIntegrationTest {
                 .andExpect(status().isBadRequest());
     }
 
-    private Diocese sampleDiocese(UUID id) {
-        Diocese diocese = new Diocese();
-        diocese.setId(id);
-        diocese.setName("Sample Diocese");
-        diocese.setUnionName("Sample Union");
-        return diocese;
+    private DioceseResponse sampleDiocese(UUID id) {
+        return DioceseResponse.builder()
+                .id(id)
+                .name("Sample Diocese")
+                .unionName("Sample Union")
+                .deaneryCount(2L)
+                .parishCount(5L)
+                .leaderCount(20L)
+                .build();
     }
 
     private String superAdminToken() {
