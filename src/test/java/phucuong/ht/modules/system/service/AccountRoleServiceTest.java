@@ -226,6 +226,32 @@ class AccountRoleServiceTest {
     }
 
     @Test
+    void adminDeaneryCanBulkAssignAdminParishRoleToAccountInOwnDeanery() {
+        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()), accountManagementAuthorizationHelper);
+        UUID deaneryId = UUID.randomUUID();
+        Account account = dioceseAccount("target");
+        Role targetRole = role("ADMIN_PARISH", true, 300, "SYSTEM");
+        AccountRoleBulkRequest request = new AccountRoleBulkRequest();
+        request.setUsername("target");
+        request.setRoleCodes(List.of("ADMIN_PARISH"));
+
+        when(accountRepository.findById("target")).thenReturn(Optional.of(account));
+        when(roleRepository.findByRoleCodeAndStatusTrue("ADMIN_PARISH")).thenReturn(Optional.of(targetRole));
+        when(accountRepository.findActiveDeaneryIdByUsername("admin-deanery")).thenReturn(Optional.of(deaneryId));
+        when(accountRepository.findActiveDeaneryIdByUsername("target")).thenReturn(Optional.of(deaneryId));
+        when(accountRoleRepository.findByAccountUsernameAndRoleRoleCode("target", "ADMIN_PARISH")).thenReturn(Optional.empty());
+        when(accountRoleRepository.save(any(AccountRole.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        List<AccountRoleResponse> responses = accountRoleService.bulkAssign(
+                request,
+                authentication("admin-deanery", List.of("ADMIN_DEANERY"), List.of("system.account_role.assign.deanery"))
+        );
+
+        assertEquals(1, responses.size());
+        assertEquals("ADMIN_PARISH", responses.get(0).getRoleCode());
+    }
+
+    @Test
     void adminDioceseCannotAssignAdminDioceseRoleToAccount() {
         accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()), accountManagementAuthorizationHelper);
         Account account = dioceseAccount("target");

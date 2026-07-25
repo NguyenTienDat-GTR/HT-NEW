@@ -83,6 +83,8 @@ public class CourseParticipationService {
                 || hasAuthority(authentication, CourseParticipationAccessEvaluator.APPROVE_DEANERY)
                 || hasAuthority(authentication, CourseParticipationAccessEvaluator.SCORE_DEANERY)) {
             scoped.getFilters().put("course.deanery.id", accountScopeValidationHelper.requireActiveDeaneryId(authentication, CourseParticipationAccessEvaluator.APPROVE_DEANERY));
+        } else if (hasAuthority(authentication, CourseParticipationAccessEvaluator.READ_PARISH)) {
+            scoped.getFilters().put("leader.parish.id", accountScopeValidationHelper.requireActiveParishId(authentication, CourseParticipationAccessEvaluator.READ_PARISH));
         } else {
             throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền xem hồ sơ đào tạo");
         }

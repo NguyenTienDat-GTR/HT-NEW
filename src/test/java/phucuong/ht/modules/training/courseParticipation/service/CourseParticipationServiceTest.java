@@ -2,10 +2,13 @@ package phucuong.ht.modules.training.courseParticipation.service;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.common.validation.AccountScopeValidationHelper;
 import phucuong.ht.common.validation.CommonValidationHelper;
@@ -30,6 +33,7 @@ import phucuong.ht.modules.training.courseParticipation.model.request.ComponentS
 import phucuong.ht.modules.training.courseParticipation.model.request.TrainingRegistrationRequest;
 import phucuong.ht.modules.training.courseParticipation.model.request.TrainingScoreRequest;
 import phucuong.ht.modules.training.courseParticipation.repository.CourseParticipationRepository;
+import phucuong.ht.modules.training.courseParticipation.security.CourseParticipationAccessEvaluator;
 import phucuong.ht.modules.training.courseRequirement.model.entity.CourseRequirement;
 import phucuong.ht.modules.training.enums.CourseType;
 import phucuong.ht.modules.training.enums.WorkflowApprovalStatus;
@@ -94,6 +98,21 @@ class CourseParticipationServiceTest {
 
     @InjectMocks
     private CourseParticipationService courseParticipationService;
+
+    @Test
+    void findAllShouldScopeParishAdminToLeadersInOwnParish() {
+        courseParticipationService = buildService();
+        UUID parishId = UUID.randomUUID();
+        ArgumentCaptor<BaseSearchRequest> requestCaptor = ArgumentCaptor.forClass(BaseSearchRequest.class);
+
+        when(accountScopeValidationHelper.requireActiveParishId(any(), any())).thenReturn(parishId);
+        when(courseParticipationRepository.findAll(any(BaseSearchRequest.class))).thenReturn(new PageImpl<>(List.of()));
+
+        courseParticipationService.findAll(new BaseSearchRequest(), authentication("admin-parish", CourseParticipationAccessEvaluator.READ_PARISH));
+
+        verify(courseParticipationRepository).findAll(requestCaptor.capture());
+        assertEquals(parishId, requestCaptor.getValue().getFilters().get("leader.parish.id"));
+    }
 
     @Test
     void registerShouldRequireExceptionReasonWhenLeaderNotEligible() {

@@ -5,6 +5,8 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.modules.auth.model.AuthUserDetails;
 import phucuong.ht.modules.auth.repository.AccountRepository;
+import phucuong.ht.modules.leader.model.entity.Leader;
+import phucuong.ht.modules.parish.model.entity.Parish;
 import phucuong.ht.modules.training.TrainingWorkflowSupport;
 import phucuong.ht.modules.training.courseParticipation.model.entity.CourseParticipation;
 import phucuong.ht.modules.training.courseParticipation.repository.CourseParticipationRepository;
@@ -80,6 +82,24 @@ class CourseParticipationAccessEvaluatorTest {
     }
 
     @Test
+    void parishCanReadOnlyParticipationsForLeadersInOwnParish() {
+        AccountRepository accountRepository = mock(AccountRepository.class);
+        TrainingCourseRepository courseRepository = mock(TrainingCourseRepository.class);
+        CourseParticipationRepository participationRepository = mock(CourseParticipationRepository.class);
+        CourseParticipationAccessEvaluator evaluator = evaluator(accountRepository, courseRepository, participationRepository);
+        UUID parishId = UUID.randomUUID();
+        CourseParticipation participation = participationWithLeaderParish(parishId, CourseType.SMTL_I);
+
+        when(accountRepository.findActiveParishIdByUsername("parish-admin")).thenReturn(Optional.of(parishId));
+        when(participationRepository.findByIdWithLeaderAndCourse("participation-1")).thenReturn(Optional.of(participation));
+
+        assertTrue(evaluator.canReadOne(authentication(CourseParticipationAccessEvaluator.READ_PARISH), "participation-1"));
+
+        when(accountRepository.findActiveParishIdByUsername("parish-admin")).thenReturn(Optional.of(UUID.randomUUID()));
+        assertFalse(evaluator.canReadOne(authentication(CourseParticipationAccessEvaluator.READ_PARISH), "participation-1"));
+    }
+
+    @Test
     void superAdminCannotScoreEvenWhenAuthorityIsPresent() {
         CourseParticipationAccessEvaluator evaluator = evaluator(
                 mock(AccountRepository.class),
@@ -108,6 +128,17 @@ class CourseParticipationAccessEvaluatorTest {
         course.setCourseCode(code);
         course.setCourseType(courseType);
         return course;
+    }
+
+    private CourseParticipation participationWithLeaderParish(UUID parishId, CourseType courseType) {
+        Parish parish = new Parish();
+        parish.setId(parishId);
+        Leader leader = new Leader();
+        leader.setParish(parish);
+        CourseParticipation participation = new CourseParticipation();
+        participation.setLeader(leader);
+        participation.setCourse(course("COURSE-2026", courseType));
+        return participation;
     }
 
     private UsernamePasswordAuthenticationToken authentication(String authority) {

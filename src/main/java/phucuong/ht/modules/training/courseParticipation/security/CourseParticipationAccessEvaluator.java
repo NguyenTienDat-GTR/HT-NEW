@@ -6,6 +6,7 @@ import org.springframework.stereotype.Component;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.modules.auth.repository.AccountRepository;
 import phucuong.ht.modules.training.TrainingWorkflowSupport;
+import phucuong.ht.modules.training.courseParticipation.model.entity.CourseParticipation;
 import phucuong.ht.modules.training.courseParticipation.repository.CourseParticipationRepository;
 import phucuong.ht.modules.training.trainingCourse.repository.TrainingCourseRepository;
 
@@ -21,6 +22,7 @@ public class CourseParticipationAccessEvaluator {
     public static final String APPROVE_DIOCESE = "training.participation.approve.diocese";
     public static final String SCORE_DEANERY = "training.participation.score.deanery";
     public static final String SCORE_DIOCESE = "training.participation.score.diocese";
+    public static final String READ_PARISH = "training.participation.read.parish";
     public static final String READ_DEANERY = "training.participation.read.deanery";
     public static final String READ_DIOCESE = "training.participation.read.diocese";
 
@@ -87,7 +89,8 @@ public class CourseParticipationAccessEvaluator {
     }
 
     public boolean canRead(Authentication authentication) {
-        return securityUtils.hasAuthority(authentication, READ_DEANERY)
+        return securityUtils.hasAuthority(authentication, READ_PARISH)
+                || securityUtils.hasAuthority(authentication, READ_DEANERY)
                 || securityUtils.hasAuthority(authentication, READ_DIOCESE)
                 || securityUtils.hasAuthority(authentication, APPROVE_DEANERY)
                 || securityUtils.hasAuthority(authentication, APPROVE_DIOCESE)
@@ -97,9 +100,41 @@ public class CourseParticipationAccessEvaluator {
 
     public boolean canReadOne(Authentication authentication, String participationId) {
         return canRead(authentication) && courseParticipationRepository.findByIdWithLeaderAndCourse(participationId)
-                .map(participation -> trainingWorkflowSupport.isDeaneryManaged(participation.getCourse().getCourseType())
-                        ? scopedDeanery(authentication, participation.getCourse().getCourseCode())
-                        : scopedDiocese(authentication, participation.getCourse().getCourseCode()))
+                .map(participation -> {
+                    if (securityUtils.hasAuthority(authentication, READ_PARISH) && scopedParish(authentication, participation)) {
+                        return true;
+                    }
+                    if (trainingWorkflowSupport.isDeaneryManaged(participation.getCourse().getCourseType())) {
+                        return hasDeaneryReadAuthority(authentication)
+                                && scopedDeanery(authentication, participation.getCourse().getCourseCode());
+                    }
+                    return hasDioceseReadAuthority(authentication)
+                            && scopedDiocese(authentication, participation.getCourse().getCourseCode());
+                })
+                .orElse(false);
+    }
+
+    private boolean hasDeaneryReadAuthority(Authentication authentication) {
+        return securityUtils.hasAuthority(authentication, READ_DEANERY)
+                || securityUtils.hasAuthority(authentication, APPROVE_DEANERY)
+                || securityUtils.hasAuthority(authentication, SCORE_DEANERY);
+    }
+
+    private boolean hasDioceseReadAuthority(Authentication authentication) {
+        return securityUtils.hasAuthority(authentication, READ_DIOCESE)
+                || securityUtils.hasAuthority(authentication, APPROVE_DIOCESE)
+                || securityUtils.hasAuthority(authentication, SCORE_DIOCESE);
+    }
+
+    private boolean scopedParish(Authentication authentication, CourseParticipation participation) {
+        String username = securityUtils.currentUsername(authentication);
+        if (username == null || username.isBlank()
+                || participation.getLeader() == null
+                || participation.getLeader().getParish() == null) {
+            return false;
+        }
+        return accountRepository.findActiveParishIdByUsername(username)
+                .map(activeId -> activeId.equals(participation.getLeader().getParish().getId()))
                 .orElse(false);
     }
 
