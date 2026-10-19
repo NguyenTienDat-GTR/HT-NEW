@@ -36,6 +36,16 @@ public class TrainingNotificationService {
 
     @Transactional
     public List<TrainingNotificationResponse> notifyUsers(List<String> usernames, TrainingNotificationCommand command) {
+        return notifyUsers(usernames, command, true);
+    }
+
+    // Chỉ lưu thông báo (người dùng đọc qua REST), không đẩy realtime qua WebSocket/STOMP.
+    @Transactional
+    public List<TrainingNotificationResponse> storeForUsers(List<String> usernames, TrainingNotificationCommand command) {
+        return notifyUsers(usernames, command, false);
+    }
+
+    private List<TrainingNotificationResponse> notifyUsers(List<String> usernames, TrainingNotificationCommand command, boolean realtime) {
         if (usernames == null || usernames.isEmpty()) {
             return List.of();
         }
@@ -68,7 +78,9 @@ public class TrainingNotificationService {
             deliveries.add(new Delivery(username, response));
         }
 
-        publishAfterCommit(deliveries);
+        if (realtime) {
+            publishAfterCommit(deliveries);
+        }
         return responses;
     }
 

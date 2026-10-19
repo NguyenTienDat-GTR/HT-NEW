@@ -9,6 +9,9 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import phucuong.ht.config.DomainEventMessage;
+import phucuong.ht.config.DomainEventPublisher;
+import phucuong.ht.modules.training.enums.CourseRegistrationStatus;
 import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.modules.auth.repository.AccountRepository;
 import phucuong.ht.modules.notification.service.TrainingNotificationRecipientResolver;
@@ -41,6 +44,7 @@ import phucuong.ht.modules.training.trainingCourse.security.TrainingCourseAccess
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -49,6 +53,9 @@ public class TrainingCourseService {
 
     private static final String DIOCESE_FILTER_FIELD = "diocese.id";
     private static final String DEANERY_FILTER_FIELD = "deanery.id";
+    public static final String EVENT_REGISTRATION_OPENED = "training.course.registration_opened";
+    public static final String EVENT_REGISTRATION_CLOSED = "training.course.registration_closed";
+    private static final String AUTO_ACTOR = "SYSTEM_AUTO_REGISTRATION";
 
     private final TrainingCourseRepository trainingCourseRepository;
     private final TrainingCourseTypeRepository trainingCourseTypeRepository;
@@ -62,6 +69,7 @@ public class TrainingCourseService {
     private final ScoreComponentTemplateRepository scoreComponentTemplateRepository;
     private final TrainingNotificationRecipientResolver notificationRecipientResolver;
     private final AccountRepository accountRepository;
+    private final DomainEventPublisher domainEventPublisher;
 
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_LIST, allEntries = true),
@@ -94,6 +102,7 @@ public class TrainingCourseService {
         course.setPassingScore(request.getPassingScore());
         requirePassingScoreWithinLimit(course);
         applyRecipients(course, request.getRecipientUsernames());
+        TrainingCourseStatusSupport.refresh(course, now);
         trainingCourseRepository.save(course);
         return toResponse(trainingCourseRepository.findByCodeWithType(course.getCourseCode()).orElse(course));
     }
@@ -185,6 +194,7 @@ public class TrainingCourseService {
         validateRegistrationWindow(existing.getRegistrationStartAt(), existing.getRegistrationEndAt());
         applyOwnerScope(existing, targetType, authentication);
         requirePassingScoreWithinLimit(existing);
+        TrainingCourseStatusSupport.refresh(existing, OffsetDateTime.now());
         if (request.getRecipientUsernames() != null) {
             applyRecipients(existing, request.getRecipientUsernames());
         }
@@ -313,22 +323,70 @@ public class TrainingCourseService {
         TrainingCourse course = trainingCourseRepository.findByCodeWithType(courseCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy khóa huấn luyện " + courseCode));
         OffsetDateTime now = OffsetDateTime.now();
-        if (course.getRegistrationEndAt() == null || now.isAfter(course.getRegistrationEndAt())) {
+        CourseRegistrationStatus current = TrainingCourseStatusSupport.registrationStatus(course, now);
+        if (current == CourseRegistrationStatus.ENDED) {
             throw commonValidationHelper.conflict("Đã hết thời gian đăng ký, hãy gia hạn thời gian đăng ký trước khi mở lại");
         }
-        course.setRegistrationOpen(Boolean.TRUE.equals(request.getOpen()));
-        course.setUpdatedAt(now);
-        course.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật khóa huấn luyện"));
+        if (current == CourseRegistrationStatus.NOT_STARTED) {
+            throw commonValidationHelper.conflict("Chưa đến thời gian đăng ký, hệ thống sẽ tự mở khi đến giờ");
+        }
+        boolean open = Boolean.TRUE.equals(request.getOpen());
+        CourseRegistrationStatus target = open ? CourseRegistrationStatus.OPEN : CourseRegistrationStatus.CLOSED;
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật khóa huấn luyện");
+        if (target != current) {
+            course.setRegistrationStatus(target);
+            course.setUpdatedAt(now);
+            course.setUpdatedBy(actor);
+            publishRegistrationEvent(course, open, "MANUAL", actor);
+        }
         return toResponse(course);
     }
 
-    // Tự đóng đăng ký các khóa đã hết thời gian đăng ký (gọi định kỳ bởi bộ lập lịch).
+    // Cập nhật trạng thái đăng ký/tổ chức theo thời gian (bộ lập lịch gọi định kỳ): tự mở khi đến giờ, tự đóng khi hết hạn,
+    // chuyển trạng thái tổ chức; phát sự kiện RabbitMQ khi đăng ký mở hoặc đóng tự động.
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, allEntries = true)
     })
-    public int closeExpiredRegistrations() {
-        return trainingCourseRepository.closeExpiredRegistrations(OffsetDateTime.now());
+    @Transactional
+    public int refreshCourseStatuses() {
+        OffsetDateTime now = OffsetDateTime.now();
+        int changedCourses = 0;
+        for (TrainingCourse course : trainingCourseRepository.findCoursesWithOpenStatuses()) {
+            CourseRegistrationStatus before = course.getRegistrationStatus();
+            if (!TrainingCourseStatusSupport.refresh(course, now)) {
+                continue;
+            }
+            changedCourses++;
+            course.setUpdatedAt(now);
+            CourseRegistrationStatus after = course.getRegistrationStatus();
+            if (before == CourseRegistrationStatus.NOT_STARTED && after == CourseRegistrationStatus.OPEN) {
+                publishRegistrationEvent(course, true, "AUTO", AUTO_ACTOR);
+            } else if (before == CourseRegistrationStatus.OPEN && after == CourseRegistrationStatus.ENDED) {
+                publishRegistrationEvent(course, false, "AUTO", AUTO_ACTOR);
+            }
+        }
+        return changedCourses;
+    }
+
+    private void publishRegistrationEvent(TrainingCourse course, boolean open, String reason, String actor) {
+        boolean deaneryManaged = trainingWorkflowSupport.isDeaneryManaged(course.getCourseType());
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("courseCode", course.getCourseCode());
+        payload.put("courseName", course.getCourseName());
+        payload.put("open", open);
+        payload.put("reason", reason);
+        payload.put("deaneryManaged", deaneryManaged);
+        payload.put("dioceseId", course.getDiocese() == null ? null : course.getDiocese().getId().toString());
+        payload.put("deaneryId", course.getDeanery() == null ? null : course.getDeanery().getId().toString());
+        domainEventPublisher.publishAfterCommit(DomainEventMessage.builder()
+                .eventType(open ? EVENT_REGISTRATION_OPENED : EVENT_REGISTRATION_CLOSED)
+                .entityType("trainingCourse")
+                .entityId(course.getCourseCode())
+                .actor(actor)
+                .occurredAt(OffsetDateTime.now())
+                .payload(payload)
+                .build());
     }
 
     // Tài khoản trong phạm vi hiện tại có quyền duyệt danh sách đăng ký của loại khóa được chọn.
@@ -478,7 +536,9 @@ public class TrainingCourseService {
                 .deaneryId(course.getDeanery() == null ? null : course.getDeanery().getId())
                 .dioceseName(course.getDiocese() == null ? null : course.getDiocese().getName())
                 .deaneryName(course.getDeanery() == null ? null : course.getDeanery().getName())
-                .registrationOpen(course.getRegistrationOpen())
+                .registrationOpen(course.getRegistrationStatus() == CourseRegistrationStatus.OPEN)
+                .registrationStatus(course.getRegistrationStatus())
+                .organizingStatus(course.getOrganizingStatus())
                 .recipientUsernames(List.copyOf(course.getRecipientUsernames()))
                 .createdBy(course.getCreatedBy())
                 .updatedBy(course.getUpdatedBy())

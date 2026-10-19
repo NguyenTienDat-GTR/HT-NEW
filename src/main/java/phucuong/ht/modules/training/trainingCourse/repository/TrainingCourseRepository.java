@@ -43,15 +43,22 @@ public class TrainingCourseRepository extends BaseRepo<TrainingCourse, String> {
         return results.stream().findFirst();
     }
 
-    // Tự đóng đăng ký các khóa đã hết thời gian đăng ký; trả về số khóa vừa đóng.
-    @org.springframework.transaction.annotation.Transactional
-    public int closeExpiredRegistrations(java.time.OffsetDateTime now) {
+    // Các khóa chưa ở trạng thái cuối (đăng ký và tổ chức đều đã ENDED thì không cần quét).
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<TrainingCourse> findCoursesWithOpenStatuses() {
         return entityManager.createQuery(
-                        "update TrainingCourse tc set tc.registrationOpen = false "
-                                + "where tc.registrationOpen = true and tc.registrationEndAt is not null and tc.registrationEndAt < :now"
+                        """
+                                select tc
+                                from TrainingCourse tc
+                                left join fetch tc.courseType
+                                left join fetch tc.diocese
+                                left join fetch tc.deanery
+                                where tc.registrationStatus <> phucuong.ht.modules.training.enums.CourseRegistrationStatus.ENDED
+                                   or tc.organizingStatus <> phucuong.ht.modules.training.enums.CourseOrganizingStatus.ENDED
+                                """,
+                        TrainingCourse.class
                 )
-                .setParameter("now", now)
-                .executeUpdate();
+                .getResultList();
     }
 
     @org.springframework.transaction.annotation.Transactional(readOnly = true)

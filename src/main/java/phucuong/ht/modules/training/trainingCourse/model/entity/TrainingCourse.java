@@ -6,6 +6,8 @@ import phucuong.ht.common.model.BaseModel;
 import phucuong.ht.modules.deanery.model.entity.Deanery;
 import phucuong.ht.modules.diocese.model.entity.Diocese;
 import phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType;
+import phucuong.ht.modules.training.enums.CourseOrganizingStatus;
+import phucuong.ht.modules.training.enums.CourseRegistrationStatus;
 
 import java.math.BigDecimal;
 import java.util.LinkedHashSet;
@@ -58,9 +60,15 @@ public class TrainingCourse extends BaseModel {
     @Column(name = "passing_score", nullable = false)
     private BigDecimal passingScore;
 
-    // Cờ mở/đóng đăng ký thủ công; tự chuyển false khi hết thời gian đăng ký. Nhận đăng ký khi cờ true và còn trong thời gian.
-    @Column(name = "registration_open", nullable = false)
-    private Boolean registrationOpen = Boolean.TRUE;
+    // Trạng thái đăng ký: scheduler tự mở khi đến giờ, tự đóng khi hết hạn; CLOSED là đóng thủ công.
+    @Enumerated(EnumType.STRING)
+    @Column(name = "registration_status", nullable = false)
+    private CourseRegistrationStatus registrationStatus = CourseRegistrationStatus.NOT_STARTED;
+
+    // Trạng thái tổ chức theo startDate/endDate: scheduler tự chuyển.
+    @Enumerated(EnumType.STRING)
+    @Column(name = "organizing_status", nullable = false)
+    private CourseOrganizingStatus organizingStatus = CourseOrganizingStatus.UPCOMING;
 
     // Tài khoản nhận danh sách đăng ký (phải có quyền duyệt danh sách đăng ký).
     @ElementCollection(fetch = FetchType.LAZY)

@@ -33,6 +33,8 @@ import phucuong.ht.modules.training.courseParticipation.model.response.CoursePar
 import phucuong.ht.modules.training.courseParticipation.model.response.TrainingRegistrationBatchResponse;
 import phucuong.ht.modules.training.courseParticipation.repository.CourseParticipationRepository;
 import phucuong.ht.modules.training.courseParticipation.security.CourseParticipationAccessEvaluator;
+import phucuong.ht.modules.training.enums.CourseRegistrationStatus;
+import phucuong.ht.modules.training.trainingCourse.service.TrainingCourseStatusSupport;
 import phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType;
 import phucuong.ht.modules.training.enums.CourseResult;
 import phucuong.ht.modules.training.enums.ParticipationStatus;
@@ -449,7 +451,7 @@ public class CourseParticipationService {
         if (now.isAfter(course.getRegistrationEndAt())) {
             throw commonValidationHelper.validationError("Đã hết thời gian nhận đăng ký");
         }
-        if (!Boolean.TRUE.equals(course.getRegistrationOpen())) {
+        if (TrainingCourseStatusSupport.registrationStatus(course, now) == CourseRegistrationStatus.CLOSED) {
             throw commonValidationHelper.validationError("Khóa huấn luyện đang đóng đăng ký");
         }
     }

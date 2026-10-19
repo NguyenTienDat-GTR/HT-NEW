@@ -18,6 +18,8 @@ import phucuong.ht.modules.training.TrainingWorkflowSupport;
 import phucuong.ht.modules.training.courseParticipation.repository.CourseParticipationRepository;
 import phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType;
 import phucuong.ht.modules.training.courseType.repository.TrainingCourseTypeRepository;
+import phucuong.ht.modules.training.enums.CourseOrganizingStatus;
+import phucuong.ht.modules.training.enums.CourseRegistrationStatus;
 import phucuong.ht.modules.training.trainingCourse.model.entity.TrainingCourse;
 import phucuong.ht.modules.training.trainingCourse.model.request.TrainingCourseUpdateRequest;
 import phucuong.ht.modules.training.trainingCourse.repository.TrainingCourseRepository;
@@ -32,6 +34,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -40,6 +45,7 @@ class TrainingCourseUpdateScopeTest {
     @Mock private phucuong.ht.modules.training.scoreComponentTemplate.repository.ScoreComponentTemplateRepository scoreComponentTemplateRepository;
     @Mock private phucuong.ht.modules.notification.service.TrainingNotificationRecipientResolver notificationRecipientResolver;
     @Mock private phucuong.ht.modules.auth.repository.AccountRepository accountRepository;
+    @Mock private phucuong.ht.config.DomainEventPublisher domainEventPublisher;
     @Mock private TrainingCourseRepository trainingCourseRepository;
     @Mock private TrainingCourseTypeRepository trainingCourseTypeRepository;
     @Mock private CourseParticipationRepository courseParticipationRepository;
@@ -85,29 +91,79 @@ class TrainingCourseUpdateScopeTest {
     }
 
     @Test
-    void registrationCanBeClosedAndReopenedWhileWindowIsStillRunning() {
+    void registrationCanBeClosedAndReopenedWhileWindowIsRunningAndPublishesEvents() {
         TrainingCourse course = deaneryCourse("DT-3", UUID.randomUUID());
+        course.setRegistrationStartAt(java.time.OffsetDateTime.now().minusDays(1));
         course.setRegistrationEndAt(java.time.OffsetDateTime.now().plusDays(1));
+        course.setRegistrationStatus(CourseRegistrationStatus.OPEN);
         var authentication = authentication("admin-deanery", "training.course.update.deanery");
         when(trainingCourseRepository.findByCodeWithType("DT-3")).thenReturn(Optional.of(course));
 
         var request = new phucuong.ht.modules.training.trainingCourse.model.request.CourseRegistrationToggleRequest();
         request.setOpen(false);
-        assertEquals(false, service().setRegistrationOpen("DT-3", request, authentication).getRegistrationOpen());
+        var closed = service().setRegistrationOpen("DT-3", request, authentication);
+        assertEquals(CourseRegistrationStatus.CLOSED, closed.getRegistrationStatus());
+        assertEquals(false, closed.getRegistrationOpen());
         request.setOpen(true);
-        assertEquals(true, service().setRegistrationOpen("DT-3", request, authentication).getRegistrationOpen());
+        assertEquals(CourseRegistrationStatus.OPEN, service().setRegistrationOpen("DT-3", request, authentication).getRegistrationStatus());
+        verify(domainEventPublisher, times(2)).publishAfterCommit(any());
     }
 
     @Test
-    void registrationCannotBeReopenedAfterWindowEnded() {
-        TrainingCourse course = deaneryCourse("DT-4", UUID.randomUUID());
-        course.setRegistrationEndAt(java.time.OffsetDateTime.now().minusMinutes(1));
+    void registrationCannotBeToggledAfterWindowEndedOrBeforeItStarts() {
+        TrainingCourse ended = deaneryCourse("DT-4", UUID.randomUUID());
+        ended.setRegistrationStartAt(java.time.OffsetDateTime.now().minusDays(2));
+        ended.setRegistrationEndAt(java.time.OffsetDateTime.now().minusMinutes(1));
+        TrainingCourse upcoming = deaneryCourse("DT-6", UUID.randomUUID());
+        upcoming.setRegistrationStartAt(java.time.OffsetDateTime.now().plusDays(1));
+        upcoming.setRegistrationEndAt(java.time.OffsetDateTime.now().plusDays(3));
         var authentication = authentication("admin-deanery", "training.course.update.deanery");
-        when(trainingCourseRepository.findByCodeWithType("DT-4")).thenReturn(Optional.of(course));
+        when(trainingCourseRepository.findByCodeWithType("DT-4")).thenReturn(Optional.of(ended));
+        when(trainingCourseRepository.findByCodeWithType("DT-6")).thenReturn(Optional.of(upcoming));
 
         var request = new phucuong.ht.modules.training.trainingCourse.model.request.CourseRegistrationToggleRequest();
         request.setOpen(true);
         assertThrows(RuntimeException.class, () -> service().setRegistrationOpen("DT-4", request, authentication));
+        assertThrows(RuntimeException.class, () -> service().setRegistrationOpen("DT-6", request, authentication));
+        verify(domainEventPublisher, never()).publishAfterCommit(any());
+    }
+
+    @Test
+    void schedulerAutoOpensAtStartAutoClosesAtEndAndMovesOrganizingStatus() {
+        java.time.OffsetDateTime now = java.time.OffsetDateTime.now();
+        TrainingCourse starting = deaneryCourse("DT-7", UUID.randomUUID());
+        starting.setRegistrationStartAt(now.minusMinutes(5));
+        starting.setRegistrationEndAt(now.plusDays(1));
+        starting.setStartDate(TrainingCourseStatusSupport.today().minusDays(1));
+        starting.setEndDate(TrainingCourseStatusSupport.today().plusDays(1));
+        starting.setRegistrationStatus(CourseRegistrationStatus.NOT_STARTED);
+        starting.setOrganizingStatus(CourseOrganizingStatus.UPCOMING);
+
+        TrainingCourse expiring = deaneryCourse("DT-8", UUID.randomUUID());
+        expiring.setRegistrationStartAt(now.minusDays(3));
+        expiring.setRegistrationEndAt(now.minusMinutes(5));
+        expiring.setStartDate(TrainingCourseStatusSupport.today().minusDays(5));
+        expiring.setEndDate(TrainingCourseStatusSupport.today().minusDays(1));
+        expiring.setRegistrationStatus(CourseRegistrationStatus.OPEN);
+        expiring.setOrganizingStatus(CourseOrganizingStatus.ONGOING);
+
+        TrainingCourse manuallyClosed = deaneryCourse("DT-9", UUID.randomUUID());
+        manuallyClosed.setRegistrationStartAt(now.minusDays(1));
+        manuallyClosed.setRegistrationEndAt(now.plusDays(1));
+        manuallyClosed.setStartDate(TrainingCourseStatusSupport.today().plusDays(2));
+        manuallyClosed.setEndDate(TrainingCourseStatusSupport.today().plusDays(3));
+        manuallyClosed.setRegistrationStatus(CourseRegistrationStatus.CLOSED);
+        manuallyClosed.setOrganizingStatus(CourseOrganizingStatus.UPCOMING);
+
+        when(trainingCourseRepository.findCoursesWithOpenStatuses()).thenReturn(List.of(starting, expiring, manuallyClosed));
+
+        assertEquals(2, service().refreshCourseStatuses());
+        assertEquals(CourseRegistrationStatus.OPEN, starting.getRegistrationStatus());
+        assertEquals(CourseOrganizingStatus.ONGOING, starting.getOrganizingStatus());
+        assertEquals(CourseRegistrationStatus.ENDED, expiring.getRegistrationStatus());
+        assertEquals(CourseOrganizingStatus.ENDED, expiring.getOrganizingStatus());
+        assertEquals(CourseRegistrationStatus.CLOSED, manuallyClosed.getRegistrationStatus());
+        verify(domainEventPublisher, times(2)).publishAfterCommit(any());
     }
 
     @Test
@@ -153,7 +209,8 @@ class TrainingCourseUpdateScopeTest {
                 new securityUtils(),
                 scoreComponentTemplateRepository,
                 notificationRecipientResolver,
-                accountRepository
+                accountRepository,
+                domainEventPublisher
         );
     }
 

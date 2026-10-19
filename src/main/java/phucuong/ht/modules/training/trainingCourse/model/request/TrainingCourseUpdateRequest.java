@@ -7,6 +7,7 @@ import lombok.Setter;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.List;
 
 @Getter
 @Setter
@@ -32,7 +33,7 @@ public class TrainingCourseUpdateRequest {
     private BigDecimal passingScore;
 
     // null = giữ nguyên; danh sách (kể cả rỗng) = thay thế.
-    private java.util.List<String> recipientUsernames;
+    private List<String> recipientUsernames;
 
     private String additionalNotes;
 }

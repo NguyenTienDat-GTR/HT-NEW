@@ -4,6 +4,9 @@ import lombok.Builder;
 import lombok.Getter;
 import phucuong.ht.common.enums.UnitType;
 
+import phucuong.ht.modules.training.enums.CourseOrganizingStatus;
+import phucuong.ht.modules.training.enums.CourseRegistrationStatus;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -29,6 +32,8 @@ public class TrainingCourseResponse {
     private String dioceseName;
     private String deaneryName;
     private Boolean registrationOpen;
+    private CourseRegistrationStatus registrationStatus;
+    private CourseOrganizingStatus organizingStatus;
     private List<String> recipientUsernames;
     private String createdBy;
     private String updatedBy;
