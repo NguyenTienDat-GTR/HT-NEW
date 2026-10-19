@@ -13,8 +13,7 @@ import java.math.BigDecimal;
 @Setter
 public class ScoreComponentTemplateCreateRequest {
 
-    @NotBlank
-    private String code;
+    // Mã thành phần điểm do hệ thống tự sinh (UUID); client không gửi.
 
     @NotBlank
     private String name;

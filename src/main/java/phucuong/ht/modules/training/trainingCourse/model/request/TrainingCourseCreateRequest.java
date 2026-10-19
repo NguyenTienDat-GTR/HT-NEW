@@ -11,8 +11,7 @@ import java.time.OffsetDateTime;
 @Setter
 public class TrainingCourseCreateRequest {
 
-    @NotBlank
-    private String courseCode;
+    // Mã khóa do hệ thống tự sinh (UUID); client không gửi.
 
     @NotBlank
     private String courseName;

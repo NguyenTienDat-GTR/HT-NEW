@@ -52,7 +52,7 @@ public class ScoreFormulaTemplateService {
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tạo công thức tính điểm");
         OffsetDateTime now = OffsetDateTime.now();
         ScoreFormulaTemplate formula = new ScoreFormulaTemplate();
-        formula.setCode(commonValidationHelper.normalizeRequiredText(request.getCode()));
+        formula.setCode(java.util.UUID.randomUUID().toString());
         formula.setName(commonValidationHelper.normalizeRequiredText(request.getName()));
         formula.setExpression(commonValidationHelper.normalizeRequiredText(request.getExpression()));
         formula.setPassingScore(request.getPassingScore());
@@ -99,9 +99,6 @@ public class ScoreFormulaTemplateService {
         }
         ScoreFormulaTemplate formula = repository.findByIdWithComponents(id)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy công thức tính điểm: " + id));
-        if (request.getCode() != null) {
-            formula.setCode(commonValidationHelper.normalizeRequiredText(request.getCode()));
-        }
         if (request.getName() != null) {
             formula.setName(commonValidationHelper.normalizeRequiredText(request.getName()));
         }

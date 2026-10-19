@@ -11,8 +11,7 @@ import phucuong.ht.modules.leader.model.enums.LeaderLevel;
 @Setter
 public class TrainingCourseTypeCreateRequest {
 
-    @NotBlank
-    private String typeCode;
+    // Mã loại khóa do hệ thống tự sinh (UUID); client không gửi.
 
     @NotBlank
     private String typeName;

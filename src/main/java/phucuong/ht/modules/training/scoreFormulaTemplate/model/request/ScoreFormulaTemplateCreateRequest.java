@@ -15,8 +15,7 @@ import java.util.List;
 @Setter
 public class ScoreFormulaTemplateCreateRequest {
 
-    @NotBlank
-    private String code;
+    // Mã công thức điểm do hệ thống tự sinh (UUID); client không gửi.
 
     @NotBlank
     private String name;

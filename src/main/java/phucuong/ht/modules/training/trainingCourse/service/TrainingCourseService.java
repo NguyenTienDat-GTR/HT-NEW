@@ -65,7 +65,7 @@ public class TrainingCourseService {
         OffsetDateTime now = OffsetDateTime.now();
 
         TrainingCourse course = new TrainingCourse();
-        course.setCourseCode(request.getCourseCode());
+        course.setCourseCode(generateUniqueCourseCode());
         course.setCourseType(courseType);
         course.setCourseName(request.getCourseName());
         course.setHostYear(request.getHostYear());
@@ -184,6 +184,14 @@ public class TrainingCourseService {
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái khóa huấn luyện");
         trainingCourseRepository.toggleStatus(courseCode, actor);
         return findById(courseCode, authentication);
+    }
+
+    private String generateUniqueCourseCode() {
+        String candidate;
+        do {
+            candidate = UUID.randomUUID().toString();
+        } while (trainingCourseRepository.findByCodeWithType(candidate).isPresent());
+        return candidate;
     }
 
     private TrainingCourseType resolveCourseType(String courseTypeCode) {

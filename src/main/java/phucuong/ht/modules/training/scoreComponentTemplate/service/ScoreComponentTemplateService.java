@@ -42,7 +42,7 @@ public class ScoreComponentTemplateService {
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tạo thành phần điểm");
         OffsetDateTime now = OffsetDateTime.now();
         ScoreComponentTemplate component = new ScoreComponentTemplate();
-        component.setCode(commonValidationHelper.normalizeRequiredText(request.getCode()));
+        component.setCode(java.util.UUID.randomUUID().toString());
         component.setName(commonValidationHelper.normalizeRequiredText(request.getName()));
         component.setMaxScore(request.getMaxScore());
         component.setDescription(commonValidationHelper.normalizeOptionalText(request.getDescription()));
@@ -82,9 +82,6 @@ public class ScoreComponentTemplateService {
     public ScoreComponentTemplateResponse update(String id, ScoreComponentTemplateUpdateRequest request, Authentication authentication) {
         ScoreComponentTemplate component = repository.findByIdWithScope(id)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy thành phần điểm: " + id));
-        if (request.getCode() != null) {
-            component.setCode(commonValidationHelper.normalizeRequiredText(request.getCode()));
-        }
         if (request.getName() != null) {
             component.setName(commonValidationHelper.normalizeRequiredText(request.getName()));
         }

@@ -19,6 +19,7 @@ import phucuong.ht.modules.training.trainingCourse.repository.TrainingCourseRepo
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -31,10 +32,7 @@ public class TrainingCourseTypeService {
     @Transactional
     public TrainingCourseTypeResponse create(TrainingCourseTypeCreateRequest request, Authentication authentication) {
         requireManagementUnitType(request.getManagementUnitType());
-        String typeCode = normalizeCode(request.getTypeCode());
-        if (trainingCourseTypeRepository.existsByTypeCode(typeCode)) {
-            throw commonValidationHelper.conflict("Mã loại khóa huấn luyện đã tồn tại: " + typeCode);
-        }
+        String typeCode = generateUniqueTypeCode();
 
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tạo loại khóa huấn luyện");
         OffsetDateTime now = OffsetDateTime.now();
@@ -126,6 +124,14 @@ public class TrainingCourseTypeService {
         if (managementUnitType != UnitType.DIOCESE && managementUnitType != UnitType.DEANERY) {
             throw commonValidationHelper.validationError("Cấp quản lý loại khóa chỉ được là DIOCESE hoặc DEANERY");
         }
+    }
+
+    private String generateUniqueTypeCode() {
+        String candidate;
+        do {
+            candidate = UUID.randomUUID().toString();
+        } while (trainingCourseTypeRepository.existsByTypeCode(candidate));
+        return candidate;
     }
 
     private TrainingCourseType resolvePrerequisite(String typeCode, String prerequisiteTypeCode) {
