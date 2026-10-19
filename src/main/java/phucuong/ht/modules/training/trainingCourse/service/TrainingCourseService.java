@@ -188,7 +188,8 @@ public class TrainingCourseService {
     @Transactional(readOnly = true)
     public TrainingCourseResponse findById(String courseCode, Authentication authentication) {
         return toResponse(trainingCourseRepository.findByCodeWithType(courseCode)
-                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy khóa huấn luyện " + courseCode)));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy khóa huấn luyện " + courseCode)),
+                courseParticipationRepository.existsByCourseCode(courseCode));
     }
 
     @Caching(evict = {
@@ -219,9 +220,15 @@ public class TrainingCourseService {
             existing.setCourseName(request.getCourseName());
         }
         if (request.getHostYear() != null) {
+            if (!java.util.Objects.equals(existing.getHostYear(), request.getHostYear())) {
+                requireNoParticipations(courseCode, "năm tổ chức");
+            }
             existing.setHostYear(request.getHostYear());
         }
         if (request.getYearsActive() != null) {
+            if (!java.util.Objects.equals(existing.getYearsActive() == null ? 0 : existing.getYearsActive(), request.getYearsActive())) {
+                requireNoParticipations(courseCode, "số năm hoạt động");
+            }
             existing.setYearsActive(request.getYearsActive());
         }
         if (request.getLocation() != null) {
@@ -240,8 +247,8 @@ public class TrainingCourseService {
             existing.setRegistrationEndAt(request.getRegistrationEndAt());
         }
         if (request.getPassingScore() != null) {
-            if (courseParticipationRepository.existsByCourseCode(courseCode)) {
-                throw commonValidationHelper.conflict("Không thể đổi điểm đạt sau khi đã có hồ sơ tham gia");
+            if (existing.getPassingScore() == null || existing.getPassingScore().compareTo(request.getPassingScore()) != 0) {
+                requireNoParticipations(courseCode, "điểm đạt");
             }
             existing.setPassingScore(request.getPassingScore());
         }
@@ -257,7 +264,7 @@ public class TrainingCourseService {
         if (request.getRecipientUsernames() != null) {
             applyRecipients(existing, request.getRecipientUsernames());
         }
-        return toResponse(existing);
+        return toResponse(existing, courseParticipationRepository.existsByCourseCode(courseCode));
     }
 
     @Caching(evict = {
@@ -589,7 +596,18 @@ public class TrainingCourseService {
         }
     }
 
+    // Loại khóa, năm tổ chức, số năm hoạt động và điểm đạt bị khóa sau khi khóa đã có hồ sơ tham gia.
+    private void requireNoParticipations(String courseCode, String fieldLabel) {
+        if (courseParticipationRepository.existsByCourseCode(courseCode)) {
+            throw commonValidationHelper.conflict("Không thể đổi " + fieldLabel + " sau khi đã có hồ sơ tham gia");
+        }
+    }
+
     private TrainingCourseResponse toResponse(TrainingCourse course) {
+        return toResponse(course, null);
+    }
+
+    private TrainingCourseResponse toResponse(TrainingCourse course, Boolean hasParticipations) {
         TrainingCourseType courseType = course.getCourseType();
         return TrainingCourseResponse.builder()
                 .courseCode(course.getCourseCode())
@@ -599,6 +617,7 @@ public class TrainingCourseService {
                 .managementUnitType(courseType == null ? null : courseType.getManagementUnitType())
                 .hostYear(course.getHostYear())
                 .yearsActive(course.getYearsActive() == null ? 0 : course.getYearsActive())
+                .hasParticipations(hasParticipations)
                 .location(course.getLocation())
                 .startDate(course.getStartDate())
                 .endDate(course.getEndDate())

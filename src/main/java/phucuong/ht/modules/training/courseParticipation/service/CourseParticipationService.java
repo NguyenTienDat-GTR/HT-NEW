@@ -1,6 +1,7 @@
 package phucuong.ht.modules.training.courseParticipation.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.security.core.Authentication;
@@ -10,6 +11,7 @@ import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.validation.AccountScopeValidationHelper;
 import phucuong.ht.common.validation.CommonValidationHelper;
+import phucuong.ht.config.CacheNames;
 import phucuong.ht.config.DomainEventMessage;
 import phucuong.ht.config.DomainEventPublisher;
 import phucuong.ht.modules.certificate.CertificateCodeGenerator;
@@ -143,6 +145,7 @@ public class CourseParticipationService {
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy hồ sơ đào tạo: " + participationId)));
     }
 
+    @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, allEntries = true)
     @Transactional
     public TrainingRegistrationBatchResponse register(String courseCode, TrainingRegistrationRequest request, Authentication authentication) {
         TrainingCourse course = requireCourse(courseCode);
@@ -433,7 +436,15 @@ public class CourseParticipationService {
         List<ScoreComponentTemplate> components = requireScoreComponents(participation);
         Map<String, ComponentScoreRequest> requestedScores = normalizeComponentScores(request.getComponentScores());
 
-        participation.getComponentScores().clear();
+        // Cập nhật tại chỗ các dòng điểm đã có (không xóa rồi thêm lại): Hibernate chèn trước khi xóa nên sẽ vi phạm
+        // ràng buộc duy nhất (participation_id, component_id) và báo "xung đột dữ liệu" khi sửa điểm.
+        Map<String, CourseParticipationComponentScore> existingScores = new HashMap<>();
+        for (CourseParticipationComponentScore existing : participation.getComponentScores()) {
+            if (existing.getComponent() != null) {
+                existingScores.put(existing.getComponent().getId(), existing);
+            }
+        }
+        Set<String> applicableComponentIds = new HashSet<>();
         BigDecimal weightedSum = BigDecimal.ZERO;
         BigDecimal coefficientSum = BigDecimal.ZERO;
         for (ScoreComponentTemplate component : components) {
@@ -445,17 +456,21 @@ public class CourseParticipationService {
                 throw commonValidationHelper.validationError("Điểm vượt quá điểm tối đa của thành phần " + component.getName());
             }
 
-            CourseParticipationComponentScore persistedScore = new CourseParticipationComponentScore();
-            persistedScore.setParticipation(participation);
-            persistedScore.setComponent(component);
+            applicableComponentIds.add(component.getId());
+            CourseParticipationComponentScore persistedScore = existingScores.get(component.getId());
+            if (persistedScore == null) {
+                persistedScore = new CourseParticipationComponentScore();
+                persistedScore.setParticipation(participation);
+                persistedScore.setComponent(component);
+                persistedScore.setCreatedAt(now);
+                persistedScore.setCreatedBy(actor);
+                participation.getComponentScores().add(persistedScore);
+            }
             persistedScore.setScore(componentRequest.getScore());
             persistedScore.setNote(commonValidationHelper.normalizeOptionalText(componentRequest.getNote()));
             persistedScore.setStatus(Boolean.TRUE);
-            persistedScore.setCreatedAt(now);
             persistedScore.setUpdatedAt(now);
-            persistedScore.setCreatedBy(actor);
             persistedScore.setUpdatedBy(actor);
-            participation.getComponentScores().add(persistedScore);
             if (Boolean.TRUE.equals(component.getIncludeInFinal())) {
                 weightedSum = weightedSum.add(componentRequest.getScore().multiply(component.getCoefficient()));
                 coefficientSum = coefficientSum.add(component.getCoefficient());
@@ -464,6 +479,8 @@ public class CourseParticipationService {
         if (!requestedScores.isEmpty()) {
             throw commonValidationHelper.validationError("Điểm thành phần gửi lên có thành phần không thuộc loại khóa của khóa học");
         }
+        // Thành phần không còn áp dụng cho khóa thì bỏ dòng điểm cũ.
+        participation.getComponentScores().removeIf(item -> item.getComponent() == null || !applicableComponentIds.contains(item.getComponent().getId()));
         if (coefficientSum.signum() <= 0) {
             throw commonValidationHelper.validationError("Loại khóa chưa có thành phần điểm nào được tính vào điểm tổng kết");
         }
@@ -855,6 +872,7 @@ public class CourseParticipationService {
     }
 
     // Thu hồi đăng ký: chỉ người gửi đăng ký, và chỉ khi hồ sơ còn chờ duyệt. Hồ sơ bị xóa để huynh trưởng có thể được đăng ký lại.
+    @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, allEntries = true)
     @Transactional
     public void withdraw(String participationId, Authentication authentication) {
         CourseParticipation participation = courseParticipationRepository.findByIdWithLeaderAndCourse(participationId)
@@ -876,6 +894,7 @@ public class CourseParticipationService {
     }
 
     // Xóa hồ sơ khỏi danh sách tham dự: người có quyền duyệt, bất kể đã có điểm hay chưa, trừ hồ sơ đã có chứng nhận.
+    @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, allEntries = true)
     @Transactional
     public void removeParticipant(String participationId, Authentication authentication) {
         CourseParticipation participation = courseParticipationRepository.findByIdWithLeaderAndCourse(participationId)

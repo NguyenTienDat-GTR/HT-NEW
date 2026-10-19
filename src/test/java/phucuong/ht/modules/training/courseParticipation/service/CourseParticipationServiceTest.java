@@ -504,6 +504,51 @@ class CourseParticipationServiceTest {
     }
 
     @Test
+    void rescoringShouldUpdateExistingComponentScoresInPlace() {
+        courseParticipationService = buildService();
+        CourseParticipation participation = new CourseParticipation();
+        participation.setId("cp-re");
+        TrainingCourse course = course("SMKN_I", UnitType.DIOCESE);
+        course.setCourseName("SMKN I");
+        course.setHostYear(2026);
+        course.setPassingScore(BigDecimal.valueOf(8));
+        ScoreComponentTemplate first = component("component-1", "TINH_THAN", BigDecimal.valueOf(10), 0, BigDecimal.ONE, true);
+        ScoreComponentTemplate second = component("component-2", "KY_NANG", BigDecimal.valueOf(10), 1, BigDecimal.ONE, true);
+        when(scoreComponentTemplateRepository.findActiveForCourse(org.mockito.ArgumentMatchers.eq("SMKN_I"), any(), any()))
+                .thenReturn(List.of(first, second));
+        participation.setCourse(course);
+        participation.setLeader(leader(UUID.randomUUID(), UUID.randomUUID(), LeaderLevel.HT_XU));
+        participation.setApprovalStatus(WorkflowApprovalStatus.APPROVED);
+        when(courseParticipationRepository.findByIdWithLeaderAndCourse("cp-re")).thenReturn(Optional.of(participation));
+        when(certificateRepository.findByLeaderIdAndCourseCode(any(), any())).thenReturn(Optional.empty());
+        when(certificateCodeGenerator.buildPrefix(any(), any(), any())).thenReturn("PC-I-2026-");
+        when(certificateRepository.findHighestSequenceByCodePrefix("PC-I-2026-")).thenReturn(Optional.of(0L));
+        when(certificateCodeGenerator.buildCode(any(), any(), any(), any(Long.class))).thenReturn("PC-I-2026-1");
+
+        courseParticipationService.score("cp-re", scoreRequest(5, 5), authentication("admin-diocese", "training.participation.score.diocese"));
+        var firstRows = List.copyOf(participation.getComponentScores());
+        courseParticipationService.score("cp-re", scoreRequest(9, 9), authentication("admin-diocese", "training.participation.score.diocese"));
+
+        // Cùng các đối tượng dòng điểm được cập nhật, không thêm/xóa dòng nào (tránh vi phạm ràng buộc duy nhất).
+        assertEquals(2, participation.getComponentScores().size());
+        assertEquals(firstRows.get(0), participation.getComponentScores().get(0));
+        assertEquals(0, BigDecimal.valueOf(9).compareTo(participation.getComponentScores().get(0).getScore()));
+        assertEquals(0, BigDecimal.valueOf(9).compareTo(participation.getTotalScore()));
+    }
+
+    private TrainingScoreRequest scoreRequest(int firstScore, int secondScore) {
+        TrainingScoreRequest request = new TrainingScoreRequest();
+        ComponentScoreRequest one = new ComponentScoreRequest();
+        one.setComponentId("component-1");
+        one.setScore(BigDecimal.valueOf(firstScore));
+        ComponentScoreRequest two = new ComponentScoreRequest();
+        two.setComponentId("component-2");
+        two.setScore(BigDecimal.valueOf(secondScore));
+        request.setComponentScores(List.of(one, two));
+        return request;
+    }
+
+    @Test
     void scoreShouldRejectWhenCourseIsNotOngoing() {
         courseParticipationService = buildService();
         TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);
