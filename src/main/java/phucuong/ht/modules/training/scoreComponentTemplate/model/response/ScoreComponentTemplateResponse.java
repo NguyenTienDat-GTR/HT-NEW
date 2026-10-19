@@ -16,6 +16,10 @@ public class ScoreComponentTemplateResponse {
     private String name;
     private BigDecimal maxScore;
     private String description;
+    private String courseTypeCode;
+    private String courseTypeName;
+    private BigDecimal coefficient;
+    private Boolean includeInFinal;
     private Integer displayOrder;
     private UnitType unitType;
     private UUID dioceseId;

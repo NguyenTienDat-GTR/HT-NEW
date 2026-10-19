@@ -107,18 +107,15 @@ Relationships:
 - `TrainingCourse`
 - `CourseParticipation`
 - `ScoreComponentTemplate`
-- `ScoreFormulaTemplate`
-- `ScoreFormulaComponent`
 - `CourseParticipationComponentScore`
 
 Relationships:
 
 - `TrainingCourse` belongs to one `CourseRequirement`
-- `TrainingCourse` belongs to one `ScoreFormulaTemplate`
+- `TrainingCourse` stores its own `passingScore`; its score components are the active `ScoreComponentTemplate` rows with the same course type and same owner (diocese/deanery)
 - `CourseParticipation` belongs to one `Leader`
 - `CourseParticipation` belongs to one `TrainingCourse`
-- `ScoreFormulaTemplate` belongs to one scoped owner: `Diocese` or `Deanery`
-- `ScoreFormulaTemplate` references many `ScoreComponentTemplate` rows through `ScoreFormulaComponent`
+- `ScoreComponentTemplate` belongs to one scoped owner (`Diocese` or `Deanery`) and one `TrainingCourseType`
 - `CourseParticipationComponentScore` belongs to one `CourseParticipation`
 - `CourseParticipationComponentScore` belongs to one `ScoreComponentTemplate`
 
@@ -786,34 +783,33 @@ Notification delivery:
 - selected `recipientUsernames` are valid only when the target account is active, has the required effective permission, and resolves to the matching deanery or diocese scope
 - when `recipientUsernames` is omitted, the backend resolves all active accounts whose effective permissions and scopes match the submission or approval stage
 
-### Training Score Formula Workflow
+### Training Score Component Workflow (V057, thay thế module công thức điểm)
 
-Training score templates:
+Module `scoreFormulaTemplate` và `TrainingScoreFormulaEvaluator` (biểu thức) đã bị XÓA. Điểm tổng kết chỉ dựa vào thành phần điểm có hệ số.
 
-- score components are managed under `/api/training/score-components`
-- score formulas are managed under `/api/training/score-formulas`
-- each component and formula belongs to exactly one scope owner: a diocese or a deanery
-- each formula stores:
-- a reusable ordered component list
-- an arithmetic expression using component codes as variables
-- a `passingScore`
+Score components (`/api/training/score-components`):
 
-Training course score configuration:
+- each component belongs to exactly one scope owner (diocese or deanery) and one course type (`courseTypeCode`, must have the same `managementUnitType` as the component `unitType`)
+- fields: `name`, `maxScore`, `coefficient` (> 0, hệ số), `includeInFinal` (flag, default true), `courseTypeCode`, `displayOrder`, `description`
+- `includeInFinal = false` means the component is still entered/stored per participation but is NOT counted in the final score
+- `courseTypeCode` and `unitType` cannot be changed on update
 
-- each `TrainingCourse` must reference exactly one `scoreFormulaId`
-- deanery-managed courses may only use deanery-owned formulas in the same deanery
-- diocese-managed courses may only use diocese-owned formulas in the same diocese
+Course configuration:
+
+- `TrainingCourse.passingScore` (required on create, replaces `scoreFormulaId`; cannot change once participations exist)
+- the components of a course = active components with the course's `courseType` and the course's owner (deanery for deanery-managed courses, else diocese)
 
 Participation scoring behavior:
 
-- `PATCH /api/training/participations/{id}/score` now accepts `componentScores` instead of a direct `totalScore`
+- `PATCH /api/training/participations/{id}/score` accepts `componentScores` (one score per applicable component, all required)
 - a participation may be scored only after the required approval is `APPROVED`: deanery approval for DT courses and diocese approval for non-DT courses
 - manual approval accepts only `PENDING` or `SUBMITTED` records; rejected records are terminal unless a future explicit reopen flow is introduced
 - one leader has exactly one participation per course
-- every participation in a course must be scored with the exact component set defined by that course's formula
 - the backend rejects missing, extra, duplicate, or over-max component scores
-- `totalScore` is calculated by the backend from the formula expression
-- pass or fail is determined by the formula `passingScore`
+- `totalScore` = weighted average: sum(score x coefficient) / sum(coefficient) over components with `includeInFinal = true`, rounded to 2 decimals (HALF_UP). Example: skill coefficient 1, spirit coefficient 2 -> (skill + 2 x spirit) / 3. Error if no component is included.
+- pass or fail is determined by `TrainingCourse.passingScore`
+- response `componentScores[]` also returns `coefficient` and `includeInFinal`
+- permissions `training.score_formula.*` are deactivated by migration V057 (data tables `score_formula_template`/`score_formula_component` dropped; legacy components without a resolvable course type are set inactive)
 - when a participation becomes passing and no certificate exists yet for the same leader and course, the system creates one `PENDING` certificate proposal automatically
 - one leader has exactly one certificate per course; code generation is serialized per certificate-code prefix
 

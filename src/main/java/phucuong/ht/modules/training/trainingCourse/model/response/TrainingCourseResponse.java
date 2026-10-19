@@ -4,6 +4,7 @@ import lombok.Builder;
 import lombok.Getter;
 import phucuong.ht.common.enums.UnitType;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -24,7 +25,7 @@ public class TrainingCourseResponse {
     private OffsetDateTime registrationEndAt;
     private UUID dioceseId;
     private UUID deaneryId;
-    private String scoreFormulaId;
+    private BigDecimal passingScore;
     private String additionalNotes;
     private Boolean status;
     private OffsetDateTime createdAt;

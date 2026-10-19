@@ -18,7 +18,6 @@ import phucuong.ht.modules.training.TrainingWorkflowSupport;
 import phucuong.ht.modules.training.courseParticipation.repository.CourseParticipationRepository;
 import phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType;
 import phucuong.ht.modules.training.courseType.repository.TrainingCourseTypeRepository;
-import phucuong.ht.modules.training.scoreFormulaTemplate.repository.ScoreFormulaTemplateRepository;
 import phucuong.ht.modules.training.trainingCourse.model.entity.TrainingCourse;
 import phucuong.ht.modules.training.trainingCourse.model.request.TrainingCourseUpdateRequest;
 import phucuong.ht.modules.training.trainingCourse.repository.TrainingCourseRepository;
@@ -42,7 +41,6 @@ class TrainingCourseUpdateScopeTest {
     @Mock private CourseParticipationRepository courseParticipationRepository;
     @Mock private DioceseRepository dioceseRepository;
     @Mock private DeaneryRepository deaneryRepository;
-    @Mock private ScoreFormulaTemplateRepository scoreFormulaTemplateRepository;
     @Mock private AccountScopeValidationHelper accountScopeValidationHelper;
 
     @Test
@@ -89,7 +87,6 @@ class TrainingCourseUpdateScopeTest {
                 courseParticipationRepository,
                 dioceseRepository,
                 deaneryRepository,
-                scoreFormulaTemplateRepository,
                 new TrainingWorkflowSupport(),
                 accountScopeValidationHelper,
                 new CommonValidationHelper(new securityUtils()),

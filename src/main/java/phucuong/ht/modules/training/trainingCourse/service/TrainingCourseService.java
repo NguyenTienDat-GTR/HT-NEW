@@ -22,8 +22,6 @@ import phucuong.ht.modules.training.TrainingWorkflowSupport;
 import phucuong.ht.modules.training.courseParticipation.repository.CourseParticipationRepository;
 import phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType;
 import phucuong.ht.modules.training.courseType.repository.TrainingCourseTypeRepository;
-import phucuong.ht.modules.training.scoreFormulaTemplate.model.entity.ScoreFormulaTemplate;
-import phucuong.ht.modules.training.scoreFormulaTemplate.repository.ScoreFormulaTemplateRepository;
 import phucuong.ht.modules.training.trainingCourse.model.entity.TrainingCourse;
 import phucuong.ht.modules.training.trainingCourse.model.request.TrainingCourseCreateRequest;
 import phucuong.ht.modules.training.trainingCourse.model.request.TrainingCourseUpdateRequest;
@@ -48,7 +46,6 @@ public class TrainingCourseService {
     private final CourseParticipationRepository courseParticipationRepository;
     private final DioceseRepository dioceseRepository;
     private final DeaneryRepository deaneryRepository;
-    private final ScoreFormulaTemplateRepository scoreFormulaTemplateRepository;
     private final TrainingWorkflowSupport trainingWorkflowSupport;
     private final AccountScopeValidationHelper accountScopeValidationHelper;
     private final CommonValidationHelper commonValidationHelper;
@@ -82,7 +79,7 @@ public class TrainingCourseService {
         course.setUpdatedBy(auditActor);
         validateRegistrationWindow(course.getRegistrationStartAt(), course.getRegistrationEndAt());
         applyOwnerScope(course, courseType, authentication);
-        applyScoreFormula(course, request.getScoreFormulaId(), authentication);
+        course.setPassingScore(request.getPassingScore());
         trainingCourseRepository.save(course);
         return toResponse(trainingCourseRepository.findByCodeWithType(course.getCourseCode()).orElse(course));
     }
@@ -133,9 +130,6 @@ public class TrainingCourseService {
         if (typeChanging && courseParticipationRepository.existsByCourseCode(courseCode)) {
             throw commonValidationHelper.conflict("Không thể đổi loại khóa huấn luyện sau khi đã có hồ sơ tham gia");
         }
-        if (typeChanging && (request.getScoreFormulaId() == null || request.getScoreFormulaId().isBlank())) {
-            throw commonValidationHelper.validationError("Đổi loại khóa phải gửi scoreFormulaId phù hợp với scope mới");
-        }
 
         if (typeChanging) {
             existing.setCourseType(targetType);
@@ -161,8 +155,11 @@ public class TrainingCourseService {
         if (request.getRegistrationEndAt() != null) {
             existing.setRegistrationEndAt(request.getRegistrationEndAt());
         }
-        if (request.getScoreFormulaId() != null) {
-            applyScoreFormula(existing, request.getScoreFormulaId(), authentication);
+        if (request.getPassingScore() != null) {
+            if (courseParticipationRepository.existsByCourseCode(courseCode)) {
+                throw commonValidationHelper.conflict("Không thể đổi điểm đạt sau khi đã có hồ sơ tham gia");
+            }
+            existing.setPassingScore(request.getPassingScore());
         }
         if (request.getAdditionalNotes() != null) {
             existing.setAdditionalNotes(request.getAdditionalNotes());
@@ -287,29 +284,6 @@ public class TrainingCourseService {
         }
     }
 
-    private void applyScoreFormula(TrainingCourse course, String scoreFormulaId, Authentication authentication) {
-        if (scoreFormulaId == null || scoreFormulaId.isBlank()) {
-            throw commonValidationHelper.validationError("scoreFormulaId là bắt buộc");
-        }
-        ScoreFormulaTemplate formula = scoreFormulaTemplateRepository.findByIdWithComponents(scoreFormulaId)
-                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy công thức tính điểm: " + scoreFormulaId));
-        if (course.getCourseType() == null) {
-            throw commonValidationHelper.validationError("Loại khóa là bắt buộc trước khi gán scoreFormula");
-        }
-        if (trainingWorkflowSupport.isDeaneryManaged(course.getCourseType())) {
-            UUID deaneryId = accountScopeValidationHelper.requireActiveDeaneryId(authentication, TrainingCourseAccessEvaluator.CREATE_DEANERY);
-            if (formula.getDeanery() == null || !deaneryId.equals(formula.getDeanery().getId())) {
-                throw commonValidationHelper.forbidden("Công thức tính điểm nằm ngoài phạm vi giáo hạt hiện tại");
-            }
-        } else {
-            UUID dioceseId = accountScopeValidationHelper.requireActiveDioceseId(authentication, TrainingCourseAccessEvaluator.CREATE_DIOCESE);
-            if (formula.getDiocese() == null || !dioceseId.equals(formula.getDiocese().getId())) {
-                throw commonValidationHelper.forbidden("Công thức tính điểm nằm ngoài phạm vi giáo phận hiện tại");
-            }
-        }
-        course.setScoreFormula(formula);
-    }
-
     private BaseSearchRequest copyRequest(BaseSearchRequest request) {
         BaseSearchRequest source = request == null ? new BaseSearchRequest() : request;
         BaseSearchRequest copy = new BaseSearchRequest();
@@ -354,7 +328,7 @@ public class TrainingCourseService {
                 .registrationEndAt(course.getRegistrationEndAt())
                 .dioceseId(course.getDiocese() == null ? null : course.getDiocese().getId())
                 .deaneryId(course.getDeanery() == null ? null : course.getDeanery().getId())
-                .scoreFormulaId(course.getScoreFormula() == null ? null : course.getScoreFormula().getId())
+                .passingScore(course.getPassingScore())
                 .additionalNotes(course.getAdditionalNotes())
                 .status(course.getStatus())
                 .createdAt(course.getCreatedAt())

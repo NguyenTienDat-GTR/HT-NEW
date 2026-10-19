@@ -24,6 +24,16 @@ public class ScoreComponentTemplateCreateRequest {
 
     private String description;
 
+    @NotBlank
+    private String courseTypeCode;
+
+    @NotNull
+    @DecimalMin(value = "0.00", inclusive = false)
+    private BigDecimal coefficient;
+
+    // Mặc định true nếu không gửi.
+    private Boolean includeInFinal;
+
     private Integer displayOrder;
 
     @NotNull

@@ -38,9 +38,6 @@ public class CourseParticipationRepository extends BaseRepo<CourseParticipation,
                                 left join fetch courseType.prerequisiteType
                                 left join fetch c.deanery
                                 left join fetch c.diocese
-                                left join fetch c.scoreFormula scoreFormula
-                                left join fetch scoreFormula.components formulaComponents
-                                left join fetch formulaComponents.component
                                 left join fetch cp.componentScores participationScores
                                 left join fetch participationScores.component
                                 where cp.id = :id
@@ -80,7 +77,6 @@ public class CourseParticipationRepository extends BaseRepo<CourseParticipation,
                                 join fetch l.parish p
                                 join fetch p.deanery de
                                 join fetch de.diocese d
-                                left join fetch c.scoreFormula
                                 where c.courseCode = :courseCode
                                 """,
                         CourseParticipation.class
@@ -105,7 +101,6 @@ public class CourseParticipationRepository extends BaseRepo<CourseParticipation,
                                 join fetch de.diocese d
                                 left join fetch c.courseType courseType
                                 left join fetch courseType.prerequisiteType
-                                left join fetch c.scoreFormula
                                 left join fetch cp.componentScores participationScores
                                 left join fetch participationScores.component
                                 where cp.id in :ids
@@ -142,9 +137,6 @@ public class CourseParticipationRepository extends BaseRepo<CourseParticipation,
                                 select cp
                                 from CourseParticipation cp
                                 join fetch cp.course c
-                                left join fetch c.scoreFormula scoreFormula
-                                left join fetch scoreFormula.components formulaComponents
-                                left join fetch formulaComponents.component
                                 join fetch cp.leader l
                                 where l.id = :leaderId
                                   and c.courseCode = :courseCode

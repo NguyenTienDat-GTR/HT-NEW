@@ -19,5 +19,10 @@ public class ScoreComponentTemplateUpdateRequest {
 
     private String description;
 
+    @DecimalMin(value = "0.00", inclusive = false)
+    private BigDecimal coefficient;
+
+    private Boolean includeInFinal;
+
     private Integer displayOrder;
 }

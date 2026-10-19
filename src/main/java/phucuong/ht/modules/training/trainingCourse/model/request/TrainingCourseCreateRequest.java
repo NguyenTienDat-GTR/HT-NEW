@@ -1,9 +1,12 @@
 package phucuong.ht.modules.training.trainingCourse.model.request;
 
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 
@@ -31,7 +34,9 @@ public class TrainingCourseCreateRequest {
 
     private OffsetDateTime registrationEndAt;
 
-    private String scoreFormulaId;
+    @NotNull
+    @DecimalMin(value = "0.00", inclusive = true)
+    private BigDecimal passingScore;
 
     private String additionalNotes;
 }

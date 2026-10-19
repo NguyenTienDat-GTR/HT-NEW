@@ -30,6 +30,7 @@ public class ScoreComponentTemplateRepository extends BaseRepo<ScoreComponentTem
                                 from ScoreComponentTemplate component
                                 left join fetch component.diocese
                                 left join fetch component.deanery
+                                left join fetch component.courseType
                                 where component.id = :id
                                 """,
                         ScoreComponentTemplate.class
@@ -51,11 +52,27 @@ public class ScoreComponentTemplateRepository extends BaseRepo<ScoreComponentTem
                                 from ScoreComponentTemplate component
                                 left join fetch component.diocese
                                 left join fetch component.deanery
+                                left join fetch component.courseType
                                 where component.id in :ids
                                 """,
                         ScoreComponentTemplate.class
                 )
                 .setParameter("ids", ids)
+                .getResultList();
+    }
+
+    // Thành phần điểm đang hoạt động áp dụng cho khóa: cùng loại khóa và cùng đơn vị sở hữu (giáo hạt hoặc giáo phận).
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<ScoreComponentTemplate> findActiveForCourse(String courseTypeCode, UUID dioceseId, UUID deaneryId) {
+        String ownerClause = deaneryId != null ? "component.deanery.id = :ownerId" : "component.diocese.id = :ownerId";
+        return entityManager.createQuery(
+                        "select component from ScoreComponentTemplate component "
+                                + "where component.courseType.typeCode = :courseTypeCode and component.status = true and "
+                                + ownerClause + " order by component.displayOrder asc, component.name asc",
+                        ScoreComponentTemplate.class
+                )
+                .setParameter("courseTypeCode", courseTypeCode)
+                .setParameter("ownerId", deaneryId != null ? deaneryId : dioceseId)
                 .getResultList();
     }
 

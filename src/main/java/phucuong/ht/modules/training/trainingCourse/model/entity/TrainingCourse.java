@@ -6,8 +6,8 @@ import phucuong.ht.common.model.BaseModel;
 import phucuong.ht.modules.deanery.model.entity.Deanery;
 import phucuong.ht.modules.diocese.model.entity.Diocese;
 import phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType;
-import phucuong.ht.modules.training.scoreFormulaTemplate.model.entity.ScoreFormulaTemplate;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 
@@ -52,9 +52,9 @@ public class TrainingCourse extends BaseModel {
     @JoinColumn(name = "deanery_id")
     private Deanery deanery;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "score_formula_id", nullable = false)
-    private ScoreFormulaTemplate scoreFormula;
+    // Điểm tổng kết tối thiểu để đạt khóa.
+    @Column(name = "passing_score", nullable = false)
+    private BigDecimal passingScore;
 
     private String additionalNotes;
 }
