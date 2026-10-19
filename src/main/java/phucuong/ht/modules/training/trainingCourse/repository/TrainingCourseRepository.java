@@ -43,6 +43,17 @@ public class TrainingCourseRepository extends BaseRepo<TrainingCourse, String> {
         return results.stream().findFirst();
     }
 
+    // Tự đóng đăng ký các khóa đã hết thời gian đăng ký; trả về số khóa vừa đóng.
+    @org.springframework.transaction.annotation.Transactional
+    public int closeExpiredRegistrations(java.time.OffsetDateTime now) {
+        return entityManager.createQuery(
+                        "update TrainingCourse tc set tc.registrationOpen = false "
+                                + "where tc.registrationOpen = true and tc.registrationEndAt is not null and tc.registrationEndAt < :now"
+                )
+                .setParameter("now", now)
+                .executeUpdate();
+    }
+
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public boolean existsByCourseTypeCode(String courseTypeCode) {
         Long count = entityManager.createQuery(

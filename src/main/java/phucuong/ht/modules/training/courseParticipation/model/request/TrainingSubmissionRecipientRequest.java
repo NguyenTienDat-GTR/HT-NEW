@@ -8,5 +8,6 @@ import java.util.List;
 @Getter
 @Setter
 public class TrainingSubmissionRecipientRequest {
+    // Không còn dùng: người nhận lấy từ danh sách tài khoản chọn khi tạo khóa huấn luyện.
     private List<String> recipientUsernames;
 }

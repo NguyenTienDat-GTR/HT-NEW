@@ -811,9 +811,20 @@ Participation scoring behavior:
 - `totalScore` = weighted average: sum(score x coefficient) / sum(coefficient) over components with `includeInFinal = true`, rounded to 2 decimals (HALF_UP). Example: skill coefficient 1, spirit coefficient 2 -> (skill + 2 x spirit) / 3. Error if no component is included.
 - pass or fail is determined by `TrainingCourse.passingScore`
 - response `componentScores[]` also returns `coefficient` and `includeInFinal`
+- `passingScore` of a course must be <= the max final score of its course type: weighted average (by coefficient) of `maxScore` of active components with `includeInFinal = true` for the course type + owner. Skipped when the type has no included component. `GET /api/training/courses/passing-score-limit?courseTypeCode=` returns `{maxPassingScore, componentCount}` for the FE tip. (Weighted, not a plain average, so the limit is the real maximum reachable score.)
 - permissions `training.score_formula.*` are deactivated by migration V057 (data tables `score_formula_template`/`score_formula_component` dropped; legacy components without a resolvable course type are set inactive)
 - when a participation becomes passing and no certificate exists yet for the same leader and course, the system creates one `PENDING` certificate proposal automatically
 - one leader has exactly one certificate per course; code generation is serialized per certificate-code prefix
+
+### Training Course Registration Control and Recipients (V058)
+
+- `training_course.registration_open` (`TrainingCourse.registrationOpen`, default true): manual open/close flag. Registration is accepted only when the flag is true AND now is within `registrationStartAt..registrationEndAt`.
+- `PATCH /api/training/courses/{courseCode}/registration` body `{ "open": true|false }` (permission = course update scope). Allowed only while `now <= registrationEndAt`; after the window ended it returns 409 (extend `registrationEndAt` first, then reopen manually). Closing and reopening manually is allowed any number of times inside the window.
+- `CourseRegistrationScheduler` (`@EnableScheduling`, every `training.registration.auto-close-interval-ms`, default 60000) sets `registration_open = false` for courses whose `registrationEndAt` passed and evicts the course caches. `requireRegistrationWindowOpen` also enforces the window itself, so registration is blocked even before the job runs.
+- Recipients: `training_course_recipient(course_code, username)` (`TrainingCourse.recipientUsernames`; create/update request field `recipientUsernames`, update: null keeps, list replaces). Each username must have `training.participation.approve.deanery` (deanery-managed course, in the course's deanery) or `training.participation.approve.diocese` (otherwise, in the course's diocese) - validated by `TrainingNotificationRecipientResolver`.
+- `GET /api/training/courses/recipient-candidates?courseTypeCode=` lists eligible accounts (`username`, `fullName`) in the caller's scope for the FE picker (authorized like course create for that type).
+- Notification routing: registration submit of a deanery-managed course and the deanery submit of a diocese course notify the course's recipients (still-eligible ones; falls back to all eligible accounts if none chosen/valid). Parish submit of a diocese course still notifies all eligible deanery accounts. `recipientUsernames` in `TrainingRegistrationRequest`/`TrainingSubmissionRecipientRequest` is now ignored.
+- Course response adds `dioceseName`, `deaneryName`, `registrationOpen`, `recipientUsernames`, `createdBy`, `updatedBy` (createdBy/updatedBy were already persisted, just not returned).
 
 ### API Cache Policy
 

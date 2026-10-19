@@ -15,6 +15,7 @@ public class TrainingRegistrationRequest {
     @NotEmpty
     private List<UUID> leaderIds;
 
+    // Không còn dùng: người nhận lấy từ danh sách tài khoản chọn khi tạo khóa huấn luyện.
     private List<String> recipientUsernames;
 
     private Map<UUID, String> exceptionReasonsByLeaderId;

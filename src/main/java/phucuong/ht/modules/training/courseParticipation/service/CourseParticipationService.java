@@ -157,8 +157,9 @@ public class CourseParticipationService {
             createdParticipations.add(participation);
         }
 
-        List<String> recipients = notificationRecipientResolver.resolveRecipients(
-                request.getRecipientUsernames(),
+        List<String> recipients = resolveCourseRecipients(
+                course,
+                trainingWorkflowSupport.isDeaneryManaged(course.getCourseType()),
                 submitNotificationPermission(course),
                 UnitType.DEANERY,
                 parish.getDeanery().getId()
@@ -213,8 +214,9 @@ public class CourseParticipationService {
             participation.setUpdatedBy(actor);
         });
 
-        List<String> recipients = notificationRecipientResolver.resolveRecipients(
-                request == null ? null : request.getRecipientUsernames(),
+        List<String> recipients = resolveCourseRecipients(
+                course,
+                true,
                 CourseParticipationAccessEvaluator.APPROVE_DIOCESE,
                 UnitType.DIOCESE,
                 deanery.getDiocese().getId()
@@ -447,6 +449,9 @@ public class CourseParticipationService {
         if (now.isAfter(course.getRegistrationEndAt())) {
             throw commonValidationHelper.validationError("Đã hết thời gian nhận đăng ký");
         }
+        if (!Boolean.TRUE.equals(course.getRegistrationOpen())) {
+            throw commonValidationHelper.validationError("Khóa huấn luyện đang đóng đăng ký");
+        }
     }
 
     private void requireActiveRegistrationData(TrainingCourse course) {
@@ -488,6 +493,16 @@ public class CourseParticipationService {
             throw commonValidationHelper.validationError("leaderIds là bắt buộc");
         }
         return new ArrayList<>(new LinkedHashSet<>(leaderIds));
+    }
+
+    // Người nhận lấy từ danh sách tài khoản đã chọn khi tạo khóa (nếu còn hợp lệ), ngược lại gửi cho mọi tài khoản đủ quyền.
+    private List<String> resolveCourseRecipients(TrainingCourse course, boolean useCourseList, String permissionCode, UnitType scopeType, UUID scopeId) {
+        List<String> eligible = notificationRecipientResolver.resolveRecipients(null, permissionCode, scopeType, scopeId);
+        if (!useCourseList || course.getRecipientUsernames().isEmpty()) {
+            return eligible;
+        }
+        List<String> chosen = eligible.stream().filter(course.getRecipientUsernames()::contains).toList();
+        return chosen.isEmpty() ? eligible : chosen;
     }
 
     private String submitNotificationPermission(TrainingCourse course) {

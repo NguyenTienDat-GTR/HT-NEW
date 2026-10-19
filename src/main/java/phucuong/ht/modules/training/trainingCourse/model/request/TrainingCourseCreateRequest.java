@@ -38,5 +38,8 @@ public class TrainingCourseCreateRequest {
     @DecimalMin(value = "0.00", inclusive = true)
     private BigDecimal passingScore;
 
+    // Tài khoản nhận danh sách đăng ký; phải có quyền duyệt danh sách đăng ký thuộc phạm vi của khóa.
+    private java.util.List<String> recipientUsernames;
+
     private String additionalNotes;
 }

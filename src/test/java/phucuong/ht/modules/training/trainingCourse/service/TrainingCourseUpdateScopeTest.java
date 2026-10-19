@@ -29,6 +29,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -36,6 +37,9 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class TrainingCourseUpdateScopeTest {
 
+    @Mock private phucuong.ht.modules.training.scoreComponentTemplate.repository.ScoreComponentTemplateRepository scoreComponentTemplateRepository;
+    @Mock private phucuong.ht.modules.notification.service.TrainingNotificationRecipientResolver notificationRecipientResolver;
+    @Mock private phucuong.ht.modules.auth.repository.AccountRepository accountRepository;
     @Mock private TrainingCourseRepository trainingCourseRepository;
     @Mock private TrainingCourseTypeRepository trainingCourseTypeRepository;
     @Mock private CourseParticipationRepository courseParticipationRepository;
@@ -80,6 +84,62 @@ class TrainingCourseUpdateScopeTest {
         assertEquals(deaneryId, response.getDeaneryId());
     }
 
+    @Test
+    void registrationCanBeClosedAndReopenedWhileWindowIsStillRunning() {
+        TrainingCourse course = deaneryCourse("DT-3", UUID.randomUUID());
+        course.setRegistrationEndAt(java.time.OffsetDateTime.now().plusDays(1));
+        var authentication = authentication("admin-deanery", "training.course.update.deanery");
+        when(trainingCourseRepository.findByCodeWithType("DT-3")).thenReturn(Optional.of(course));
+
+        var request = new phucuong.ht.modules.training.trainingCourse.model.request.CourseRegistrationToggleRequest();
+        request.setOpen(false);
+        assertEquals(false, service().setRegistrationOpen("DT-3", request, authentication).getRegistrationOpen());
+        request.setOpen(true);
+        assertEquals(true, service().setRegistrationOpen("DT-3", request, authentication).getRegistrationOpen());
+    }
+
+    @Test
+    void registrationCannotBeReopenedAfterWindowEnded() {
+        TrainingCourse course = deaneryCourse("DT-4", UUID.randomUUID());
+        course.setRegistrationEndAt(java.time.OffsetDateTime.now().minusMinutes(1));
+        var authentication = authentication("admin-deanery", "training.course.update.deanery");
+        when(trainingCourseRepository.findByCodeWithType("DT-4")).thenReturn(Optional.of(course));
+
+        var request = new phucuong.ht.modules.training.trainingCourse.model.request.CourseRegistrationToggleRequest();
+        request.setOpen(true);
+        assertThrows(RuntimeException.class, () -> service().setRegistrationOpen("DT-4", request, authentication));
+    }
+
+    @Test
+    void passingScoreMustNotExceedWeightedMaxOfIncludedComponents() {
+        UUID deaneryId = UUID.randomUUID();
+        TrainingCourse course = deaneryCourse("DT-5", deaneryId);
+        var authentication = authentication("admin-deanery", "training.course.update.deanery");
+        TrainingCourseUpdateRequest request = new TrainingCourseUpdateRequest();
+        request.setPassingScore(java.math.BigDecimal.valueOf(9));
+
+        // Hai thành phần tối đa 10 (hệ số 1) và 5 (hệ số 1, tính vào tổng kết), 20 không tính -> giới hạn 7.5
+        when(trainingCourseRepository.findByCodeWithType("DT-5")).thenReturn(Optional.of(course));
+        when(accountScopeValidationHelper.requireActiveDeaneryId(any(), eq(TrainingCourseAccessEvaluator.UPDATE_DEANERY))).thenReturn(deaneryId);
+        when(courseParticipationRepository.existsByCourseCode("DT-5")).thenReturn(false);
+        when(deaneryRepository.getRequired(deaneryId)).thenReturn(course.getDeanery());
+        when(accountScopeValidationHelper.requireActiveDeaneryId(any(), eq(TrainingCourseAccessEvaluator.CREATE_DEANERY))).thenReturn(deaneryId);
+        when(scoreComponentTemplateRepository.findActiveForCourse(eq("SMTL_DT"), any(), eq(deaneryId)))
+                .thenReturn(List.of(component(10, true), component(5, true), component(20, false)));
+
+        assertThrows(RuntimeException.class, () -> service().update("DT-5", request, authentication));
+        request.setPassingScore(java.math.BigDecimal.valueOf(7.5));
+        assertEquals(0, java.math.BigDecimal.valueOf(7.5).compareTo(service().update("DT-5", request, authentication).getPassingScore()));
+    }
+
+    private phucuong.ht.modules.training.scoreComponentTemplate.model.entity.ScoreComponentTemplate component(int max, boolean included) {
+        var component = new phucuong.ht.modules.training.scoreComponentTemplate.model.entity.ScoreComponentTemplate();
+        component.setMaxScore(java.math.BigDecimal.valueOf(max));
+        component.setCoefficient(java.math.BigDecimal.ONE);
+        component.setIncludeInFinal(included);
+        return component;
+    }
+
     private TrainingCourseService service() {
         return new TrainingCourseService(
                 trainingCourseRepository,
@@ -90,7 +150,10 @@ class TrainingCourseUpdateScopeTest {
                 new TrainingWorkflowSupport(),
                 accountScopeValidationHelper,
                 new CommonValidationHelper(new securityUtils()),
-                new securityUtils()
+                new securityUtils(),
+                scoreComponentTemplateRepository,
+                notificationRecipientResolver,
+                accountRepository
         );
     }
 

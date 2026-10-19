@@ -31,5 +31,8 @@ public class TrainingCourseUpdateRequest {
     @DecimalMin(value = "0.00", inclusive = true)
     private BigDecimal passingScore;
 
+    // null = giữ nguyên; danh sách (kể cả rỗng) = thay thế.
+    private java.util.List<String> recipientUsernames;
+
     private String additionalNotes;
 }

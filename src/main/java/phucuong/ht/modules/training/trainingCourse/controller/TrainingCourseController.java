@@ -9,6 +9,9 @@ import org.springframework.web.bind.annotation.*;
 import phucuong.ht.common.dto.apiResponse;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
+import phucuong.ht.modules.training.trainingCourse.model.request.CourseRegistrationToggleRequest;
+import phucuong.ht.modules.training.trainingCourse.model.response.CoursePassingScoreLimitResponse;
+import phucuong.ht.modules.training.trainingCourse.model.response.CourseRecipientCandidateResponse;
 import phucuong.ht.modules.training.trainingCourse.model.request.TrainingCourseCreateRequest;
 import phucuong.ht.modules.training.trainingCourse.model.request.TrainingCourseUpdateRequest;
 import phucuong.ht.modules.training.trainingCourse.model.response.TrainingCourseResponse;
@@ -31,6 +34,28 @@ public class TrainingCourseController {
     @PreAuthorize("@trainingCourseAccessEvaluator.canList(authentication)")
     public apiResponse<Page<TrainingCourseResponse>> findAll(BaseSearchRequest request, Authentication authentication) {
         return apiResponse.success("Lấy danh sách khóa huấn luyện thành công", trainingCourseService.findAll(request, authentication));
+    }
+
+    @GetMapping("/recipient-candidates")
+    @PreAuthorize("@trainingCourseAccessEvaluator.canCreate(authentication, #courseTypeCode)")
+    public apiResponse<java.util.List<CourseRecipientCandidateResponse>> recipientCandidates(@RequestParam String courseTypeCode, Authentication authentication) {
+        return apiResponse.success("Lấy danh sách tài khoản nhận danh sách đăng ký thành công", trainingCourseService.recipientCandidates(courseTypeCode, authentication));
+    }
+
+    @GetMapping("/passing-score-limit")
+    @PreAuthorize("@trainingCourseAccessEvaluator.canCreate(authentication, #courseTypeCode)")
+    public apiResponse<CoursePassingScoreLimitResponse> passingScoreLimit(@RequestParam String courseTypeCode, Authentication authentication) {
+        return apiResponse.success("Lấy điểm đạt tối đa thành công", trainingCourseService.passingScoreLimit(courseTypeCode, authentication));
+    }
+
+    @PatchMapping("/{courseCode}/registration")
+    @PreAuthorize("@trainingCourseAccessEvaluator.canUpdate(authentication, #courseCode)")
+    public apiResponse<TrainingCourseResponse> setRegistrationOpen(
+            @PathVariable String courseCode,
+            @Valid @RequestBody CourseRegistrationToggleRequest request,
+            Authentication authentication
+    ) {
+        return apiResponse.success("Cập nhật trạng thái đăng ký thành công", trainingCourseService.setRegistrationOpen(courseCode, request, authentication));
     }
 
     @GetMapping("/{courseCode}")
