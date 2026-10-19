@@ -35,11 +35,9 @@ public class CourseParticipationUpdateRequest {
 
     private OffsetDateTime parishSubmittedAt;
 
-    private OffsetDateTime deanerySubmittedAt;
 
-    private WorkflowApprovalStatus deaneryApprovalStatus;
 
-    private WorkflowApprovalStatus dioceseApprovalStatus;
+    private WorkflowApprovalStatus approvalStatus;
 
     private WorkflowApprovalStatus certificateApprovalStatus;
 

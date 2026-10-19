@@ -137,6 +137,26 @@ class CourseParticipationServiceTest {
     }
 
     @Test
+    void registerShouldRejectLeaderPresentInBothStandardAndExceptionLists() {
+        courseParticipationService = buildService();
+
+        UUID parishId = UUID.randomUUID();
+        UUID leaderId = UUID.randomUUID();
+        TrainingCourse course = course("SMKN_DT", UnitType.DEANERY);
+        Parish parish = parish(parishId, course);
+        when(trainingCourseRepository.findByCodeWithType("SMKNDT-2026")).thenReturn(Optional.of(course));
+        when(parishRepository.findByIdWithDeaneryAndDiocese(parishId)).thenReturn(Optional.of(parish));
+        when(accountScopeValidationHelper.requireActiveParishId(any(), any())).thenReturn(parishId);
+
+        TrainingRegistrationRequest request = new TrainingRegistrationRequest();
+        request.setLeaderIds(List.of(leaderId));
+        request.setExceptionReasonsByLeaderId(java.util.Map.of(leaderId, "Đặc cách"));
+
+        assertThrows(RuntimeException.class, () -> courseParticipationService.register("SMKNDT-2026", request, authentication("admin-parish", "training.participation.submit.parish")));
+        verify(trainingNotificationService, never()).notifyUsers(any(), any());
+    }
+
+    @Test
     void registerShouldRejectWhenRegistrationWindowNotOpen() {
         courseParticipationService = buildService();
 
@@ -251,7 +271,7 @@ class CourseParticipationServiceTest {
     }
 
     @Test
-    void registerShouldReturnBatchSummaryForDioceseCourseWithoutAutoApprovalAtParishStep() {
+    void registerShouldAutoApproveEligibleLeaderForDioceseCourse() {
         courseParticipationService = buildService();
 
         UUID parishId = UUID.randomUUID();
@@ -272,10 +292,26 @@ class CourseParticipationServiceTest {
         var response = courseParticipationService.register("SMTLI-2026", request, authentication("admin-parish", "training.participation.submit.parish"));
 
         assertEquals(1, response.getTotalCount());
-        assertEquals(0, response.getAutoApprovedCount());
-        assertEquals(1, response.getPendingCount());
+        assertEquals(1, response.getAutoApprovedCount());
+        assertEquals(0, response.getPendingCount());
         verify(trainingNotificationService).notifyUsers(any(), any());
         verify(domainEventPublisher).publishAfterCommit(any());
+    }
+
+    @Test
+    void registerShouldRejectDeanerySenderForDioceseCourse() {
+        courseParticipationService = buildService();
+
+        UUID deaneryId = UUID.randomUUID();
+        TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);
+        when(trainingCourseRepository.findByCodeWithType("SMTLI-2026")).thenReturn(Optional.of(course));
+        when(accountScopeValidationHelper.requireActiveDeaneryId(any(), any())).thenReturn(deaneryId);
+
+        TrainingRegistrationRequest request = new TrainingRegistrationRequest();
+        request.setLeaderIds(List.of(UUID.randomUUID()));
+
+        assertThrows(RuntimeException.class, () -> courseParticipationService.register("SMTLI-2026", request, authentication("admin-deanery", "training.participation.submit.deanery")));
+        verify(courseParticipationRepository, never()).save(any());
     }
 
     @Test
@@ -300,7 +336,7 @@ class CourseParticipationServiceTest {
                 .thenReturn(List.of(tinhThan, kyNang, chuyenCan));
         participation.setCourse(course);
         participation.setLeader(leader(UUID.randomUUID(), UUID.randomUUID(), LeaderLevel.HT_XU));
-        participation.setDioceseApprovalStatus(WorkflowApprovalStatus.APPROVED);
+        participation.setApprovalStatus(WorkflowApprovalStatus.APPROVED);
 
         when(courseParticipationRepository.findByIdWithLeaderAndCourse("cp-1")).thenReturn(Optional.of(participation));
         when(certificateRepository.findByLeaderIdAndCourseCode(any(), any())).thenReturn(Optional.empty());

@@ -33,6 +33,10 @@ public class TrainingCourse extends BaseModel {
 
     private Integer hostYear;
 
+    // Số năm tối thiểu giữa năm đạt cấp độ của khóa tiên quyết và năm tổ chức khóa này (mặc định 0).
+    @Column(name = "years_active", nullable = false)
+    private Integer yearsActive = 0;
+
     private String location;
 
     private LocalDate startDate;

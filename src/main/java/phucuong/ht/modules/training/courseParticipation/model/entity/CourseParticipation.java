@@ -55,13 +55,9 @@ public class CourseParticipation extends BaseModel {
 
     private OffsetDateTime parishSubmittedAt;
 
-    private OffsetDateTime deanerySubmittedAt;
-
+    // Trạng thái duyệt đăng ký: khóa giáo hạt do giáo hạt duyệt, khóa giáo phận do giáo phận duyệt.
     @Enumerated(EnumType.STRING)
-    private WorkflowApprovalStatus deaneryApprovalStatus;
-
-    @Enumerated(EnumType.STRING)
-    private WorkflowApprovalStatus dioceseApprovalStatus;
+    private WorkflowApprovalStatus approvalStatus;
 
     @Enumerated(EnumType.STRING)
     private WorkflowApprovalStatus certificateApprovalStatus;

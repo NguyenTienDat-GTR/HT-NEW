@@ -48,6 +48,12 @@ public class TrainingCourseAccessEvaluator {
                 || securityUtils.hasAuthority(authentication, READ_DEANERY);
     }
 
+    public boolean canListRegistrable(Authentication authentication) {
+        return securityUtils.hasAuthority(authentication, "training.participation.submit.parish")
+                || securityUtils.hasAuthority(authentication, "training.participation.submit.diocese")
+                || securityUtils.hasAuthority(authentication, "training.participation.submit.deanery");
+    }
+
     public boolean canRead(Authentication authentication, String courseCode) {
         return hasScopedAccess(authentication, courseCode, READ_DIOCESE, READ_DEANERY);
     }

@@ -10,17 +10,21 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import phucuong.ht.common.dto.apiResponse;
 import phucuong.ht.modules.training.courseParticipation.model.request.TrainingApprovalRequest;
 import phucuong.ht.modules.training.courseParticipation.model.request.TrainingRegistrationRequest;
 import phucuong.ht.modules.training.courseParticipation.model.request.TrainingScoreRequest;
-import phucuong.ht.modules.training.courseParticipation.model.request.TrainingSubmissionRecipientRequest;
 import phucuong.ht.modules.training.courseParticipation.model.response.CourseParticipationResponse;
+import phucuong.ht.modules.training.courseParticipation.model.response.RegistrationCandidateResponse;
 import phucuong.ht.modules.training.courseParticipation.model.response.TrainingRegistrationBatchResponse;
 import phucuong.ht.modules.training.courseParticipation.service.CourseParticipationService;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import org.springframework.data.domain.Page;
+
+import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/training")
@@ -41,6 +45,24 @@ public class CourseParticipationController {
         return apiResponse.success("Lấy chi tiết hồ sơ đào tạo thành công", courseParticipationService.findById(id));
     }
 
+    @GetMapping("/courses/{courseCode}/registration-candidates")
+    @PreAuthorize("@courseParticipationAccessEvaluator.canRegister(authentication, #courseCode)")
+    public apiResponse<Page<RegistrationCandidateResponse>> registrationCandidates(
+            @PathVariable String courseCode,
+            @RequestParam(defaultValue = "ELIGIBLE") String mode,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) UUID deaneryId,
+            @RequestParam(required = false) UUID parishId,
+            @RequestParam(required = false) List<UUID> excludeLeaderIds,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            Authentication authentication
+    ) {
+        boolean eligibleOnly = !"EXCEPTION".equalsIgnoreCase(mode);
+        return apiResponse.success("Lấy danh sách huynh trưởng lập danh sách đăng ký thành công",
+                courseParticipationService.findRegistrationCandidates(courseCode, eligibleOnly, search, deaneryId, parishId, excludeLeaderIds, Math.max(page, 0), Math.min(Math.max(size, 1), BaseSearchRequest.MAX_PAGE_SIZE), authentication));
+    }
+
     @PostMapping("/courses/{courseCode}/registrations")
     @PreAuthorize("@courseParticipationAccessEvaluator.canRegister(authentication, #courseCode)")
     public apiResponse<TrainingRegistrationBatchResponse> register(
@@ -49,16 +71,6 @@ public class CourseParticipationController {
             Authentication authentication
     ) {
         return apiResponse.success("Gửi danh sách đăng ký khóa huấn luyện thành công", courseParticipationService.register(courseCode, request, authentication));
-    }
-
-    @PostMapping("/courses/{courseCode}/deanery-submit")
-    @PreAuthorize("@courseParticipationAccessEvaluator.canDeanerySubmit(authentication, #courseCode)")
-    public apiResponse<TrainingRegistrationBatchResponse> deanerySubmit(
-            @PathVariable String courseCode,
-            @RequestBody(required = false) TrainingSubmissionRecipientRequest request,
-            Authentication authentication
-    ) {
-        return apiResponse.success("Tổng hợp danh sách lên giáo phận thành công", courseParticipationService.deanerySubmit(courseCode, request, authentication));
     }
 
     @PostMapping("/registrations/{id}/deanery-approval")

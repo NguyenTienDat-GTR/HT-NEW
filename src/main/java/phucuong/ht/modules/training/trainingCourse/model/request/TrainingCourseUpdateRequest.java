@@ -1,6 +1,7 @@
 package phucuong.ht.modules.training.trainingCourse.model.request;
 
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Min;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -18,6 +19,9 @@ public class TrainingCourseUpdateRequest {
     private String courseTypeCode;
 
     private Integer hostYear;
+
+    @Min(value = 0, message = "Số năm hoạt động không được âm")
+    private Integer yearsActive;
 
     private String location;
 

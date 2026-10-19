@@ -31,9 +31,9 @@ public class CourseParticipationResponse {
     private Boolean eligible;
     private String exceptionReason;
     private OffsetDateTime parishSubmittedAt;
-    private OffsetDateTime deanerySubmittedAt;
-    private WorkflowApprovalStatus deaneryApprovalStatus;
-    private WorkflowApprovalStatus dioceseApprovalStatus;
+    private WorkflowApprovalStatus approvalStatus;
+    // Cấp quản lý khóa (DEANERY/DIOCESE): quyết định endpoint duyệt phù hợp.
+    private phucuong.ht.common.enums.UnitType managementUnitType;
     private WorkflowApprovalStatus certificateApprovalStatus;
     private OffsetDateTime certificateRequestedAt;
     private OffsetDateTime certificateApprovedAt;

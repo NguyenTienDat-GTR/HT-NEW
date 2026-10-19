@@ -1,6 +1,5 @@
 package phucuong.ht.modules.training.courseParticipation.model.request;
 
-import jakarta.validation.constraints.NotEmpty;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -12,11 +11,12 @@ import java.util.UUID;
 @Setter
 public class TrainingRegistrationRequest {
 
-    @NotEmpty
+    // Danh sách đăng ký thường: chỉ gồm huynh trưởng đủ điều kiện. Có thể rỗng nếu chỉ gửi danh sách ngoại lệ.
     private List<UUID> leaderIds;
 
     // Không còn dùng: người nhận lấy từ danh sách tài khoản chọn khi tạo khóa huấn luyện.
     private List<String> recipientUsernames;
 
+    // Danh sách ngoại lệ: huynh trưởng không đủ điều kiện -> lí do. Không được trùng với leaderIds.
     private Map<UUID, String> exceptionReasonsByLeaderId;
 }

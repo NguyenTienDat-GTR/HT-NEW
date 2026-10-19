@@ -22,6 +22,7 @@ public class TrainingCourseResponse {
     private String courseTypeName;
     private UnitType managementUnitType;
     private Integer hostYear;
+    private Integer yearsActive;
     private String location;
     private LocalDate startDate;
     private LocalDate endDate;

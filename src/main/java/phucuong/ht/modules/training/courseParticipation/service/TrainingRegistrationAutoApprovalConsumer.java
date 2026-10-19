@@ -34,16 +34,7 @@ public class TrainingRegistrationAutoApprovalConsumer {
         if (message == null || message.getPayload() == null) {
             return;
         }
-        if (!"training.registration.batch_submitted".equals(message.getEventType())
-                && !"training.registration.deanery_batch_submitted".equals(message.getEventType())) {
-            return;
-        }
-
-        boolean deaneryManaged = Boolean.parseBoolean(String.valueOf(message.getPayload().get("deaneryManaged")));
-        boolean shouldProcess = "training.registration.batch_submitted".equals(message.getEventType())
-                ? deaneryManaged
-                : !deaneryManaged;
-        if (!shouldProcess) {
+        if (!"training.registration.batch_submitted".equals(message.getEventType())) {
             return;
         }
 
@@ -58,28 +49,18 @@ public class TrainingRegistrationAutoApprovalConsumer {
             if (!Boolean.TRUE.equals(participation.getEligible())) {
                 continue;
             }
-            if ("training.registration.batch_submitted".equals(message.getEventType())) {
-                if (participation.getDeaneryApprovalStatus() == WorkflowApprovalStatus.APPROVED
-                        || participation.getDeaneryApprovalStatus() == WorkflowApprovalStatus.REJECTED) {
-                    continue;
-                }
-                participation.setDeaneryApprovalStatus(WorkflowApprovalStatus.APPROVED);
-            } else {
-                if (participation.getDioceseApprovalStatus() == WorkflowApprovalStatus.APPROVED
-                        || participation.getDioceseApprovalStatus() == WorkflowApprovalStatus.REJECTED) {
-                    continue;
-                }
-                participation.setDioceseApprovalStatus(WorkflowApprovalStatus.APPROVED);
+            if (participation.getApprovalStatus() == WorkflowApprovalStatus.APPROVED
+                    || participation.getApprovalStatus() == WorkflowApprovalStatus.REJECTED) {
+                continue;
             }
+            participation.setApprovalStatus(WorkflowApprovalStatus.APPROVED);
             participation.setApprovedBy(CourseParticipationService.autoApprovalActor());
             participation.setUpdatedBy(CourseParticipationService.autoApprovalActor());
             approvedCount++;
         }
 
         int pendingCount = (int) participations.stream()
-                .filter(participation -> "training.registration.batch_submitted".equals(message.getEventType())
-                        ? participation.getDeaneryApprovalStatus() == WorkflowApprovalStatus.PENDING
-                        : participation.getDioceseApprovalStatus() == WorkflowApprovalStatus.PENDING)
+                .filter(participation -> participation.getApprovalStatus() == WorkflowApprovalStatus.PENDING)
                 .count();
 
         UnitType recipientScopeType = UnitType.valueOf(String.valueOf(message.getPayload().get("recipientScopeType")));

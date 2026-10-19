@@ -88,6 +88,7 @@ public class TrainingCourseService {
         course.setCourseType(courseType);
         course.setCourseName(request.getCourseName());
         course.setHostYear(request.getHostYear());
+        course.setYearsActive(request.getYearsActive() == null ? 0 : request.getYearsActive());
         course.setLocation(request.getLocation());
         course.setStartDate(request.getStartDate());
         course.setEndDate(request.getEndDate());
@@ -130,6 +131,33 @@ public class TrainingCourseService {
         return new PageImpl<>(content, page.getPageable(), page.getTotalElements());
     }
 
+    // Khóa đang mở đăng ký trong phạm vi tài khoản (kể cả tài khoản giáo xứ, không cần quyền xem danh sách khóa).
+    @Transactional(readOnly = true)
+    public List<TrainingCourseResponse> findRegistrable(Authentication authentication) {
+        String username = securityUtils.currentUsername(authentication);
+        if (username == null || username.isBlank()) {
+            throw commonValidationHelper.forbidden("Không xác định được tài khoản hiện tại");
+        }
+        UnitType sender = trainingWorkflowSupport.resolveRegistrationSender(
+                hasAuthority(authentication, "training.participation.submit.parish"),
+                hasAuthority(authentication, "training.participation.submit.diocese"),
+                hasAuthority(authentication, "training.participation.submit.deanery"),
+                accountScopeValidationHelper.hasDirectDiocese(authentication),
+                accountScopeValidationHelper.hasDirectDeanery(authentication));
+        if (sender == null) {
+            throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền gửi đăng ký khóa huấn luyện");
+        }
+        // Giáo xứ: khóa giáo phận của giáo phận mình + khóa giáo hạt của giáo hạt mình; giáo phận/giáo hạt: chỉ khóa của đơn vị mình.
+        UUID dioceseId = sender == UnitType.DEANERY ? null : accountRepository.findActiveDioceseIdByUsername(username).orElse(null);
+        UUID deaneryId = sender == UnitType.DIOCESE ? null : accountRepository.findActiveDeaneryIdByUsername(username).orElse(null);
+        if (dioceseId == null && deaneryId == null) {
+            throw commonValidationHelper.forbidden("Tài khoản hiện tại không có phạm vi hợp lệ để đăng ký khóa huấn luyện");
+        }
+        return trainingCourseRepository.findOpenForRegistration(dioceseId, deaneryId).stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
     @Cacheable(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, key = "@cacheScopeKeyHelper.detailKey(#authentication, #courseCode)")
     @Transactional(readOnly = true)
     public TrainingCourseResponse findById(String courseCode, Authentication authentication) {
@@ -166,6 +194,9 @@ public class TrainingCourseService {
         }
         if (request.getHostYear() != null) {
             existing.setHostYear(request.getHostYear());
+        }
+        if (request.getYearsActive() != null) {
+            existing.setYearsActive(request.getYearsActive());
         }
         if (request.getLocation() != null) {
             existing.setLocation(request.getLocation());
@@ -541,6 +572,7 @@ public class TrainingCourseService {
                 .courseTypeName(courseType == null ? null : courseType.getTypeName())
                 .managementUnitType(courseType == null ? null : courseType.getManagementUnitType())
                 .hostYear(course.getHostYear())
+                .yearsActive(course.getYearsActive() == null ? 0 : course.getYearsActive())
                 .location(course.getLocation())
                 .startDate(course.getStartDate())
                 .endDate(course.getEndDate())

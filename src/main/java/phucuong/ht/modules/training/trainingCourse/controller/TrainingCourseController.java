@@ -36,6 +36,12 @@ public class TrainingCourseController {
         return apiResponse.success("Lấy danh sách khóa huấn luyện thành công", trainingCourseService.findAll(request, authentication));
     }
 
+    @GetMapping("/registrable")
+    @PreAuthorize("@trainingCourseAccessEvaluator.canListRegistrable(authentication)")
+    public apiResponse<java.util.List<TrainingCourseResponse>> findRegistrable(Authentication authentication) {
+        return apiResponse.success("Lấy danh sách khóa đang mở đăng ký thành công", trainingCourseService.findRegistrable(authentication));
+    }
+
     @GetMapping("/recipient-candidates")
     @PreAuthorize("@trainingCourseAccessEvaluator.canCreate(authentication, #courseTypeCode)")
     public apiResponse<java.util.List<CourseRecipientCandidateResponse>> recipientCandidates(@RequestParam String courseTypeCode, Authentication authentication) {
