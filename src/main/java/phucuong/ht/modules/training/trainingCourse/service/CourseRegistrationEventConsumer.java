@@ -21,7 +21,8 @@ import java.util.Set;
 import java.util.UUID;
 
 // Theo mô hình event-driven: khi khóa mở/đóng đăng ký, thông báo cho các tài khoản có quyền gửi hoặc duyệt
-// danh sách đăng ký trong phạm vi khóa. Thông báo chỉ được lưu (đọc qua REST), không đẩy qua socket.
+// danh sách đăng ký trong phạm vi khóa. Thông báo được lưu DB rồi đẩy realtime qua STOMP tới các tài khoản đang online
+// ngay khi có sự kiện từ RabbitMQ (không thăm dò); tài khoản offline đọc lại qua REST khi đăng nhập.
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -60,7 +61,7 @@ public class CourseRegistrationEventConsumer {
         String courseCode = String.valueOf(payload.get("courseCode"));
         String courseName = String.valueOf(payload.get("courseName"));
         boolean auto = "AUTO".equals(String.valueOf(payload.get("reason")));
-        trainingNotificationService.storeForUsers(recipients, TrainingNotificationCommand.builder()
+        trainingNotificationService.notifyUsers(recipients, TrainingNotificationCommand.builder()
                 .eventType(message.getEventType())
                 .title(opened ? "Khóa huấn luyện đã mở đăng ký" : "Khóa huấn luyện đã đóng đăng ký")
                 .message(buildMessage(courseName, opened, auto, message.getActor()))

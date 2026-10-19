@@ -32,7 +32,7 @@ class CourseRegistrationEventConsumerTest {
     @Mock private TrainingNotificationService trainingNotificationService;
 
     @Test
-    void notifiesOnlyScopedSubmittersAndApproversWithoutSocketPush() {
+    void notifiesOnlyScopedSubmittersAndApproversThroughRealtimeNotifier() {
         UUID deaneryId = UUID.randomUUID();
         when(authPermissionQueryRepository.findUsernamesByPermissionCode(anyString())).thenReturn(List.of());
         when(authPermissionQueryRepository.findUsernamesByPermissionCode("training.participation.submit.parish")).thenReturn(List.of("parish-in", "parish-out"));
@@ -54,8 +54,7 @@ class CourseRegistrationEventConsumerTest {
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<String>> recipients = ArgumentCaptor.forClass(List.class);
         ArgumentCaptor<TrainingNotificationCommand> command = ArgumentCaptor.forClass(TrainingNotificationCommand.class);
-        verify(trainingNotificationService).storeForUsers(recipients.capture(), command.capture());
-        verify(trainingNotificationService, never()).notifyUsers(any(), any());
+        verify(trainingNotificationService).notifyUsers(recipients.capture(), command.capture());
         assertEquals(List.of("parish-in", "deanery-in"), recipients.getValue());
         assertEquals("C1", command.getValue().courseCode());
         assertEquals(TrainingCourseService.EVENT_REGISTRATION_CLOSED, command.getValue().eventType());
@@ -65,6 +64,5 @@ class CourseRegistrationEventConsumerTest {
     void ignoresUnrelatedEvents() {
         DomainEventMessage message = DomainEventMessage.builder().eventType("training.score.updated").payload(Map.of()).build();
         new CourseRegistrationEventConsumer(authPermissionQueryRepository, accountRepository, trainingNotificationService).handle(message);
-        verify(trainingNotificationService, never()).storeForUsers(any(), any());
     }
 }
