@@ -3,7 +3,6 @@ package phucuong.ht.modules.training.courseParticipation.model.response;
 import lombok.Builder;
 import lombok.Getter;
 import phucuong.ht.modules.training.enums.CourseResult;
-import phucuong.ht.modules.training.enums.CourseType;
 import phucuong.ht.modules.training.enums.ParticipationStatus;
 import phucuong.ht.modules.training.enums.WorkflowApprovalStatus;
 
@@ -21,7 +20,7 @@ public class CourseParticipationResponse {
     private String leaderFullName;
     private String courseCode;
     private String courseName;
-    private CourseType courseType;
+    private String courseTypeCode;
     private String scoreFormulaId;
     private LocalDate registrationDate;
     private ParticipationStatus participationStatus;

@@ -5,7 +5,6 @@ import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Repository;
 import phucuong.ht.common.repository.BaseRepo;
 import phucuong.ht.modules.training.courseParticipation.model.entity.CourseParticipation;
-import phucuong.ht.modules.training.enums.CourseType;
 
 import java.util.List;
 import java.util.Optional;
@@ -35,7 +34,8 @@ public class CourseParticipationRepository extends BaseRepo<CourseParticipation,
                                 join fetch p.deanery de
                                 join fetch de.diocese d
                                 join fetch cp.course c
-                                left join fetch c.requirement
+                                left join fetch c.courseType courseType
+                                left join fetch courseType.prerequisiteType
                                 left join fetch c.deanery
                                 left join fetch c.diocese
                                 left join fetch c.scoreFormula scoreFormula
@@ -53,19 +53,19 @@ public class CourseParticipationRepository extends BaseRepo<CourseParticipation,
         return results.stream().findFirst();
     }
 
-    public boolean existsApprovedParticipationByLeaderAndCourseType(UUID leaderId, CourseType courseType) {
+    public boolean existsApprovedParticipationByLeaderAndCourseType(UUID leaderId, String prerequisiteTypeCode) {
         Long count = entityManager.createQuery(
                         """
                                 select count(cp)
                                 from CourseParticipation cp
                                 where cp.leader.id = :leaderId
-                                  and cp.course.courseType = :courseType
+                                  and cp.course.courseType.typeCode = :typeCode
                                   and cp.result = phucuong.ht.modules.training.enums.CourseResult.COMPLETED
                                 """,
                         Long.class
                 )
                 .setParameter("leaderId", leaderId)
-                .setParameter("courseType", courseType)
+                .setParameter("typeCode", prerequisiteTypeCode)
                 .getSingleResult();
         return count != null && count > 0;
     }
@@ -103,7 +103,8 @@ public class CourseParticipationRepository extends BaseRepo<CourseParticipation,
                                 join fetch l.parish p
                                 join fetch p.deanery de
                                 join fetch de.diocese d
-                                left join fetch c.requirement
+                                left join fetch c.courseType courseType
+                                left join fetch courseType.prerequisiteType
                                 left join fetch c.scoreFormula
                                 left join fetch cp.componentScores participationScores
                                 left join fetch participationScores.component

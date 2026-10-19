@@ -34,8 +34,8 @@ import phucuong.ht.modules.training.courseParticipation.model.request.TrainingRe
 import phucuong.ht.modules.training.courseParticipation.model.request.TrainingScoreRequest;
 import phucuong.ht.modules.training.courseParticipation.repository.CourseParticipationRepository;
 import phucuong.ht.modules.training.courseParticipation.security.CourseParticipationAccessEvaluator;
-import phucuong.ht.modules.training.courseRequirement.model.entity.CourseRequirement;
-import phucuong.ht.modules.training.enums.CourseType;
+import phucuong.ht.common.enums.UnitType;
+import phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType;
 import phucuong.ht.modules.training.enums.WorkflowApprovalStatus;
 import phucuong.ht.modules.training.scoreComponentTemplate.model.entity.ScoreComponentTemplate;
 import phucuong.ht.modules.training.scoreFormulaTemplate.model.entity.ScoreFormulaComponent;
@@ -120,15 +120,12 @@ class CourseParticipationServiceTest {
 
         UUID parishId = UUID.randomUUID();
         UUID leaderId = UUID.randomUUID();
-        TrainingCourse course = course(CourseType.SMKN_DT);
+        TrainingCourse course = course("SMKN_DT", UnitType.DEANERY);
         Leader leader = leader(leaderId, parishId, LeaderLevel.HT_XU);
-        CourseRequirement requirement = new CourseRequirement();
-        requirement.setRequiredCurrentLevel(LeaderLevel.DU_TRUONG);
-        requirement.setStatus(Boolean.TRUE);
-        course.setRequirement(requirement);
+        course.getCourseType().setRequiredCurrentLevel(LeaderLevel.DU_TRUONG);
 
         Parish parish = parish(parishId, course);
-        when(trainingCourseRepository.findByCodeWithRequirement("SMKNDT-2026")).thenReturn(Optional.of(course));
+        when(trainingCourseRepository.findByCodeWithType("SMKNDT-2026")).thenReturn(Optional.of(course));
         when(leaderRepository.findByIdWithParish(leaderId)).thenReturn(Optional.of(leader));
         when(parishRepository.findByIdWithDeaneryAndDiocese(parishId)).thenReturn(Optional.of(parish));
         when(accountScopeValidationHelper.requireActiveParishId(any(), any())).thenReturn(parishId);
@@ -144,11 +141,11 @@ class CourseParticipationServiceTest {
     void registerShouldRejectWhenRegistrationWindowNotOpen() {
         courseParticipationService = buildService();
 
-        TrainingCourse course = course(CourseType.SMKN_DT);
+        TrainingCourse course = course("SMKN_DT", UnitType.DEANERY);
         course.setRegistrationStartAt(OffsetDateTime.now().plusDays(1));
         course.setRegistrationEndAt(OffsetDateTime.now().plusDays(2));
 
-        when(trainingCourseRepository.findByCodeWithRequirement("SMKNDT-2026")).thenReturn(Optional.of(course));
+        when(trainingCourseRepository.findByCodeWithType("SMKNDT-2026")).thenReturn(Optional.of(course));
 
         TrainingRegistrationRequest request = new TrainingRegistrationRequest();
         request.setLeaderIds(List.of(UUID.randomUUID()));
@@ -163,15 +160,12 @@ class CourseParticipationServiceTest {
 
         UUID parishId = UUID.randomUUID();
         UUID leaderId = UUID.randomUUID();
-        TrainingCourse course = course(CourseType.SMTL_I);
-        CourseRequirement requirement = new CourseRequirement();
-        requirement.setRequiredMinAge(18);
-        requirement.setStatus(Boolean.TRUE);
-        course.setRequirement(requirement);
+        TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);
+        course.getCourseType().setRequiredMinAge(18);
         Leader leader = leader(leaderId, parishId, LeaderLevel.HT_XU);
         leader.setBirthDate(null);
 
-        when(trainingCourseRepository.findByCodeWithRequirement("SMTLI-2026")).thenReturn(Optional.of(course));
+        when(trainingCourseRepository.findByCodeWithType("SMTLI-2026")).thenReturn(Optional.of(course));
         when(leaderRepository.findByIdWithParish(leaderId)).thenReturn(Optional.of(leader));
         when(parishRepository.findByIdWithDeaneryAndDiocese(parishId)).thenReturn(Optional.of(parish(parishId, course)));
         when(accountScopeValidationHelper.requireActiveParishId(any(), any())).thenReturn(parishId);
@@ -190,11 +184,11 @@ class CourseParticipationServiceTest {
 
         UUID parishId = UUID.randomUUID();
         UUID leaderId = UUID.randomUUID();
-        TrainingCourse course = course(CourseType.SMTL_I);
+        TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);
         Leader leader = leader(leaderId, parishId, LeaderLevel.HT_XU);
         leader.setStatus(Boolean.FALSE);
 
-        when(trainingCourseRepository.findByCodeWithRequirement("SMTLI-2026")).thenReturn(Optional.of(course));
+        when(trainingCourseRepository.findByCodeWithType("SMTLI-2026")).thenReturn(Optional.of(course));
         when(leaderRepository.findByIdWithParish(leaderId)).thenReturn(Optional.of(leader));
         when(parishRepository.findByIdWithDeaneryAndDiocese(parishId)).thenReturn(Optional.of(parish(parishId, course)));
         when(accountScopeValidationHelper.requireActiveParishId(any(), any())).thenReturn(parishId);
@@ -212,14 +206,14 @@ class CourseParticipationServiceTest {
         courseParticipationService = buildService();
 
         UUID parishId = UUID.randomUUID();
-        TrainingCourse course = course(CourseType.SMKN_DT);
+        TrainingCourse course = course("SMKN_DT", UnitType.DEANERY);
         Parish foreignParish = parish(parishId, course);
         Deanery foreignDeanery = new Deanery();
         foreignDeanery.setId(UUID.randomUUID());
         foreignDeanery.setDiocese(course.getDiocese());
         foreignParish.setDeanery(foreignDeanery);
 
-        when(trainingCourseRepository.findByCodeWithRequirement("SMKNDT-2026")).thenReturn(Optional.of(course));
+        when(trainingCourseRepository.findByCodeWithType("SMKNDT-2026")).thenReturn(Optional.of(course));
         when(accountScopeValidationHelper.requireActiveParishId(any(), any())).thenReturn(parishId);
         when(parishRepository.findByIdWithDeaneryAndDiocese(parishId)).thenReturn(Optional.of(foreignParish));
 
@@ -236,7 +230,7 @@ class CourseParticipationServiceTest {
         courseParticipationService = buildService();
 
         UUID parishId = UUID.randomUUID();
-        TrainingCourse course = course(CourseType.SMTL_I);
+        TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);
         Parish foreignParish = parish(parishId, course);
         Diocese foreignDiocese = new Diocese();
         foreignDiocese.setId(UUID.randomUUID());
@@ -245,7 +239,7 @@ class CourseParticipationServiceTest {
         foreignDeanery.setDiocese(foreignDiocese);
         foreignParish.setDeanery(foreignDeanery);
 
-        when(trainingCourseRepository.findByCodeWithRequirement("SMTLI-2026")).thenReturn(Optional.of(course));
+        when(trainingCourseRepository.findByCodeWithType("SMTLI-2026")).thenReturn(Optional.of(course));
         when(accountScopeValidationHelper.requireActiveParishId(any(), any())).thenReturn(parishId);
         when(parishRepository.findByIdWithDeaneryAndDiocese(parishId)).thenReturn(Optional.of(foreignParish));
 
@@ -263,11 +257,11 @@ class CourseParticipationServiceTest {
 
         UUID parishId = UUID.randomUUID();
         UUID leaderId = UUID.randomUUID();
-        TrainingCourse course = course(CourseType.SMTL_I);
+        TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);
         Leader leader = leader(leaderId, parishId, LeaderLevel.HT_XU);
         Parish parish = parish(parishId, course);
 
-        when(trainingCourseRepository.findByCodeWithRequirement("SMTLI-2026")).thenReturn(Optional.of(course));
+        when(trainingCourseRepository.findByCodeWithType("SMTLI-2026")).thenReturn(Optional.of(course));
         when(leaderRepository.findByIdWithParish(leaderId)).thenReturn(Optional.of(leader));
         when(parishRepository.findByIdWithDeaneryAndDiocese(parishId)).thenReturn(Optional.of(parish));
         when(accountScopeValidationHelper.requireActiveParishId(any(), any())).thenReturn(parishId);
@@ -291,7 +285,7 @@ class CourseParticipationServiceTest {
 
         CourseParticipation participation = new CourseParticipation();
         participation.setId("cp-1");
-        TrainingCourse course = course(CourseType.SMKN_I);
+        TrainingCourse course = course("SMKN_I", UnitType.DIOCESE);
         course.setCourseName("SMKN I");
         course.setHostYear(2026);
         Diocese diocese = new Diocese();
@@ -374,10 +368,15 @@ class CourseParticipationServiceTest {
         return new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
     }
 
-    private TrainingCourse course(CourseType courseType) {
+    private TrainingCourse course(String typeCode, UnitType managementUnitType) {
+        TrainingCourseType type = new TrainingCourseType();
+        type.setTypeCode(typeCode);
+        type.setTypeName(typeCode);
+        type.setManagementUnitType(managementUnitType);
+        type.setStatus(Boolean.TRUE);
         TrainingCourse course = new TrainingCourse();
         course.setCourseCode("COURSE");
-        course.setCourseType(courseType);
+        course.setCourseType(type);
         Diocese diocese = new Diocese();
         diocese.setId(UUID.randomUUID());
         diocese.setName("Diocese A");

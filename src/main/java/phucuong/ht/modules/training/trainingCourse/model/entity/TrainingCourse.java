@@ -5,8 +5,7 @@ import lombok.*;
 import phucuong.ht.common.model.BaseModel;
 import phucuong.ht.modules.deanery.model.entity.Deanery;
 import phucuong.ht.modules.diocese.model.entity.Diocese;
-import phucuong.ht.modules.training.courseRequirement.model.entity.CourseRequirement;
-import phucuong.ht.modules.training.enums.CourseType;
+import phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType;
 import phucuong.ht.modules.training.scoreFormulaTemplate.model.entity.ScoreFormulaTemplate;
 
 import java.time.LocalDate;
@@ -26,10 +25,6 @@ public class TrainingCourse extends BaseModel {
     @Column(name = "course_code")
     private String courseCode;
 
-    @ManyToOne
-    @JoinColumn(name = "requirement_code")
-    private CourseRequirement requirement;
-
     private String courseName;
 
     private Integer hostYear;
@@ -44,8 +39,10 @@ public class TrainingCourse extends BaseModel {
 
     private OffsetDateTime registrationEndAt;
 
-    @Enumerated(EnumType.STRING)
-    private CourseType courseType;
+    // Loại khóa (catalog quản lý được), đã bao gồm điều kiện tham dự.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "course_type_code", nullable = false)
+    private TrainingCourseType courseType;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "diocese_id")

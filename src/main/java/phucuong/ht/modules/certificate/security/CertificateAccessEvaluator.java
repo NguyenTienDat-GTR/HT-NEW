@@ -22,7 +22,7 @@ public class CertificateAccessEvaluator {
     private final TrainingWorkflowSupport trainingWorkflowSupport;
 
     public boolean canCreate(Authentication authentication, String courseCode) {
-        return trainingCourseRepository.findByCodeWithRequirement(courseCode)
+        return trainingCourseRepository.findByCodeWithType(courseCode)
                 .map(course -> trainingWorkflowSupport.isDeaneryManaged(course.getCourseType())
                         ? securityUtils.hasAuthority(authentication, "training.certificate.create.deanery") && scopedDeanery(authentication, courseCode)
                         : securityUtils.hasAuthority(authentication, "training.certificate.create.diocese") && scopedDiocese(authentication, courseCode))

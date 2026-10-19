@@ -28,7 +28,8 @@ import phucuong.ht.modules.training.TrainingWorkflowSupport;
 import phucuong.ht.modules.training.courseParticipation.model.entity.CourseParticipation;
 import phucuong.ht.modules.training.courseParticipation.repository.CourseParticipationRepository;
 import phucuong.ht.modules.training.enums.CourseResult;
-import phucuong.ht.modules.training.enums.CourseType;
+import phucuong.ht.common.enums.UnitType;
+import phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType;
 import phucuong.ht.modules.training.enums.WorkflowApprovalStatus;
 import phucuong.ht.modules.training.scoreFormulaTemplate.model.entity.ScoreFormulaTemplate;
 import phucuong.ht.modules.training.trainingCourse.model.entity.TrainingCourse;
@@ -85,7 +86,7 @@ class CertificateServiceTest {
 
         TrainingCourse course = new TrainingCourse();
         course.setCourseCode("SMKNI");
-        course.setCourseType(CourseType.SMKN_I);
+        course.setCourseType(courseType("SMKN_I", UnitType.DIOCESE, LeaderLevel.HT_I));
         ScoreFormulaTemplate formula = new ScoreFormulaTemplate();
         formula.setPassingScore(BigDecimal.valueOf(5));
         course.setScoreFormula(formula);
@@ -133,7 +134,7 @@ class CertificateServiceTest {
 
         when(certificateRepository.findByCodeWithLeaderAndCourse("CERT-1")).thenReturn(Optional.of(certificate));
         when(leaderRepository.findByIdWithParish(targetLeader.getId())).thenReturn(Optional.of(targetLeader));
-        when(trainingCourseRepository.findByCodeWithRequirement("TARGET")).thenReturn(Optional.of(targetCourse));
+        when(trainingCourseRepository.findByCodeWithType("TARGET")).thenReturn(Optional.of(targetCourse));
         when(accountScopeValidationHelper.requireActiveDeaneryId(authentication, "training.certificate.update.deanery"))
                 .thenReturn(sourceDeaneryId);
 
@@ -162,7 +163,7 @@ class CertificateServiceTest {
 
         when(certificateRepository.findByCodeWithLeaderAndCourse("CERT-1")).thenReturn(Optional.of(certificate));
         when(leaderRepository.findByIdWithParish(targetLeader.getId())).thenReturn(Optional.of(targetLeader));
-        when(trainingCourseRepository.findByCodeWithRequirement("TARGET")).thenReturn(Optional.of(targetCourse));
+        when(trainingCourseRepository.findByCodeWithType("TARGET")).thenReturn(Optional.of(targetCourse));
         when(accountScopeValidationHelper.requireActiveDioceseId(authentication, "training.certificate.update.diocese"))
                 .thenReturn(sourceDioceseId);
 
@@ -189,7 +190,7 @@ class CertificateServiceTest {
 
         when(certificateRepository.findByCodeWithLeaderAndCourse("CERT-1")).thenReturn(Optional.of(certificate));
         when(leaderRepository.findByIdWithParish(targetLeader.getId())).thenReturn(Optional.of(targetLeader));
-        when(trainingCourseRepository.findByCodeWithRequirement("TARGET")).thenReturn(Optional.of(targetCourse));
+        when(trainingCourseRepository.findByCodeWithType("TARGET")).thenReturn(Optional.of(targetCourse));
         when(accountScopeValidationHelper.requireActiveDeaneryId(authentication, "training.certificate.update.deanery"))
                 .thenReturn(deaneryId);
 
@@ -215,6 +216,17 @@ class CertificateServiceTest {
         );
     }
 
+    private TrainingCourseType courseType(String code, UnitType managementUnitType, LeaderLevel resultingLevel) {
+        TrainingCourseType type = new TrainingCourseType();
+        type.setTypeCode(code);
+        type.setTypeName(code);
+        type.setManagementUnitType(managementUnitType);
+        type.setResultingLevel(resultingLevel);
+        type.setCertificateShortCode(code);
+        type.setStatus(Boolean.TRUE);
+        return type;
+    }
+
     private Certificate certificateInCourse(String certificateCode, TrainingCourse course, Leader leader) {
         Certificate certificate = new Certificate();
         certificate.setCertificateCode(certificateCode);
@@ -231,7 +243,7 @@ class CertificateServiceTest {
         deanery.setDiocese(diocese);
         TrainingCourse course = new TrainingCourse();
         course.setCourseCode(courseCode);
-        course.setCourseType(CourseType.SMTL_DT);
+        course.setCourseType(courseType("SMTL_DT", UnitType.DEANERY, null));
         course.setDeanery(deanery);
         return course;
     }
@@ -241,7 +253,7 @@ class CertificateServiceTest {
         diocese.setId(dioceseId);
         TrainingCourse course = new TrainingCourse();
         course.setCourseCode(courseCode);
-        course.setCourseType(CourseType.SMKN_I);
+        course.setCourseType(courseType("SMKN_I", UnitType.DIOCESE, LeaderLevel.HT_I));
         course.setDiocese(diocese);
         return course;
     }

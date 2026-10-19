@@ -1,58 +1,35 @@
 package phucuong.ht.modules.training;
 
 import org.springframework.stereotype.Component;
+import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.modules.leader.model.enums.LeaderLevel;
-import phucuong.ht.modules.training.enums.CourseType;
+import phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType;
 
-import java.util.EnumSet;
 import java.util.Optional;
 
 @Component
 public class TrainingWorkflowSupport {
 
-    private static final EnumSet<CourseType> DT_COURSE_TYPES = EnumSet.of(CourseType.SMTL_DT, CourseType.SMKN_DT);
-
-    public boolean isDeaneryManaged(CourseType courseType) {
-        return courseType != null && DT_COURSE_TYPES.contains(courseType);
+    // Khóa do giáo hạt quản lý (trước đây là khóa DT: SMTL_DT, SMKN_DT).
+    public boolean isDeaneryManaged(TrainingCourseType courseType) {
+        return courseType != null && courseType.getManagementUnitType() == UnitType.DEANERY;
     }
 
-    public Optional<CourseType> prerequisiteOf(CourseType courseType) {
+    public Optional<TrainingCourseType> prerequisiteOf(TrainingCourseType courseType) {
         if (courseType == null) {
             return Optional.empty();
         }
-
-        return switch (courseType) {
-            case SMKN_DT -> Optional.of(CourseType.SMTL_DT);
-            case SMKN_I -> Optional.of(CourseType.SMTL_I);
-            case TSM_II -> Optional.of(CourseType.SMKN_I);
-            case SMTL_II -> Optional.of(CourseType.TSM_II);
-            case SMKN_II -> Optional.of(CourseType.SMTL_II);
-            case TSM_III_1 -> Optional.of(CourseType.SMKN_II);
-            case TSM_III_2 -> Optional.of(CourseType.TSM_III_1);
-            case SMTL_III -> Optional.of(CourseType.TSM_III_2);
-            case SMKN_III -> Optional.of(CourseType.SMTL_III);
-            default -> Optional.empty();
-        };
+        return Optional.ofNullable(courseType.getPrerequisiteType());
     }
 
-    public Optional<LeaderLevel> certificateLevelFor(CourseType courseType) {
+    public Optional<LeaderLevel> certificateLevelFor(TrainingCourseType courseType) {
         if (courseType == null) {
             return Optional.empty();
         }
-
-        return switch (courseType) {
-            case SMKN_DT -> Optional.of(LeaderLevel.DU_TRUONG);
-            case SMKN_I -> Optional.of(LeaderLevel.HT_I);
-            case SMKN_II -> Optional.of(LeaderLevel.HT_II);
-            case SMKN_III -> Optional.of(LeaderLevel.HT_III);
-            case HLV_I -> Optional.of(LeaderLevel.HLV_I);
-            case HLV_II -> Optional.of(LeaderLevel.HLV_II);
-            case HLV_III -> Optional.of(LeaderLevel.HLV_III);
-            default -> Optional.empty();
-        };
+        return Optional.ofNullable(courseType.getResultingLevel());
     }
 
-    public boolean needsAutomaticEligibilityApproval(CourseType courseType) {
+    public boolean needsAutomaticEligibilityApproval(TrainingCourseType courseType) {
         return courseType != null;
     }
 
@@ -60,11 +37,11 @@ public class TrainingWorkflowSupport {
         return targetLevel != null && (currentLevel == null || targetLevel.ordinal() > currentLevel.ordinal());
     }
 
-    public boolean shouldAutoApproveAfterParishSubmission(CourseType courseType) {
+    public boolean shouldAutoApproveAfterParishSubmission(TrainingCourseType courseType) {
         return isDeaneryManaged(courseType);
     }
 
-    public boolean shouldAutoApproveAfterDeanerySubmission(CourseType courseType) {
+    public boolean shouldAutoApproveAfterDeanerySubmission(TrainingCourseType courseType) {
         return courseType != null && !isDeaneryManaged(courseType);
     }
 }

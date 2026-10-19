@@ -1,29 +1,34 @@
-package phucuong.ht.modules.training.courseRequirement.model.request;
+package phucuong.ht.modules.training.courseType.model.request;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
+import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.modules.leader.model.enums.LeaderLevel;
-import phucuong.ht.modules.training.enums.CourseType;
 
 @Getter
 @Setter
-public class CourseRequirementCreateRequest {
+public class TrainingCourseTypeCreateRequest {
 
     @NotBlank
-    private String requirementCode;
+    private String typeCode;
 
     @NotBlank
-    private String requirementName;
+    private String typeName;
 
     @NotNull
-    private CourseType courseType;
+    private UnitType managementUnitType;
 
-    @NotNull
     private LeaderLevel requiredCurrentLevel;
 
     private Integer requiredMinAge;
 
     private Integer requiredYearsActive;
+
+    private String prerequisiteTypeCode;
+
+    private LeaderLevel resultingLevel;
+
+    private String certificateShortCode;
 }

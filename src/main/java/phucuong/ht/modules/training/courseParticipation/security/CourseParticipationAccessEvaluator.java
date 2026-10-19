@@ -41,7 +41,7 @@ public class CourseParticipationAccessEvaluator {
                 || accountRepository.findActiveParishIdByUsername(username).isEmpty()) {
             return false;
         }
-        return trainingCourseRepository.findByCodeWithRequirement(courseCode)
+        return trainingCourseRepository.findByCodeWithType(courseCode)
                 .map(course -> trainingWorkflowSupport.isDeaneryManaged(course.getCourseType())
                         ? scopedDeanery(authentication, courseCode)
                         : scopedDiocese(authentication, courseCode))
@@ -50,7 +50,7 @@ public class CourseParticipationAccessEvaluator {
 
     public boolean canDeanerySubmit(Authentication authentication, String courseCode) {
         return securityUtils.hasAuthority(authentication, SUBMIT_DEANERY)
-                && trainingCourseRepository.findByCodeWithRequirement(courseCode)
+                && trainingCourseRepository.findByCodeWithType(courseCode)
                 .map(course -> trainingWorkflowSupport.isDeaneryManaged(course.getCourseType())
                         ? false : directDeaneryInCourseDiocese(authentication, courseCode))
                 .orElse(false);

@@ -3,15 +3,11 @@ package phucuong.ht.modules.training.trainingCourse.security;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
-import phucuong.ht.common.validation.AccountScopeValidationHelper;
-import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.modules.auth.repository.AccountRepository;
 import phucuong.ht.modules.training.TrainingWorkflowSupport;
-import phucuong.ht.modules.training.enums.CourseType;
+import phucuong.ht.modules.training.courseType.repository.TrainingCourseTypeRepository;
 import phucuong.ht.modules.training.trainingCourse.repository.TrainingCourseRepository;
-
-import java.util.UUID;
 
 @Component("trainingCourseAccessEvaluator")
 @RequiredArgsConstructor
@@ -29,12 +25,22 @@ public class TrainingCourseAccessEvaluator {
     private final securityUtils securityUtils;
     private final AccountRepository accountRepository;
     private final TrainingCourseRepository trainingCourseRepository;
+    private final TrainingCourseTypeRepository trainingCourseTypeRepository;
     private final TrainingWorkflowSupport trainingWorkflowSupport;
 
-    public boolean canCreate(Authentication authentication, CourseType courseType) {
-        return trainingWorkflowSupport.isDeaneryManaged(courseType)
-                ? securityUtils.hasAuthority(authentication, CREATE_DEANERY)
-                : securityUtils.hasAuthority(authentication, CREATE_DIOCESE);
+    public boolean canCreate(Authentication authentication, String courseTypeCode) {
+        if (courseTypeCode == null || courseTypeCode.isBlank()) {
+            // Để service trả lỗi validation rõ ràng thay vì 403.
+            return securityUtils.hasAuthority(authentication, CREATE_DIOCESE)
+                    || securityUtils.hasAuthority(authentication, CREATE_DEANERY);
+        }
+        return trainingCourseTypeRepository.findByCodeWithPrerequisite(courseTypeCode.trim())
+                .map(courseType -> trainingWorkflowSupport.isDeaneryManaged(courseType)
+                        ? securityUtils.hasAuthority(authentication, CREATE_DEANERY)
+                        : securityUtils.hasAuthority(authentication, CREATE_DIOCESE))
+                // Loại khóa không tồn tại: cho qua để service trả 404 nếu người dùng có quyền tạo.
+                .orElseGet(() -> securityUtils.hasAuthority(authentication, CREATE_DIOCESE)
+                        || securityUtils.hasAuthority(authentication, CREATE_DEANERY));
     }
 
     public boolean canList(Authentication authentication) {
@@ -59,7 +65,7 @@ public class TrainingCourseAccessEvaluator {
             return false;
         }
 
-        return trainingCourseRepository.findByCodeWithRequirement(courseCode)
+        return trainingCourseRepository.findByCodeWithType(courseCode)
                 .map(course -> {
                     if (trainingWorkflowSupport.isDeaneryManaged(course.getCourseType())) {
                         if (!securityUtils.hasAuthority(authentication, deaneryAuthority)) {

@@ -22,7 +22,7 @@ public class TrainingCourseController {
     private final TrainingCourseService trainingCourseService;
 
     @PostMapping
-    @PreAuthorize("@trainingCourseAccessEvaluator.canCreate(authentication, #request.courseType)")
+    @PreAuthorize("@trainingCourseAccessEvaluator.canCreate(authentication, #request.courseTypeCode)")
     public apiResponse<TrainingCourseResponse> create(@Valid @RequestBody TrainingCourseCreateRequest request, Authentication authentication) {
         return apiResponse.success("Tạo khóa huấn luyện thành công", trainingCourseService.create(request, authentication));
     }

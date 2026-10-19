@@ -2,7 +2,6 @@ package phucuong.ht.modules.training.trainingCourse.model.request;
 
 import lombok.Getter;
 import lombok.Setter;
-import phucuong.ht.modules.training.enums.CourseType;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -11,9 +10,9 @@ import java.time.OffsetDateTime;
 @Setter
 public class TrainingCourseUpdateRequest {
 
-    private String requirementCode;
-
     private String courseName;
+
+    private String courseTypeCode;
 
     private Integer hostYear;
 
@@ -26,8 +25,6 @@ public class TrainingCourseUpdateRequest {
     private OffsetDateTime registrationStartAt;
 
     private OffsetDateTime registrationEndAt;
-
-    private CourseType courseType;
 
     private String scoreFormulaId;
 

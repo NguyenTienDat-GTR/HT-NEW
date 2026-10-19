@@ -277,7 +277,7 @@ public class CertificateService {
         if (courseCode == null || courseCode.isBlank()) {
             throw commonValidationHelper.validationError("courseCode là bắt buộc");
         }
-        return trainingCourseRepository.findByCodeWithRequirement(courseCode)
+        return trainingCourseRepository.findByCodeWithType(courseCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy khóa huấn luyện: " + courseCode));
     }
 

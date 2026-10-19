@@ -11,7 +11,6 @@ import phucuong.ht.modules.diocese.repository.DioceseRepository;
 import phucuong.ht.modules.executiveBoard.repository.ExecutiveBoardAssignmentRepository;
 import phucuong.ht.modules.leader.repository.LeaderRepository;
 import phucuong.ht.modules.parish.repository.ParishRepository;
-import phucuong.ht.modules.training.courseRequirement.repository.CourseRequirementRepository;
 import phucuong.ht.modules.training.trainingCourse.repository.TrainingCourseRepository;
 import org.springframework.security.core.Authentication;
 
@@ -27,7 +26,6 @@ public class AuditScopeResolver {
     private final ParishRepository parishRepository;
     private final LeaderRepository leaderRepository;
     private final TrainingCourseRepository trainingCourseRepository;
-    private final CourseRequirementRepository courseRequirementRepository;
     private final CertificateRepository certificateRepository;
     private final ExecutiveBoardAssignmentRepository executiveBoardAssignmentRepository;
 
@@ -39,7 +37,6 @@ public class AuditScopeResolver {
             ParishRepository parishRepository,
             LeaderRepository leaderRepository,
             TrainingCourseRepository trainingCourseRepository,
-            CourseRequirementRepository courseRequirementRepository,
             CertificateRepository certificateRepository,
             ExecutiveBoardAssignmentRepository executiveBoardAssignmentRepository
     ) {
@@ -50,7 +47,6 @@ public class AuditScopeResolver {
         this.parishRepository = parishRepository;
         this.leaderRepository = leaderRepository;
         this.trainingCourseRepository = trainingCourseRepository;
-        this.courseRequirementRepository = courseRequirementRepository;
         this.certificateRepository = certificateRepository;
         this.executiveBoardAssignmentRepository = executiveBoardAssignmentRepository;
     }
@@ -150,11 +146,6 @@ public class AuditScopeResolver {
                 case "course" -> {
                     UUID deaneryId = trainingCourseRepository.findDeaneryIdByCourseCode(resourceId).orElse(null);
                     UUID dioceseId = trainingCourseRepository.findDioceseIdByCourseCode(resourceId).orElse(null);
-                    yield buildTrainingScope(dioceseId, deaneryId);
-                }
-                case "requirement" -> {
-                    UUID deaneryId = courseRequirementRepository.findDeaneryIdByRequirementCode(resourceId).orElse(null);
-                    UUID dioceseId = courseRequirementRepository.findDioceseIdByRequirementCode(resourceId).orElse(null);
                     yield buildTrainingScope(dioceseId, deaneryId);
                 }
                 case "certificate" -> {
