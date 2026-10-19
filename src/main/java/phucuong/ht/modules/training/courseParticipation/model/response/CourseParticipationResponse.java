@@ -32,6 +32,12 @@ public class CourseParticipationResponse {
     private String exceptionReason;
     private OffsetDateTime parishSubmittedAt;
     private WorkflowApprovalStatus approvalStatus;
+    // Người gửi đăng ký (dùng để quyết định ai được thu hồi) và đơn vị của huynh trưởng.
+    private String createdBy;
+    private java.util.UUID parishId;
+    private String parishName;
+    private java.util.UUID deaneryId;
+    private String deaneryName;
     // Cấp quản lý khóa (DEANERY/DIOCESE): quyết định endpoint duyệt phù hợp.
     private phucuong.ht.common.enums.UnitType managementUnitType;
     private WorkflowApprovalStatus certificateApprovalStatus;

@@ -131,7 +131,10 @@ GET /api/training/participations|200|401|403|400|N/A: collection endpoint does n
 GET /api/training/participations/{id}|200|401|403|N/A: participation identifier is an opaque string|404|N/A: read-only endpoint does not mutate state
 GET /api/training/participants|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
 GET /api/training/participants/{id}|200|401|403|N/A: participation identifier is an opaque string|404|N/A: read-only endpoint does not mutate state
+DELETE /api/training/participants/{id}|200|401|403|N/A: participation identifier is an opaque string|404|409
 POST /api/training/courses/{courseCode}/registrations|200|401|403|400|404|409
+DELETE /api/training/registrations/{id}|200|401|403|N/A: registration identifier is an opaque string|404|409
+POST /api/training/registrations/bulk-approval|200|401|403|400|N/A: ids are validated per item and reported in the response|N/A: partial failures are reported per item
 GET /api/training/courses/{courseCode}/registration-candidates|200|401|403|400|404|N/A: read-only endpoint does not mutate state
 POST /api/training/registrations/{id}/deanery-approval|200|401|403|400|404|409
 POST /api/training/registrations/{id}/diocese-approval|200|401|403|400|404|409

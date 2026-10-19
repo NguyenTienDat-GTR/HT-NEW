@@ -32,6 +32,7 @@ import phucuong.ht.modules.training.courseParticipation.model.request.*;
 import phucuong.ht.modules.training.courseParticipation.model.response.ComponentScoreResponse;
 import phucuong.ht.modules.training.courseParticipation.model.response.CourseParticipationResponse;
 import phucuong.ht.modules.training.courseParticipation.model.response.RegistrationCandidateResponse;
+import phucuong.ht.modules.training.courseParticipation.model.response.TrainingBulkApprovalResponse;
 import phucuong.ht.modules.training.courseParticipation.model.response.TrainingRegistrationBatchResponse;
 import phucuong.ht.modules.training.courseParticipation.repository.CourseParticipationRepository;
 import phucuong.ht.modules.training.courseParticipation.security.CourseParticipationAccessEvaluator;
@@ -363,7 +364,7 @@ public class CourseParticipationService {
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người duyệt giáo hạt");
         OffsetDateTime now = OffsetDateTime.now();
         requirePendingManualApproval(participation.getApprovalStatus());
-        participation.setApprovalStatus(Boolean.TRUE.equals(request.getApproved()) ? WorkflowApprovalStatus.APPROVED : WorkflowApprovalStatus.REJECTED);
+        applyApprovalDecision(participation, Boolean.TRUE.equals(request.getApproved()));
         participation.setReview(request.getReview());
         participation.setApprovedBy(actor);
         participation.setUpdatedAt(now);
@@ -383,7 +384,7 @@ public class CourseParticipationService {
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người duyệt giáo phận");
         OffsetDateTime now = OffsetDateTime.now();
         requirePendingManualApproval(participation.getApprovalStatus());
-        participation.setApprovalStatus(Boolean.TRUE.equals(request.getApproved()) ? WorkflowApprovalStatus.APPROVED : WorkflowApprovalStatus.REJECTED);
+        applyApprovalDecision(participation, Boolean.TRUE.equals(request.getApproved()));
         participation.setReview(request.getReview());
         participation.setApprovedBy(actor);
         participation.setUpdatedAt(now);
@@ -788,6 +789,11 @@ public class CourseParticipationService {
                 .exceptionReason(participation.getExceptionReason())
                 .parishSubmittedAt(participation.getParishSubmittedAt())
                 .approvalStatus(participation.getApprovalStatus())
+                .createdBy(participation.getCreatedBy())
+                .parishId(participation.getLeader() == null || participation.getLeader().getParish() == null ? null : participation.getLeader().getParish().getId())
+                .parishName(participation.getLeader() == null || participation.getLeader().getParish() == null ? null : participation.getLeader().getParish().getName())
+                .deaneryId(participation.getLeader() == null || participation.getLeader().getParish() == null || participation.getLeader().getParish().getDeanery() == null ? null : participation.getLeader().getParish().getDeanery().getId())
+                .deaneryName(participation.getLeader() == null || participation.getLeader().getParish() == null || participation.getLeader().getParish().getDeanery() == null ? null : participation.getLeader().getParish().getDeanery().getName())
                 .managementUnitType(participation.getCourse() == null || participation.getCourse().getCourseType() == null ? null : participation.getCourse().getCourseType().getManagementUnitType())
                 .certificateApprovalStatus(participation.getCertificateApprovalStatus())
                 .certificateRequestedAt(participation.getCertificateRequestedAt())
@@ -820,6 +826,126 @@ public class CourseParticipationService {
             return leader.getFirstName();
         }
         return leader.getLastName() + " " + leader.getFirstName();
+    }
+
+    // Thu hồi đăng ký: chỉ người gửi đăng ký, và chỉ khi hồ sơ còn chờ duyệt. Hồ sơ bị xóa để huynh trưởng có thể được đăng ký lại.
+    @Transactional
+    public void withdraw(String participationId, Authentication authentication) {
+        CourseParticipation participation = courseParticipationRepository.findByIdWithLeaderAndCourse(participationId)
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy đăng ký khóa huấn luyện " + participationId));
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người thu hồi đăng ký");
+        if (!actor.equals(participation.getCreatedBy())) {
+            throw commonValidationHelper.forbidden("Chỉ người gửi đăng ký mới được thu hồi đăng ký");
+        }
+        // Chỉ thu hồi được khi hồ sơ chưa được duyệt hoặc từ chối.
+        WorkflowApprovalStatus approval = participation.getApprovalStatus();
+        if (approval != WorkflowApprovalStatus.PENDING && approval != WorkflowApprovalStatus.SUBMITTED) {
+            throw commonValidationHelper.conflict("Không thể thu hồi đăng ký đã được duyệt hoặc từ chối");
+        }
+        String courseCode = participation.getCourse().getCourseCode();
+        UUID leaderId = participation.getLeader().getId();
+        courseParticipationRepository.delete(participation);
+        publishEvent("training.registration.withdrawn", "courseParticipation", participationId, actor,
+                Map.of("courseCode", courseCode, "leaderId", String.valueOf(leaderId)));
+    }
+
+    // Xóa hồ sơ khỏi danh sách tham dự: người có quyền duyệt, bất kể đã có điểm hay chưa, trừ hồ sơ đã có chứng nhận.
+    @Transactional
+    public void removeParticipant(String participationId, Authentication authentication) {
+        CourseParticipation participation = courseParticipationRepository.findByIdWithLeaderAndCourse(participationId)
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy hồ sơ tham dự " + participationId));
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người xóa hồ sơ");
+        if (!canApproveCourseOf(participation, authentication)) {
+            throw commonValidationHelper.forbidden("Không có quyền xóa hồ sơ khỏi danh sách tham dự");
+        }
+        UUID leaderId = participation.getLeader().getId();
+        String courseCode = participation.getCourse().getCourseCode();
+        Optional<Certificate> certificate = certificateRepository.findByLeaderIdAndCourseCode(leaderId, courseCode);
+        boolean hasCertificate = participation.getCertificateApprovalStatus() == WorkflowApprovalStatus.APPROVED
+                || certificate.map(item -> item.getApprovalStatus() == WorkflowApprovalStatus.APPROVED).orElse(false);
+        if (hasCertificate) {
+            throw commonValidationHelper.conflict("Không thể xóa hồ sơ đã có chứng nhận");
+        }
+        // Chứng nhận hệ thống đề xuất (chưa duyệt) sinh ra khi chấm điểm đạt cũng bị xóa theo hồ sơ.
+        certificate.ifPresent(certificateRepository::delete);
+        courseParticipationRepository.delete(participation);
+        publishEvent("training.participant.removed", "courseParticipation", participationId, actor,
+                Map.of("courseCode", courseCode, "leaderId", String.valueOf(leaderId)));
+    }
+
+    // Duyệt hoặc từ chối nhiều hồ sơ một lần; hồ sơ không hợp lệ được bỏ qua và trả về kèm lý do.
+    @Transactional
+    public TrainingBulkApprovalResponse bulkApprove(TrainingBulkApprovalRequest request, Authentication authentication) {
+        boolean approved = Boolean.TRUE.equals(request.getApproved());
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người duyệt");
+        OffsetDateTime now = OffsetDateTime.now();
+        List<TrainingBulkApprovalResponse.Failure> failures = new ArrayList<>();
+        int success = 0;
+        for (String id : new LinkedHashSet<>(request.getIds())) {
+            Optional<CourseParticipation> found = courseParticipationRepository.findByIdWithLeaderAndCourse(id);
+            if (found.isEmpty()) {
+                failures.add(bulkFailure(id, null, "Không tìm thấy đăng ký"));
+                continue;
+            }
+            CourseParticipation participation = found.get();
+            String leaderName = buildFullName(participation.getLeader());
+            String problem = bulkApprovalProblem(participation, authentication);
+            if (problem != null) {
+                failures.add(bulkFailure(id, leaderName, problem));
+                continue;
+            }
+            applyApprovalDecision(participation, approved);
+            participation.setReview(request.getReview());
+            participation.setApprovedBy(actor);
+            participation.setUpdatedAt(now);
+            participation.setUpdatedBy(actor);
+            boolean deaneryManaged = trainingWorkflowSupport.isDeaneryManaged(participation.getCourse().getCourseType());
+            publishEvent(deaneryManaged ? "training.registration.deanery_approved" : "training.registration.diocese_approved",
+                    "courseParticipation", id, actor, Map.of("approved", approved));
+            success++;
+        }
+        return TrainingBulkApprovalResponse.builder()
+                .successCount(success)
+                .failedCount(failures.size())
+                .failures(failures)
+                .build();
+    }
+
+    private TrainingBulkApprovalResponse.Failure bulkFailure(String id, String leaderName, String reason) {
+        return TrainingBulkApprovalResponse.Failure.builder().id(id).leaderFullName(leaderName).reason(reason).build();
+    }
+
+    // Quyền duyệt theo cấp quản lý của khóa (giống endpoint duyệt từng hồ sơ) và hồ sơ phải đang chờ duyệt.
+    private String bulkApprovalProblem(CourseParticipation participation, Authentication authentication) {
+        if (!canApproveCourseOf(participation, authentication)) {
+            return "Không có quyền duyệt hồ sơ này";
+        }
+        WorkflowApprovalStatus status = participation.getApprovalStatus();
+        if (status != WorkflowApprovalStatus.PENDING && status != WorkflowApprovalStatus.SUBMITTED) {
+            return "Hồ sơ đã ở trạng thái kết thúc hoặc không chờ duyệt";
+        }
+        return null;
+    }
+
+    // Tài khoản có quyền duyệt đúng cấp quản lý của khóa: giáo hạt với khóa giáo hạt, giáo phận với khóa giáo phận.
+    private boolean canApproveCourseOf(CourseParticipation participation, Authentication authentication) {
+        TrainingCourse course = participation.getCourse();
+        if (trainingWorkflowSupport.isDeaneryManaged(course.getCourseType())) {
+            return hasAuthority(authentication, CourseParticipationAccessEvaluator.APPROVE_DEANERY)
+                    && accountScopeValidationHelper.hasDirectDeanery(authentication)
+                    && course.getDeanery() != null
+                    && course.getDeanery().getId().equals(accountScopeValidationHelper.requireActiveDeaneryId(authentication, CourseParticipationAccessEvaluator.APPROVE_DEANERY));
+        }
+        return hasAuthority(authentication, CourseParticipationAccessEvaluator.APPROVE_DIOCESE)
+                && accountScopeValidationHelper.hasDirectDiocese(authentication)
+                && course.getDiocese() != null
+                && course.getDiocese().getId().equals(accountScopeValidationHelper.requireActiveDioceseId(authentication, CourseParticipationAccessEvaluator.APPROVE_DIOCESE));
+    }
+
+    // Duyệt xong -> đã tham dự (ATTENDED); từ chối duyệt -> bị từ chối (REJECTED).
+    private void applyApprovalDecision(CourseParticipation participation, boolean approved) {
+        participation.setApprovalStatus(approved ? WorkflowApprovalStatus.APPROVED : WorkflowApprovalStatus.REJECTED);
+        participation.setParticipationStatus(approved ? ParticipationStatus.ATTENDED : ParticipationStatus.REJECTED);
     }
 
     private void requirePendingManualApproval(WorkflowApprovalStatus status) {

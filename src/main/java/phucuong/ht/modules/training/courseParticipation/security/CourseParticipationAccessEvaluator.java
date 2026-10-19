@@ -64,6 +64,24 @@ public class CourseParticipationAccessEvaluator {
                 .orElse(false);
     }
 
+    // Thu hồi: tài khoản có quyền gửi đăng ký; service kiểm tra thêm đúng người đã gửi.
+    public boolean canWithdraw(Authentication authentication) {
+        return securityUtils.hasAuthority(authentication, SUBMIT_PARISH)
+                || securityUtils.hasAuthority(authentication, SUBMIT_DIOCESE)
+                || securityUtils.hasAuthority(authentication, SUBMIT_DEANERY);
+    }
+
+    // Duyệt/từ chối hàng loạt: có quyền duyệt giáo hạt hoặc giáo phận; service kiểm tra từng hồ sơ.
+    public boolean canBulkApprove(Authentication authentication) {
+        return securityUtils.hasAuthority(authentication, APPROVE_DEANERY)
+                || securityUtils.hasAuthority(authentication, APPROVE_DIOCESE);
+    }
+
+    // Xóa hồ sơ khỏi danh sách tham dự: người có quyền duyệt; service kiểm tra đúng cấp quản lý của khóa.
+    public boolean canRemoveParticipant(Authentication authentication) {
+        return canBulkApprove(authentication);
+    }
+
     public boolean canDeaneryApprove(Authentication authentication, String participationId) {
         return securityUtils.hasAuthority(authentication, APPROVE_DEANERY)
                 && courseParticipationRepository.findByIdWithLeaderAndCourse(participationId)

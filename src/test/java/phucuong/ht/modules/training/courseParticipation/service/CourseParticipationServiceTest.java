@@ -365,6 +365,145 @@ class CourseParticipationServiceTest {
     }
 
     @Test
+    void withdrawShouldBeRejectedForSomeoneElseThanTheSender() {
+        courseParticipationService = buildService();
+        TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);
+        CourseParticipation participation = pendingParticipation("cp-w", course, "someone-else");
+        when(courseParticipationRepository.findByIdWithLeaderAndCourse("cp-w")).thenReturn(Optional.of(participation));
+
+        assertThrows(RuntimeException.class, () -> courseParticipationService.withdraw("cp-w", authentication("admin-parish", "training.participation.submit.parish")));
+        verify(courseParticipationRepository, never()).delete(any());
+    }
+
+    @Test
+    void withdrawShouldBeRejectedOnceRegistrationIsApprovedOrRejected() {
+        courseParticipationService = buildService();
+        TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);
+        for (WorkflowApprovalStatus status : List.of(WorkflowApprovalStatus.APPROVED, WorkflowApprovalStatus.REJECTED)) {
+            CourseParticipation participation = pendingParticipation("cp-d", course, "leader-1");
+            participation.setApprovalStatus(status);
+            when(courseParticipationRepository.findByIdWithLeaderAndCourse("cp-d")).thenReturn(Optional.of(participation));
+
+            assertThrows(RuntimeException.class, () -> courseParticipationService.withdraw("cp-d", authentication("admin-parish", "training.participation.submit.parish")));
+        }
+        verify(courseParticipationRepository, never()).delete(any());
+    }
+
+    @Test
+    void withdrawShouldDeletePendingRegistrationOfTheSender() {
+        courseParticipationService = buildService();
+        TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);
+        CourseParticipation participation = pendingParticipation("cp-w", course, "leader-1");
+        when(courseParticipationRepository.findByIdWithLeaderAndCourse("cp-w")).thenReturn(Optional.of(participation));
+
+        courseParticipationService.withdraw("cp-w", authentication("admin-parish", "training.participation.submit.parish"));
+
+        verify(courseParticipationRepository).delete(participation);
+        verify(domainEventPublisher).publishAfterCommit(any());
+    }
+
+    @Test
+    void bulkApproveShouldApproveValidRegistrationsAndReportTheRest() {
+        courseParticipationService = buildService();
+        TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);
+        CourseParticipation participation = pendingParticipation("cp-1", course, "leader-9");
+        when(courseParticipationRepository.findByIdWithLeaderAndCourse("cp-1")).thenReturn(Optional.of(participation));
+        when(courseParticipationRepository.findByIdWithLeaderAndCourse("missing")).thenReturn(Optional.empty());
+        when(accountScopeValidationHelper.hasDirectDiocese(any())).thenReturn(true);
+        when(accountScopeValidationHelper.requireActiveDioceseId(any(), any())).thenReturn(course.getDiocese().getId());
+
+        phucuong.ht.modules.training.courseParticipation.model.request.TrainingBulkApprovalRequest request =
+                new phucuong.ht.modules.training.courseParticipation.model.request.TrainingBulkApprovalRequest();
+        request.setIds(List.of("cp-1", "missing"));
+        request.setApproved(Boolean.TRUE);
+
+        var response = courseParticipationService.bulkApprove(request, authentication("admin-diocese", "training.participation.approve.diocese"));
+
+        assertEquals(1, response.getSuccessCount());
+        assertEquals(1, response.getFailedCount());
+        assertEquals(WorkflowApprovalStatus.APPROVED, participation.getApprovalStatus());
+        assertEquals(phucuong.ht.modules.training.enums.ParticipationStatus.ATTENDED, participation.getParticipationStatus());
+    }
+
+    @Test
+    void bulkRejectShouldSetRejectedStatuses() {
+        courseParticipationService = buildService();
+        TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);
+        CourseParticipation participation = pendingParticipation("cp-1", course, "leader-9");
+        when(courseParticipationRepository.findByIdWithLeaderAndCourse("cp-1")).thenReturn(Optional.of(participation));
+        when(accountScopeValidationHelper.hasDirectDiocese(any())).thenReturn(true);
+        when(accountScopeValidationHelper.requireActiveDioceseId(any(), any())).thenReturn(course.getDiocese().getId());
+
+        phucuong.ht.modules.training.courseParticipation.model.request.TrainingBulkApprovalRequest request =
+                new phucuong.ht.modules.training.courseParticipation.model.request.TrainingBulkApprovalRequest();
+        request.setIds(List.of("cp-1"));
+        request.setApproved(Boolean.FALSE);
+        request.setReview("Không đủ điều kiện");
+
+        courseParticipationService.bulkApprove(request, authentication("admin-diocese", "training.participation.approve.diocese"));
+
+        assertEquals(WorkflowApprovalStatus.REJECTED, participation.getApprovalStatus());
+        assertEquals(phucuong.ht.modules.training.enums.ParticipationStatus.REJECTED, participation.getParticipationStatus());
+    }
+
+    @Test
+    void removeParticipantShouldDeleteScoredRegistrationWithoutCertificate() {
+        courseParticipationService = buildService();
+        TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);
+        CourseParticipation participation = pendingParticipation("cp-r", course, "leader-9");
+        participation.setApprovalStatus(WorkflowApprovalStatus.APPROVED);
+        participation.setTotalScore(BigDecimal.valueOf(8));
+        when(courseParticipationRepository.findByIdWithLeaderAndCourse("cp-r")).thenReturn(Optional.of(participation));
+        when(certificateRepository.findByLeaderIdAndCourseCode(any(), any())).thenReturn(Optional.empty());
+        when(accountScopeValidationHelper.hasDirectDiocese(any())).thenReturn(true);
+        when(accountScopeValidationHelper.requireActiveDioceseId(any(), any())).thenReturn(course.getDiocese().getId());
+
+        courseParticipationService.removeParticipant("cp-r", authentication("admin-diocese", "training.participation.approve.diocese"));
+
+        verify(courseParticipationRepository).delete(participation);
+    }
+
+    @Test
+    void removeParticipantShouldBeRejectedWhenCertificateIsApproved() {
+        courseParticipationService = buildService();
+        TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);
+        CourseParticipation participation = pendingParticipation("cp-r", course, "leader-9");
+        participation.setApprovalStatus(WorkflowApprovalStatus.APPROVED);
+        participation.setCertificateApprovalStatus(WorkflowApprovalStatus.APPROVED);
+        when(courseParticipationRepository.findByIdWithLeaderAndCourse("cp-r")).thenReturn(Optional.of(participation));
+        when(accountScopeValidationHelper.hasDirectDiocese(any())).thenReturn(true);
+        when(accountScopeValidationHelper.requireActiveDioceseId(any(), any())).thenReturn(course.getDiocese().getId());
+
+        assertThrows(RuntimeException.class, () -> courseParticipationService.removeParticipant("cp-r", authentication("admin-diocese", "training.participation.approve.diocese")));
+        verify(courseParticipationRepository, never()).delete(any());
+    }
+
+    @Test
+    void removeParticipantShouldBeRejectedOutsideApproverScope() {
+        courseParticipationService = buildService();
+        TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);
+        CourseParticipation participation = pendingParticipation("cp-r", course, "leader-9");
+        when(courseParticipationRepository.findByIdWithLeaderAndCourse("cp-r")).thenReturn(Optional.of(participation));
+        when(accountScopeValidationHelper.hasDirectDiocese(any())).thenReturn(true);
+        when(accountScopeValidationHelper.requireActiveDioceseId(any(), any())).thenReturn(UUID.randomUUID());
+
+        assertThrows(RuntimeException.class, () -> courseParticipationService.removeParticipant("cp-r", authentication("admin-diocese", "training.participation.approve.diocese")));
+        verify(courseParticipationRepository, never()).delete(any());
+    }
+
+    private CourseParticipation pendingParticipation(String id, TrainingCourse course, String createdBy) {
+        CourseParticipation participation = new CourseParticipation();
+        participation.setId(id);
+        participation.setCourse(course);
+        participation.setLeader(leader(UUID.randomUUID(), UUID.randomUUID(), LeaderLevel.HT_XU));
+        participation.setCreatedBy(createdBy);
+        participation.setApprovalStatus(WorkflowApprovalStatus.PENDING);
+        participation.setParticipationStatus(phucuong.ht.modules.training.enums.ParticipationStatus.REGISTERED);
+        participation.setCertificateApprovalStatus(WorkflowApprovalStatus.NOT_REQUIRED);
+        return participation;
+    }
+
+    @Test
     void scoreShouldRejectWhenCertificateAlreadyApproved() {
         courseParticipationService = buildService();
         CourseParticipation participation = new CourseParticipation();

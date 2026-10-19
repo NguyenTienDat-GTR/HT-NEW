@@ -23,6 +23,11 @@ public class CourseParticipationRepository extends BaseRepo<CourseParticipation,
         return participation;
     }
 
+    @Transactional
+    public void delete(CourseParticipation participation) {
+        entityManager.remove(entityManager.contains(participation) ? participation : entityManager.merge(participation));
+    }
+
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public Optional<CourseParticipation> findByIdWithLeaderAndCourse(String id) {
         List<CourseParticipation> results = entityManager.createQuery(

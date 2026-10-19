@@ -13,6 +13,7 @@ import phucuong.ht.modules.notification.service.TrainingNotificationService;
 import phucuong.ht.modules.training.TrainingWorkflowSupport;
 import phucuong.ht.modules.training.courseParticipation.model.entity.CourseParticipation;
 import phucuong.ht.modules.training.courseParticipation.repository.CourseParticipationRepository;
+import phucuong.ht.modules.training.enums.ParticipationStatus;
 import phucuong.ht.modules.training.enums.WorkflowApprovalStatus;
 
 import java.util.List;
@@ -54,6 +55,7 @@ public class TrainingRegistrationAutoApprovalConsumer {
                 continue;
             }
             participation.setApprovalStatus(WorkflowApprovalStatus.APPROVED);
+            participation.setParticipationStatus(ParticipationStatus.ATTENDED);
             participation.setApprovedBy(CourseParticipationService.autoApprovalActor());
             participation.setUpdatedBy(CourseParticipationService.autoApprovalActor());
             approvedCount++;

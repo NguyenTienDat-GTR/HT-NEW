@@ -55,6 +55,7 @@ class TrainingRegistrationAutoApprovalConsumerTest {
         consumer().handle(message("training.registration.batch_submitted", true, "cp-1"));
 
         assertEquals(WorkflowApprovalStatus.APPROVED, participation.getApprovalStatus());
+        assertEquals(phucuong.ht.modules.training.enums.ParticipationStatus.ATTENDED, participation.getParticipationStatus());
         assertEquals(CourseParticipationService.autoApprovalActor(), participation.getApprovedBy());
         verify(trainingNotificationService).notifyUsers(any(), any());
     }

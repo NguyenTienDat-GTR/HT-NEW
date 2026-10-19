@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -14,10 +15,12 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import phucuong.ht.common.dto.apiResponse;
 import phucuong.ht.modules.training.courseParticipation.model.request.TrainingApprovalRequest;
+import phucuong.ht.modules.training.courseParticipation.model.request.TrainingBulkApprovalRequest;
 import phucuong.ht.modules.training.courseParticipation.model.request.TrainingRegistrationRequest;
 import phucuong.ht.modules.training.courseParticipation.model.request.TrainingScoreRequest;
 import phucuong.ht.modules.training.courseParticipation.model.response.CourseParticipationResponse;
 import phucuong.ht.modules.training.courseParticipation.model.response.RegistrationCandidateResponse;
+import phucuong.ht.modules.training.courseParticipation.model.response.TrainingBulkApprovalResponse;
 import phucuong.ht.modules.training.courseParticipation.model.response.TrainingRegistrationBatchResponse;
 import phucuong.ht.modules.training.courseParticipation.service.CourseParticipationService;
 import phucuong.ht.common.repository.BaseSearchRequest;
@@ -49,6 +52,13 @@ public class CourseParticipationController {
     @PreAuthorize("@courseParticipationAccessEvaluator.canReadOne(authentication, #id)")
     public apiResponse<CourseParticipationResponse> findParticipantById(@PathVariable String id) {
         return apiResponse.success("Lấy chi tiết tham dự thành công", courseParticipationService.findParticipantById(id));
+    }
+
+    @DeleteMapping("/participants/{id}")
+    @PreAuthorize("@courseParticipationAccessEvaluator.canRemoveParticipant(authentication)")
+    public apiResponse<Void> removeParticipant(@PathVariable String id, Authentication authentication) {
+        courseParticipationService.removeParticipant(id, authentication);
+        return apiResponse.success("Xóa hồ sơ khỏi danh sách tham dự thành công", null);
     }
 
     @GetMapping("/participations/{id}")
@@ -83,6 +93,19 @@ public class CourseParticipationController {
             Authentication authentication
     ) {
         return apiResponse.success("Gửi danh sách đăng ký khóa huấn luyện thành công", courseParticipationService.register(courseCode, request, authentication));
+    }
+
+    @DeleteMapping("/registrations/{id}")
+    @PreAuthorize("@courseParticipationAccessEvaluator.canWithdraw(authentication)")
+    public apiResponse<Void> withdraw(@PathVariable String id, Authentication authentication) {
+        courseParticipationService.withdraw(id, authentication);
+        return apiResponse.success("Thu hồi đăng ký thành công", null);
+    }
+
+    @PostMapping("/registrations/bulk-approval")
+    @PreAuthorize("@courseParticipationAccessEvaluator.canBulkApprove(authentication)")
+    public apiResponse<TrainingBulkApprovalResponse> bulkApprove(@Valid @RequestBody TrainingBulkApprovalRequest request, Authentication authentication) {
+        return apiResponse.success("Xử lý duyệt hàng loạt hoàn tất", courseParticipationService.bulkApprove(request, authentication));
     }
 
     @PostMapping("/registrations/{id}/deanery-approval")
