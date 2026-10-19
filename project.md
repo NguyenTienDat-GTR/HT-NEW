@@ -762,18 +762,14 @@ Training registration API contracts:
 - `recipientUsernames`
 - `exceptionReasonsByLeaderId`
 - the response returns batch summary fields: sender unit, total count, predicted auto-approved count, pending count, and the created registrations
-- `POST /api/training/courses/{courseCode}/deanery-submit` may optionally receive `recipientUsernames` and now returns the same batch-summary shape
+- ~~`POST /api/training/courses/{courseCode}/deanery-submit`~~ đã bị gỡ (xem "Training registration redesign 2026-10-19": bỏ bước giáo hạt tổng hợp)
 
 Submission and approval routing:
 
-- parish submission always uses the active parish scope from the current account
-- parish accounts only submit registration lists; they never own an approval stage even if an accidental direct authority is present
-- for DT courses, the submitting parish must belong to the course-owning deanery; for regular courses, it must belong to the course-owning diocese. This hierarchy is checked in both the access evaluator and the service before any registration is persisted.
-- DT courses notify deanery approvers in the target deanery and RabbitMQ auto-approves eligible registrations at the deanery stage
-- non-DT courses submitted from parish to deanery notify deanery aggregators with `training.participation.submit.deanery` in the target deanery and do not auto-approve yet
-- when a deanery submits a non-DT course to diocese, the sender unit in the notification becomes the deanery, recipients must have `training.participation.approve.diocese` in the target diocese, and RabbitMQ auto-approves eligible registrations at the diocese stage
-- manual approval belongs only to the owning scope: a direct deanery owner approves DT registrations and a direct diocese owner approves regular registrations. Deanery is an aggregation step, not final approval, for regular courses.
-- auto-approval is idempotent and skips records already approved or rejected for the target stage
+- (Cập nhật 2026-10-19, xem mục "Training registration redesign 2026-10-19" ở cuối file; các gạch đầu dòng cũ về bước giáo hạt tổng hợp đã được thay thế.)
+- người gửi: tài khoản giáo xứ, giáo phận hoặc giáo hạt; đơn vị gửi được chọn theo phạm vi gắn trực tiếp của tài khoản (`TrainingWorkflowSupport.resolveRegistrationSender`)
+- manual approval belongs only to the owning scope: a direct deanery owner approves DT registrations and a direct diocese owner approves regular registrations
+- auto-approval is idempotent and skips records already approved or rejected
 
 Notification delivery:
 
@@ -1233,3 +1229,65 @@ The following work was added in this iteration:
 - Migration `V056__replace_course_type_enum_with_catalog.sql`: tạo bảng, seed 14 loại khóa hiện hữu (giữ nguyên scope/tiên quyết/cấp thăng/mã viết tắt), backfill điều kiện từ `course_requirement`, thêm `training_course.course_type_code` + FK rồi drop `requirement_code`/`course_type`, drop bảng `course_requirement`, seed/di trú quyền.
 - `AuditScopeResolver` bỏ nhánh scope cho `requirement` (catalog loại khóa là toàn hệ thống nên audit log của nó không gắn scope diocese/deanery).
 - Kiểm thử: đã cập nhật/viết lại các unit test liên quan (TrainingCourseUpdateScopeTest, CourseParticipationServiceTest, CourseParticipationAccessEvaluatorTest, TrainingRegistrationAutoApprovalConsumerTest, CertificateServiceTest) và xóa CourseRequirementUpdateScopeTest. CHƯA chạy được `gradlew` trong môi trường agent (proxy chặn tải Gradle distribution, VM chỉ có JDK 11); cần chạy `.\gradlew.bat clean test` trên môi trường Windows để xác nhận biên dịch + test.
+
+
+### Training registration redesign 2026-10-19
+
+Branch `feature/course-years-active-registration-lists` (BE + FE, từ `main`). Migration V060-V063.
+
+Số năm hoạt động của khóa (V060):
+
+- `training_course.years_active` (INTEGER NOT NULL DEFAULT 0, CHECK >= 0); create/update request `yearsActive` (`@Min(0)`), response trả `yearsActive`.
+- Điều kiện kèm theo khóa tiên quyết: huynh trưởng phải đạt khóa tiên quyết, và `năm tổ chức khóa - năm đạt khóa tiên quyết >= yearsActive`. Năm tổ chức = `hostYear` (fallback năm `startDate`, rồi năm hiện tại). Năm đạt = sớm nhất của các hồ sơ `COMPLETED` thuộc loại tiên quyết: ưu tiên năm `certificateApprovedAt`, rồi `hostYear`, rồi năm `endDate` của khóa đó (`CourseParticipationRepository.findEarliestCompletedYearByLeaderAndCourseType`).
+- Loại khóa không có khóa tiên quyết thì bỏ qua điều kiện năm. Điều kiện cũ `required_years_active` của loại khóa (tính từ ngày tạo huynh trưởng) KHÔNG còn được kiểm tra (cột vẫn còn trong catalog).
+
+Danh sách đăng ký và danh sách ngoại lệ:
+
+- `GET /api/training/courses/{courseCode}/registration-candidates?mode=ELIGIBLE|EXCEPTION&search&deaneryId&parishId&excludeLeaderIds&page&size`: huynh trưởng đang hoạt động trong phạm vi tài khoản gửi (giáo xứ: giáo xứ mình; giáo hạt: giáo hạt mình; giáo phận: giáo phận mình), chưa có hồ sơ trong khóa. `ELIGIBLE` = đủ điều kiện; `EXCEPTION` = không đủ điều kiện và KHÔNG có cấp cao hơn "cấp độ đạt được gần nhất" của loại khóa (cấp thăng của khóa tiên quyết, nếu không có thì cấp hiện tại yêu cầu; so theo thứ tự `LeaderLevel`). Tìm kiếm theo tên, tên thánh, giáo xứ, giáo hạt.
+- `POST /courses/{code}/registrations`: `leaderIds` (danh sách đăng ký, phải đủ điều kiện) và `exceptionReasonsByLeaderId` (danh sách ngoại lệ, mỗi người kèm lý do, phải không đủ điều kiện và không vượt cấp nêu trên). Hai danh sách không được trùng người (400). Cần ít nhất một người.
+
+Ai được gửi đăng ký (sender):
+
+- giáo xứ (`submit.parish`): khóa giáo phận của giáo phận mình và khóa giáo hạt của giáo hạt mình, đang mở đăng ký.
+- giáo phận (`training.participation.submit.diocese`, V061, gán cho `ADMIN_DIOCESE`/`SUPER_ADMIN`): bất kỳ huynh trưởng nào trong giáo phận, chỉ vào khóa thuộc giáo phận.
+- giáo hạt (`submit.deanery`): bất kỳ huynh trưởng nào trong giáo hạt, chỉ vào khóa thuộc giáo hạt.
+- đơn vị gửi chọn theo phạm vi gắn trực tiếp của tài khoản trước (vì `ADMIN_DIOCESE` cũng giữ `submit.parish`): `TrainingWorkflowSupport.resolveRegistrationSender`.
+- `GET /api/training/courses/registrable`: khóa đang mở đăng ký đúng phạm vi người gửi. Tài khoản giáo xứ cũng gọi được `GET /api/training/courses` (chỉ thấy khóa đang mở trong phạm vi) và xem chi tiết các khóa đó.
+
+Duyệt:
+
+- Bỏ bước giáo hạt tổng hợp (`deanery-submit`, event `deanery_batch_submitted`). Khóa giáo hạt do giáo hạt duyệt, khóa giáo phận do giáo phận duyệt.
+- V062 gộp `deanery_approval_status`/`diocese_approval_status`/`deanery_submitted_at` thành một cột `approval_status`. Response có `approvalStatus` và `managementUnitType`.
+- Hồ sơ đủ điều kiện được hệ thống tự duyệt ngay khi gửi (consumer RabbitMQ); hồ sơ ngoại lệ chờ duyệt tay. Thông báo gửi tới tài khoản duyệt của đơn vị sở hữu khóa.
+- Trạng thái tham dự (V063): duyệt -> `ATTENDED`, từ chối -> `REJECTED` (giá trị enum mới); chấm điểm đạt -> `COMPLETED`.
+- `POST /registrations/{id}/deanery-approval|diocese-approval` nhận `approved` true/false (từ chối cùng quyền với duyệt).
+- `POST /api/training/registrations/bulk-approval {ids, approved, review}`: duyệt/từ chối nhiều hồ sơ; kiểm tra quyền và trạng thái chờ duyệt từng hồ sơ, hồ sơ lỗi được bỏ qua và trả về trong `failures`.
+- `DELETE /api/training/registrations/{id}` (thu hồi): chỉ người đã gửi (so `createdBy` với audit actor), chỉ khi còn chờ duyệt; xóa hồ sơ để huynh trưởng đăng ký lại được.
+- `GET /api/training/participants` (+ `/{id}`): danh sách tham dự, luôn lọc `approvalStatus = APPROVED` (hồ sơ chờ duyệt/từ chối không nằm trong danh sách). `DELETE /api/training/participants/{id}`: người có quyền duyệt đúng cấp xóa hồ sơ khỏi danh sách tham dự kể cả đã có điểm, trừ hồ sơ đã có chứng nhận được duyệt (chứng nhận đề xuất chưa duyệt bị xóa theo).
+- Response hồ sơ có thêm `createdBy`, `parishId/Name`, `deaneryId/Name` của huynh trưởng.
+
+Kiểm thử: `CourseParticipationServiceTest`, `TrainingRegistrationAutoApprovalConsumerTest`, `EndpointContractMatrixTest` (ma trận 122 route) pass. Một số test khác fail sẵn từ trước (lệch câu chữ thông báo; test tích hợp lỗi hết kết nối DB).
+
+### Training scoring, locks and participant removal 2026-10-20
+
+Branch `feature/course-years-active-registration-lists` (tiếp nối mục "Training registration redesign 2026-10-19"). Migration V064.
+
+Chấm điểm (`PATCH /api/training/participations/{id}/score`):
+
+- chỉ chấm được khi khóa đang trong thời gian diễn ra: `startDate <= hôm nay <= endDate` (Asia/Ho_Chi_Minh, `TrainingCourseStatusSupport.organizingStatus`, tính trực tiếp theo ngày, không chờ job cập nhật trạng thái); ngoài khoảng đó trả 409. Khóa chưa có `startDate` coi như chưa diễn ra.
+- khóa/mở chỉnh sửa điểm: `training_course.score_locked` (V064) và `PATCH /api/training/courses/{courseCode}/score-lock {locked}`; quyền `training.participation.lock.diocese` (khóa giáo phận) / `.deanery` (khóa giáo hạt), gán cho `ADMIN_DIOCESE`/`ADMIN_DEANERY`/`SUPER_ADMIN`, kiểm tra theo phạm vi sở hữu khóa (`TrainingCourseAccessEvaluator.canLockScore`). Khi khóa thì chấm điểm trả 409. Response khóa có `scoreLocked`. Bật/tắt khóa không giới hạn theo thời gian (việc nhập điểm vẫn bị giới hạn bởi thời gian diễn ra).
+- sửa điểm cập nhật tại chỗ các dòng `course_participation_component_score` đã có (không `clear()` rồi thêm lại: Hibernate chèn trước khi xóa nên vi phạm unique `(participation_id, component_id)` và bị báo "xung đột dữ liệu"); thành phần không còn áp dụng thì bỏ dòng cũ.
+- hồ sơ có chứng nhận đã duyệt (cờ trên hồ sơ hoặc bản ghi `Certificate` có `approvalStatus = APPROVED`) không được sửa điểm (409).
+- sửa điểm xuống dưới `passingScore`: chứng nhận đang `PENDING`/`SUBMITTED` của hồ sơ bị xóa (`CertificateRepository.delete`), trạng thái chứng nhận của hồ sơ về `NOT_REQUIRED`.
+- `GET /api/training/courses/{courseCode}/score-components`: thành phần điểm áp dụng cho khóa (id, tên, điểm tối đa, hệ số, tính tổng) để FE dựng các cột nhập điểm; quyền chấm điểm đúng cấp quản lý của khóa (`canScoreCourse`).
+
+Cập nhật khóa (`PUT /api/training/courses/{courseCode}`):
+
+- khi khóa đã có hồ sơ tham gia, không đổi được loại khóa, năm tổ chức (`hostYear`), số năm hoạt động (`yearsActive`), điểm đạt (`passingScore`): đổi giá trị thì 409, gửi lại đúng giá trị cũ thì chấp nhận (`requireNoParticipations`). Các trường khác vẫn sửa được.
+- chi tiết/cập nhật khóa trả `hasParticipations`; cache chi tiết khóa (`TRAINING_COURSE_DETAIL`) bị xóa khi đăng ký/thu hồi/xóa hồ sơ để cờ này không cũ.
+
+Danh sách tham dự:
+
+- `DELETE /api/training/participants/{id}`: người có quyền duyệt đúng cấp quản lý của khóa xóa hồ sơ khỏi danh sách tham dự, bất kể đã có điểm hay chưa, trừ hồ sơ đã có chứng nhận được duyệt (409); chứng nhận đề xuất chưa duyệt bị xóa theo; ghi sự kiện `training.participant.removed`.
+
+Ma trận endpoint (`endpoint-contract-matrix.psv`) hiện có 124 route.

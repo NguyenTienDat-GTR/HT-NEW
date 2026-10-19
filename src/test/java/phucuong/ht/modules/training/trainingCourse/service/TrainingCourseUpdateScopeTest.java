@@ -92,6 +92,56 @@ class TrainingCourseUpdateScopeTest {
     }
 
     @Test
+    void lockedFieldsCannotChangeOnceCourseHasParticipations() {
+        UUID deaneryId = UUID.randomUUID();
+        TrainingCourse course = deaneryCourse("DT-L1", deaneryId);
+        course.setHostYear(2026);
+        course.setYearsActive(1);
+        course.setPassingScore(java.math.BigDecimal.valueOf(5));
+        var authentication = authentication("admin-deanery", "training.course.update.deanery");
+        when(trainingCourseRepository.findByCodeWithType("DT-L1")).thenReturn(Optional.of(course));
+        when(accountScopeValidationHelper.requireActiveDeaneryId(eq(authentication), anyString())).thenReturn(deaneryId);
+        when(courseParticipationRepository.existsByCourseCode("DT-L1")).thenReturn(true);
+
+        TrainingCourseUpdateRequest hostYear = new TrainingCourseUpdateRequest();
+        hostYear.setHostYear(2027);
+        assertThrows(RuntimeException.class, () -> service().update("DT-L1", hostYear, authentication));
+
+        TrainingCourseUpdateRequest yearsActive = new TrainingCourseUpdateRequest();
+        yearsActive.setYearsActive(3);
+        assertThrows(RuntimeException.class, () -> service().update("DT-L1", yearsActive, authentication));
+
+        TrainingCourseUpdateRequest passing = new TrainingCourseUpdateRequest();
+        passing.setPassingScore(java.math.BigDecimal.valueOf(6));
+        assertThrows(RuntimeException.class, () -> service().update("DT-L1", passing, authentication));
+    }
+
+    @Test
+    void lockedFieldsAcceptUnchangedValuesAndOtherFieldsStayEditable() {
+        UUID deaneryId = UUID.randomUUID();
+        TrainingCourse course = deaneryCourse("DT-L2", deaneryId);
+        course.setHostYear(2026);
+        course.setYearsActive(1);
+        course.setPassingScore(java.math.BigDecimal.valueOf(5));
+        var authentication = authentication("admin-deanery", "training.course.update.deanery");
+        when(trainingCourseRepository.findByCodeWithType("DT-L2")).thenReturn(Optional.of(course));
+        when(accountScopeValidationHelper.requireActiveDeaneryId(eq(authentication), anyString())).thenReturn(deaneryId);
+        when(deaneryRepository.getRequired(deaneryId)).thenReturn(course.getDeanery());
+        when(courseParticipationRepository.existsByCourseCode("DT-L2")).thenReturn(true);
+
+        TrainingCourseUpdateRequest request = new TrainingCourseUpdateRequest();
+        request.setHostYear(2026);
+        request.setYearsActive(1);
+        request.setPassingScore(new java.math.BigDecimal("5.00"));
+        request.setLocation("Địa điểm mới");
+
+        var response = service().update("DT-L2", request, authentication);
+
+        assertEquals("Địa điểm mới", response.getLocation());
+        assertEquals(true, response.getHasParticipations());
+    }
+
+    @Test
     void registrationCanBeClosedAndReopenedWhileWindowIsRunningAndPublishesEvents() {
         TrainingCourse course = deaneryCourse("DT-3", UUID.randomUUID());
         course.setRegistrationStartAt(java.time.OffsetDateTime.now().minusDays(1));

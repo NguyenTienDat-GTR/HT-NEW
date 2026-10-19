@@ -15,6 +15,27 @@ public class TrainingWorkflowSupport {
         return courseType != null && courseType.getManagementUnitType() == UnitType.DEANERY;
     }
 
+    // Đơn vị gửi đăng ký: ưu tiên phạm vi gắn trực tiếp của tài khoản (vai trò giáo phận cũng có thể giữ quyền gửi của giáo xứ).
+    public UnitType resolveRegistrationSender(
+            boolean submitParish, boolean submitDiocese, boolean submitDeanery, boolean directDiocese, boolean directDeanery) {
+        if (submitDiocese && directDiocese) {
+            return UnitType.DIOCESE;
+        }
+        if (submitDeanery && directDeanery) {
+            return UnitType.DEANERY;
+        }
+        if (submitParish) {
+            return UnitType.PARISH;
+        }
+        if (submitDiocese) {
+            return UnitType.DIOCESE;
+        }
+        if (submitDeanery) {
+            return UnitType.DEANERY;
+        }
+        return null;
+    }
+
     public Optional<TrainingCourseType> prerequisiteOf(TrainingCourseType courseType) {
         if (courseType == null) {
             return Optional.empty();
@@ -37,11 +58,8 @@ public class TrainingWorkflowSupport {
         return targetLevel != null && (currentLevel == null || targetLevel.ordinal() > currentLevel.ordinal());
     }
 
-    public boolean shouldAutoApproveAfterParishSubmission(TrainingCourseType courseType) {
-        return isDeaneryManaged(courseType);
-    }
-
-    public boolean shouldAutoApproveAfterDeanerySubmission(TrainingCourseType courseType) {
-        return courseType != null && !isDeaneryManaged(courseType);
+    // Hồ sơ đủ điều kiện được hệ thống tự duyệt ngay khi gửi đăng ký (khóa giáo hạt: giáo hạt duyệt; khóa giáo phận: giáo phận duyệt).
+    public boolean shouldAutoApproveAfterSubmission(TrainingCourseType courseType) {
+        return courseType != null;
     }
 }

@@ -4,5 +4,6 @@ public enum ParticipationStatus {
     REGISTERED,
     ATTENDED,
     COMPLETED,
-    CANCELLED
+    CANCELLED,
+    REJECTED
 }

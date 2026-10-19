@@ -23,6 +23,11 @@ public class CertificateRepository extends BaseRepo<Certificate, String> {
         return certificate;
     }
 
+    @Transactional
+    public void delete(Certificate certificate) {
+        entityManager.remove(entityManager.contains(certificate) ? certificate : entityManager.merge(certificate));
+    }
+
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public Optional<Certificate> findByCodeWithLeaderAndCourse(String certificateCode) {
         List<Certificate> results = entityManager.createQuery(

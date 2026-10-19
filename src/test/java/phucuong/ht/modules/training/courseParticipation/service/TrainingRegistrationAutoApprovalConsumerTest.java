@@ -48,33 +48,34 @@ class TrainingRegistrationAutoApprovalConsumerTest {
     @Test
     void handleShouldApproveDeaneryStatusForDtBatchSubmission() {
         CourseParticipation participation = participation();
-        participation.setDeaneryApprovalStatus(WorkflowApprovalStatus.PENDING);
+        participation.setApprovalStatus(WorkflowApprovalStatus.PENDING);
         when(courseParticipationRepository.findAllByIdsWithLeaderAndCourse(List.of("cp-1"))).thenReturn(List.of(participation));
         when(trainingNotificationRecipientResolver.resolveRecipients(any(), any(), any(), any())).thenReturn(List.of("approver"));
 
         consumer().handle(message("training.registration.batch_submitted", true, "cp-1"));
 
-        assertEquals(WorkflowApprovalStatus.APPROVED, participation.getDeaneryApprovalStatus());
+        assertEquals(WorkflowApprovalStatus.APPROVED, participation.getApprovalStatus());
+        assertEquals(phucuong.ht.modules.training.enums.ParticipationStatus.ATTENDED, participation.getParticipationStatus());
         assertEquals(CourseParticipationService.autoApprovalActor(), participation.getApprovedBy());
         verify(trainingNotificationService).notifyUsers(any(), any());
     }
 
     @Test
-    void handleShouldApproveDioceseStatusForDeanerySubmission() {
+    void handleShouldApproveDioceseStatusForNonDtBatchSubmission() {
         CourseParticipation participation = participation();
-        participation.setDioceseApprovalStatus(WorkflowApprovalStatus.PENDING);
+        participation.setApprovalStatus(WorkflowApprovalStatus.PENDING);
         when(courseParticipationRepository.findAllByIdsWithLeaderAndCourse(List.of("cp-1"))).thenReturn(List.of(participation));
         when(trainingNotificationRecipientResolver.resolveRecipients(any(), any(), any(), any())).thenReturn(List.of("approver"));
 
-        consumer().handle(message("training.registration.deanery_batch_submitted", false, "cp-1"));
+        consumer().handle(message("training.registration.batch_submitted", false, "cp-1"));
 
-        assertEquals(WorkflowApprovalStatus.APPROVED, participation.getDioceseApprovalStatus());
+        assertEquals(WorkflowApprovalStatus.APPROVED, participation.getApprovalStatus());
         verify(trainingNotificationService).notifyUsers(any(), any());
     }
 
     @Test
-    void handleShouldIgnoreParishSubmissionForNonDtCourse() {
-        consumer().handle(message("training.registration.batch_submitted", false, "cp-1"));
+    void handleShouldIgnoreUnrelatedEvents() {
+        consumer().handle(message("training.registration.other", false, "cp-1"));
 
         verify(courseParticipationRepository, never()).findAllByIdsWithLeaderAndCourse(any());
         verify(trainingNotificationService, never()).notifyUsers(any(), any());

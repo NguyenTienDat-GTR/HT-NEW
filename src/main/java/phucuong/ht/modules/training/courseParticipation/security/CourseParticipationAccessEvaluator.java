@@ -3,6 +3,7 @@ package phucuong.ht.modules.training.courseParticipation.security;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
+import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.modules.auth.repository.AccountRepository;
 import phucuong.ht.modules.training.TrainingWorkflowSupport;
@@ -17,6 +18,7 @@ public class CourseParticipationAccessEvaluator {
     private static final String SUPER_ADMIN_ROLE = "ROLE_SUPER_ADMIN";
 
     public static final String SUBMIT_PARISH = "training.participation.submit.parish";
+    public static final String SUBMIT_DIOCESE = "training.participation.submit.diocese";
     public static final String SUBMIT_DEANERY = "training.participation.submit.deanery";
     public static final String APPROVE_DEANERY = "training.participation.approve.deanery";
     public static final String APPROVE_DIOCESE = "training.participation.approve.diocese";
@@ -32,28 +34,52 @@ public class CourseParticipationAccessEvaluator {
     private final CourseParticipationRepository courseParticipationRepository;
     private final TrainingWorkflowSupport trainingWorkflowSupport;
 
+    // Gửi đăng ký: giáo xứ (khóa giáo phận/giáo hạt trong phạm vi), giáo phận (chỉ khóa giáo phận), giáo hạt (chỉ khóa giáo hạt).
     public boolean canRegister(Authentication authentication, String courseCode) {
-        if (!securityUtils.hasAuthority(authentication, SUBMIT_PARISH)) {
-            return false;
-        }
         String username = securityUtils.currentUsername(authentication);
-        if (username == null || username.isBlank()
-                || accountRepository.findActiveParishIdByUsername(username).isEmpty()) {
+        if (username == null || username.isBlank()) {
             return false;
         }
         return trainingCourseRepository.findByCodeWithType(courseCode)
-                .map(course -> trainingWorkflowSupport.isDeaneryManaged(course.getCourseType())
-                        ? scopedDeanery(authentication, courseCode)
-                        : scopedDiocese(authentication, courseCode))
+                .map(course -> {
+                    boolean deaneryManaged = trainingWorkflowSupport.isDeaneryManaged(course.getCourseType());
+                    UnitType sender = trainingWorkflowSupport.resolveRegistrationSender(
+                            securityUtils.hasAuthority(authentication, SUBMIT_PARISH),
+                            securityUtils.hasAuthority(authentication, SUBMIT_DIOCESE),
+                            securityUtils.hasAuthority(authentication, SUBMIT_DEANERY),
+                            accountRepository.findDirectActiveDioceseIdByUsername(username).isPresent(),
+                            accountRepository.findDirectActiveDeaneryIdByUsername(username).isPresent());
+                    if (sender == UnitType.PARISH) {
+                        return accountRepository.findActiveParishIdByUsername(username).isPresent()
+                                && (deaneryManaged ? scopedDeanery(authentication, courseCode) : scopedDiocese(authentication, courseCode));
+                    }
+                    if (sender == UnitType.DIOCESE) {
+                        return !deaneryManaged && directDioceseOwnsCourse(authentication, courseCode);
+                    }
+                    if (sender == UnitType.DEANERY) {
+                        return deaneryManaged && directDeaneryOwnsCourse(authentication, courseCode);
+                    }
+                    return false;
+                })
                 .orElse(false);
     }
 
-    public boolean canDeanerySubmit(Authentication authentication, String courseCode) {
-        return securityUtils.hasAuthority(authentication, SUBMIT_DEANERY)
-                && trainingCourseRepository.findByCodeWithType(courseCode)
-                .map(course -> trainingWorkflowSupport.isDeaneryManaged(course.getCourseType())
-                        ? false : directDeaneryInCourseDiocese(authentication, courseCode))
-                .orElse(false);
+    // Thu hồi: tài khoản có quyền gửi đăng ký; service kiểm tra thêm đúng người đã gửi.
+    public boolean canWithdraw(Authentication authentication) {
+        return securityUtils.hasAuthority(authentication, SUBMIT_PARISH)
+                || securityUtils.hasAuthority(authentication, SUBMIT_DIOCESE)
+                || securityUtils.hasAuthority(authentication, SUBMIT_DEANERY);
+    }
+
+    // Duyệt/từ chối hàng loạt: có quyền duyệt giáo hạt hoặc giáo phận; service kiểm tra từng hồ sơ.
+    public boolean canBulkApprove(Authentication authentication) {
+        return securityUtils.hasAuthority(authentication, APPROVE_DEANERY)
+                || securityUtils.hasAuthority(authentication, APPROVE_DIOCESE);
+    }
+
+    // Xóa hồ sơ khỏi danh sách tham dự: người có quyền duyệt; service kiểm tra đúng cấp quản lý của khóa.
+    public boolean canRemoveParticipant(Authentication authentication) {
+        return canBulkApprove(authentication);
     }
 
     public boolean canDeaneryApprove(Authentication authentication, String participationId) {
@@ -85,6 +111,18 @@ public class CourseParticipationAccessEvaluator {
                     return securityUtils.hasAuthority(authentication, SCORE_DIOCESE)
                             && scopedDiocese(authentication, participation.getCourse().getCourseCode());
                 })
+                .orElse(false);
+    }
+
+    // Xem thành phần điểm của khóa để nhập điểm: người có quyền chấm điểm đúng cấp quản lý của khóa.
+    public boolean canScoreCourse(Authentication authentication, String courseCode) {
+        if (securityUtils.hasAuthority(authentication, SUPER_ADMIN_ROLE)) {
+            return false;
+        }
+        return trainingCourseRepository.findByCodeWithType(courseCode)
+                .map(course -> trainingWorkflowSupport.isDeaneryManaged(course.getCourseType())
+                        ? securityUtils.hasAuthority(authentication, SCORE_DEANERY) && scopedDeanery(authentication, courseCode)
+                        : securityUtils.hasAuthority(authentication, SCORE_DIOCESE) && scopedDiocese(authentication, courseCode))
                 .orElse(false);
     }
 

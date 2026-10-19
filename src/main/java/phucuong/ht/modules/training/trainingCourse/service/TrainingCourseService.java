@@ -88,6 +88,7 @@ public class TrainingCourseService {
         course.setCourseType(courseType);
         course.setCourseName(request.getCourseName());
         course.setHostYear(request.getHostYear());
+        course.setYearsActive(request.getYearsActive() == null ? 0 : request.getYearsActive());
         course.setLocation(request.getLocation());
         course.setStartDate(request.getStartDate());
         course.setEndDate(request.getEndDate());
@@ -119,6 +120,8 @@ public class TrainingCourseService {
         } else if (hasAuthority(authentication, TrainingCourseAccessEvaluator.READ_DEANERY)) {
             UUID deaneryId = accountScopeValidationHelper.requireActiveDeaneryId(authentication, TrainingCourseAccessEvaluator.READ_DEANERY);
             scopedRequest.getFilters().put(DEANERY_FILTER_FIELD, deaneryId);
+        } else if (hasAuthority(authentication, TrainingCourseAccessEvaluator.SUBMIT_PARISH)) {
+            return findOpenCoursesForParish(request, authentication);
         } else {
             throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền xem khóa huấn luyện");
         }
@@ -130,11 +133,63 @@ public class TrainingCourseService {
         return new PageImpl<>(content, page.getPageable(), page.getTotalElements());
     }
 
+    // Giáo xứ chỉ xem được các khóa đang mở đăng ký trong phạm vi; tìm kiếm theo tên khóa/địa điểm.
+    private Page<TrainingCourseResponse> findOpenCoursesForParish(BaseSearchRequest request, Authentication authentication) {
+        String username = securityUtils.currentUsername(authentication);
+        if (username == null || username.isBlank()) {
+            throw commonValidationHelper.forbidden("Không xác định được tài khoản hiện tại");
+        }
+        UUID dioceseId = accountRepository.findActiveDioceseIdByUsername(username).orElse(null);
+        UUID deaneryId = accountRepository.findActiveDeaneryIdByUsername(username).orElse(null);
+        if (dioceseId == null && deaneryId == null) {
+            throw commonValidationHelper.forbidden("Tài khoản hiện tại không có phạm vi hợp lệ để xem khóa huấn luyện");
+        }
+        String keyword = request.getSearch() == null ? "" : request.getSearch().trim().toLowerCase(java.util.Locale.ROOT);
+        List<TrainingCourseResponse> matched = trainingCourseRepository.findOpenForRegistration(dioceseId, deaneryId).stream()
+                .filter(course -> keyword.isEmpty()
+                        || (course.getCourseName() != null && course.getCourseName().toLowerCase(java.util.Locale.ROOT).contains(keyword))
+                        || (course.getLocation() != null && course.getLocation().toLowerCase(java.util.Locale.ROOT).contains(keyword)))
+                .map(this::toResponse)
+                .toList();
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(request.getPage(), request.getSize());
+        int from = Math.min(request.getPage() * request.getSize(), matched.size());
+        int to = Math.min(from + request.getSize(), matched.size());
+        return new PageImpl<>(matched.subList(from, to), pageable, matched.size());
+    }
+
+    // Khóa đang mở đăng ký trong phạm vi tài khoản (kể cả tài khoản giáo xứ, không cần quyền xem danh sách khóa).
+    @Transactional(readOnly = true)
+    public List<TrainingCourseResponse> findRegistrable(Authentication authentication) {
+        String username = securityUtils.currentUsername(authentication);
+        if (username == null || username.isBlank()) {
+            throw commonValidationHelper.forbidden("Không xác định được tài khoản hiện tại");
+        }
+        UnitType sender = trainingWorkflowSupport.resolveRegistrationSender(
+                hasAuthority(authentication, "training.participation.submit.parish"),
+                hasAuthority(authentication, "training.participation.submit.diocese"),
+                hasAuthority(authentication, "training.participation.submit.deanery"),
+                accountScopeValidationHelper.hasDirectDiocese(authentication),
+                accountScopeValidationHelper.hasDirectDeanery(authentication));
+        if (sender == null) {
+            throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền gửi đăng ký khóa huấn luyện");
+        }
+        // Giáo xứ: khóa giáo phận của giáo phận mình + khóa giáo hạt của giáo hạt mình; giáo phận/giáo hạt: chỉ khóa của đơn vị mình.
+        UUID dioceseId = sender == UnitType.DEANERY ? null : accountRepository.findActiveDioceseIdByUsername(username).orElse(null);
+        UUID deaneryId = sender == UnitType.DIOCESE ? null : accountRepository.findActiveDeaneryIdByUsername(username).orElse(null);
+        if (dioceseId == null && deaneryId == null) {
+            throw commonValidationHelper.forbidden("Tài khoản hiện tại không có phạm vi hợp lệ để đăng ký khóa huấn luyện");
+        }
+        return trainingCourseRepository.findOpenForRegistration(dioceseId, deaneryId).stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
     @Cacheable(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, key = "@cacheScopeKeyHelper.detailKey(#authentication, #courseCode)")
     @Transactional(readOnly = true)
     public TrainingCourseResponse findById(String courseCode, Authentication authentication) {
         return toResponse(trainingCourseRepository.findByCodeWithType(courseCode)
-                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy khóa huấn luyện " + courseCode)));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy khóa huấn luyện " + courseCode)),
+                courseParticipationRepository.existsByCourseCode(courseCode));
     }
 
     @Caching(evict = {
@@ -165,7 +220,16 @@ public class TrainingCourseService {
             existing.setCourseName(request.getCourseName());
         }
         if (request.getHostYear() != null) {
+            if (!java.util.Objects.equals(existing.getHostYear(), request.getHostYear())) {
+                requireNoParticipations(courseCode, "năm tổ chức");
+            }
             existing.setHostYear(request.getHostYear());
+        }
+        if (request.getYearsActive() != null) {
+            if (!java.util.Objects.equals(existing.getYearsActive() == null ? 0 : existing.getYearsActive(), request.getYearsActive())) {
+                requireNoParticipations(courseCode, "số năm hoạt động");
+            }
+            existing.setYearsActive(request.getYearsActive());
         }
         if (request.getLocation() != null) {
             existing.setLocation(request.getLocation());
@@ -183,8 +247,8 @@ public class TrainingCourseService {
             existing.setRegistrationEndAt(request.getRegistrationEndAt());
         }
         if (request.getPassingScore() != null) {
-            if (courseParticipationRepository.existsByCourseCode(courseCode)) {
-                throw commonValidationHelper.conflict("Không thể đổi điểm đạt sau khi đã có hồ sơ tham gia");
+            if (existing.getPassingScore() == null || existing.getPassingScore().compareTo(request.getPassingScore()) != 0) {
+                requireNoParticipations(courseCode, "điểm đạt");
             }
             existing.setPassingScore(request.getPassingScore());
         }
@@ -200,7 +264,7 @@ public class TrainingCourseService {
         if (request.getRecipientUsernames() != null) {
             applyRecipients(existing, request.getRecipientUsernames());
         }
-        return toResponse(existing);
+        return toResponse(existing, courseParticipationRepository.existsByCourseCode(courseCode));
     }
 
     @Caching(evict = {
@@ -532,7 +596,33 @@ public class TrainingCourseService {
         }
     }
 
+    // Khóa/mở chỉnh sửa điểm của khóa. Quyền kiểm tra ở controller (lock theo phạm vi sở hữu khóa).
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, allEntries = true)
+    })
+    @Transactional
+    public TrainingCourseResponse setScoreLocked(String courseCode, boolean locked, Authentication authentication) {
+        TrainingCourse course = trainingCourseRepository.findByCodeWithType(courseCode)
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy khóa huấn luyện " + courseCode));
+        course.setScoreLocked(locked);
+        course.setUpdatedAt(OffsetDateTime.now());
+        course.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người khóa/mở điểm"));
+        return toResponse(course, courseParticipationRepository.existsByCourseCode(courseCode));
+    }
+
+    // Loại khóa, năm tổ chức, số năm hoạt động và điểm đạt bị khóa sau khi khóa đã có hồ sơ tham gia.
+    private void requireNoParticipations(String courseCode, String fieldLabel) {
+        if (courseParticipationRepository.existsByCourseCode(courseCode)) {
+            throw commonValidationHelper.conflict("Không thể đổi " + fieldLabel + " sau khi đã có hồ sơ tham gia");
+        }
+    }
+
     private TrainingCourseResponse toResponse(TrainingCourse course) {
+        return toResponse(course, null);
+    }
+
+    private TrainingCourseResponse toResponse(TrainingCourse course, Boolean hasParticipations) {
         TrainingCourseType courseType = course.getCourseType();
         return TrainingCourseResponse.builder()
                 .courseCode(course.getCourseCode())
@@ -541,6 +631,9 @@ public class TrainingCourseService {
                 .courseTypeName(courseType == null ? null : courseType.getTypeName())
                 .managementUnitType(courseType == null ? null : courseType.getManagementUnitType())
                 .hostYear(course.getHostYear())
+                .yearsActive(course.getYearsActive() == null ? 0 : course.getYearsActive())
+                .hasParticipations(hasParticipations)
+                .scoreLocked(Boolean.TRUE.equals(course.getScoreLocked()))
                 .location(course.getLocation())
                 .startDate(course.getStartDate())
                 .endDate(course.getEndDate())

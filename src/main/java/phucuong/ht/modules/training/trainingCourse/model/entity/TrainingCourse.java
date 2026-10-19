@@ -33,6 +33,10 @@ public class TrainingCourse extends BaseModel {
 
     private Integer hostYear;
 
+    // Số năm tối thiểu giữa năm đạt cấp độ của khóa tiên quyết và năm tổ chức khóa này (mặc định 0).
+    @Column(name = "years_active", nullable = false)
+    private Integer yearsActive = 0;
+
     private String location;
 
     private LocalDate startDate;
@@ -75,6 +79,10 @@ public class TrainingCourse extends BaseModel {
     @CollectionTable(name = "training_course_recipient", joinColumns = @JoinColumn(name = "course_code"))
     @Column(name = "username")
     private Set<String> recipientUsernames = new LinkedHashSet<>();
+
+    // Khóa chỉnh sửa điểm: admin giáo phận/giáo hạt (có quyền lock) bật/tắt trong thời gian diễn ra khóa; khi khóa thì không nhập điểm được.
+    @Column(name = "score_locked", nullable = false)
+    private Boolean scoreLocked = Boolean.FALSE;
 
     private String additionalNotes;
 }

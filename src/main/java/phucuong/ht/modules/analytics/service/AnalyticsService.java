@@ -61,13 +61,13 @@ public class AnalyticsService {
 
         long pendingApprovals = count(
                 participationFrom,
-                leaderScope + " and " + courseScope + " and (cp.deanery_approval_status in ('PENDING','SUBMITTED') or cp.diocese_approval_status in ('PENDING','SUBMITTED'))",
+                leaderScope + " and " + courseScope + " and cp.approval_status in ('PENDING','SUBMITTED')",
                 "",
                 params
         );
         long pendingScoring = count(
                 participationFrom,
-                leaderScope + " and " + courseScope + " and cp.total_score is null and (cp.deanery_approval_status = 'APPROVED' or cp.diocese_approval_status = 'APPROVED')",
+                leaderScope + " and " + courseScope + " and cp.total_score is null and cp.approval_status = 'APPROVED'",
                 "",
                 params
         );
@@ -164,7 +164,7 @@ public class AnalyticsService {
         long completed = count(participationFrom, participationScope + " and cp.participation_status = 'COMPLETED'", participationDate, params);
         long passed = count(participationFrom, participationScope + " and cp.result = 'COMPLETED'", participationDate, params);
         long cancelled = count(participationFrom, participationScope + " and cp.participation_status = 'CANCELLED'", participationDate, params);
-        long pending = count(participationFrom, participationScope + " and ('PENDING' in (cp.deanery_approval_status, cp.diocese_approval_status, cp.certificate_approval_status) or 'SUBMITTED' in (cp.deanery_approval_status, cp.diocese_approval_status, cp.certificate_approval_status))", participationDate, params);
+        long pending = count(participationFrom, participationScope + " and ('PENDING' in (cp.approval_status, cp.certificate_approval_status) or 'SUBMITTED' in (cp.approval_status, cp.certificate_approval_status))", participationDate, params);
         long certificateRequested = count(participationFrom, participationScope + " and cp.certificate_requested_at is not null", participationDate, params);
         long certificateApproved = count(participationFrom, participationScope + " and cp.certificate_approved_at is not null", participationDate, params);
         kpis.put("registrations", registrations);

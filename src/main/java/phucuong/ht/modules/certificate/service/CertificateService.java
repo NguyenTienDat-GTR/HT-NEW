@@ -242,9 +242,7 @@ public class CertificateService {
                 || participation.getTotalScore() == null) {
             throw commonValidationHelper.validationError("Chứng chỉ chỉ được duyệt cho hồ sơ đã chấm điểm hợp lệ");
         }
-        WorkflowApprovalStatus requiredStatus = trainingWorkflowSupport.isDeaneryManaged(participation.getCourse().getCourseType())
-                ? participation.getDeaneryApprovalStatus() : participation.getDioceseApprovalStatus();
-        if (requiredStatus != WorkflowApprovalStatus.APPROVED) {
+        if (participation.getApprovalStatus() != WorkflowApprovalStatus.APPROVED) {
             throw commonValidationHelper.validationError("Hồ sơ phải được duyệt đúng cấp trước khi duyệt chứng chỉ");
         }
     }

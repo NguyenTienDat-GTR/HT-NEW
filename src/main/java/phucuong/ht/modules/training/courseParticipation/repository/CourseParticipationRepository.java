@@ -23,6 +23,11 @@ public class CourseParticipationRepository extends BaseRepo<CourseParticipation,
         return participation;
     }
 
+    @Transactional
+    public void delete(CourseParticipation participation) {
+        entityManager.remove(entityManager.contains(participation) ? participation : entityManager.merge(participation));
+    }
+
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public Optional<CourseParticipation> findByIdWithLeaderAndCourse(String id) {
         List<CourseParticipation> results = entityManager.createQuery(
@@ -65,6 +70,27 @@ public class CourseParticipationRepository extends BaseRepo<CourseParticipation,
                 .setParameter("typeCode", prerequisiteTypeCode)
                 .getSingleResult();
         return count != null && count > 0;
+    }
+
+    // Năm sớm nhất huynh trưởng đạt khóa thuộc loại này: ưu tiên năm duyệt chứng chỉ, nếu thiếu thì lấy năm tổ chức/kết thúc khóa.
+    public Optional<Integer> findEarliestCompletedYearByLeaderAndCourseType(UUID leaderId, String typeCode) {
+        List<Integer> years = entityManager.createQuery(
+                        """
+                                select coalesce(
+                                           extract(year from cp.certificateApprovedAt),
+                                           cp.course.hostYear,
+                                           extract(year from cp.course.endDate))
+                                from CourseParticipation cp
+                                where cp.leader.id = :leaderId
+                                  and cp.course.courseType.typeCode = :typeCode
+                                  and cp.result = phucuong.ht.modules.training.enums.CourseResult.COMPLETED
+                                """,
+                        Integer.class
+                )
+                .setParameter("leaderId", leaderId)
+                .setParameter("typeCode", typeCode)
+                .getResultList();
+        return years.stream().filter(java.util.Objects::nonNull).min(Integer::compareTo);
     }
 
     public List<CourseParticipation> findAllByCourseCode(String courseCode) {

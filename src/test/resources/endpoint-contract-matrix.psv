@@ -129,8 +129,14 @@ GET /api/system/audit-logs/{id}|200|401|403|N/A: log identifier is an opaque str
 # Training participations and workflow
 GET /api/training/participations|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
 GET /api/training/participations/{id}|200|401|403|N/A: participation identifier is an opaque string|404|N/A: read-only endpoint does not mutate state
+GET /api/training/participants|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/training/participants/{id}|200|401|403|N/A: participation identifier is an opaque string|404|N/A: read-only endpoint does not mutate state
+DELETE /api/training/participants/{id}|200|401|403|N/A: participation identifier is an opaque string|404|409
 POST /api/training/courses/{courseCode}/registrations|200|401|403|400|404|409
-POST /api/training/courses/{courseCode}/deanery-submit|200|401|403|400|404|409
+DELETE /api/training/registrations/{id}|200|401|403|N/A: registration identifier is an opaque string|404|409
+POST /api/training/registrations/bulk-approval|200|401|403|400|N/A: ids are validated per item and reported in the response|N/A: partial failures are reported per item
+GET /api/training/courses/{courseCode}/registration-candidates|200|401|403|400|404|N/A: read-only endpoint does not mutate state
+GET /api/training/courses/{courseCode}/score-components|200|401|403|N/A: collection endpoint does not resolve an individual resource|404|N/A: read-only endpoint does not mutate state
 POST /api/training/registrations/{id}/deanery-approval|200|401|403|400|404|409
 POST /api/training/registrations/{id}/diocese-approval|200|401|403|400|404|409
 PATCH /api/training/participations/{id}/score|200|401|403|400|404|409
@@ -155,8 +161,10 @@ PATCH /api/training/score-components/{id}/toggle-status|200|401|403|400|404|N/A:
 POST /api/training/courses|200|401|403|400|404|409
 GET /api/training/courses|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
 GET /api/training/courses/recipient-candidates|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/training/courses/registrable|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
 GET /api/training/courses/passing-score-limit|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
 GET /api/training/courses/{courseCode}|200|401|403|N/A: course code is an opaque string|404|N/A: read-only endpoint does not mutate state
 PUT /api/training/courses/{courseCode}|200|401|403|400|404|409
 PATCH /api/training/courses/{courseCode}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict
 PATCH /api/training/courses/{courseCode}/registration|200|401|403|400|404|N/A: open/close flag has no uniqueness conflict
+PATCH /api/training/courses/{courseCode}/score-lock|200|401|403|400|404|N/A: locking is idempotent
