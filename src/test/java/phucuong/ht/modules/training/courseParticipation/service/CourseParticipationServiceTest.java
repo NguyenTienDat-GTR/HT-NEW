@@ -504,6 +504,26 @@ class CourseParticipationServiceTest {
     }
 
     @Test
+    void scoreShouldRejectWhenCourseIsNotOngoing() {
+        courseParticipationService = buildService();
+        TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);
+        course.setStartDate(java.time.LocalDate.now().plusDays(5));
+        course.setEndDate(java.time.LocalDate.now().plusDays(7));
+        CourseParticipation participation = pendingParticipation("cp-s", course, "leader-9");
+        participation.setApprovalStatus(WorkflowApprovalStatus.APPROVED);
+        when(courseParticipationRepository.findByIdWithLeaderAndCourse("cp-s")).thenReturn(Optional.of(participation));
+
+        TrainingScoreRequest request = new TrainingScoreRequest();
+        ComponentScoreRequest score = new ComponentScoreRequest();
+        score.setComponentId("component-1");
+        score.setScore(BigDecimal.ONE);
+        request.setComponentScores(List.of(score));
+
+        assertThrows(RuntimeException.class, () -> courseParticipationService.score("cp-s", request, authentication("admin-diocese", "training.participation.score.diocese")));
+        verify(scoreComponentTemplateRepository, never()).findActiveForCourse(any(), any(), any());
+    }
+
+    @Test
     void scoreShouldRejectWhenCertificateAlreadyApproved() {
         courseParticipationService = buildService();
         CourseParticipation participation = new CourseParticipation();
@@ -553,6 +573,9 @@ class CourseParticipationServiceTest {
         TrainingCourse course = new TrainingCourse();
         course.setCourseCode("COURSE");
         course.setCourseType(type);
+        // Khóa đang diễn ra (cho phép chấm điểm).
+        course.setStartDate(java.time.LocalDate.now().minusDays(1));
+        course.setEndDate(java.time.LocalDate.now().plusDays(1));
         Diocese diocese = new Diocese();
         diocese.setId(UUID.randomUUID());
         diocese.setName("Diocese A");

@@ -429,6 +429,7 @@ public class CourseParticipationService {
             throw commonValidationHelper.conflict("Không thể sửa điểm sau khi chứng chỉ đã được duyệt");
         }
         requireApprovedForScoring(participation);
+        requireCourseOngoingForScoring(participation.getCourse());
         List<ScoreComponentTemplate> components = requireScoreComponents(participation);
         Map<String, ComponentScoreRequest> requestedScores = normalizeComponentScores(request.getComponentScores());
 
@@ -976,6 +977,13 @@ public class CourseParticipationService {
     private void requirePendingManualApproval(WorkflowApprovalStatus status) {
         if (status != WorkflowApprovalStatus.PENDING && status != WorkflowApprovalStatus.SUBMITTED) {
             throw commonValidationHelper.conflict("Hồ sơ đã ở trạng thái kết thúc hoặc không chờ duyệt");
+        }
+    }
+
+    // Chỉ được chấm điểm khi khóa đang trong thời gian diễn ra (từ ngày bắt đầu đến hết ngày kết thúc, múi giờ Việt Nam).
+    private void requireCourseOngoingForScoring(TrainingCourse course) {
+        if (TrainingCourseStatusSupport.organizingStatus(course, TrainingCourseStatusSupport.today()) != phucuong.ht.modules.training.enums.CourseOrganizingStatus.ONGOING) {
+            throw commonValidationHelper.conflict("Chỉ được chấm điểm khi khóa huấn luyện đang trong thời gian diễn ra");
         }
     }
 
