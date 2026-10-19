@@ -827,6 +827,10 @@ Participation scoring behavior:
 - Notification routing: registration submit of a deanery-managed course and the deanery submit of a diocese course notify the course's recipients (still-eligible ones; falls back to all eligible accounts if none chosen/valid). Parish submit of a diocese course still notifies all eligible deanery accounts. `recipientUsernames` in `TrainingRegistrationRequest`/`TrainingSubmissionRecipientRequest` is now ignored.
 - Course response adds `dioceseName`, `deaneryName`, `registrationOpen`, `recipientUsernames`, `createdBy`, `updatedBy` (createdBy/updatedBy were already persisted, just not returned).
 
+### WebSocket handshake security
+
+- `/ws/notifications` is `permitAll` in `securityConfig` (both public matcher variants). Browsers cannot send an `Authorization` header on a WebSocket upgrade, so the HTTP handshake must be public; authentication happens at the STOMP `CONNECT` frame in `WebSocketConfig.NotificationInboundChannelInterceptor` (Bearer token + active Redis session), and only `/user/queue/notifications` and the auth-events queue can be subscribed. Before this fix `anyRequest().authenticated()` rejected the handshake with 401, so NO realtime push (notifications, auth refresh events) ever reached the browser. Verify with a raw upgrade request: expect `101`, not `401`.
+
 ### Rate limit response encoding
 
 - `ApiRateLimitFilter` writes the 429 body by hand; `Content-Type: application/json` has no charset so the servlet writer defaulted to ISO-8859-1 and the Vietnamese message came out as mojibake. It now calls `setCharacterEncoding(UTF-8)` (covered by `ApiRateLimitFilterEncodingTest`). Any filter that writes a JSON body manually must set UTF-8 (the other filters already do).
