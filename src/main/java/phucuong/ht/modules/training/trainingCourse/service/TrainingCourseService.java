@@ -85,6 +85,7 @@ public class TrainingCourseService {
     }
 
     @Cacheable(cacheNames = CacheNames.TRAINING_COURSE_LIST, key = "@cacheScopeKeyHelper.listKey(#authentication, #request)")
+    @Transactional(readOnly = true)
     public Page<TrainingCourseResponse> findAll(BaseSearchRequest request, Authentication authentication) {
         BaseSearchRequest scopedRequest = copyRequest(request);
         if (hasAuthority(authentication, TrainingCourseAccessEvaluator.READ_DIOCESE)) {
@@ -105,6 +106,7 @@ public class TrainingCourseService {
     }
 
     @Cacheable(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, key = "@cacheScopeKeyHelper.detailKey(#authentication, #courseCode)")
+    @Transactional(readOnly = true)
     public TrainingCourseResponse findById(String courseCode, Authentication authentication) {
         return toResponse(trainingCourseRepository.findByCodeWithType(courseCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy khóa huấn luyện " + courseCode)));
