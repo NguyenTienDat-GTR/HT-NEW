@@ -34,7 +34,7 @@ public class CertificateRepository extends BaseRepo<Certificate, String> {
                                 left join fetch p.deanery de
                                 left join fetch de.diocese d
                                 left join fetch c.course tc
-                                left join fetch tc.requirement
+                                left join fetch tc.courseType
                                 left join fetch tc.deanery
                                 left join fetch tc.diocese
                                 where c.certificateCode = :certificateCode

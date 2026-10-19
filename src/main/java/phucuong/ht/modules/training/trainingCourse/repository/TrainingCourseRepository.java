@@ -24,12 +24,13 @@ public class TrainingCourseRepository extends BaseRepo<TrainingCourse, String> {
     }
 
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
-    public Optional<TrainingCourse> findByCodeWithRequirement(String courseCode) {
+    public Optional<TrainingCourse> findByCodeWithType(String courseCode) {
         List<TrainingCourse> results = entityManager.createQuery(
                         """
                                 select tc
                                 from TrainingCourse tc
-                                left join fetch tc.requirement
+                                left join fetch tc.courseType courseType
+                                left join fetch courseType.prerequisiteType
                                 left join fetch tc.diocese
                                 left join fetch tc.deanery
                                 left join fetch tc.scoreFormula scoreFormula
@@ -42,6 +43,17 @@ public class TrainingCourseRepository extends BaseRepo<TrainingCourse, String> {
                 .setMaxResults(1)
                 .getResultList();
         return results.stream().findFirst();
+    }
+
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public boolean existsByCourseTypeCode(String courseTypeCode) {
+        Long count = entityManager.createQuery(
+                        "select count(tc) from TrainingCourse tc where tc.courseType.typeCode = :typeCode",
+                        Long.class
+                )
+                .setParameter("typeCode", courseTypeCode)
+                .getSingleResult();
+        return count != null && count > 0;
     }
 
     public Optional<UUID> findDioceseIdByCourseCode(String courseCode) {

@@ -2,7 +2,7 @@ package phucuong.ht.modules.certificate;
 
 import org.springframework.stereotype.Component;
 import phucuong.ht.common.validation.CommonValidationHelper;
-import phucuong.ht.modules.training.enums.CourseType;
+import phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType;
 
 import java.text.Normalizer;
 import java.util.Locale;
@@ -16,14 +16,14 @@ public class CertificateCodeGenerator {
         this.commonValidationHelper = commonValidationHelper;
     }
 
-    public String buildCode(String unitName, CourseType courseType, Integer hostYear, long sequence) {
+    public String buildCode(String unitName, TrainingCourseType courseType, Integer hostYear, long sequence) {
         if (hostYear == null) {
             throw commonValidationHelper.validationError("Năm tổ chức là bắt buộc để tạo mã chứng chỉ");
         }
         return abbreviation(unitName) + "-" + courseShortCode(courseType) + "-" + hostYear + "-" + sequence;
     }
 
-    public String buildPrefix(String unitName, CourseType courseType, Integer hostYear) {
+    public String buildPrefix(String unitName, TrainingCourseType courseType, Integer hostYear) {
         if (hostYear == null) {
             throw commonValidationHelper.validationError("Năm tổ chức là bắt buộc để tạo mã chứng chỉ");
         }
@@ -47,18 +47,19 @@ public class CertificateCodeGenerator {
         return builder.toString();
     }
 
-    public String courseShortCode(CourseType courseType) {
+    // Mã viết tắt lấy từ cấu hình loại khóa; fallback về mã loại khi chưa khai báo.
+    public String courseShortCode(TrainingCourseType courseType) {
         if (courseType == null) {
             throw commonValidationHelper.validationError("Loại khóa học là bắt buộc để tạo mã chứng chỉ");
         }
-        return switch (courseType) {
-            case SMTL_DT, SMKN_DT -> "DT";
-            case SMTL_I, SMKN_I, TSM_II, SMTL_II, SMKN_II, TSM_III_1, TSM_III_2 -> courseType.name().replace("_", "");
-            case SMTL_III, SMKN_III -> "III";
-            case HLV_I -> "HLVI";
-            case HLV_II -> "HLVII";
-            case HLV_III -> "HLVIII";
-        };
+        String shortCode = courseType.getCertificateShortCode();
+        if (shortCode == null || shortCode.isBlank()) {
+            shortCode = courseType.getTypeCode();
+        }
+        if (shortCode == null || shortCode.isBlank()) {
+            throw commonValidationHelper.validationError("Loại khóa học thiếu mã viết tắt để tạo mã chứng chỉ");
+        }
+        return normalizeAscii(shortCode).replaceAll("\\s+", "");
     }
 
     private String normalizeAscii(String input) {

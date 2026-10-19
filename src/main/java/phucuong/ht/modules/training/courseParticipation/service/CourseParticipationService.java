@@ -34,7 +34,7 @@ import phucuong.ht.modules.training.courseParticipation.model.response.CoursePar
 import phucuong.ht.modules.training.courseParticipation.model.response.TrainingRegistrationBatchResponse;
 import phucuong.ht.modules.training.courseParticipation.repository.CourseParticipationRepository;
 import phucuong.ht.modules.training.courseParticipation.security.CourseParticipationAccessEvaluator;
-import phucuong.ht.modules.training.courseRequirement.model.entity.CourseRequirement;
+import phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType;
 import phucuong.ht.modules.training.enums.CourseResult;
 import phucuong.ht.modules.training.enums.ParticipationStatus;
 import phucuong.ht.modules.training.enums.WorkflowApprovalStatus;
@@ -424,7 +424,7 @@ public class CourseParticipationService {
     }
 
     private TrainingCourse requireCourse(String courseCode) {
-        return trainingCourseRepository.findByCodeWithRequirement(courseCode)
+        return trainingCourseRepository.findByCodeWithType(courseCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy khóa huấn luyện " + courseCode));
     }
 
@@ -445,8 +445,8 @@ public class CourseParticipationService {
         if (!Boolean.TRUE.equals(course.getStatus())) {
             throw commonValidationHelper.validationError("Khóa huấn luyện đã ngừng hoạt động");
         }
-        if (course.getRequirement() != null && !Boolean.TRUE.equals(course.getRequirement().getStatus())) {
-            throw commonValidationHelper.validationError("Yêu cầu đăng ký của khóa huấn luyện đã ngừng hoạt động");
+        if (course.getCourseType() != null && !Boolean.TRUE.equals(course.getCourseType().getStatus())) {
+            throw commonValidationHelper.validationError("Loại khóa huấn luyện đã ngừng hoạt động");
         }
     }
 
@@ -515,7 +515,7 @@ public class CourseParticipationService {
         int pendingCount = Math.max(total - autoApprovedCount, 0);
         return TrainingRegistrationBatchResponse.builder()
                 .courseCode(course.getCourseCode())
-                .courseType(course.getCourseType())
+                .courseTypeCode(course.getCourseType() == null ? null : course.getCourseType().getTypeCode())
                 .senderUnitType(senderUnitType)
                 .senderUnitId(senderUnitId)
                 .senderUnitName(senderUnitName)
@@ -561,48 +561,49 @@ public class CourseParticipationService {
             UUID recipientScopeId,
             String recipientPermission
     ) {
-        publishEvent(eventType, "trainingCourse", course.getCourseCode(), actor, Map.of(
-                "courseCode", course.getCourseCode(),
-                "courseType", course.getCourseType().name(),
-                "participationIds", participations.stream().map(CourseParticipation::getId).toList(),
-                "senderUnitType", senderUnitType.name(),
-                "senderUnitId", String.valueOf(senderUnitId),
-                "senderUnitName", senderUnitName,
-                "recipientScopeType", recipientScopeType.name(),
-                "recipientScopeId", String.valueOf(recipientScopeId),
-                "recipientPermission", recipientPermission,
-                "totalCount", participations.size()
+        publishEvent(eventType, "trainingCourse", course.getCourseCode(), actor, Map.ofEntries(
+                Map.entry("courseCode", course.getCourseCode()),
+                Map.entry("courseType", course.getCourseType().getTypeCode()),
+                Map.entry("deaneryManaged", trainingWorkflowSupport.isDeaneryManaged(course.getCourseType())),
+                Map.entry("participationIds", participations.stream().map(CourseParticipation::getId).toList()),
+                Map.entry("senderUnitType", senderUnitType.name()),
+                Map.entry("senderUnitId", String.valueOf(senderUnitId)),
+                Map.entry("senderUnitName", senderUnitName),
+                Map.entry("recipientScopeType", recipientScopeType.name()),
+                Map.entry("recipientScopeId", String.valueOf(recipientScopeId)),
+                Map.entry("recipientPermission", recipientPermission),
+                Map.entry("totalCount", participations.size())
         ));
     }
 
     private boolean isEligible(Leader leader, TrainingCourse course) {
-        CourseRequirement requirement = course.getRequirement();
-        if (requirement != null) {
-            if (requirement.getRequiredCurrentLevel() != null && leader.getLeaderLevel() != requirement.getRequiredCurrentLevel()) {
+        TrainingCourseType courseType = course.getCourseType();
+        if (courseType != null) {
+            if (courseType.getRequiredCurrentLevel() != null && leader.getLeaderLevel() != courseType.getRequiredCurrentLevel()) {
                 return false;
             }
-            if (requirement.getRequiredMinAge() != null) {
+            if (courseType.getRequiredMinAge() != null) {
                 if (leader.getBirthDate() == null) {
                     return false;
                 }
                 int age = Period.between(leader.getBirthDate(), LocalDate.now()).getYears();
-                if (age < requirement.getRequiredMinAge()) {
+                if (age < courseType.getRequiredMinAge()) {
                     return false;
                 }
             }
-            if (requirement.getRequiredYearsActive() != null) {
+            if (courseType.getRequiredYearsActive() != null) {
                 if (leader.getCreatedAt() == null) {
                     return false;
                 }
                 int yearsActive = Period.between(leader.getCreatedAt().toLocalDate(), LocalDate.now()).getYears();
-                if (yearsActive < requirement.getRequiredYearsActive()) {
+                if (yearsActive < courseType.getRequiredYearsActive()) {
                     return false;
                 }
             }
         }
 
         return trainingWorkflowSupport.prerequisiteOf(course.getCourseType())
-                .map(prerequisite -> courseParticipationRepository.existsApprovedParticipationByLeaderAndCourseType(leader.getId(), prerequisite))
+                .map(prerequisite -> courseParticipationRepository.existsApprovedParticipationByLeaderAndCourseType(leader.getId(), prerequisite.getTypeCode()))
                 .orElse(true);
     }
 
@@ -613,7 +614,7 @@ public class CourseParticipationService {
                 .leaderFullName(buildFullName(participation.getLeader()))
                 .courseCode(participation.getCourse() == null ? null : participation.getCourse().getCourseCode())
                 .courseName(participation.getCourse() == null ? null : participation.getCourse().getCourseName())
-                .courseType(participation.getCourse() == null ? null : participation.getCourse().getCourseType())
+                .courseTypeCode(participation.getCourse() == null || participation.getCourse().getCourseType() == null ? null : participation.getCourse().getCourseType().getTypeCode())
                 .scoreFormulaId(participation.getCourse() == null || participation.getCourse().getScoreFormula() == null ? null : participation.getCourse().getScoreFormula().getId())
                 .registrationDate(participation.getRegistrationDate())
                 .participationStatus(participation.getParticipationStatus())

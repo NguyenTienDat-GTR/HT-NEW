@@ -219,10 +219,10 @@ public class AnalyticsService {
     }
 
     private List<AnalyticsResponse.Breakdown> courseBreakdown(String leaderScope, String dateFilter, Map<String, Object> params) {
-        String sql = "select c.course_code, c.course_name, c.course_type, count(cp.id), " +
+        String sql = "select c.course_code, c.course_name, c.course_type_code, count(cp.id), " +
                 "count(*) filter (where cp.participation_status = 'COMPLETED'), count(*) filter (where cp.result = 'COMPLETED'), coalesce(avg(cp.total_score), 0) " +
                 "from course_participation cp join training_course c on c.course_code = cp.course_id join leader l on l.id = cp.leader_id where " + leaderScope + dateFilter +
-                " group by c.course_code, c.course_name, c.course_type order by count(cp.id) desc, c.course_name";
+                " group by c.course_code, c.course_name, c.course_type_code order by count(cp.id) desc, c.course_name";
         List<AnalyticsResponse.Breakdown> result = new ArrayList<>();
         for (Object[] row : repository.rows(sql, params)) {
             Map<String, Object> metrics = new LinkedHashMap<>();
@@ -250,7 +250,7 @@ public class AnalyticsService {
     }
 
     private List<AnalyticsResponse.Breakdown> certificateCourseBreakdown(String leaderScope, String dateFilter, Map<String, Object> params) {
-        String sql = "select tc.course_code, tc.course_name, tc.course_type, count(c.certificate_code), count(*) filter (where c.approval_status = 'APPROVED'), count(*) filter (where c.approval_status = 'PENDING') from certificate c join leader l on l.id = c.leader_id join training_course tc on tc.course_code = c.course_code where " + leaderScope + dateFilter + " group by tc.course_code, tc.course_name, tc.course_type order by count(c.certificate_code) desc, tc.course_name";
+        String sql = "select tc.course_code, tc.course_name, tc.course_type_code, count(c.certificate_code), count(*) filter (where c.approval_status = 'APPROVED'), count(*) filter (where c.approval_status = 'PENDING') from certificate c join leader l on l.id = c.leader_id join training_course tc on tc.course_code = c.course_code where " + leaderScope + dateFilter + " group by tc.course_code, tc.course_name, tc.course_type_code order by count(c.certificate_code) desc, tc.course_name";
         List<AnalyticsResponse.Breakdown> result = new ArrayList<>();
         for (Object[] row : repository.rows(sql, params)) {
             Map<String, Object> metrics = new LinkedHashMap<>();
@@ -345,7 +345,7 @@ public class AnalyticsService {
             case "leaderLevel" -> "l.leader_level";
             case "status" -> alias + ".status";
             case "approvalStatus" -> alias + ".approval_status";
-            case "courseType" -> "c.course_type";
+            case "courseType" -> "c.course_type_code";
             case "year" -> "extract(year from " + field + ")";
             case "parish" -> "p.name";
             case "deanery" -> "d.name";

@@ -13,7 +13,6 @@ import phucuong.ht.modules.notification.service.TrainingNotificationService;
 import phucuong.ht.modules.training.TrainingWorkflowSupport;
 import phucuong.ht.modules.training.courseParticipation.model.entity.CourseParticipation;
 import phucuong.ht.modules.training.courseParticipation.repository.CourseParticipationRepository;
-import phucuong.ht.modules.training.enums.CourseType;
 import phucuong.ht.modules.training.enums.WorkflowApprovalStatus;
 
 import java.util.List;
@@ -40,10 +39,10 @@ public class TrainingRegistrationAutoApprovalConsumer {
             return;
         }
 
-        CourseType courseType = CourseType.valueOf(String.valueOf(message.getPayload().get("courseType")));
+        boolean deaneryManaged = Boolean.parseBoolean(String.valueOf(message.getPayload().get("deaneryManaged")));
         boolean shouldProcess = "training.registration.batch_submitted".equals(message.getEventType())
-                ? trainingWorkflowSupport.shouldAutoApproveAfterParishSubmission(courseType)
-                : trainingWorkflowSupport.shouldAutoApproveAfterDeanerySubmission(courseType);
+                ? deaneryManaged
+                : !deaneryManaged;
         if (!shouldProcess) {
             return;
         }

@@ -20,9 +20,8 @@ import phucuong.ht.modules.deanery.repository.DeaneryRepository;
 import phucuong.ht.modules.diocese.repository.DioceseRepository;
 import phucuong.ht.modules.training.TrainingWorkflowSupport;
 import phucuong.ht.modules.training.courseParticipation.repository.CourseParticipationRepository;
-import phucuong.ht.modules.training.courseRequirement.model.entity.CourseRequirement;
-import phucuong.ht.modules.training.courseRequirement.repository.CourseRequirementRepository;
-import phucuong.ht.modules.training.enums.CourseType;
+import phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType;
+import phucuong.ht.modules.training.courseType.repository.TrainingCourseTypeRepository;
 import phucuong.ht.modules.training.scoreFormulaTemplate.model.entity.ScoreFormulaTemplate;
 import phucuong.ht.modules.training.scoreFormulaTemplate.repository.ScoreFormulaTemplateRepository;
 import phucuong.ht.modules.training.trainingCourse.model.entity.TrainingCourse;
@@ -45,7 +44,7 @@ public class TrainingCourseService {
     private static final String DEANERY_FILTER_FIELD = "deanery.id";
 
     private final TrainingCourseRepository trainingCourseRepository;
-    private final CourseRequirementRepository courseRequirementRepository;
+    private final TrainingCourseTypeRepository trainingCourseTypeRepository;
     private final CourseParticipationRepository courseParticipationRepository;
     private final DioceseRepository dioceseRepository;
     private final DeaneryRepository deaneryRepository;
@@ -61,17 +60,13 @@ public class TrainingCourseService {
     })
     @Transactional
     public TrainingCourseResponse create(TrainingCourseCreateRequest request, Authentication authentication) {
-        if (request.getCourseType() == null) {
-            throw commonValidationHelper.validationError("courseType là bắt buộc");
-        }
-
-        CourseRequirement requirement = resolveRequirement(request.getRequirementCode());
+        TrainingCourseType courseType = resolveCourseType(request.getCourseTypeCode());
         String auditActor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tạo khóa huấn luyện");
         OffsetDateTime now = OffsetDateTime.now();
 
         TrainingCourse course = new TrainingCourse();
-        course.setCourseCode(request.getCourseCode());
-        course.setRequirement(requirement);
+        course.setCourseCode(generateUniqueCourseCode());
+        course.setCourseType(courseType);
         course.setCourseName(request.getCourseName());
         course.setHostYear(request.getHostYear());
         course.setLocation(request.getLocation());
@@ -79,7 +74,6 @@ public class TrainingCourseService {
         course.setEndDate(request.getEndDate());
         course.setRegistrationStartAt(request.getRegistrationStartAt());
         course.setRegistrationEndAt(request.getRegistrationEndAt());
-        course.setCourseType(request.getCourseType());
         course.setAdditionalNotes(request.getAdditionalNotes());
         course.setStatus(Boolean.TRUE);
         course.setCreatedAt(now);
@@ -87,11 +81,10 @@ public class TrainingCourseService {
         course.setCreatedBy(auditActor);
         course.setUpdatedBy(auditActor);
         validateRegistrationWindow(course.getRegistrationStartAt(), course.getRegistrationEndAt());
-        applyOwnerScope(course, request.getCourseType(), authentication);
-        validateRequirementScope(requirement, course, request.getCourseType());
+        applyOwnerScope(course, courseType, authentication);
         applyScoreFormula(course, request.getScoreFormulaId(), authentication);
         trainingCourseRepository.save(course);
-        return toResponse(trainingCourseRepository.findByCodeWithRequirement(course.getCourseCode()).orElse(course));
+        return toResponse(trainingCourseRepository.findByCodeWithType(course.getCourseCode()).orElse(course));
     }
 
     @Cacheable(cacheNames = CacheNames.TRAINING_COURSE_LIST, key = "@cacheScopeKeyHelper.listKey(#authentication, #request)")
@@ -116,7 +109,7 @@ public class TrainingCourseService {
 
     @Cacheable(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, key = "@cacheScopeKeyHelper.detailKey(#authentication, #courseCode)")
     public TrainingCourseResponse findById(String courseCode, Authentication authentication) {
-        return toResponse(trainingCourseRepository.findByCodeWithRequirement(courseCode)
+        return toResponse(trainingCourseRepository.findByCodeWithType(courseCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy khóa huấn luyện " + courseCode)));
     }
 
@@ -126,20 +119,26 @@ public class TrainingCourseService {
     })
     @Transactional
     public TrainingCourseResponse update(String courseCode, TrainingCourseUpdateRequest request, Authentication authentication) {
-        TrainingCourse existing = trainingCourseRepository.findByCodeWithRequirement(courseCode)
+        TrainingCourse existing = trainingCourseRepository.findByCodeWithType(courseCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy khóa huấn luyện " + courseCode));
-        CourseType targetCourseType = request.getCourseType() == null ? existing.getCourseType() : request.getCourseType();
-        requireUpdateScope(authentication, existing, targetCourseType);
-        if (request.getCourseType() != null && request.getCourseType() != existing.getCourseType()
-                && courseParticipationRepository.existsByCourseCode(courseCode)) {
+
+        TrainingCourseType currentType = existing.getCourseType();
+        boolean typeChanging = request.getCourseTypeCode() != null
+                && !request.getCourseTypeCode().isBlank()
+                && !request.getCourseTypeCode().trim().equals(currentType.getTypeCode());
+        TrainingCourseType targetType = typeChanging ? resolveCourseType(request.getCourseTypeCode()) : currentType;
+
+        requireUpdateScope(authentication, existing, targetType);
+
+        if (typeChanging && courseParticipationRepository.existsByCourseCode(courseCode)) {
             throw commonValidationHelper.conflict("Không thể đổi loại khóa huấn luyện sau khi đã có hồ sơ tham gia");
         }
-        if (request.getCourseType() != null && request.getCourseType() != existing.getCourseType()
-                && (request.getScoreFormulaId() == null || request.getScoreFormulaId().isBlank())) {
-            throw commonValidationHelper.validationError("Đổi courseType phải gửi scoreFormulaId phù hợp với scope mới");
+        if (typeChanging && (request.getScoreFormulaId() == null || request.getScoreFormulaId().isBlank())) {
+            throw commonValidationHelper.validationError("Đổi loại khóa phải gửi scoreFormulaId phù hợp với scope mới");
         }
-        if (request.getRequirementCode() != null) {
-            existing.setRequirement(resolveRequirement(request.getRequirementCode()));
+
+        if (typeChanging) {
+            existing.setCourseType(targetType);
         }
         if (request.getCourseName() != null) {
             existing.setCourseName(request.getCourseName());
@@ -162,9 +161,6 @@ public class TrainingCourseService {
         if (request.getRegistrationEndAt() != null) {
             existing.setRegistrationEndAt(request.getRegistrationEndAt());
         }
-        if (request.getCourseType() != null) {
-            existing.setCourseType(request.getCourseType());
-        }
         if (request.getScoreFormulaId() != null) {
             applyScoreFormula(existing, request.getScoreFormulaId(), authentication);
         }
@@ -174,8 +170,7 @@ public class TrainingCourseService {
         existing.setUpdatedAt(OffsetDateTime.now());
         existing.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật khóa huấn luyện"));
         validateRegistrationWindow(existing.getRegistrationStartAt(), existing.getRegistrationEndAt());
-        applyOwnerScope(existing, targetCourseType, authentication);
-        validateRequirementScope(existing.getRequirement(), existing, targetCourseType);
+        applyOwnerScope(existing, targetType, authentication);
         return toResponse(existing);
     }
 
@@ -191,7 +186,27 @@ public class TrainingCourseService {
         return findById(courseCode, authentication);
     }
 
-    private void applyOwnerScope(TrainingCourse course, CourseType courseType, Authentication authentication) {
+    private String generateUniqueCourseCode() {
+        String candidate;
+        do {
+            candidate = UUID.randomUUID().toString();
+        } while (trainingCourseRepository.findByCodeWithType(candidate).isPresent());
+        return candidate;
+    }
+
+    private TrainingCourseType resolveCourseType(String courseTypeCode) {
+        if (courseTypeCode == null || courseTypeCode.isBlank()) {
+            throw commonValidationHelper.validationError("courseTypeCode là bắt buộc");
+        }
+        TrainingCourseType courseType = trainingCourseTypeRepository.findByCodeWithPrerequisite(courseTypeCode.trim())
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy loại khóa huấn luyện: " + courseTypeCode));
+        if (!Boolean.TRUE.equals(courseType.getStatus())) {
+            throw commonValidationHelper.validationError("Loại khóa huấn luyện đang bị tạm ngưng: " + courseType.getTypeCode());
+        }
+        return courseType;
+    }
+
+    private void applyOwnerScope(TrainingCourse course, TrainingCourseType courseType, Authentication authentication) {
         if (trainingWorkflowSupport.isDeaneryManaged(courseType)) {
             UUID deaneryId = accountScopeValidationHelper.requireActiveDeaneryId(authentication, TrainingCourseAccessEvaluator.CREATE_DEANERY);
             course.setDeanery(deaneryRepository.getRequired(deaneryId));
@@ -204,7 +219,7 @@ public class TrainingCourseService {
         course.setDeanery(null);
     }
 
-    private void requireUpdateScope(Authentication authentication, TrainingCourse existing, CourseType targetCourseType) {
+    private void requireUpdateScope(Authentication authentication, TrainingCourse existing, TrainingCourseType targetCourseType) {
         UUID sourceDioceseId = sourceDioceseId(existing);
         if (trainingWorkflowSupport.isDeaneryManaged(existing.getCourseType())) {
             requireAuthority(authentication, TrainingCourseAccessEvaluator.UPDATE_DEANERY);
@@ -226,7 +241,7 @@ public class TrainingCourseService {
             }
         }
 
-        if (targetCourseType == existing.getCourseType()) {
+        if (targetCourseType.getTypeCode().equals(existing.getCourseType().getTypeCode())) {
             return;
         }
 
@@ -238,7 +253,7 @@ public class TrainingCourseService {
             );
             Deanery targetDeanery = deaneryRepository.getRequired(targetDeaneryId);
             if (targetDeanery.getDiocese() == null || !sourceDioceseId.equals(targetDeanery.getDiocese().getId())) {
-                throw commonValidationHelper.forbidden("Không th chuyển khóa huấn luyện sang giáo hạt ngoài giáo phận sở hữu");
+                throw commonValidationHelper.forbidden("Không thể chuyển khóa huấn luyện sang giáo hạt ngoài giáo phận sở hữu");
             }
             return;
         }
@@ -256,7 +271,7 @@ public class TrainingCourseService {
     private UUID sourceDioceseId(TrainingCourse course) {
         if (trainingWorkflowSupport.isDeaneryManaged(course.getCourseType())) {
             if (course.getDeanery() == null || course.getDeanery().getDiocese() == null) {
-                throw commonValidationHelper.conflict("Khóa D trưởng không có phạm vi giáo hạt / giáo phận hơp lệ");
+                throw commonValidationHelper.conflict("Khóa giáo hạt không có phạm vi giáo hạt / giáo phận hợp lệ");
             }
             return course.getDeanery().getDiocese().getId();
         }
@@ -268,7 +283,7 @@ public class TrainingCourseService {
 
     private void requireAuthority(Authentication authentication, String authority) {
         if (!securityUtils.hasAuthority(authentication, authority)) {
-            throw commonValidationHelper.forbidden("Tài khoản hiện tại không cos quyê cập nhật phạm vi khóa huấn luyện này");
+            throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền cập nhật phạm vi khóa huấn luyện này");
         }
     }
 
@@ -279,7 +294,7 @@ public class TrainingCourseService {
         ScoreFormulaTemplate formula = scoreFormulaTemplateRepository.findByIdWithComponents(scoreFormulaId)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy công thức tính điểm: " + scoreFormulaId));
         if (course.getCourseType() == null) {
-            throw commonValidationHelper.validationError("courseType là bắt buộc trước khi gán scoreFormula");
+            throw commonValidationHelper.validationError("Loại khóa là bắt buộc trước khi gán scoreFormula");
         }
         if (trainingWorkflowSupport.isDeaneryManaged(course.getCourseType())) {
             UUID deaneryId = accountScopeValidationHelper.requireActiveDeaneryId(authentication, TrainingCourseAccessEvaluator.CREATE_DEANERY);
@@ -293,29 +308,6 @@ public class TrainingCourseService {
             }
         }
         course.setScoreFormula(formula);
-    }
-
-    private CourseRequirement resolveRequirement(String requirementCode) {
-        if (requirementCode == null || requirementCode.isBlank()) {
-            return null;
-        }
-        return courseRequirementRepository.findByCodeWithScope(requirementCode)
-                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy yêu cầu khóa học " + requirementCode));
-    }
-
-    private void validateRequirementScope(CourseRequirement requirement, TrainingCourse course, CourseType courseType) {
-        if (requirement == null) {
-            return;
-        }
-        if (requirement.getCourseType() != courseType) {
-            throw commonValidationHelper.validationError("Yêu cầu khóa học phải cùng courseType với khóa huấn luyện");
-        }
-        boolean validOwner = trainingWorkflowSupport.isDeaneryManaged(courseType)
-                ? course.getDeanery() != null && requirement.getDeanery() != null && course.getDeanery().getId().equals(requirement.getDeanery().getId())
-                : course.getDiocese() != null && requirement.getDiocese() != null && course.getDiocese().getId().equals(requirement.getDiocese().getId());
-        if (!validOwner) {
-            throw commonValidationHelper.validationError("Yêu cầu khóa học phải thuộc cùng phạm vi quản lý với khóa huấn luyện");
-        }
     }
 
     private BaseSearchRequest copyRequest(BaseSearchRequest request) {
@@ -347,17 +339,19 @@ public class TrainingCourseService {
     }
 
     private TrainingCourseResponse toResponse(TrainingCourse course) {
+        TrainingCourseType courseType = course.getCourseType();
         return TrainingCourseResponse.builder()
                 .courseCode(course.getCourseCode())
-                .requirementCode(course.getRequirement() == null ? null : course.getRequirement().getRequirementCode())
                 .courseName(course.getCourseName())
+                .courseTypeCode(courseType == null ? null : courseType.getTypeCode())
+                .courseTypeName(courseType == null ? null : courseType.getTypeName())
+                .managementUnitType(courseType == null ? null : courseType.getManagementUnitType())
                 .hostYear(course.getHostYear())
                 .location(course.getLocation())
                 .startDate(course.getStartDate())
                 .endDate(course.getEndDate())
                 .registrationStartAt(course.getRegistrationStartAt())
                 .registrationEndAt(course.getRegistrationEndAt())
-                .courseType(course.getCourseType())
                 .dioceseId(course.getDiocese() == null ? null : course.getDiocese().getId())
                 .deaneryId(course.getDeanery() == null ? null : course.getDeanery().getId())
                 .scoreFormulaId(course.getScoreFormula() == null ? null : course.getScoreFormula().getId())

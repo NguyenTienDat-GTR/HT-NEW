@@ -10,7 +10,8 @@ import phucuong.ht.modules.parish.model.entity.Parish;
 import phucuong.ht.modules.training.TrainingWorkflowSupport;
 import phucuong.ht.modules.training.courseParticipation.model.entity.CourseParticipation;
 import phucuong.ht.modules.training.courseParticipation.repository.CourseParticipationRepository;
-import phucuong.ht.modules.training.enums.CourseType;
+import phucuong.ht.common.enums.UnitType;
+import phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType;
 import phucuong.ht.modules.training.trainingCourse.model.entity.TrainingCourse;
 import phucuong.ht.modules.training.trainingCourse.repository.TrainingCourseRepository;
 
@@ -32,11 +33,11 @@ class CourseParticipationAccessEvaluatorTest {
         CourseParticipationAccessEvaluator evaluator = evaluator(accountRepository, courseRepository, mock(CourseParticipationRepository.class));
         UUID parishId = UUID.randomUUID();
         UUID deaneryId = UUID.randomUUID();
-        TrainingCourse course = course("DT-2026", CourseType.SMKN_DT);
+        TrainingCourse course = course("DT-2026", UnitType.DEANERY);
 
         when(accountRepository.findActiveParishIdByUsername("parish-admin")).thenReturn(Optional.of(parishId));
         when(accountRepository.findActiveDeaneryIdByUsername("parish-admin")).thenReturn(Optional.of(deaneryId));
-        when(courseRepository.findByCodeWithRequirement("DT-2026")).thenReturn(Optional.of(course));
+        when(courseRepository.findByCodeWithType("DT-2026")).thenReturn(Optional.of(course));
         when(courseRepository.findDeaneryIdByCourseCode("DT-2026")).thenReturn(Optional.of(deaneryId));
 
         assertTrue(evaluator.canRegister(authentication(CourseParticipationAccessEvaluator.SUBMIT_PARISH), "DT-2026"));
@@ -52,11 +53,11 @@ class CourseParticipationAccessEvaluatorTest {
         CourseParticipationAccessEvaluator evaluator = evaluator(accountRepository, courseRepository, mock(CourseParticipationRepository.class));
         UUID parishId = UUID.randomUUID();
         UUID dioceseId = UUID.randomUUID();
-        TrainingCourse course = course("REGULAR-2026", CourseType.SMTL_I);
+        TrainingCourse course = course("REGULAR-2026", UnitType.DIOCESE);
 
         when(accountRepository.findActiveParishIdByUsername("parish-admin")).thenReturn(Optional.of(parishId));
         when(accountRepository.findActiveDioceseIdByUsername("parish-admin")).thenReturn(Optional.of(dioceseId));
-        when(courseRepository.findByCodeWithRequirement("REGULAR-2026")).thenReturn(Optional.of(course));
+        when(courseRepository.findByCodeWithType("REGULAR-2026")).thenReturn(Optional.of(course));
         when(courseRepository.findDioceseIdByCourseCode("REGULAR-2026")).thenReturn(Optional.of(dioceseId));
 
         assertTrue(evaluator.canRegister(authentication(CourseParticipationAccessEvaluator.SUBMIT_PARISH), "REGULAR-2026"));
@@ -71,7 +72,7 @@ class CourseParticipationAccessEvaluatorTest {
         TrainingCourseRepository courseRepository = mock(TrainingCourseRepository.class);
         CourseParticipationRepository participationRepository = mock(CourseParticipationRepository.class);
         CourseParticipationAccessEvaluator evaluator = evaluator(accountRepository, courseRepository, participationRepository);
-        TrainingCourse course = course("DT-2026", CourseType.SMKN_DT);
+        TrainingCourse course = course("DT-2026", UnitType.DEANERY);
         CourseParticipation participation = new CourseParticipation();
         participation.setCourse(course);
 
@@ -88,7 +89,7 @@ class CourseParticipationAccessEvaluatorTest {
         CourseParticipationRepository participationRepository = mock(CourseParticipationRepository.class);
         CourseParticipationAccessEvaluator evaluator = evaluator(accountRepository, courseRepository, participationRepository);
         UUID parishId = UUID.randomUUID();
-        CourseParticipation participation = participationWithLeaderParish(parishId, CourseType.SMTL_I);
+        CourseParticipation participation = participationWithLeaderParish(parishId, UnitType.DIOCESE);
 
         when(accountRepository.findActiveParishIdByUsername("parish-admin")).thenReturn(Optional.of(parishId));
         when(participationRepository.findByIdWithLeaderAndCourse("participation-1")).thenReturn(Optional.of(participation));
@@ -123,14 +124,18 @@ class CourseParticipationAccessEvaluatorTest {
                 new securityUtils(), accountRepository, courseRepository, participationRepository, new TrainingWorkflowSupport());
     }
 
-    private TrainingCourse course(String code, CourseType courseType) {
+    private TrainingCourse course(String code, UnitType managementUnitType) {
+        TrainingCourseType type = new TrainingCourseType();
+        type.setTypeCode(code + "-TYPE");
+        type.setManagementUnitType(managementUnitType);
+        type.setStatus(Boolean.TRUE);
         TrainingCourse course = new TrainingCourse();
         course.setCourseCode(code);
-        course.setCourseType(courseType);
+        course.setCourseType(type);
         return course;
     }
 
-    private CourseParticipation participationWithLeaderParish(UUID parishId, CourseType courseType) {
+    private CourseParticipation participationWithLeaderParish(UUID parishId, UnitType courseType) {
         Parish parish = new Parish();
         parish.setId(parishId);
         Leader leader = new Leader();
