@@ -20,6 +20,7 @@ import phucuong.ht.modules.training.courseParticipation.model.request.TrainingRe
 import phucuong.ht.modules.training.courseParticipation.model.request.TrainingScoreRequest;
 import phucuong.ht.modules.training.courseParticipation.model.response.CourseParticipationResponse;
 import phucuong.ht.modules.training.courseParticipation.model.response.RegistrationCandidateResponse;
+import phucuong.ht.modules.training.courseParticipation.model.response.ScoreEntryComponentResponse;
 import phucuong.ht.modules.training.courseParticipation.model.response.TrainingBulkApprovalResponse;
 import phucuong.ht.modules.training.courseParticipation.model.response.TrainingRegistrationBatchResponse;
 import phucuong.ht.modules.training.courseParticipation.service.CourseParticipationService;
@@ -40,6 +41,12 @@ public class CourseParticipationController {
     @PreAuthorize("@courseParticipationAccessEvaluator.canRead(authentication)")
     public apiResponse<Page<CourseParticipationResponse>> findAll(BaseSearchRequest request, Authentication authentication) {
         return apiResponse.success("Lấy danh sách hồ sơ đào tạo thành công", courseParticipationService.findAll(request, authentication));
+    }
+
+    @GetMapping("/courses/{courseCode}/score-components")
+    @PreAuthorize("@courseParticipationAccessEvaluator.canScoreCourse(authentication, #courseCode)")
+    public apiResponse<List<ScoreEntryComponentResponse>> scoreComponents(@PathVariable String courseCode) {
+        return apiResponse.success("Lấy thành phần điểm của khóa thành công", courseParticipationService.findScoreComponents(courseCode));
     }
 
     @GetMapping("/participants")

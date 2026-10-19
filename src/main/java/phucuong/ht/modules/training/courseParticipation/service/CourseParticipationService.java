@@ -32,6 +32,7 @@ import phucuong.ht.modules.training.courseParticipation.model.request.*;
 import phucuong.ht.modules.training.courseParticipation.model.response.ComponentScoreResponse;
 import phucuong.ht.modules.training.courseParticipation.model.response.CourseParticipationResponse;
 import phucuong.ht.modules.training.courseParticipation.model.response.RegistrationCandidateResponse;
+import phucuong.ht.modules.training.courseParticipation.model.response.ScoreEntryComponentResponse;
 import phucuong.ht.modules.training.courseParticipation.model.response.TrainingBulkApprovalResponse;
 import phucuong.ht.modules.training.courseParticipation.model.response.TrainingRegistrationBatchResponse;
 import phucuong.ht.modules.training.courseParticipation.repository.CourseParticipationRepository;
@@ -93,6 +94,30 @@ public class CourseParticipationService {
         }
         Page<CourseParticipation> page = courseParticipationRepository.findAll(scoped);
         return new PageImpl<>(page.getContent().stream().map(this::toResponse).toList(), page.getPageable(), page.getTotalElements());
+    }
+
+    // Thành phần điểm áp dụng cho khóa (cùng loại khóa và đơn vị sở hữu) để nhập điểm theo cột.
+    @Transactional(readOnly = true)
+    public List<ScoreEntryComponentResponse> findScoreComponents(String courseCode) {
+        TrainingCourse course = requireCourse(courseCode);
+        if (course.getCourseType() == null) {
+            return List.of();
+        }
+        return scoreComponentTemplateRepository.findActiveForCourse(
+                        course.getCourseType().getTypeCode(),
+                        course.getDiocese() == null ? null : course.getDiocese().getId(),
+                        course.getDeanery() == null ? null : course.getDeanery().getId())
+                .stream()
+                .map(component -> ScoreEntryComponentResponse.builder()
+                        .id(component.getId())
+                        .code(component.getCode())
+                        .name(component.getName())
+                        .maxScore(component.getMaxScore())
+                        .coefficient(component.getCoefficient())
+                        .includeInFinal(component.getIncludeInFinal())
+                        .displayOrder(component.getDisplayOrder())
+                        .build())
+                .toList();
     }
 
     // Danh sách tham dự: chỉ huynh trưởng đã được duyệt đăng ký (hồ sơ chờ duyệt/bị từ chối không nằm trong danh sách).

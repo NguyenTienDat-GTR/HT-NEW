@@ -114,6 +114,18 @@ public class CourseParticipationAccessEvaluator {
                 .orElse(false);
     }
 
+    // Xem thành phần điểm của khóa để nhập điểm: người có quyền chấm điểm đúng cấp quản lý của khóa.
+    public boolean canScoreCourse(Authentication authentication, String courseCode) {
+        if (securityUtils.hasAuthority(authentication, SUPER_ADMIN_ROLE)) {
+            return false;
+        }
+        return trainingCourseRepository.findByCodeWithType(courseCode)
+                .map(course -> trainingWorkflowSupport.isDeaneryManaged(course.getCourseType())
+                        ? securityUtils.hasAuthority(authentication, SCORE_DEANERY) && scopedDeanery(authentication, courseCode)
+                        : securityUtils.hasAuthority(authentication, SCORE_DIOCESE) && scopedDiocese(authentication, courseCode))
+                .orElse(false);
+    }
+
     public boolean canRead(Authentication authentication) {
         return securityUtils.hasAuthority(authentication, READ_PARISH)
                 || securityUtils.hasAuthority(authentication, READ_DEANERY)
