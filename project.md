@@ -1267,3 +1267,27 @@ Duyệt:
 - Response hồ sơ có thêm `createdBy`, `parishId/Name`, `deaneryId/Name` của huynh trưởng.
 
 Kiểm thử: `CourseParticipationServiceTest`, `TrainingRegistrationAutoApprovalConsumerTest`, `EndpointContractMatrixTest` (ma trận 122 route) pass. Một số test khác fail sẵn từ trước (lệch câu chữ thông báo; test tích hợp lỗi hết kết nối DB).
+
+### Training scoring, locks and participant removal 2026-10-20
+
+Branch `feature/course-years-active-registration-lists` (tiếp nối mục "Training registration redesign 2026-10-19"). Migration V064.
+
+Chấm điểm (`PATCH /api/training/participations/{id}/score`):
+
+- chỉ chấm được khi khóa đang trong thời gian diễn ra: `startDate <= hôm nay <= endDate` (Asia/Ho_Chi_Minh, `TrainingCourseStatusSupport.organizingStatus`, tính trực tiếp theo ngày, không chờ job cập nhật trạng thái); ngoài khoảng đó trả 409. Khóa chưa có `startDate` coi như chưa diễn ra.
+- khóa/mở chỉnh sửa điểm: `training_course.score_locked` (V064) và `PATCH /api/training/courses/{courseCode}/score-lock {locked}`; quyền `training.participation.lock.diocese` (khóa giáo phận) / `.deanery` (khóa giáo hạt), gán cho `ADMIN_DIOCESE`/`ADMIN_DEANERY`/`SUPER_ADMIN`, kiểm tra theo phạm vi sở hữu khóa (`TrainingCourseAccessEvaluator.canLockScore`). Khi khóa thì chấm điểm trả 409. Response khóa có `scoreLocked`. Bật/tắt khóa không giới hạn theo thời gian (việc nhập điểm vẫn bị giới hạn bởi thời gian diễn ra).
+- sửa điểm cập nhật tại chỗ các dòng `course_participation_component_score` đã có (không `clear()` rồi thêm lại: Hibernate chèn trước khi xóa nên vi phạm unique `(participation_id, component_id)` và bị báo "xung đột dữ liệu"); thành phần không còn áp dụng thì bỏ dòng cũ.
+- hồ sơ có chứng nhận đã duyệt (cờ trên hồ sơ hoặc bản ghi `Certificate` có `approvalStatus = APPROVED`) không được sửa điểm (409).
+- sửa điểm xuống dưới `passingScore`: chứng nhận đang `PENDING`/`SUBMITTED` của hồ sơ bị xóa (`CertificateRepository.delete`), trạng thái chứng nhận của hồ sơ về `NOT_REQUIRED`.
+- `GET /api/training/courses/{courseCode}/score-components`: thành phần điểm áp dụng cho khóa (id, tên, điểm tối đa, hệ số, tính tổng) để FE dựng các cột nhập điểm; quyền chấm điểm đúng cấp quản lý của khóa (`canScoreCourse`).
+
+Cập nhật khóa (`PUT /api/training/courses/{courseCode}`):
+
+- khi khóa đã có hồ sơ tham gia, không đổi được loại khóa, năm tổ chức (`hostYear`), số năm hoạt động (`yearsActive`), điểm đạt (`passingScore`): đổi giá trị thì 409, gửi lại đúng giá trị cũ thì chấp nhận (`requireNoParticipations`). Các trường khác vẫn sửa được.
+- chi tiết/cập nhật khóa trả `hasParticipations`; cache chi tiết khóa (`TRAINING_COURSE_DETAIL`) bị xóa khi đăng ký/thu hồi/xóa hồ sơ để cờ này không cũ.
+
+Danh sách tham dự:
+
+- `DELETE /api/training/participants/{id}`: người có quyền duyệt đúng cấp quản lý của khóa xóa hồ sơ khỏi danh sách tham dự, bất kể đã có điểm hay chưa, trừ hồ sơ đã có chứng nhận được duyệt (409); chứng nhận đề xuất chưa duyệt bị xóa theo; ghi sự kiện `training.participant.removed`.
+
+Ma trận endpoint (`endpoint-contract-matrix.psv`) hiện có 124 route.
