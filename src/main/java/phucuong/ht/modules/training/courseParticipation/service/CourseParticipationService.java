@@ -94,6 +94,23 @@ public class CourseParticipationService {
         return new PageImpl<>(page.getContent().stream().map(this::toResponse).toList(), page.getPageable(), page.getTotalElements());
     }
 
+    // Danh sách tham dự: chỉ huynh trưởng đã được duyệt đăng ký (hồ sơ chờ duyệt/bị từ chối không nằm trong danh sách).
+    @Transactional(readOnly = true)
+    public Page<CourseParticipationResponse> findParticipants(BaseSearchRequest request, Authentication authentication) {
+        BaseSearchRequest approvedOnly = copySearchRequest(request);
+        approvedOnly.getFilters().put("approvalStatus", WorkflowApprovalStatus.APPROVED.name());
+        return findAll(approvedOnly, authentication);
+    }
+
+    @Transactional(readOnly = true)
+    public CourseParticipationResponse findParticipantById(String participationId) {
+        CourseParticipationResponse response = findById(participationId);
+        if (response.getApprovalStatus() != WorkflowApprovalStatus.APPROVED) {
+            throw commonValidationHelper.notFound("Không tìm thấy huynh trưởng tham dự " + participationId);
+        }
+        return response;
+    }
+
     @Transactional(readOnly = true)
     public CourseParticipationResponse findById(String participationId) {
         return toResponse(courseParticipationRepository.findByIdWithLeaderAndCourse(participationId)

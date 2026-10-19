@@ -120,6 +120,8 @@ public class TrainingCourseService {
         } else if (hasAuthority(authentication, TrainingCourseAccessEvaluator.READ_DEANERY)) {
             UUID deaneryId = accountScopeValidationHelper.requireActiveDeaneryId(authentication, TrainingCourseAccessEvaluator.READ_DEANERY);
             scopedRequest.getFilters().put(DEANERY_FILTER_FIELD, deaneryId);
+        } else if (hasAuthority(authentication, TrainingCourseAccessEvaluator.SUBMIT_PARISH)) {
+            return findOpenCoursesForParish(request, authentication);
         } else {
             throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền xem khóa huấn luyện");
         }
@@ -129,6 +131,30 @@ public class TrainingCourseService {
                 .map(this::toResponse)
                 .toList();
         return new PageImpl<>(content, page.getPageable(), page.getTotalElements());
+    }
+
+    // Giáo xứ chỉ xem được các khóa đang mở đăng ký trong phạm vi; tìm kiếm theo tên khóa/địa điểm.
+    private Page<TrainingCourseResponse> findOpenCoursesForParish(BaseSearchRequest request, Authentication authentication) {
+        String username = securityUtils.currentUsername(authentication);
+        if (username == null || username.isBlank()) {
+            throw commonValidationHelper.forbidden("Không xác định được tài khoản hiện tại");
+        }
+        UUID dioceseId = accountRepository.findActiveDioceseIdByUsername(username).orElse(null);
+        UUID deaneryId = accountRepository.findActiveDeaneryIdByUsername(username).orElse(null);
+        if (dioceseId == null && deaneryId == null) {
+            throw commonValidationHelper.forbidden("Tài khoản hiện tại không có phạm vi hợp lệ để xem khóa huấn luyện");
+        }
+        String keyword = request.getSearch() == null ? "" : request.getSearch().trim().toLowerCase(java.util.Locale.ROOT);
+        List<TrainingCourseResponse> matched = trainingCourseRepository.findOpenForRegistration(dioceseId, deaneryId).stream()
+                .filter(course -> keyword.isEmpty()
+                        || (course.getCourseName() != null && course.getCourseName().toLowerCase(java.util.Locale.ROOT).contains(keyword))
+                        || (course.getLocation() != null && course.getLocation().toLowerCase(java.util.Locale.ROOT).contains(keyword)))
+                .map(this::toResponse)
+                .toList();
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(request.getPage(), request.getSize());
+        int from = Math.min(request.getPage() * request.getSize(), matched.size());
+        int to = Math.min(from + request.getSize(), matched.size());
+        return new PageImpl<>(matched.subList(from, to), pageable, matched.size());
     }
 
     // Khóa đang mở đăng ký trong phạm vi tài khoản (kể cả tài khoản giáo xứ, không cần quyền xem danh sách khóa).

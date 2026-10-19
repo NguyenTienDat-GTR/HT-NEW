@@ -43,9 +43,13 @@ public class TrainingCourseAccessEvaluator {
                         || securityUtils.hasAuthority(authentication, CREATE_DEANERY));
     }
 
+    public static final String SUBMIT_PARISH = "training.participation.submit.parish";
+
+    // Tài khoản giáo xứ cũng xem được danh sách khóa, nhưng chỉ các khóa đang mở đăng ký trong phạm vi.
     public boolean canList(Authentication authentication) {
         return securityUtils.hasAuthority(authentication, READ_DIOCESE)
-                || securityUtils.hasAuthority(authentication, READ_DEANERY);
+                || securityUtils.hasAuthority(authentication, READ_DEANERY)
+                || securityUtils.hasAuthority(authentication, SUBMIT_PARISH);
     }
 
     public boolean canListRegistrable(Authentication authentication) {
@@ -55,7 +59,33 @@ public class TrainingCourseAccessEvaluator {
     }
 
     public boolean canRead(Authentication authentication, String courseCode) {
-        return hasScopedAccess(authentication, courseCode, READ_DIOCESE, READ_DEANERY);
+        return hasScopedAccess(authentication, courseCode, READ_DIOCESE, READ_DEANERY)
+                || canReadOpenCourseAsParish(authentication, courseCode);
+    }
+
+    // Giáo xứ chỉ xem khóa đang mở đăng ký thuộc giáo phận (khóa thường) hoặc giáo hạt (khóa giáo hạt) của mình.
+    private boolean canReadOpenCourseAsParish(Authentication authentication, String courseCode) {
+        if (courseCode == null || courseCode.isBlank() || !securityUtils.hasAuthority(authentication, SUBMIT_PARISH)) {
+            return false;
+        }
+        String username = securityUtils.currentUsername(authentication);
+        if (username == null || username.isBlank() || accountRepository.findActiveParishIdByUsername(username).isEmpty()) {
+            return false;
+        }
+        return trainingCourseRepository.findByCodeWithType(courseCode)
+                .map(course -> {
+                    if (course.getRegistrationStatus() != phucuong.ht.modules.training.enums.CourseRegistrationStatus.OPEN
+                            || !Boolean.TRUE.equals(course.getStatus())) {
+                        return false;
+                    }
+                    if (trainingWorkflowSupport.isDeaneryManaged(course.getCourseType())) {
+                        return course.getDeanery() != null && accountRepository.findActiveDeaneryIdByUsername(username)
+                                .map(course.getDeanery().getId()::equals).orElse(false);
+                    }
+                    return course.getDiocese() != null && accountRepository.findActiveDioceseIdByUsername(username)
+                            .map(course.getDiocese().getId()::equals).orElse(false);
+                })
+                .orElse(false);
     }
 
     public boolean canUpdate(Authentication authentication, String courseCode) {

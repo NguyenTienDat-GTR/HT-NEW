@@ -39,6 +39,18 @@ public class CourseParticipationController {
         return apiResponse.success("Lấy danh sách hồ sơ đào tạo thành công", courseParticipationService.findAll(request, authentication));
     }
 
+    @GetMapping("/participants")
+    @PreAuthorize("@courseParticipationAccessEvaluator.canRead(authentication)")
+    public apiResponse<Page<CourseParticipationResponse>> findParticipants(BaseSearchRequest request, Authentication authentication) {
+        return apiResponse.success("Lấy danh sách tham dự thành công", courseParticipationService.findParticipants(request, authentication));
+    }
+
+    @GetMapping("/participants/{id}")
+    @PreAuthorize("@courseParticipationAccessEvaluator.canReadOne(authentication, #id)")
+    public apiResponse<CourseParticipationResponse> findParticipantById(@PathVariable String id) {
+        return apiResponse.success("Lấy chi tiết tham dự thành công", courseParticipationService.findParticipantById(id));
+    }
+
     @GetMapping("/participations/{id}")
     @PreAuthorize("@courseParticipationAccessEvaluator.canReadOne(authentication, #id)")
     public apiResponse<CourseParticipationResponse> findById(@PathVariable String id) {
