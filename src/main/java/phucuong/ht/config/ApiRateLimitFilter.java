@@ -56,6 +56,7 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         if (!decision.allowed()) {
             response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+            response.setCharacterEncoding(java.nio.charset.StandardCharsets.UTF_8.name());
             response.setHeader("Retry-After", String.valueOf(decision.retryAfterSeconds()));
             objectMapper.writeValue(
                     response.getWriter(),

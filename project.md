@@ -827,6 +827,11 @@ Participation scoring behavior:
 - Notification routing: registration submit of a deanery-managed course and the deanery submit of a diocese course notify the course's recipients (still-eligible ones; falls back to all eligible accounts if none chosen/valid). Parish submit of a diocese course still notifies all eligible deanery accounts. `recipientUsernames` in `TrainingRegistrationRequest`/`TrainingSubmissionRecipientRequest` is now ignored.
 - Course response adds `dioceseName`, `deaneryName`, `registrationOpen`, `recipientUsernames`, `createdBy`, `updatedBy` (createdBy/updatedBy were already persisted, just not returned).
 
+### Rate limit response encoding
+
+- `ApiRateLimitFilter` writes the 429 body by hand; `Content-Type: application/json` has no charset so the servlet writer defaulted to ISO-8859-1 and the Vietnamese message came out as mojibake. It now calls `setCharacterEncoding(UTF-8)` (covered by `ApiRateLimitFilterEncodingTest`). Any filter that writes a JSON body manually must set UTF-8 (the other filters already do).
+- Read tier is 120 requests/minute per user (`app.rate-limit.read.*`); the FE must keep requests per screen low (see `FE/agent.md`).
+
 ### API Cache Policy
 
 Cache implementation notes:
