@@ -9,4 +9,6 @@ import lombok.Getter;
 public class CourseRecipientCandidateResponse {
     private String username;
     private String fullName;
+    // Vai trò đang hiệu lực của tài khoản (nối bằng dấu phẩy, vai trò chính trước).
+    private String roleName;
 }

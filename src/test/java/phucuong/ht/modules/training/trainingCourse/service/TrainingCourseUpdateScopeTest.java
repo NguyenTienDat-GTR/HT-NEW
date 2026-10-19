@@ -46,6 +46,7 @@ class TrainingCourseUpdateScopeTest {
     @Mock private phucuong.ht.modules.notification.service.TrainingNotificationRecipientResolver notificationRecipientResolver;
     @Mock private phucuong.ht.modules.auth.repository.AccountRepository accountRepository;
     @Mock private phucuong.ht.config.DomainEventPublisher domainEventPublisher;
+    @Mock private phucuong.ht.modules.auth.repository.AccountRoleRepository accountRoleRepository;
     @Mock private TrainingCourseRepository trainingCourseRepository;
     @Mock private TrainingCourseTypeRepository trainingCourseTypeRepository;
     @Mock private CourseParticipationRepository courseParticipationRepository;
@@ -210,7 +211,8 @@ class TrainingCourseUpdateScopeTest {
                 scoreComponentTemplateRepository,
                 notificationRecipientResolver,
                 accountRepository,
-                domainEventPublisher
+                domainEventPublisher,
+                accountRoleRepository
         );
     }
 

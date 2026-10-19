@@ -14,6 +14,7 @@ import phucuong.ht.config.DomainEventPublisher;
 import phucuong.ht.modules.training.enums.CourseRegistrationStatus;
 import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.modules.auth.repository.AccountRepository;
+import phucuong.ht.modules.auth.repository.AccountRoleRepository;
 import phucuong.ht.modules.notification.service.TrainingNotificationRecipientResolver;
 import phucuong.ht.modules.training.courseParticipation.security.CourseParticipationAccessEvaluator;
 import phucuong.ht.modules.training.scoreComponentTemplate.model.entity.ScoreComponentTemplate;
@@ -70,6 +71,7 @@ public class TrainingCourseService {
     private final TrainingNotificationRecipientResolver notificationRecipientResolver;
     private final AccountRepository accountRepository;
     private final DomainEventPublisher domainEventPublisher;
+    private final AccountRoleRepository accountRoleRepository;
 
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_LIST, allEntries = true),
@@ -408,6 +410,7 @@ public class TrainingCourseService {
                         .fullName(accountRepository.findActiveByUsername(username)
                                 .map(account -> fullName(account.getLeader()))
                                 .orElse(null))
+                        .roleName(roleNames(username))
                         .build())
                 .toList();
     }
@@ -478,6 +481,17 @@ public class TrainingCourseService {
                 deanery ? UnitType.DEANERY : UnitType.DIOCESE,
                 scopeId
         ));
+    }
+
+    private String roleNames(String username) {
+        String names = accountRoleRepository.findActiveByUsername(username).stream()
+                .sorted(java.util.Comparator.comparing((phucuong.ht.modules.system.model.entity.AccountRole role) -> !Boolean.TRUE.equals(role.getIsPrimary())))
+                .map(accountRole -> accountRole.getRole().getRoleName() == null || accountRole.getRole().getRoleName().isBlank()
+                        ? accountRole.getRole().getRoleCode()
+                        : accountRole.getRole().getRoleName())
+                .distinct()
+                .collect(java.util.stream.Collectors.joining(", "));
+        return names.isBlank() ? null : names;
     }
 
     private String fullName(phucuong.ht.modules.leader.model.entity.Leader leader) {
