@@ -135,12 +135,12 @@ POST /api/training/registrations/{id}/deanery-approval|200|401|403|400|404|409
 POST /api/training/registrations/{id}/diocese-approval|200|401|403|400|404|409
 PATCH /api/training/participations/{id}/score|200|401|403|400|404|409
 
-# Training requirements
-POST /api/training/requirements|200|401|403|400|N/A: create does not reference an existing requirement|409
-GET /api/training/requirements|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
-GET /api/training/requirements/{requirementCode}|200|401|403|N/A: requirement code is an opaque string|404|N/A: read-only endpoint does not mutate state
-PUT /api/training/requirements/{requirementCode}|200|401|403|400|404|409
-PATCH /api/training/requirements/{requirementCode}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict
+# Training course types
+POST /api/training/course-types|200|401|403|400|N/A: create does not reference an existing course type|409
+GET /api/training/course-types|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/training/course-types/{typeCode}|200|401|403|N/A: type code is an opaque string|404|N/A: read-only endpoint does not mutate state
+PUT /api/training/course-types/{typeCode}|200|401|403|400|404|409
+PATCH /api/training/course-types/{typeCode}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict
 
 # Score component templates
 POST /api/training/score-components|200|401|403|400|404|409
@@ -150,15 +150,13 @@ PUT /api/training/score-components/{id}|200|401|403|400|404|409
 PATCH /api/training/score-components/{id}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict
 
 # Score formula templates
-POST /api/training/score-formulas|200|401|403|400|404|409
-GET /api/training/score-formulas|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
-GET /api/training/score-formulas/{id}|200|401|403|400|404|N/A: read-only endpoint does not mutate state
-PUT /api/training/score-formulas/{id}|200|401|403|400|404|409
-PATCH /api/training/score-formulas/{id}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict
 
 # Training courses
 POST /api/training/courses|200|401|403|400|404|409
 GET /api/training/courses|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/training/courses/recipient-candidates|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/training/courses/passing-score-limit|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
 GET /api/training/courses/{courseCode}|200|401|403|N/A: course code is an opaque string|404|N/A: read-only endpoint does not mutate state
 PUT /api/training/courses/{courseCode}|200|401|403|400|404|409
 PATCH /api/training/courses/{courseCode}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict
+PATCH /api/training/courses/{courseCode}/registration|200|401|403|400|404|N/A: open/close flag has no uniqueness conflict

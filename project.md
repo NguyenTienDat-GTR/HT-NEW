@@ -107,18 +107,15 @@ Relationships:
 - `TrainingCourse`
 - `CourseParticipation`
 - `ScoreComponentTemplate`
-- `ScoreFormulaTemplate`
-- `ScoreFormulaComponent`
 - `CourseParticipationComponentScore`
 
 Relationships:
 
 - `TrainingCourse` belongs to one `CourseRequirement`
-- `TrainingCourse` belongs to one `ScoreFormulaTemplate`
+- `TrainingCourse` stores its own `passingScore`; its score components are the active `ScoreComponentTemplate` rows with the same course type and same owner (diocese/deanery)
 - `CourseParticipation` belongs to one `Leader`
 - `CourseParticipation` belongs to one `TrainingCourse`
-- `ScoreFormulaTemplate` belongs to one scoped owner: `Diocese` or `Deanery`
-- `ScoreFormulaTemplate` references many `ScoreComponentTemplate` rows through `ScoreFormulaComponent`
+- `ScoreComponentTemplate` belongs to one scoped owner (`Diocese` or `Deanery`) and one `TrainingCourseType`
 - `CourseParticipationComponentScore` belongs to one `CourseParticipation`
 - `CourseParticipationComponentScore` belongs to one `ScoreComponentTemplate`
 
@@ -786,36 +783,58 @@ Notification delivery:
 - selected `recipientUsernames` are valid only when the target account is active, has the required effective permission, and resolves to the matching deanery or diocese scope
 - when `recipientUsernames` is omitted, the backend resolves all active accounts whose effective permissions and scopes match the submission or approval stage
 
-### Training Score Formula Workflow
+### Training Score Component Workflow (V057, thay thế module công thức điểm)
 
-Training score templates:
+Module `scoreFormulaTemplate` và `TrainingScoreFormulaEvaluator` (biểu thức) đã bị XÓA. Điểm tổng kết chỉ dựa vào thành phần điểm có hệ số.
 
-- score components are managed under `/api/training/score-components`
-- score formulas are managed under `/api/training/score-formulas`
-- each component and formula belongs to exactly one scope owner: a diocese or a deanery
-- each formula stores:
-- a reusable ordered component list
-- an arithmetic expression using component codes as variables
-- a `passingScore`
+Score components (`/api/training/score-components`):
 
-Training course score configuration:
+- each component belongs to one course type (`courseTypeCode`); `unitType` and the owner (diocese/deanery of the creator) are derived from the course type's `managementUnitType`, the create request has no `unitType`; create is authorized by `training.score_component.create.<scope>` matching the course type's level
+- `GET /api/training/course-types` is scoped by account: only `read.deanery` -> deanery-managed types, only `read.diocese` -> diocese-managed types (feeds the course-type dropdowns)
+- list/detail of components are `@Transactional(readOnly)` because `spring.jpa.open-in-view=false` (lazy `courseType` caused a LazyInitializationException on list)
+- fields: `name`, `maxScore`, `coefficient` (> 0, hệ số), `includeInFinal` (flag, default true), `courseTypeCode`, `displayOrder`, `description`
+- `includeInFinal = false` means the component is still entered/stored per participation but is NOT counted in the final score
+- `courseTypeCode` and `unitType` cannot be changed on update
 
-- each `TrainingCourse` must reference exactly one `scoreFormulaId`
-- deanery-managed courses may only use deanery-owned formulas in the same deanery
-- diocese-managed courses may only use diocese-owned formulas in the same diocese
+Course configuration:
+
+- `TrainingCourse.passingScore` (required on create, replaces `scoreFormulaId`; cannot change once participations exist)
+- the components of a course = active components with the course's `courseType` and the course's owner (deanery for deanery-managed courses, else diocese)
 
 Participation scoring behavior:
 
-- `PATCH /api/training/participations/{id}/score` now accepts `componentScores` instead of a direct `totalScore`
+- `PATCH /api/training/participations/{id}/score` accepts `componentScores` (one score per applicable component, all required)
 - a participation may be scored only after the required approval is `APPROVED`: deanery approval for DT courses and diocese approval for non-DT courses
 - manual approval accepts only `PENDING` or `SUBMITTED` records; rejected records are terminal unless a future explicit reopen flow is introduced
 - one leader has exactly one participation per course
-- every participation in a course must be scored with the exact component set defined by that course's formula
 - the backend rejects missing, extra, duplicate, or over-max component scores
-- `totalScore` is calculated by the backend from the formula expression
-- pass or fail is determined by the formula `passingScore`
+- `totalScore` = weighted average: sum(score x coefficient) / sum(coefficient) over components with `includeInFinal = true`, rounded to 2 decimals (HALF_UP). Example: skill coefficient 1, spirit coefficient 2 -> (skill + 2 x spirit) / 3. Error if no component is included.
+- pass or fail is determined by `TrainingCourse.passingScore`
+- response `componentScores[]` also returns `coefficient` and `includeInFinal`
+- `passingScore` of a course must be <= the max final score of its course type: weighted average (by coefficient) of `maxScore` of active components with `includeInFinal = true` for the course type + owner. Skipped when the type has no included component. `GET /api/training/courses/passing-score-limit?courseTypeCode=` returns `{maxPassingScore, componentCount}` for the FE tip. (Weighted, not a plain average, so the limit is the real maximum reachable score.)
+- permissions `training.score_formula.*` are deactivated by migration V057 (data tables `score_formula_template`/`score_formula_component` dropped; legacy components without a resolvable course type are set inactive)
 - when a participation becomes passing and no certificate exists yet for the same leader and course, the system creates one `PENDING` certificate proposal automatically
 - one leader has exactly one certificate per course; code generation is serialized per certificate-code prefix
+
+### Training Course Registration Control and Recipients (V058)
+
+- (V059 replaced the V058 boolean `registration_open`.) `training_course.registration_status` (`CourseRegistrationStatus`: `NOT_STARTED`, `OPEN`, `CLOSED` = manual close, `ENDED`) and `training_course.organizing_status` (`CourseOrganizingStatus`: `UPCOMING`, `ONGOING`, `ENDED` from `startDate/endDate`, Asia/Ho_Chi_Minh) are persisted so lists can filter by equality (`registrationStatus`, `organizingStatus` filters). Response also returns `registrationOpen` (= status OPEN). Logic lives in `TrainingCourseStatusSupport` (static): `ENDED` once `now > registrationEndAt`; `CLOSED` is preserved until manual open or end; else `NOT_STARTED` before start, `OPEN` inside the window. Registration is accepted only when the computed status is OPEN (independent of scheduler lag).
+- `PATCH /api/training/courses/{courseCode}/registration` body `{ "open": true|false }` (permission = course update scope). Allowed only while the status is OPEN/CLOSED (inside the window): 409 before start (system auto-opens) and after end (extend `registrationEndAt`, which recomputes the status on update, then reopen manually if needed). Each real change publishes a RabbitMQ domain event.
+- `CourseRegistrationScheduler` (`@EnableScheduling`, every `training.registration.auto-close-interval-ms`, default 60000) calls `TrainingCourseService.refreshCourseStatuses()`: auto-opens (`NOT_STARTED -> OPEN`) when the registration window starts, auto-closes (`OPEN -> ENDED`) when it ends, moves `organizing_status`, evicts course caches, and publishes events for the auto open/close transitions. Creating or updating a course recomputes both statuses.
+- Event-driven notifications (RabbitMQ -> STOMP push): events `training.course.registration_opened` / `training.course.registration_closed` (payload `courseCode`, `courseName`, `open`, `reason` MANUAL|AUTO, `deaneryManaged`, `dioceseId`, `deaneryId`) go through `DomainEventPublisher` (afterCommit) to RabbitMQ. A DEDICATED queue `ht.domain.events.course-registration` (+ DLQ) is bound to the domain exchange (do not reuse the workflow queue: several listeners on one queue would compete for messages). `CourseRegistrationEventConsumer` notifies accounts holding any of `submit.parish`, `submit.deanery`, `approve.deanery`, `approve.diocese` inside the course scope (deanery-managed course: same deanery; otherwise same diocese) using `TrainingNotificationService.notifyUsers`: the notification is stored in DB and, after commit, pushed to online users over STOMP `/user/queue/notifications`. The push happens only when a RabbitMQ event arrives (the socket carries no polling traffic besides STOMP heartbeats); offline users read the stored notification via REST. Note: the STOMP broker is the in-memory simple broker, so with several BE instances a push only reaches users connected to the instance that consumed the event (use a broker relay to RabbitMQ STOMP if scaling out).
+- Recipients: `training_course_recipient(course_code, username)` (`TrainingCourse.recipientUsernames`; create/update request field `recipientUsernames`, update: null keeps, list replaces). Each username must have `training.participation.approve.deanery` (deanery-managed course, in the course's deanery) or `training.participation.approve.diocese` (otherwise, in the course's diocese) - validated by `TrainingNotificationRecipientResolver`.
+- `GET /api/training/courses/recipient-candidates?courseTypeCode=` lists eligible accounts (`username`, `fullName`, `roleName` = active role names joined by ", ", primary first) in the caller's scope for the FE picker (authorized like course create for that type).
+- Notification routing: registration submit of a deanery-managed course and the deanery submit of a diocese course notify the course's recipients (still-eligible ones; falls back to all eligible accounts if none chosen/valid). Parish submit of a diocese course still notifies all eligible deanery accounts. `recipientUsernames` in `TrainingRegistrationRequest`/`TrainingSubmissionRecipientRequest` is now ignored.
+- Course response adds `dioceseName`, `deaneryName`, `registrationOpen`, `recipientUsernames`, `createdBy`, `updatedBy` (createdBy/updatedBy were already persisted, just not returned).
+
+### WebSocket handshake security
+
+- `/ws/notifications` is `permitAll` in `securityConfig` (both public matcher variants). Browsers cannot send an `Authorization` header on a WebSocket upgrade, so the HTTP handshake must be public; authentication happens at the STOMP `CONNECT` frame in `WebSocketConfig.NotificationInboundChannelInterceptor` (Bearer token + active Redis session), and only `/user/queue/notifications` and the auth-events queue can be subscribed. Before this fix `anyRequest().authenticated()` rejected the handshake with 401, so NO realtime push (notifications, auth refresh events) ever reached the browser. Verify with a raw upgrade request: expect `101`, not `401`.
+
+### Rate limit response encoding
+
+- `ApiRateLimitFilter` writes the 429 body by hand; `Content-Type: application/json` has no charset so the servlet writer defaulted to ISO-8859-1 and the Vietnamese message came out as mojibake. It now calls `setCharacterEncoding(UTF-8)` (covered by `ApiRateLimitFilterEncodingTest`). Any filter that writes a JSON body manually must set UTF-8 (the other filters already do).
+- Read tier is 120 requests/minute per user (`app.rate-limit.read.*`); the FE must keep requests per screen low (see `FE/agent.md`).
 
 ### API Cache Policy
 

@@ -27,7 +27,6 @@ import phucuong.ht.modules.notification.service.TrainingNotificationService;
 import phucuong.ht.modules.parish.model.entity.Parish;
 import phucuong.ht.modules.parish.repository.ParishRepository;
 import phucuong.ht.modules.training.TrainingWorkflowSupport;
-import phucuong.ht.modules.training.TrainingScoreFormulaEvaluator;
 import phucuong.ht.modules.training.courseParticipation.model.entity.CourseParticipation;
 import phucuong.ht.modules.training.courseParticipation.model.request.ComponentScoreRequest;
 import phucuong.ht.modules.training.courseParticipation.model.request.TrainingRegistrationRequest;
@@ -38,8 +37,7 @@ import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType;
 import phucuong.ht.modules.training.enums.WorkflowApprovalStatus;
 import phucuong.ht.modules.training.scoreComponentTemplate.model.entity.ScoreComponentTemplate;
-import phucuong.ht.modules.training.scoreFormulaTemplate.model.entity.ScoreFormulaComponent;
-import phucuong.ht.modules.training.scoreFormulaTemplate.model.entity.ScoreFormulaTemplate;
+import phucuong.ht.modules.training.scoreComponentTemplate.repository.ScoreComponentTemplateRepository;
 import phucuong.ht.modules.training.trainingCourse.model.entity.TrainingCourse;
 import phucuong.ht.modules.training.trainingCourse.repository.TrainingCourseRepository;
 
@@ -93,7 +91,8 @@ class CourseParticipationServiceTest {
     @Mock
     private TrainingNotificationService trainingNotificationService;
 
-    private final TrainingScoreFormulaEvaluator trainingScoreFormulaEvaluator = new TrainingScoreFormulaEvaluator(new CommonValidationHelper(new securityUtils()));
+    @Mock
+    private ScoreComponentTemplateRepository scoreComponentTemplateRepository;
     private final CommonValidationHelper commonValidationHelper = new CommonValidationHelper(new securityUtils());
 
     @InjectMocks
@@ -292,14 +291,13 @@ class CourseParticipationServiceTest {
         diocese.setId(UUID.randomUUID());
         diocese.setName("Phu Cuong");
         course.setDiocese(diocese);
-        ScoreFormulaTemplate formula = new ScoreFormulaTemplate();
-        formula.setId("formula-1");
-        formula.setExpression("TINH_THAN + KY_NANG");
-        formula.setPassingScore(BigDecimal.valueOf(8));
-        ScoreComponentTemplate tinhThan = component("component-1", "TINH_THAN", BigDecimal.valueOf(10), 0);
-        ScoreComponentTemplate kyNang = component("component-2", "KY_NANG", BigDecimal.valueOf(10), 1);
-        formula.setComponents(List.of(link(formula, tinhThan, 0), link(formula, kyNang, 1)));
-        course.setScoreFormula(formula);
+        course.setPassingScore(BigDecimal.valueOf(8));
+        // Tinh than he so 2, ky nang he so 1, "chuyen can" he so 1 nhung khong tinh vao diem tong ket.
+        ScoreComponentTemplate tinhThan = component("component-1", "TINH_THAN", BigDecimal.valueOf(10), 0, BigDecimal.valueOf(2), true);
+        ScoreComponentTemplate kyNang = component("component-2", "KY_NANG", BigDecimal.valueOf(10), 1, BigDecimal.ONE, true);
+        ScoreComponentTemplate chuyenCan = component("component-3", "CHUYEN_CAN", BigDecimal.valueOf(10), 2, BigDecimal.ONE, false);
+        when(scoreComponentTemplateRepository.findActiveForCourse(org.mockito.ArgumentMatchers.eq("SMKN_I"), any(), any()))
+                .thenReturn(List.of(tinhThan, kyNang, chuyenCan));
         participation.setCourse(course);
         participation.setLeader(leader(UUID.randomUUID(), UUID.randomUUID(), LeaderLevel.HT_XU));
         participation.setDioceseApprovalStatus(WorkflowApprovalStatus.APPROVED);
@@ -313,17 +311,20 @@ class CourseParticipationServiceTest {
         TrainingScoreRequest request = new TrainingScoreRequest();
         ComponentScoreRequest scoreOne = new ComponentScoreRequest();
         scoreOne.setComponentId("component-1");
-        scoreOne.setScore(BigDecimal.valueOf(3));
+        scoreOne.setScore(BigDecimal.valueOf(9));
         ComponentScoreRequest scoreTwo = new ComponentScoreRequest();
         scoreTwo.setComponentId("component-2");
-        scoreTwo.setScore(BigDecimal.valueOf(5));
-        request.setComponentScores(List.of(scoreOne, scoreTwo));
+        scoreTwo.setScore(BigDecimal.valueOf(6));
+        ComponentScoreRequest scoreThree = new ComponentScoreRequest();
+        scoreThree.setComponentId("component-3");
+        scoreThree.setScore(BigDecimal.ZERO);
+        request.setComponentScores(List.of(scoreOne, scoreTwo, scoreThree));
         request.setReview("pass");
 
         var response = courseParticipationService.score("cp-1", request, authentication("admin-diocese", "training.participation.score.diocese"));
 
         assertEquals(WorkflowApprovalStatus.PENDING, response.getCertificateApprovalStatus());
-        assertEquals(BigDecimal.valueOf(8), response.getTotalScore());
+        assertEquals(0, BigDecimal.valueOf(8).compareTo(response.getTotalScore()));
         verify(domainEventPublisher).publishAfterCommit(any());
     }
 
@@ -352,7 +353,7 @@ class CourseParticipationServiceTest {
                 parishRepository,
                 deaneryRepository,
                 new TrainingWorkflowSupport(),
-                trainingScoreFormulaEvaluator,
+                scoreComponentTemplateRepository,
                 accountScopeValidationHelper,
                 commonValidationHelper,
                 certificateRepository,
@@ -413,21 +414,15 @@ class CourseParticipationServiceTest {
         return parish;
     }
 
-    private ScoreComponentTemplate component(String id, String code, BigDecimal maxScore, int displayOrder) {
+    private ScoreComponentTemplate component(String id, String code, BigDecimal maxScore, int displayOrder, BigDecimal coefficient, boolean includeInFinal) {
         ScoreComponentTemplate component = new ScoreComponentTemplate();
         component.setId(id);
         component.setCode(code);
         component.setName(code);
         component.setMaxScore(maxScore);
         component.setDisplayOrder(displayOrder);
+        component.setCoefficient(coefficient);
+        component.setIncludeInFinal(includeInFinal);
         return component;
-    }
-
-    private ScoreFormulaComponent link(ScoreFormulaTemplate formula, ScoreComponentTemplate component, int displayOrder) {
-        ScoreFormulaComponent link = new ScoreFormulaComponent();
-        link.setFormula(formula);
-        link.setComponent(component);
-        link.setDisplayOrder(displayOrder);
-        return link;
     }
 }

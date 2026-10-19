@@ -1,11 +1,15 @@
 package phucuong.ht.modules.training.trainingCourse.model.request;
 
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.List;
 
 @Getter
 @Setter
@@ -31,7 +35,12 @@ public class TrainingCourseCreateRequest {
 
     private OffsetDateTime registrationEndAt;
 
-    private String scoreFormulaId;
+    @NotNull
+    @DecimalMin(value = "0.00", inclusive = true)
+    private BigDecimal passingScore;
+
+    // Tài khoản nhận danh sách đăng ký; phải có quyền duyệt danh sách đăng ký thuộc phạm vi của khóa.
+    private List<String> recipientUsernames;
 
     private String additionalNotes;
 }

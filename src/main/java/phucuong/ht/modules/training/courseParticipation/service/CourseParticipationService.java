@@ -24,7 +24,6 @@ import phucuong.ht.modules.notification.service.TrainingNotificationRecipientRes
 import phucuong.ht.modules.notification.service.TrainingNotificationService;
 import phucuong.ht.modules.parish.model.entity.Parish;
 import phucuong.ht.modules.parish.repository.ParishRepository;
-import phucuong.ht.modules.training.TrainingScoreFormulaEvaluator;
 import phucuong.ht.modules.training.TrainingWorkflowSupport;
 import phucuong.ht.modules.training.courseParticipation.model.entity.CourseParticipation;
 import phucuong.ht.modules.training.courseParticipation.model.entity.CourseParticipationComponentScore;
@@ -34,12 +33,14 @@ import phucuong.ht.modules.training.courseParticipation.model.response.CoursePar
 import phucuong.ht.modules.training.courseParticipation.model.response.TrainingRegistrationBatchResponse;
 import phucuong.ht.modules.training.courseParticipation.repository.CourseParticipationRepository;
 import phucuong.ht.modules.training.courseParticipation.security.CourseParticipationAccessEvaluator;
+import phucuong.ht.modules.training.enums.CourseRegistrationStatus;
+import phucuong.ht.modules.training.trainingCourse.service.TrainingCourseStatusSupport;
 import phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType;
 import phucuong.ht.modules.training.enums.CourseResult;
 import phucuong.ht.modules.training.enums.ParticipationStatus;
 import phucuong.ht.modules.training.enums.WorkflowApprovalStatus;
-import phucuong.ht.modules.training.scoreFormulaTemplate.model.entity.ScoreFormulaComponent;
-import phucuong.ht.modules.training.scoreFormulaTemplate.model.entity.ScoreFormulaTemplate;
+import phucuong.ht.modules.training.scoreComponentTemplate.model.entity.ScoreComponentTemplate;
+import phucuong.ht.modules.training.scoreComponentTemplate.repository.ScoreComponentTemplateRepository;
 import phucuong.ht.modules.training.trainingCourse.model.entity.TrainingCourse;
 import phucuong.ht.modules.training.trainingCourse.repository.TrainingCourseRepository;
 
@@ -63,7 +64,7 @@ public class CourseParticipationService {
     private final ParishRepository parishRepository;
     private final DeaneryRepository deaneryRepository;
     private final TrainingWorkflowSupport trainingWorkflowSupport;
-    private final TrainingScoreFormulaEvaluator trainingScoreFormulaEvaluator;
+    private final ScoreComponentTemplateRepository scoreComponentTemplateRepository;
     private final AccountScopeValidationHelper accountScopeValidationHelper;
     private final CommonValidationHelper commonValidationHelper;
     private final CertificateRepository certificateRepository;
@@ -158,8 +159,9 @@ public class CourseParticipationService {
             createdParticipations.add(participation);
         }
 
-        List<String> recipients = notificationRecipientResolver.resolveRecipients(
-                request.getRecipientUsernames(),
+        List<String> recipients = resolveCourseRecipients(
+                course,
+                trainingWorkflowSupport.isDeaneryManaged(course.getCourseType()),
                 submitNotificationPermission(course),
                 UnitType.DEANERY,
                 parish.getDeanery().getId()
@@ -214,8 +216,9 @@ public class CourseParticipationService {
             participation.setUpdatedBy(actor);
         });
 
-        List<String> recipients = notificationRecipientResolver.resolveRecipients(
-                request == null ? null : request.getRecipientUsernames(),
+        List<String> recipients = resolveCourseRecipients(
+                course,
+                true,
                 CourseParticipationAccessEvaluator.APPROVE_DIOCESE,
                 UnitType.DIOCESE,
                 deanery.getDiocese().getId()
@@ -297,26 +300,24 @@ public class CourseParticipationService {
             throw commonValidationHelper.conflict("Không thể sửa điểm sau khi chứng chỉ đã được duyệt");
         }
         requireApprovedForScoring(participation);
-        ScoreFormulaTemplate scoreFormula = requireScoreFormula(participation);
+        List<ScoreComponentTemplate> components = requireScoreComponents(participation);
         Map<String, ComponentScoreRequest> requestedScores = normalizeComponentScores(request.getComponentScores());
-        Map<String, BigDecimal> formulaVariables = new LinkedHashMap<>();
 
         participation.getComponentScores().clear();
-        List<ScoreFormulaComponent> formulaComponents = scoreFormula.getComponents().stream()
-                .sorted(Comparator.comparing(ScoreFormulaComponent::getDisplayOrder, Comparator.nullsLast(Integer::compareTo)))
-                .toList();
-        for (ScoreFormulaComponent formulaComponent : formulaComponents) {
-            ComponentScoreRequest componentRequest = requestedScores.remove(formulaComponent.getComponent().getId());
+        BigDecimal weightedSum = BigDecimal.ZERO;
+        BigDecimal coefficientSum = BigDecimal.ZERO;
+        for (ScoreComponentTemplate component : components) {
+            ComponentScoreRequest componentRequest = requestedScores.remove(component.getId());
             if (componentRequest == null) {
-                throw commonValidationHelper.validationError("Thiếu điểm cho thành phần bắt buộc " + formulaComponent.getComponent().getCode());
+                throw commonValidationHelper.validationError("Thiếu điểm cho thành phần bắt buộc " + component.getName());
             }
-            if (componentRequest.getScore().compareTo(formulaComponent.getComponent().getMaxScore()) > 0) {
-                throw commonValidationHelper.validationError("Điểm vượt quá điểm tối đa của thành phần " + formulaComponent.getComponent().getCode());
+            if (componentRequest.getScore().compareTo(component.getMaxScore()) > 0) {
+                throw commonValidationHelper.validationError("Điểm vượt quá điểm tối đa của thành phần " + component.getName());
             }
 
             CourseParticipationComponentScore persistedScore = new CourseParticipationComponentScore();
             persistedScore.setParticipation(participation);
-            persistedScore.setComponent(formulaComponent.getComponent());
+            persistedScore.setComponent(component);
             persistedScore.setScore(componentRequest.getScore());
             persistedScore.setNote(commonValidationHelper.normalizeOptionalText(componentRequest.getNote()));
             persistedScore.setStatus(Boolean.TRUE);
@@ -325,18 +326,25 @@ public class CourseParticipationService {
             persistedScore.setCreatedBy(actor);
             persistedScore.setUpdatedBy(actor);
             participation.getComponentScores().add(persistedScore);
-            formulaVariables.put(formulaComponent.getComponent().getCode(), componentRequest.getScore());
+            if (Boolean.TRUE.equals(component.getIncludeInFinal())) {
+                weightedSum = weightedSum.add(componentRequest.getScore().multiply(component.getCoefficient()));
+                coefficientSum = coefficientSum.add(component.getCoefficient());
+            }
         }
         if (!requestedScores.isEmpty()) {
-            throw commonValidationHelper.validationError("Điểm thành phần gửi lên có thành phần ngoài công thức điểm của khóa học");
+            throw commonValidationHelper.validationError("Điểm thành phần gửi lên có thành phần không thuộc loại khóa của khóa học");
+        }
+        if (coefficientSum.signum() <= 0) {
+            throw commonValidationHelper.validationError("Loại khóa chưa có thành phần điểm nào được tính vào điểm tổng kết");
         }
 
-        BigDecimal totalScore = trainingScoreFormulaEvaluator.evaluate(scoreFormula.getExpression(), formulaVariables);
+        // Điểm tổng kết = trung bình có hệ số của các thành phần có includeInFinal = true.
+        BigDecimal totalScore = weightedSum.divide(coefficientSum, 2, java.math.RoundingMode.HALF_UP);
         participation.setTotalScore(totalScore);
         participation.setReview(request.getReview());
         participation.setUpdatedAt(now);
         participation.setUpdatedBy(actor);
-        if (totalScore.compareTo(scoreFormula.getPassingScore()) >= 0) {
+        if (totalScore.compareTo(participation.getCourse().getPassingScore()) >= 0) {
             participation.setResult(CourseResult.COMPLETED);
             participation.setParticipationStatus(ParticipationStatus.COMPLETED);
             participation.setCertificateApprovalStatus(WorkflowApprovalStatus.PENDING);
@@ -354,15 +362,19 @@ public class CourseParticipationService {
         return toResponse(participation);
     }
 
-    private ScoreFormulaTemplate requireScoreFormula(CourseParticipation participation) {
-        if (participation.getCourse() == null || participation.getCourse().getScoreFormula() == null) {
-            throw commonValidationHelper.validationError("Khóa huấn luyện chưa có công thức tính điểm");
+    private List<ScoreComponentTemplate> requireScoreComponents(CourseParticipation participation) {
+        if (participation.getCourse() == null || participation.getCourse().getCourseType() == null) {
+            throw commonValidationHelper.validationError("Khóa huấn luyện chưa có loại khóa");
         }
-        ScoreFormulaTemplate formula = participation.getCourse().getScoreFormula();
-        if (formula.getComponents() == null || formula.getComponents().isEmpty()) {
-            throw commonValidationHelper.validationError("Công thức tính điểm của khóa huấn luyện chưa có thành phần điểm nào");
+        var course = participation.getCourse();
+        List<ScoreComponentTemplate> components = scoreComponentTemplateRepository.findActiveForCourse(
+                course.getCourseType().getTypeCode(),
+                course.getDiocese() == null ? null : course.getDiocese().getId(),
+                course.getDeanery() == null ? null : course.getDeanery().getId());
+        if (components.isEmpty()) {
+            throw commonValidationHelper.validationError("Loại khóa của khóa huấn luyện chưa có thành phần điểm nào");
         }
-        return formula;
+        return components;
     }
 
     private Map<String, ComponentScoreRequest> normalizeComponentScores(List<ComponentScoreRequest> componentScores) {
@@ -439,6 +451,9 @@ public class CourseParticipationService {
         if (now.isAfter(course.getRegistrationEndAt())) {
             throw commonValidationHelper.validationError("Đã hết thời gian nhận đăng ký");
         }
+        if (TrainingCourseStatusSupport.registrationStatus(course, now) == CourseRegistrationStatus.CLOSED) {
+            throw commonValidationHelper.validationError("Khóa huấn luyện đang đóng đăng ký");
+        }
     }
 
     private void requireActiveRegistrationData(TrainingCourse course) {
@@ -480,6 +495,16 @@ public class CourseParticipationService {
             throw commonValidationHelper.validationError("leaderIds là bắt buộc");
         }
         return new ArrayList<>(new LinkedHashSet<>(leaderIds));
+    }
+
+    // Người nhận lấy từ danh sách tài khoản đã chọn khi tạo khóa (nếu còn hợp lệ), ngược lại gửi cho mọi tài khoản đủ quyền.
+    private List<String> resolveCourseRecipients(TrainingCourse course, boolean useCourseList, String permissionCode, UnitType scopeType, UUID scopeId) {
+        List<String> eligible = notificationRecipientResolver.resolveRecipients(null, permissionCode, scopeType, scopeId);
+        if (!useCourseList || course.getRecipientUsernames().isEmpty()) {
+            return eligible;
+        }
+        List<String> chosen = eligible.stream().filter(course.getRecipientUsernames()::contains).toList();
+        return chosen.isEmpty() ? eligible : chosen;
     }
 
     private String submitNotificationPermission(TrainingCourse course) {
@@ -615,15 +640,13 @@ public class CourseParticipationService {
                 .courseCode(participation.getCourse() == null ? null : participation.getCourse().getCourseCode())
                 .courseName(participation.getCourse() == null ? null : participation.getCourse().getCourseName())
                 .courseTypeCode(participation.getCourse() == null || participation.getCourse().getCourseType() == null ? null : participation.getCourse().getCourseType().getTypeCode())
-                .scoreFormulaId(participation.getCourse() == null || participation.getCourse().getScoreFormula() == null ? null : participation.getCourse().getScoreFormula().getId())
                 .registrationDate(participation.getRegistrationDate())
                 .participationStatus(participation.getParticipationStatus())
                 .totalScore(participation.getTotalScore())
-                .passingScore(participation.getCourse() == null || participation.getCourse().getScoreFormula() == null ? null : participation.getCourse().getScoreFormula().getPassingScore())
+                .passingScore(participation.getCourse() == null ? null : participation.getCourse().getPassingScore())
                 .passed(participation.getCourse() != null
-                        && participation.getCourse().getScoreFormula() != null
                         && participation.getTotalScore() != null
-                        && participation.getTotalScore().compareTo(participation.getCourse().getScoreFormula().getPassingScore()) >= 0)
+                        && participation.getTotalScore().compareTo(participation.getCourse().getPassingScore()) >= 0)
                 .result(participation.getResult())
                 .review(participation.getReview())
                 .eligible(participation.getEligible())
@@ -644,6 +667,8 @@ public class CourseParticipationService {
                                 .componentCode(score.getComponent() == null ? null : score.getComponent().getCode())
                                 .componentName(score.getComponent() == null ? null : score.getComponent().getName())
                                 .maxScore(score.getComponent() == null ? null : score.getComponent().getMaxScore())
+                                .coefficient(score.getComponent() == null ? null : score.getComponent().getCoefficient())
+                                .includeInFinal(score.getComponent() == null ? null : score.getComponent().getIncludeInFinal())
                                 .score(score.getScore())
                                 .note(score.getNote())
                                 .displayOrder(score.getComponent() == null ? null : score.getComponent().getDisplayOrder())

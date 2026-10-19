@@ -31,7 +31,6 @@ import phucuong.ht.modules.training.enums.CourseResult;
 import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType;
 import phucuong.ht.modules.training.enums.WorkflowApprovalStatus;
-import phucuong.ht.modules.training.scoreFormulaTemplate.model.entity.ScoreFormulaTemplate;
 import phucuong.ht.modules.training.trainingCourse.model.entity.TrainingCourse;
 import phucuong.ht.modules.training.trainingCourse.repository.TrainingCourseRepository;
 
@@ -87,9 +86,7 @@ class CertificateServiceTest {
         TrainingCourse course = new TrainingCourse();
         course.setCourseCode("SMKNI");
         course.setCourseType(courseType("SMKN_I", UnitType.DIOCESE, LeaderLevel.HT_I));
-        ScoreFormulaTemplate formula = new ScoreFormulaTemplate();
-        formula.setPassingScore(BigDecimal.valueOf(5));
-        course.setScoreFormula(formula);
+        course.setPassingScore(BigDecimal.valueOf(5));
 
         Certificate certificate = new Certificate();
         certificate.setCertificateCode("CERT-1");

@@ -13,6 +13,8 @@ public class ComponentScoreResponse {
     private String componentCode;
     private String componentName;
     private BigDecimal maxScore;
+    private BigDecimal coefficient;
+    private Boolean includeInFinal;
     private BigDecimal score;
     private String note;
     private Integer displayOrder;

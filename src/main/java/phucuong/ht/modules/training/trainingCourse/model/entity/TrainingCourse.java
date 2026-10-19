@@ -6,8 +6,12 @@ import phucuong.ht.common.model.BaseModel;
 import phucuong.ht.modules.deanery.model.entity.Deanery;
 import phucuong.ht.modules.diocese.model.entity.Diocese;
 import phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType;
-import phucuong.ht.modules.training.scoreFormulaTemplate.model.entity.ScoreFormulaTemplate;
+import phucuong.ht.modules.training.enums.CourseOrganizingStatus;
+import phucuong.ht.modules.training.enums.CourseRegistrationStatus;
 
+import java.math.BigDecimal;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 
@@ -17,7 +21,7 @@ import java.time.OffsetDateTime;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-@ToString
+@ToString(exclude = "recipientUsernames")
 @EqualsAndHashCode(callSuper = true)
 public class TrainingCourse extends BaseModel {
 
@@ -52,9 +56,25 @@ public class TrainingCourse extends BaseModel {
     @JoinColumn(name = "deanery_id")
     private Deanery deanery;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "score_formula_id", nullable = false)
-    private ScoreFormulaTemplate scoreFormula;
+    // Điểm tổng kết tối thiểu để đạt khóa.
+    @Column(name = "passing_score", nullable = false)
+    private BigDecimal passingScore;
+
+    // Trạng thái đăng ký: scheduler tự mở khi đến giờ, tự đóng khi hết hạn; CLOSED là đóng thủ công.
+    @Enumerated(EnumType.STRING)
+    @Column(name = "registration_status", nullable = false)
+    private CourseRegistrationStatus registrationStatus = CourseRegistrationStatus.NOT_STARTED;
+
+    // Trạng thái tổ chức theo startDate/endDate: scheduler tự chuyển.
+    @Enumerated(EnumType.STRING)
+    @Column(name = "organizing_status", nullable = false)
+    private CourseOrganizingStatus organizingStatus = CourseOrganizingStatus.UPCOMING;
+
+    // Tài khoản nhận danh sách đăng ký (phải có quyền duyệt danh sách đăng ký).
+    @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(name = "training_course_recipient", joinColumns = @JoinColumn(name = "course_code"))
+    @Column(name = "username")
+    private Set<String> recipientUsernames = new LinkedHashSet<>();
 
     private String additionalNotes;
 }

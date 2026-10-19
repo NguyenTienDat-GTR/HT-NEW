@@ -5,7 +5,6 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
-import phucuong.ht.common.enums.UnitType;
 
 import java.math.BigDecimal;
 
@@ -24,8 +23,16 @@ public class ScoreComponentTemplateCreateRequest {
 
     private String description;
 
-    private Integer displayOrder;
+    @NotBlank
+    private String courseTypeCode;
 
     @NotNull
-    private UnitType unitType;
+    @DecimalMin(value = "0.00", inclusive = false)
+    private BigDecimal coefficient;
+
+    // Mặc định true nếu không gửi.
+    private Boolean includeInFinal;
+
+    private Integer displayOrder;
+
 }

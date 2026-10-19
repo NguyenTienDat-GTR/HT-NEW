@@ -18,7 +18,8 @@ import phucuong.ht.modules.training.TrainingWorkflowSupport;
 import phucuong.ht.modules.training.courseParticipation.repository.CourseParticipationRepository;
 import phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType;
 import phucuong.ht.modules.training.courseType.repository.TrainingCourseTypeRepository;
-import phucuong.ht.modules.training.scoreFormulaTemplate.repository.ScoreFormulaTemplateRepository;
+import phucuong.ht.modules.training.enums.CourseOrganizingStatus;
+import phucuong.ht.modules.training.enums.CourseRegistrationStatus;
 import phucuong.ht.modules.training.trainingCourse.model.entity.TrainingCourse;
 import phucuong.ht.modules.training.trainingCourse.model.request.TrainingCourseUpdateRequest;
 import phucuong.ht.modules.training.trainingCourse.repository.TrainingCourseRepository;
@@ -30,19 +31,27 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class TrainingCourseUpdateScopeTest {
 
+    @Mock private phucuong.ht.modules.training.scoreComponentTemplate.repository.ScoreComponentTemplateRepository scoreComponentTemplateRepository;
+    @Mock private phucuong.ht.modules.notification.service.TrainingNotificationRecipientResolver notificationRecipientResolver;
+    @Mock private phucuong.ht.modules.auth.repository.AccountRepository accountRepository;
+    @Mock private phucuong.ht.config.DomainEventPublisher domainEventPublisher;
+    @Mock private phucuong.ht.modules.auth.repository.AccountRoleRepository accountRoleRepository;
     @Mock private TrainingCourseRepository trainingCourseRepository;
     @Mock private TrainingCourseTypeRepository trainingCourseTypeRepository;
     @Mock private CourseParticipationRepository courseParticipationRepository;
     @Mock private DioceseRepository dioceseRepository;
     @Mock private DeaneryRepository deaneryRepository;
-    @Mock private ScoreFormulaTemplateRepository scoreFormulaTemplateRepository;
     @Mock private AccountScopeValidationHelper accountScopeValidationHelper;
 
     @Test
@@ -82,6 +91,112 @@ class TrainingCourseUpdateScopeTest {
         assertEquals(deaneryId, response.getDeaneryId());
     }
 
+    @Test
+    void registrationCanBeClosedAndReopenedWhileWindowIsRunningAndPublishesEvents() {
+        TrainingCourse course = deaneryCourse("DT-3", UUID.randomUUID());
+        course.setRegistrationStartAt(java.time.OffsetDateTime.now().minusDays(1));
+        course.setRegistrationEndAt(java.time.OffsetDateTime.now().plusDays(1));
+        course.setRegistrationStatus(CourseRegistrationStatus.OPEN);
+        var authentication = authentication("admin-deanery", "training.course.update.deanery");
+        when(trainingCourseRepository.findByCodeWithType("DT-3")).thenReturn(Optional.of(course));
+
+        var request = new phucuong.ht.modules.training.trainingCourse.model.request.CourseRegistrationToggleRequest();
+        request.setOpen(false);
+        var closed = service().setRegistrationOpen("DT-3", request, authentication);
+        assertEquals(CourseRegistrationStatus.CLOSED, closed.getRegistrationStatus());
+        assertEquals(false, closed.getRegistrationOpen());
+        request.setOpen(true);
+        assertEquals(CourseRegistrationStatus.OPEN, service().setRegistrationOpen("DT-3", request, authentication).getRegistrationStatus());
+        verify(domainEventPublisher, times(2)).publishAfterCommit(any());
+    }
+
+    @Test
+    void registrationCannotBeToggledAfterWindowEndedOrBeforeItStarts() {
+        TrainingCourse ended = deaneryCourse("DT-4", UUID.randomUUID());
+        ended.setRegistrationStartAt(java.time.OffsetDateTime.now().minusDays(2));
+        ended.setRegistrationEndAt(java.time.OffsetDateTime.now().minusMinutes(1));
+        TrainingCourse upcoming = deaneryCourse("DT-6", UUID.randomUUID());
+        upcoming.setRegistrationStartAt(java.time.OffsetDateTime.now().plusDays(1));
+        upcoming.setRegistrationEndAt(java.time.OffsetDateTime.now().plusDays(3));
+        var authentication = authentication("admin-deanery", "training.course.update.deanery");
+        when(trainingCourseRepository.findByCodeWithType("DT-4")).thenReturn(Optional.of(ended));
+        when(trainingCourseRepository.findByCodeWithType("DT-6")).thenReturn(Optional.of(upcoming));
+
+        var request = new phucuong.ht.modules.training.trainingCourse.model.request.CourseRegistrationToggleRequest();
+        request.setOpen(true);
+        assertThrows(RuntimeException.class, () -> service().setRegistrationOpen("DT-4", request, authentication));
+        assertThrows(RuntimeException.class, () -> service().setRegistrationOpen("DT-6", request, authentication));
+        verify(domainEventPublisher, never()).publishAfterCommit(any());
+    }
+
+    @Test
+    void schedulerAutoOpensAtStartAutoClosesAtEndAndMovesOrganizingStatus() {
+        java.time.OffsetDateTime now = java.time.OffsetDateTime.now();
+        TrainingCourse starting = deaneryCourse("DT-7", UUID.randomUUID());
+        starting.setRegistrationStartAt(now.minusMinutes(5));
+        starting.setRegistrationEndAt(now.plusDays(1));
+        starting.setStartDate(TrainingCourseStatusSupport.today().minusDays(1));
+        starting.setEndDate(TrainingCourseStatusSupport.today().plusDays(1));
+        starting.setRegistrationStatus(CourseRegistrationStatus.NOT_STARTED);
+        starting.setOrganizingStatus(CourseOrganizingStatus.UPCOMING);
+
+        TrainingCourse expiring = deaneryCourse("DT-8", UUID.randomUUID());
+        expiring.setRegistrationStartAt(now.minusDays(3));
+        expiring.setRegistrationEndAt(now.minusMinutes(5));
+        expiring.setStartDate(TrainingCourseStatusSupport.today().minusDays(5));
+        expiring.setEndDate(TrainingCourseStatusSupport.today().minusDays(1));
+        expiring.setRegistrationStatus(CourseRegistrationStatus.OPEN);
+        expiring.setOrganizingStatus(CourseOrganizingStatus.ONGOING);
+
+        TrainingCourse manuallyClosed = deaneryCourse("DT-9", UUID.randomUUID());
+        manuallyClosed.setRegistrationStartAt(now.minusDays(1));
+        manuallyClosed.setRegistrationEndAt(now.plusDays(1));
+        manuallyClosed.setStartDate(TrainingCourseStatusSupport.today().plusDays(2));
+        manuallyClosed.setEndDate(TrainingCourseStatusSupport.today().plusDays(3));
+        manuallyClosed.setRegistrationStatus(CourseRegistrationStatus.CLOSED);
+        manuallyClosed.setOrganizingStatus(CourseOrganizingStatus.UPCOMING);
+
+        when(trainingCourseRepository.findCoursesWithOpenStatuses()).thenReturn(List.of(starting, expiring, manuallyClosed));
+
+        assertEquals(2, service().refreshCourseStatuses());
+        assertEquals(CourseRegistrationStatus.OPEN, starting.getRegistrationStatus());
+        assertEquals(CourseOrganizingStatus.ONGOING, starting.getOrganizingStatus());
+        assertEquals(CourseRegistrationStatus.ENDED, expiring.getRegistrationStatus());
+        assertEquals(CourseOrganizingStatus.ENDED, expiring.getOrganizingStatus());
+        assertEquals(CourseRegistrationStatus.CLOSED, manuallyClosed.getRegistrationStatus());
+        verify(domainEventPublisher, times(2)).publishAfterCommit(any());
+    }
+
+    @Test
+    void passingScoreMustNotExceedWeightedMaxOfIncludedComponents() {
+        UUID deaneryId = UUID.randomUUID();
+        TrainingCourse course = deaneryCourse("DT-5", deaneryId);
+        var authentication = authentication("admin-deanery", "training.course.update.deanery");
+        TrainingCourseUpdateRequest request = new TrainingCourseUpdateRequest();
+        request.setPassingScore(java.math.BigDecimal.valueOf(9));
+
+        // Hai thành phần tối đa 10 (hệ số 1) và 5 (hệ số 1, tính vào tổng kết), 20 không tính -> giới hạn 7.5
+        when(trainingCourseRepository.findByCodeWithType("DT-5")).thenReturn(Optional.of(course));
+        when(accountScopeValidationHelper.requireActiveDeaneryId(any(), eq(TrainingCourseAccessEvaluator.UPDATE_DEANERY))).thenReturn(deaneryId);
+        when(courseParticipationRepository.existsByCourseCode("DT-5")).thenReturn(false);
+        when(deaneryRepository.getRequired(deaneryId)).thenReturn(course.getDeanery());
+        when(accountScopeValidationHelper.requireActiveDeaneryId(any(), eq(TrainingCourseAccessEvaluator.CREATE_DEANERY))).thenReturn(deaneryId);
+        when(scoreComponentTemplateRepository.findActiveForCourse(eq("SMTL_DT"), any(), eq(deaneryId)))
+                .thenReturn(List.of(component(10, true), component(5, true), component(20, false)));
+
+        assertThrows(RuntimeException.class, () -> service().update("DT-5", request, authentication));
+        request.setPassingScore(java.math.BigDecimal.valueOf(7.5));
+        assertEquals(0, java.math.BigDecimal.valueOf(7.5).compareTo(service().update("DT-5", request, authentication).getPassingScore()));
+    }
+
+    private phucuong.ht.modules.training.scoreComponentTemplate.model.entity.ScoreComponentTemplate component(int max, boolean included) {
+        var component = new phucuong.ht.modules.training.scoreComponentTemplate.model.entity.ScoreComponentTemplate();
+        component.setMaxScore(java.math.BigDecimal.valueOf(max));
+        component.setCoefficient(java.math.BigDecimal.ONE);
+        component.setIncludeInFinal(included);
+        return component;
+    }
+
     private TrainingCourseService service() {
         return new TrainingCourseService(
                 trainingCourseRepository,
@@ -89,11 +204,15 @@ class TrainingCourseUpdateScopeTest {
                 courseParticipationRepository,
                 dioceseRepository,
                 deaneryRepository,
-                scoreFormulaTemplateRepository,
                 new TrainingWorkflowSupport(),
                 accountScopeValidationHelper,
                 new CommonValidationHelper(new securityUtils()),
-                new securityUtils()
+                new securityUtils(),
+                scoreComponentTemplateRepository,
+                notificationRecipientResolver,
+                accountRepository,
+                domainEventPublisher,
+                accountRoleRepository
         );
     }
 

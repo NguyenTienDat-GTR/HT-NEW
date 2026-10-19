@@ -21,7 +21,6 @@ public class CourseParticipationResponse {
     private String courseCode;
     private String courseName;
     private String courseTypeCode;
-    private String scoreFormulaId;
     private LocalDate registrationDate;
     private ParticipationStatus participationStatus;
     private BigDecimal totalScore;

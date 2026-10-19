@@ -1,10 +1,13 @@
 package phucuong.ht.modules.training.trainingCourse.model.request;
 
+import jakarta.validation.constraints.DecimalMin;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.List;
 
 @Getter
 @Setter
@@ -26,7 +29,11 @@ public class TrainingCourseUpdateRequest {
 
     private OffsetDateTime registrationEndAt;
 
-    private String scoreFormulaId;
+    @DecimalMin(value = "0.00", inclusive = true)
+    private BigDecimal passingScore;
+
+    // null = giữ nguyên; danh sách (kể cả rỗng) = thay thế.
+    private List<String> recipientUsernames;
 
     private String additionalNotes;
 }

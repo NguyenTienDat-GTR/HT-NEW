@@ -6,6 +6,7 @@ import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.common.model.BaseModel;
 import phucuong.ht.modules.deanery.model.entity.Deanery;
 import phucuong.ht.modules.diocese.model.entity.Diocese;
+import phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType;
 
 import java.math.BigDecimal;
 
@@ -15,7 +16,7 @@ import java.math.BigDecimal;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-@ToString(exclude = {"diocese", "deanery"})
+@ToString(exclude = {"diocese", "deanery", "courseType"})
 @EqualsAndHashCode(callSuper = true)
 public class ScoreComponentTemplate extends BaseModel {
 
@@ -31,6 +32,19 @@ public class ScoreComponentTemplate extends BaseModel {
     private BigDecimal maxScore;
 
     private String description;
+
+    // Hệ số của thành phần khi tính điểm tổng kết (trung bình có hệ số).
+    @Column(name = "coefficient")
+    private BigDecimal coefficient;
+
+    // Có tính thành phần này vào điểm tổng kết của khóa huấn luyện hay không.
+    @Column(name = "include_in_final")
+    private Boolean includeInFinal;
+
+    // Loại khóa huấn luyện mà thành phần điểm thuộc về.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "course_type_code")
+    private TrainingCourseType courseType;
 
     @Column(name = "display_order")
     private Integer displayOrder;

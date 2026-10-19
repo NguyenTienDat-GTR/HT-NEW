@@ -13,6 +13,7 @@ import phucuong.ht.common.validation.AccountScopeValidationHelper;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.modules.deanery.repository.DeaneryRepository;
 import phucuong.ht.modules.diocese.repository.DioceseRepository;
+import phucuong.ht.modules.training.courseType.repository.TrainingCourseTypeRepository;
 import phucuong.ht.modules.training.scoreComponentTemplate.model.entity.ScoreComponentTemplate;
 import phucuong.ht.modules.training.scoreComponentTemplate.model.request.ScoreComponentTemplateCreateRequest;
 import phucuong.ht.modules.training.scoreComponentTemplate.model.request.ScoreComponentTemplateUpdateRequest;
@@ -34,6 +35,7 @@ public class ScoreComponentTemplateService {
     private final ScoreComponentTemplateRepository repository;
     private final DioceseRepository dioceseRepository;
     private final DeaneryRepository deaneryRepository;
+    private final TrainingCourseTypeRepository trainingCourseTypeRepository;
     private final AccountScopeValidationHelper accountScopeValidationHelper;
     private final CommonValidationHelper commonValidationHelper;
 
@@ -47,17 +49,24 @@ public class ScoreComponentTemplateService {
         component.setMaxScore(request.getMaxScore());
         component.setDescription(commonValidationHelper.normalizeOptionalText(request.getDescription()));
         component.setDisplayOrder(request.getDisplayOrder() == null ? 0 : request.getDisplayOrder());
-        component.setUnitType(request.getUnitType());
+        phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType courseType = trainingCourseTypeRepository
+                .findByCodeWithPrerequisite(request.getCourseTypeCode().trim())
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy loại khóa " + request.getCourseTypeCode()));
+        component.setUnitType(courseType.getManagementUnitType());
+        component.setCourseType(courseType);
+        component.setCoefficient(request.getCoefficient());
+        component.setIncludeInFinal(request.getIncludeInFinal() == null ? Boolean.TRUE : request.getIncludeInFinal());
         component.setStatus(Boolean.TRUE);
         component.setCreatedAt(now);
         component.setUpdatedAt(now);
         component.setCreatedBy(actor);
         component.setUpdatedBy(actor);
-        applyOwnerScope(component, request.getUnitType(), authentication);
+        applyOwnerScope(component, courseType.getManagementUnitType(), authentication);
         repository.save(component);
         return toResponse(component);
     }
 
+    @Transactional(readOnly = true)
     public Page<ScoreComponentTemplateResponse> findAll(BaseSearchRequest request, Authentication authentication) {
         BaseSearchRequest scopedRequest = copyRequest(request);
         if (hasAuthority(authentication, "training.score_component.read.diocese")) {
@@ -73,6 +82,7 @@ public class ScoreComponentTemplateService {
         return new PageImpl<>(page.getContent().stream().map(this::toResponse).toList(), page.getPageable(), page.getTotalElements());
     }
 
+    @Transactional(readOnly = true)
     public ScoreComponentTemplateResponse findById(String id) {
         return toResponse(repository.findByIdWithScope(id)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy thành phần điểm: " + id)));
@@ -90,6 +100,12 @@ public class ScoreComponentTemplateService {
         }
         if (request.getDescription() != null) {
             component.setDescription(commonValidationHelper.normalizeOptionalText(request.getDescription()));
+        }
+        if (request.getCoefficient() != null) {
+            component.setCoefficient(request.getCoefficient());
+        }
+        if (request.getIncludeInFinal() != null) {
+            component.setIncludeInFinal(request.getIncludeInFinal());
         }
         if (request.getDisplayOrder() != null) {
             component.setDisplayOrder(request.getDisplayOrder());
@@ -145,6 +161,10 @@ public class ScoreComponentTemplateService {
                 .maxScore(component.getMaxScore())
                 .description(component.getDescription())
                 .displayOrder(component.getDisplayOrder())
+                .courseTypeCode(component.getCourseType() == null ? null : component.getCourseType().getTypeCode())
+                .courseTypeName(component.getCourseType() == null ? null : component.getCourseType().getTypeName())
+                .coefficient(component.getCoefficient())
+                .includeInFinal(component.getIncludeInFinal())
                 .unitType(component.getUnitType())
                 .dioceseId(component.getDiocese() == null ? null : component.getDiocese().getId())
                 .deaneryId(component.getDeanery() == null ? null : component.getDeanery().getId())

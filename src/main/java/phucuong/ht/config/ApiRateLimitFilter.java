@@ -17,6 +17,7 @@ import phucuong.ht.common.exception.errorCode;
 import phucuong.ht.modules.auth.model.AuthUserDetails;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
 @Component
 @RequiredArgsConstructor
@@ -56,6 +57,7 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         if (!decision.allowed()) {
             response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+            response.setCharacterEncoding(StandardCharsets.UTF_8.name());
             response.setHeader("Retry-After", String.valueOf(decision.retryAfterSeconds()));
             objectMapper.writeValue(
                     response.getWriter(),

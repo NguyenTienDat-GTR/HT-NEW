@@ -22,7 +22,7 @@ public class ScoreComponentTemplateController {
     private final ScoreComponentTemplateService service;
 
     @PostMapping
-    @PreAuthorize("@scoreComponentTemplateAccessEvaluator.canCreate(authentication, #request.unitType)")
+    @PreAuthorize("@scoreComponentTemplateAccessEvaluator.canCreate(authentication, #request.courseTypeCode)")
     public apiResponse<ScoreComponentTemplateResponse> create(@Valid @RequestBody ScoreComponentTemplateCreateRequest request, Authentication authentication) {
         return apiResponse.success("Tạo thành phần điểm thành công", service.create(request, authentication));
     }

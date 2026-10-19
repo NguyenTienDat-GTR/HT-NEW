@@ -4,8 +4,13 @@ import lombok.Builder;
 import lombok.Getter;
 import phucuong.ht.common.enums.UnitType;
 
+import phucuong.ht.modules.training.enums.CourseOrganizingStatus;
+import phucuong.ht.modules.training.enums.CourseRegistrationStatus;
+
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Getter
@@ -24,7 +29,15 @@ public class TrainingCourseResponse {
     private OffsetDateTime registrationEndAt;
     private UUID dioceseId;
     private UUID deaneryId;
-    private String scoreFormulaId;
+    private String dioceseName;
+    private String deaneryName;
+    private Boolean registrationOpen;
+    private CourseRegistrationStatus registrationStatus;
+    private CourseOrganizingStatus organizingStatus;
+    private List<String> recipientUsernames;
+    private String createdBy;
+    private String updatedBy;
+    private BigDecimal passingScore;
     private String additionalNotes;
     private Boolean status;
     private OffsetDateTime createdAt;

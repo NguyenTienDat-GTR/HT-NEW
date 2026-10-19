@@ -200,9 +200,8 @@ public class CertificateService {
 
         requireApprovedParticipationForCertificate(participation);
         boolean passingScore = participation.getCourse() != null
-                && participation.getCourse().getScoreFormula() != null
                 && participation.getTotalScore() != null
-                && participation.getTotalScore().compareTo(participation.getCourse().getScoreFormula().getPassingScore()) >= 0;
+                && participation.getTotalScore().compareTo(participation.getCourse().getPassingScore()) >= 0;
         String approvalReason = request == null ? null : commonValidationHelper.normalizeOptionalText(request.getApprovalReason());
         if (!passingScore && approvalReason == null) {
             throw commonValidationHelper.validationError("approvalReason là bắt buộc khi duyệt chứng chỉ cho leader chưa đạt điểm qua");
@@ -360,8 +359,7 @@ public class CertificateService {
         boolean passed = participation != null
                 && participation.getTotalScore() != null
                 && participation.getCourse() != null
-                && participation.getCourse().getScoreFormula() != null
-                && participation.getTotalScore().compareTo(participation.getCourse().getScoreFormula().getPassingScore()) >= 0;
+                && participation.getTotalScore().compareTo(participation.getCourse().getPassingScore()) >= 0;
         return CertificateResponse.builder()
                 .certificateCode(certificate.getCertificateCode())
                 .oldCertificateCode(certificate.getOldCertificateCode())
@@ -371,7 +369,7 @@ public class CertificateService {
                 .courseCode(certificate.getCourse() == null ? null : certificate.getCourse().getCourseCode())
                 .courseName(certificate.getCourse() == null ? null : certificate.getCourse().getCourseName())
                 .totalScore(participation == null ? null : participation.getTotalScore())
-                .passingScore(participation == null || participation.getCourse() == null || participation.getCourse().getScoreFormula() == null ? null : participation.getCourse().getScoreFormula().getPassingScore())
+                .passingScore(participation == null || participation.getCourse() == null ? null : participation.getCourse().getPassingScore())
                 .passed(participation == null || participation.getTotalScore() == null ? null : passed)
                 .approvalReasonRequired(participation != null && participation.getTotalScore() != null && !passed)
                 .result(certificate.getResult())

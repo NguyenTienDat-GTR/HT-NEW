@@ -33,8 +33,6 @@ public class TrainingCourseRepository extends BaseRepo<TrainingCourse, String> {
                                 left join fetch courseType.prerequisiteType
                                 left join fetch tc.diocese
                                 left join fetch tc.deanery
-                                left join fetch tc.scoreFormula scoreFormula
-                                left join fetch scoreFormula.components
                                 where tc.courseCode = :courseCode
                                 """,
                         TrainingCourse.class
@@ -43,6 +41,24 @@ public class TrainingCourseRepository extends BaseRepo<TrainingCourse, String> {
                 .setMaxResults(1)
                 .getResultList();
         return results.stream().findFirst();
+    }
+
+    // Các khóa chưa ở trạng thái cuối (đăng ký và tổ chức đều đã ENDED thì không cần quét).
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<TrainingCourse> findCoursesWithOpenStatuses() {
+        return entityManager.createQuery(
+                        """
+                                select tc
+                                from TrainingCourse tc
+                                left join fetch tc.courseType
+                                left join fetch tc.diocese
+                                left join fetch tc.deanery
+                                where tc.registrationStatus <> phucuong.ht.modules.training.enums.CourseRegistrationStatus.ENDED
+                                   or tc.organizingStatus <> phucuong.ht.modules.training.enums.CourseOrganizingStatus.ENDED
+                                """,
+                        TrainingCourse.class
+                )
+                .getResultList();
     }
 
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
