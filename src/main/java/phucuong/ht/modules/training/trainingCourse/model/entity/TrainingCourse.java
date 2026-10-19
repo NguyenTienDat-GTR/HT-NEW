@@ -80,5 +80,9 @@ public class TrainingCourse extends BaseModel {
     @Column(name = "username")
     private Set<String> recipientUsernames = new LinkedHashSet<>();
 
+    // Khóa chỉnh sửa điểm: admin giáo phận/giáo hạt (có quyền lock) bật/tắt trong thời gian diễn ra khóa; khi khóa thì không nhập điểm được.
+    @Column(name = "score_locked", nullable = false)
+    private Boolean scoreLocked = Boolean.FALSE;
+
     private String additionalNotes;
 }

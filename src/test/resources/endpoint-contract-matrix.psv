@@ -167,3 +167,4 @@ GET /api/training/courses/{courseCode}|200|401|403|N/A: course code is an opaque
 PUT /api/training/courses/{courseCode}|200|401|403|400|404|409
 PATCH /api/training/courses/{courseCode}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict
 PATCH /api/training/courses/{courseCode}/registration|200|401|403|400|404|N/A: open/close flag has no uniqueness conflict
+PATCH /api/training/courses/{courseCode}/score-lock|200|401|403|400|404|N/A: locking is idempotent

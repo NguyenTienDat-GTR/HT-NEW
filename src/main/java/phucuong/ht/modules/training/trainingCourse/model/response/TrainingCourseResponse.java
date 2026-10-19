@@ -25,6 +25,7 @@ public class TrainingCourseResponse {
     private Integer yearsActive;
     // Chỉ có ở chi tiết/cập nhật khóa: đã có hồ sơ tham gia thì khóa các trường loại khóa, năm tổ chức, số năm hoạt động, điểm đạt.
     private Boolean hasParticipations;
+    private Boolean scoreLocked;
     private String location;
     private LocalDate startDate;
     private LocalDate endDate;

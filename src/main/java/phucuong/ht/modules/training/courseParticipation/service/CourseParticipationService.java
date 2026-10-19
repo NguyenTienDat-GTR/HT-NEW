@@ -428,11 +428,18 @@ public class CourseParticipationService {
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người nhập điểm");
         OffsetDateTime now = OffsetDateTime.now();
 
-        if (participation.getCertificateApprovalStatus() == WorkflowApprovalStatus.APPROVED) {
+        // Hồ sơ đã có chứng nhận được duyệt thì không sửa điểm.
+        Optional<Certificate> currentCertificate = certificateRepository.findByLeaderIdAndCourseCode(
+                participation.getLeader().getId(), participation.getCourse().getCourseCode());
+        if (participation.getCertificateApprovalStatus() == WorkflowApprovalStatus.APPROVED
+                || currentCertificate.map(item -> item.getApprovalStatus() == WorkflowApprovalStatus.APPROVED).orElse(false)) {
             throw commonValidationHelper.conflict("Không thể sửa điểm sau khi chứng chỉ đã được duyệt");
         }
         requireApprovedForScoring(participation);
         requireCourseOngoingForScoring(participation.getCourse());
+        if (Boolean.TRUE.equals(participation.getCourse().getScoreLocked())) {
+            throw commonValidationHelper.conflict("Điểm của khóa đang bị khóa chỉnh sửa, cần mở khóa trước khi nhập điểm");
+        }
         List<ScoreComponentTemplate> components = requireScoreComponents(participation);
         Map<String, ComponentScoreRequest> requestedScores = normalizeComponentScores(request.getComponentScores());
 
@@ -504,6 +511,11 @@ public class CourseParticipationService {
             participation.setParticipationStatus(ParticipationStatus.ATTENDED);
             participation.setCertificateApprovalStatus(WorkflowApprovalStatus.NOT_REQUIRED);
             participation.setCertificateRequestedAt(null);
+            // Sửa điểm xuống dưới điểm đạt: xóa chứng nhận đang chờ duyệt của hồ sơ.
+            currentCertificate
+                    .filter(item -> item.getApprovalStatus() == WorkflowApprovalStatus.PENDING
+                            || item.getApprovalStatus() == WorkflowApprovalStatus.SUBMITTED)
+                    .ifPresent(certificateRepository::delete);
         }
         publishEvent("training.score.updated", "courseParticipation", participationId, actor, Map.of("score", totalScore));
         return toResponse(participation);

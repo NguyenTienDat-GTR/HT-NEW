@@ -10,6 +10,7 @@ import phucuong.ht.common.dto.apiResponse;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.modules.training.trainingCourse.model.request.CourseRegistrationToggleRequest;
+import phucuong.ht.modules.training.trainingCourse.model.request.CourseScoreLockRequest;
 import phucuong.ht.modules.training.trainingCourse.model.response.CoursePassingScoreLimitResponse;
 import phucuong.ht.modules.training.trainingCourse.model.response.CourseRecipientCandidateResponse;
 import phucuong.ht.modules.training.trainingCourse.model.request.TrainingCourseCreateRequest;
@@ -34,6 +35,18 @@ public class TrainingCourseController {
     @PreAuthorize("@trainingCourseAccessEvaluator.canList(authentication)")
     public apiResponse<Page<TrainingCourseResponse>> findAll(BaseSearchRequest request, Authentication authentication) {
         return apiResponse.success("Lấy danh sách khóa huấn luyện thành công", trainingCourseService.findAll(request, authentication));
+    }
+
+    @PatchMapping("/{courseCode}/score-lock")
+    @PreAuthorize("@trainingCourseAccessEvaluator.canLockScore(authentication, #courseCode)")
+    public apiResponse<TrainingCourseResponse> setScoreLock(
+            @PathVariable String courseCode,
+            @Valid @RequestBody CourseScoreLockRequest request,
+            Authentication authentication
+    ) {
+        return apiResponse.success(
+                Boolean.TRUE.equals(request.getLocked()) ? "Đã khóa chỉnh sửa điểm" : "Đã mở chỉnh sửa điểm",
+                trainingCourseService.setScoreLocked(courseCode, Boolean.TRUE.equals(request.getLocked()), authentication));
     }
 
     @GetMapping("/registrable")

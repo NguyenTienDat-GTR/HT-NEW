@@ -549,6 +549,60 @@ class CourseParticipationServiceTest {
     }
 
     @Test
+    void scoreShouldRejectWhenScoreEditingIsLocked() {
+        courseParticipationService = buildService();
+        TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);
+        course.setScoreLocked(Boolean.TRUE);
+        CourseParticipation participation = pendingParticipation("cp-l", course, "leader-9");
+        participation.setApprovalStatus(WorkflowApprovalStatus.APPROVED);
+        when(courseParticipationRepository.findByIdWithLeaderAndCourse("cp-l")).thenReturn(Optional.of(participation));
+
+        assertThrows(RuntimeException.class, () -> courseParticipationService.score("cp-l", scoreRequest(9, 9), authentication("admin-diocese", "training.participation.score.diocese")));
+        verify(scoreComponentTemplateRepository, never()).findActiveForCourse(any(), any(), any());
+    }
+
+    @Test
+    void scoreShouldRejectWhenApprovedCertificateExists() {
+        courseParticipationService = buildService();
+        TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);
+        CourseParticipation participation = pendingParticipation("cp-c", course, "leader-9");
+        participation.setApprovalStatus(WorkflowApprovalStatus.APPROVED);
+        phucuong.ht.modules.certificate.model.entity.Certificate certificate = new phucuong.ht.modules.certificate.model.entity.Certificate();
+        certificate.setApprovalStatus(WorkflowApprovalStatus.APPROVED);
+        when(courseParticipationRepository.findByIdWithLeaderAndCourse("cp-c")).thenReturn(Optional.of(participation));
+        when(certificateRepository.findByLeaderIdAndCourseCode(any(), any())).thenReturn(Optional.of(certificate));
+
+        assertThrows(RuntimeException.class, () -> courseParticipationService.score("cp-c", scoreRequest(9, 9), authentication("admin-diocese", "training.participation.score.diocese")));
+        verify(scoreComponentTemplateRepository, never()).findActiveForCourse(any(), any(), any());
+    }
+
+    @Test
+    void rescoringBelowPassingScoreShouldDeletePendingCertificate() {
+        courseParticipationService = buildService();
+        CourseParticipation participation = new CourseParticipation();
+        participation.setId("cp-d");
+        TrainingCourse course = course("SMKN_I", UnitType.DIOCESE);
+        course.setPassingScore(BigDecimal.valueOf(8));
+        ScoreComponentTemplate first = component("component-1", "TINH_THAN", BigDecimal.valueOf(10), 0, BigDecimal.ONE, true);
+        ScoreComponentTemplate second = component("component-2", "KY_NANG", BigDecimal.valueOf(10), 1, BigDecimal.ONE, true);
+        when(scoreComponentTemplateRepository.findActiveForCourse(org.mockito.ArgumentMatchers.eq("SMKN_I"), any(), any()))
+                .thenReturn(List.of(first, second));
+        participation.setCourse(course);
+        participation.setLeader(leader(UUID.randomUUID(), UUID.randomUUID(), LeaderLevel.HT_XU));
+        participation.setApprovalStatus(WorkflowApprovalStatus.APPROVED);
+        participation.setCertificateApprovalStatus(WorkflowApprovalStatus.PENDING);
+        phucuong.ht.modules.certificate.model.entity.Certificate pending = new phucuong.ht.modules.certificate.model.entity.Certificate();
+        pending.setApprovalStatus(WorkflowApprovalStatus.PENDING);
+        when(courseParticipationRepository.findByIdWithLeaderAndCourse("cp-d")).thenReturn(Optional.of(participation));
+        when(certificateRepository.findByLeaderIdAndCourseCode(any(), any())).thenReturn(Optional.of(pending));
+
+        courseParticipationService.score("cp-d", scoreRequest(3, 3), authentication("admin-diocese", "training.participation.score.diocese"));
+
+        verify(certificateRepository).delete(pending);
+        assertEquals(WorkflowApprovalStatus.NOT_REQUIRED, participation.getCertificateApprovalStatus());
+    }
+
+    @Test
     void scoreShouldRejectWhenCourseIsNotOngoing() {
         courseParticipationService = buildService();
         TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);

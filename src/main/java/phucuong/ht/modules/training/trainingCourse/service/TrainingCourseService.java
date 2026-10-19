@@ -596,6 +596,21 @@ public class TrainingCourseService {
         }
     }
 
+    // Khóa/mở chỉnh sửa điểm của khóa. Quyền kiểm tra ở controller (lock theo phạm vi sở hữu khóa).
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, allEntries = true)
+    })
+    @Transactional
+    public TrainingCourseResponse setScoreLocked(String courseCode, boolean locked, Authentication authentication) {
+        TrainingCourse course = trainingCourseRepository.findByCodeWithType(courseCode)
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy khóa huấn luyện " + courseCode));
+        course.setScoreLocked(locked);
+        course.setUpdatedAt(OffsetDateTime.now());
+        course.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người khóa/mở điểm"));
+        return toResponse(course, courseParticipationRepository.existsByCourseCode(courseCode));
+    }
+
     // Loại khóa, năm tổ chức, số năm hoạt động và điểm đạt bị khóa sau khi khóa đã có hồ sơ tham gia.
     private void requireNoParticipations(String courseCode, String fieldLabel) {
         if (courseParticipationRepository.existsByCourseCode(courseCode)) {
@@ -618,6 +633,7 @@ public class TrainingCourseService {
                 .hostYear(course.getHostYear())
                 .yearsActive(course.getYearsActive() == null ? 0 : course.getYearsActive())
                 .hasParticipations(hasParticipations)
+                .scoreLocked(Boolean.TRUE.equals(course.getScoreLocked()))
                 .location(course.getLocation())
                 .startDate(course.getStartDate())
                 .endDate(course.getEndDate())
