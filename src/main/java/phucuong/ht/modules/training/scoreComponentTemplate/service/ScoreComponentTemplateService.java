@@ -49,13 +49,10 @@ public class ScoreComponentTemplateService {
         component.setMaxScore(request.getMaxScore());
         component.setDescription(commonValidationHelper.normalizeOptionalText(request.getDescription()));
         component.setDisplayOrder(request.getDisplayOrder() == null ? 0 : request.getDisplayOrder());
-        component.setUnitType(request.getUnitType());
         phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType courseType = trainingCourseTypeRepository
                 .findByCodeWithPrerequisite(request.getCourseTypeCode().trim())
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy loại khóa " + request.getCourseTypeCode()));
-        if (courseType.getManagementUnitType() != request.getUnitType()) {
-            throw commonValidationHelper.validationError("unitType của thành phần điểm phải trùng đơn vị quản lý của loại khóa");
-        }
+        component.setUnitType(courseType.getManagementUnitType());
         component.setCourseType(courseType);
         component.setCoefficient(request.getCoefficient());
         component.setIncludeInFinal(request.getIncludeInFinal() == null ? Boolean.TRUE : request.getIncludeInFinal());
@@ -64,11 +61,12 @@ public class ScoreComponentTemplateService {
         component.setUpdatedAt(now);
         component.setCreatedBy(actor);
         component.setUpdatedBy(actor);
-        applyOwnerScope(component, request.getUnitType(), authentication);
+        applyOwnerScope(component, courseType.getManagementUnitType(), authentication);
         repository.save(component);
         return toResponse(component);
     }
 
+    @Transactional(readOnly = true)
     public Page<ScoreComponentTemplateResponse> findAll(BaseSearchRequest request, Authentication authentication) {
         BaseSearchRequest scopedRequest = copyRequest(request);
         if (hasAuthority(authentication, "training.score_component.read.diocese")) {
@@ -84,6 +82,7 @@ public class ScoreComponentTemplateService {
         return new PageImpl<>(page.getContent().stream().map(this::toResponse).toList(), page.getPageable(), page.getTotalElements());
     }
 
+    @Transactional(readOnly = true)
     public ScoreComponentTemplateResponse findById(String id) {
         return toResponse(repository.findByIdWithScope(id)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy thành phần điểm: " + id)));

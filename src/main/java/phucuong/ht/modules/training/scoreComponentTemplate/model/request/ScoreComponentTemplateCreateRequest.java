@@ -5,7 +5,6 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
-import phucuong.ht.common.enums.UnitType;
 
 import java.math.BigDecimal;
 
@@ -36,6 +35,4 @@ public class ScoreComponentTemplateCreateRequest {
 
     private Integer displayOrder;
 
-    @NotNull
-    private UnitType unitType;
 }

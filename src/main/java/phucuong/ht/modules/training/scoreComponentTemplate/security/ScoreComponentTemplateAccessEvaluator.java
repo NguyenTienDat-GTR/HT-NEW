@@ -6,6 +6,7 @@ import org.springframework.stereotype.Component;
 import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.modules.auth.repository.AccountRepository;
+import phucuong.ht.modules.training.courseType.repository.TrainingCourseTypeRepository;
 import phucuong.ht.modules.training.scoreComponentTemplate.repository.ScoreComponentTemplateRepository;
 
 @Component("scoreComponentTemplateAccessEvaluator")
@@ -15,9 +16,16 @@ public class ScoreComponentTemplateAccessEvaluator {
     private final securityUtils securityUtils;
     private final AccountRepository accountRepository;
     private final ScoreComponentTemplateRepository repository;
+    private final TrainingCourseTypeRepository trainingCourseTypeRepository;
 
-    public boolean canCreate(Authentication authentication, UnitType unitType) {
-        return hasCreateAuthority(authentication, unitType);
+    // Cấp quản lý của thành phần điểm lấy theo loại khóa chứa nó.
+    public boolean canCreate(Authentication authentication, String courseTypeCode) {
+        if (courseTypeCode == null || courseTypeCode.isBlank()) {
+            return false;
+        }
+        return trainingCourseTypeRepository.findByCodeWithPrerequisite(courseTypeCode.trim())
+                .map(type -> hasCreateAuthority(authentication, type.getManagementUnitType()))
+                .orElse(false);
     }
 
     public boolean canList(Authentication authentication) {

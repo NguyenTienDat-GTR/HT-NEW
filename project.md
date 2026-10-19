@@ -789,7 +789,9 @@ Module `scoreFormulaTemplate` và `TrainingScoreFormulaEvaluator` (biểu thức
 
 Score components (`/api/training/score-components`):
 
-- each component belongs to exactly one scope owner (diocese or deanery) and one course type (`courseTypeCode`, must have the same `managementUnitType` as the component `unitType`)
+- each component belongs to one course type (`courseTypeCode`); `unitType` and the owner (diocese/deanery of the creator) are derived from the course type's `managementUnitType`, the create request has no `unitType`; create is authorized by `training.score_component.create.<scope>` matching the course type's level
+- `GET /api/training/course-types` is scoped by account: only `read.deanery` -> deanery-managed types, only `read.diocese` -> diocese-managed types (feeds the course-type dropdowns)
+- list/detail of components are `@Transactional(readOnly)` because `spring.jpa.open-in-view=false` (lazy `courseType` caused a LazyInitializationException on list)
 - fields: `name`, `maxScore`, `coefficient` (> 0, hệ số), `includeInFinal` (flag, default true), `courseTypeCode`, `displayOrder`, `description`
 - `includeInFinal = false` means the component is still entered/stored per participation but is NOT counted in the final score
 - `courseTypeCode` and `unitType` cannot be changed on update

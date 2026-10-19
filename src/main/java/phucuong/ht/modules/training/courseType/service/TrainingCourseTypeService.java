@@ -11,6 +11,7 @@ import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType;
+import phucuong.ht.modules.training.courseType.security.TrainingCourseTypeAccessEvaluator;
 import phucuong.ht.modules.training.courseType.model.request.TrainingCourseTypeCreateRequest;
 import phucuong.ht.modules.training.courseType.model.request.TrainingCourseTypeUpdateRequest;
 import phucuong.ht.modules.training.courseType.model.response.TrainingCourseTypeResponse;
@@ -58,11 +59,38 @@ public class TrainingCourseTypeService {
 
     @Transactional(readOnly = true)
     public Page<TrainingCourseTypeResponse> findAll(BaseSearchRequest request, Authentication authentication) {
-        Page<TrainingCourseType> page = trainingCourseTypeRepository.findAll(request);
+        BaseSearchRequest scoped = scopeByAccount(request, authentication);
+        Page<TrainingCourseType> page = trainingCourseTypeRepository.findAll(scoped);
         List<TrainingCourseTypeResponse> content = page.getContent().stream()
                 .map(this::toResponse)
                 .toList();
         return new PageImpl<>(content, page.getPageable(), page.getTotalElements());
+    }
+
+    // Tài khoản chỉ thấy loại khóa thuộc cấp quản lý của mình (giáo hạt hoặc giáo phận).
+    private BaseSearchRequest scopeByAccount(BaseSearchRequest request, Authentication authentication) {
+        BaseSearchRequest source = request == null ? new BaseSearchRequest() : request;
+        boolean diocese = hasAuthority(authentication, TrainingCourseTypeAccessEvaluator.READ_DIOCESE);
+        boolean deanery = hasAuthority(authentication, TrainingCourseTypeAccessEvaluator.READ_DEANERY);
+        if (diocese == deanery) {
+            return source;
+        }
+        BaseSearchRequest copy = new BaseSearchRequest();
+        copy.setPage(source.getPage());
+        copy.setSize(source.getSize());
+        copy.setSearch(source.getSearch());
+        copy.setSearchFields(source.getSearchFields() == null ? List.of() : List.copyOf(source.getSearchFields()));
+        copy.setFilters(source.getFilters() == null ? new java.util.LinkedHashMap<>() : new java.util.LinkedHashMap<>(source.getFilters()));
+        copy.setStatus(source.getStatus());
+        copy.setSortBy(source.getSortBy());
+        copy.setSortDirection(source.getSortDirection());
+        copy.getFilters().put("managementUnitType", deanery ? UnitType.DEANERY : UnitType.DIOCESE);
+        return copy;
+    }
+
+    private boolean hasAuthority(Authentication authentication, String authority) {
+        return authentication != null && authentication.getAuthorities().stream()
+                .anyMatch(granted -> authority.equals(granted.getAuthority()));
     }
 
     public TrainingCourseTypeResponse findById(String typeCode, Authentication authentication) {
