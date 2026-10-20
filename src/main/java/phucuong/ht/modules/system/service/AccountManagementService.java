@@ -437,9 +437,10 @@ public class AccountManagementService {
     private Page<AccountResponse> page(BaseSearchRequest request, List<AccountResponse> accounts) {
         int page = request == null ? 0 : request.getPage();
         int size = request == null ? 10 : request.getSize();
-        int start = Math.min(page * size, accounts.size());
-        int end = Math.min(start + size, accounts.size());
-        return new PageImpl<>(accounts.subList(start, end), PageRequest.of(page, size), accounts.size());
+        List<AccountResponse> ordered = request == null ? accounts : phucuong.ht.common.utils.InMemorySortSupport.sort(accounts, request.getSortBy(), request.getSortDirection());
+        int start = Math.min(page * size, ordered.size());
+        int end = Math.min(start + size, ordered.size());
+        return new PageImpl<>(ordered.subList(start, end), PageRequest.of(page, size), ordered.size());
     }
 
     private String safe(String value) {

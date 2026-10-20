@@ -269,11 +269,17 @@ public abstract class BaseRepo<T extends BaseModel, ID> {
                 if (!StringUtils.hasText(field)) {
                     continue;
                 }
-                Expression<String> expression = searchExpression(cb, root, field);
-                searchPredicates.add(cb.like(expression, keyword));
+                // Trường tìm kiếm không phải thuộc tính của entity (ví dụ cột tính ra ở response) thì bỏ qua, không làm lỗi cả request.
+                Expression<String> expression = trySearchExpression(cb, root, field);
+                if (expression != null) {
+                    searchPredicates.add(cb.like(expression, keyword));
+                }
             }
             if (!searchPredicates.isEmpty()) {
                 predicates.add(cb.or(searchPredicates.toArray(Predicate[]::new)));
+            } else {
+                // Có từ khóa nhưng không có trường nào tìm được: không khớp bản ghi nào thay vì trả lỗi.
+                predicates.add(cb.disjunction());
             }
         }
 
@@ -305,12 +311,44 @@ public abstract class BaseRepo<T extends BaseModel, ID> {
             return;
         }
 
-        Path<?> path = resolvePath(root, sortBy);
-        if ("DESC".equalsIgnoreCase(request.getSortDirection())) {
-            query.orderBy(cb.desc(path));
-            return;
+        // sortBy có thể ghép nhiều trường bằng dấu + (ví dụ firstName+lastName); trường không phải thuộc tính entity thì bỏ qua.
+        boolean desc = "DESC".equalsIgnoreCase(request.getSortDirection());
+        List<jakarta.persistence.criteria.Order> orders = new ArrayList<>();
+        for (String part : sortBy.split("\\+")) {
+            Path<?> path = tryResolvePath(root, part.trim());
+            if (path != null) {
+                orders.add(desc ? cb.desc(path) : cb.asc(path));
+            }
         }
-        query.orderBy(cb.asc(path));
+        if (!orders.isEmpty()) {
+            query.orderBy(orders);
+        }
+    }
+
+    private Path<?> tryResolvePath(Path<?> root, String fieldPath) {
+        if (!StringUtils.hasText(fieldPath)) {
+            return null;
+        }
+        try {
+            return resolvePath(root, fieldPath);
+        } catch (RuntimeException ex) {
+            return null;
+        }
+    }
+
+    private Expression<String> trySearchExpression(CriteriaBuilder cb, Path<?> root, String field) {
+        try {
+            // Chỉ tìm trên cột chữ (hoặc enum): lower() không áp dụng được cho số/ngày giờ (PostgreSQL báo lỗi lower(integer)).
+            for (String part : field.split("\\+")) {
+                Class<?> type = resolvePath(root, part.trim()).getJavaType();
+                if (!String.class.equals(type) && !type.isEnum()) {
+                    return null;
+                }
+            }
+            return searchExpression(cb, root, field);
+        } catch (RuntimeException ex) {
+            return null;
+        }
     }
 
     /**
