@@ -16,18 +16,26 @@ public class CertificateCodeGenerator {
         this.commonValidationHelper = commonValidationHelper;
     }
 
-    public String buildCode(String unitName, TrainingCourseType courseType, Integer hostYear, long sequence) {
+    // unitPrefix: "GP" cho khóa giáo phận, "GH" cho khóa giáo hạt.
+    // Ví dụ: giáo phận Phú Cường + loại HTI + 2026 + seq 1 -> "GPPC-HTI-2026-1".
+    public String buildCode(String unitPrefix, String unitName, TrainingCourseType courseType, Integer hostYear, long sequence) {
         if (hostYear == null) {
             throw commonValidationHelper.validationError("Năm tổ chức là bắt buộc để tạo mã chứng chỉ");
         }
-        return abbreviation(unitName) + "-" + courseShortCode(courseType) + "-" + hostYear + "-" + sequence;
+        return unitAbbreviation(unitPrefix, unitName) + "-" + courseShortCode(courseType) + "-" + hostYear + "-" + sequence;
     }
 
-    public String buildPrefix(String unitName, TrainingCourseType courseType, Integer hostYear) {
+    public String buildPrefix(String unitPrefix, String unitName, TrainingCourseType courseType, Integer hostYear) {
         if (hostYear == null) {
             throw commonValidationHelper.validationError("Năm tổ chức là bắt buộc để tạo mã chứng chỉ");
         }
-        return abbreviation(unitName) + "-" + courseShortCode(courseType) + "-" + hostYear + "-";
+        return unitAbbreviation(unitPrefix, unitName) + "-" + courseShortCode(courseType) + "-" + hostYear + "-";
+    }
+
+    // Ghép tiền tố cấp quản lý (GP/GH) với viết tắt tên đơn vị.
+    public String unitAbbreviation(String unitPrefix, String unitName) {
+        String prefix = unitPrefix == null ? "" : unitPrefix.trim().toUpperCase(Locale.ROOT);
+        return prefix + abbreviation(unitName);
     }
 
     public String abbreviation(String unitName) {

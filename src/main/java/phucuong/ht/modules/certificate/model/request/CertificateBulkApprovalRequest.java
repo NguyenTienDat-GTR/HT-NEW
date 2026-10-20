@@ -22,4 +22,9 @@ public class CertificateBulkApprovalRequest {
 
     // Lý do riêng theo mã chứng nhận; ưu tiên hơn lý do chung.
     private Map<String, String> reasons;
+
+    // Người ký áp dụng cho tất cả chứng nhận được duyệt trong lần này.
+    private phucuong.ht.modules.certificate.model.enums.CertificateSignerType signerType;
+    private String signerName;
+    private String signerTitle;
 }

@@ -84,7 +84,7 @@ public class ScoreComponentTemplateRepository extends BaseRepo<ScoreComponentTem
                 .setParameter("id", id)
                 .setMaxResults(1)
                 .getResultList();
-        return results.stream().findFirst();
+        return results.stream().filter(java.util.Objects::nonNull).findFirst();
     }
 
     public Optional<UUID> findDeaneryIdByComponentId(String id) {
@@ -95,6 +95,6 @@ public class ScoreComponentTemplateRepository extends BaseRepo<ScoreComponentTem
                 .setParameter("id", id)
                 .setMaxResults(1)
                 .getResultList();
-        return results.stream().findFirst();
+        return results.stream().filter(java.util.Objects::nonNull).findFirst();
     }
 }

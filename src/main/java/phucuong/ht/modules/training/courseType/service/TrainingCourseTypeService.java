@@ -1,6 +1,7 @@
 package phucuong.ht.modules.training.courseType.service;
 
 import lombok.RequiredArgsConstructor;
+import phucuong.ht.modules.leader.model.enums.LeaderLevel;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.security.core.Authentication;
@@ -47,6 +48,7 @@ public class TrainingCourseTypeService {
         courseType.setRequiredYearsActive(request.getRequiredYearsActive());
         courseType.setResultingLevel(request.getResultingLevel());
         courseType.setCertificateShortCode(normalizeText(request.getCertificateShortCode()));
+        requireShortCodeForCertified(courseType);
         courseType.setPrerequisiteType(resolvePrerequisite(typeCode, request.getPrerequisiteTypeCode()));
         courseType.setStatus(Boolean.TRUE);
         courseType.setCreatedAt(now);
@@ -132,6 +134,7 @@ public class TrainingCourseTypeService {
             courseType.setPrerequisiteType(resolvePrerequisite(typeCode, request.getPrerequisiteTypeCode()));
         }
 
+        requireShortCodeForCertified(courseType);
         courseType.setUpdatedAt(OffsetDateTime.now());
         courseType.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật loại khóa huấn luyện"));
         return toResponse(courseType);
@@ -143,6 +146,15 @@ public class TrainingCourseTypeService {
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái loại khóa huấn luyện");
         trainingCourseTypeRepository.toggleStatus(typeCode, actor);
         return findById(typeCode, authentication);
+    }
+
+    // Loại khóa có cấp độ đạt được (yêu cầu chứng nhận) bắt buộc có mã viết tắt để sinh mã chứng chỉ.
+    private void requireShortCodeForCertified(TrainingCourseType courseType) {
+        LeaderLevel level = courseType.getResultingLevel();
+        boolean certified = level != null && level != LeaderLevel.NONE;
+        if (certified && (courseType.getCertificateShortCode() == null || courseType.getCertificateShortCode().isBlank())) {
+            throw commonValidationHelper.validationError("Phải nhập mã viết tắt chứng chỉ cho loại khóa có cấp độ đạt được");
+        }
     }
 
     private void requireManagementUnitType(UnitType managementUnitType) {

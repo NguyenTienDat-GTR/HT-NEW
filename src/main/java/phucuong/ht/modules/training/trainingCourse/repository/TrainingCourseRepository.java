@@ -106,7 +106,8 @@ public class TrainingCourseRepository extends BaseRepo<TrainingCourse, String> {
                 .setParameter("courseCode", courseCode)
                 .setMaxResults(1)
                 .getResultList();
-        return results.stream().findFirst();
+        // Khóa giáo hạt có thể không gắn giáo phận: bỏ phần tử null để tránh NPE khi bọc Optional.
+        return results.stream().filter(java.util.Objects::nonNull).findFirst();
     }
 
     public Optional<UUID> findDeaneryIdByCourseCode(String courseCode) {
@@ -121,6 +122,7 @@ public class TrainingCourseRepository extends BaseRepo<TrainingCourse, String> {
                 .setParameter("courseCode", courseCode)
                 .setMaxResults(1)
                 .getResultList();
-        return results.stream().findFirst();
+        // Khóa giáo phận không gắn giáo hạt: bỏ phần tử null để tránh NPE khi bọc Optional.
+        return results.stream().filter(java.util.Objects::nonNull).findFirst();
     }
 }

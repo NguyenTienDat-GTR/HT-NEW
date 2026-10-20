@@ -599,10 +599,12 @@ public class CourseParticipationService {
 
     private String nextCertificateCode(CourseParticipation participation) {
         String unitName = unitNameForCertificate(participation.getCourse());
-        String prefix = certificateCodeGenerator.buildPrefix(unitName, participation.getCourse().getCourseType(), participation.getCourse().getHostYear());
+        // GP cho khóa giáo phận, GH cho khóa giáo hạt.
+        String unitPrefix = trainingWorkflowSupport.isDeaneryManaged(participation.getCourse().getCourseType()) ? "GH" : "GP";
+        String prefix = certificateCodeGenerator.buildPrefix(unitPrefix, unitName, participation.getCourse().getCourseType(), participation.getCourse().getHostYear());
         certificateRepository.lockCodePrefix(prefix);
         long nextSequence = certificateRepository.findHighestSequenceByCodePrefix(prefix).orElse(0L) + 1L;
-        return certificateCodeGenerator.buildCode(unitName, participation.getCourse().getCourseType(), participation.getCourse().getHostYear(), nextSequence);
+        return certificateCodeGenerator.buildCode(unitPrefix, unitName, participation.getCourse().getCourseType(), participation.getCourse().getHostYear(), nextSequence);
     }
 
     private String unitNameForCertificate(TrainingCourse course) {

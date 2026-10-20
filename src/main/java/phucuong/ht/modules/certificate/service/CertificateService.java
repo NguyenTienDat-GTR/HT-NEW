@@ -238,6 +238,9 @@ public class CertificateService {
                 if (approved) {
                     CertificateApproveRequest single = new CertificateApproveRequest();
                     single.setApprovalReason(reason);
+                    single.setSignerType(request.getSignerType());
+                    single.setSignerName(request.getSignerName());
+                    single.setSignerTitle(request.getSignerTitle());
                     approveInternal(code, single, authentication);
                 } else {
                     rejectInternal(code, reason, authentication);
@@ -263,6 +266,9 @@ public class CertificateService {
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy chứng chỉ: " + certificateCode));
         if (certificate.getLeader() == null || certificate.getCourse() == null) {
             throw commonValidationHelper.validationError("Chứng chỉ phải được liên kết với leader và khóa huấn luyện");
+        }
+        if (certificate.getCourse().getFinishedAt() != null) {
+            throw commonValidationHelper.conflict("Khóa huấn luyện đã kết thúc nên không từ chối chứng nhận được, chỉ xuất được PDF");
         }
         WorkflowApprovalStatus current = certificate.getApprovalStatus();
         if (current != WorkflowApprovalStatus.PENDING && current != WorkflowApprovalStatus.SUBMITTED) {
@@ -291,6 +297,28 @@ public class CertificateService {
         return certificate;
     }
 
+    // Ghi người ký vào chứng nhận; bắt buộc có người ký khi duyệt.
+    private void applySigner(Certificate certificate, CertificateApproveRequest request) {
+        phucuong.ht.modules.certificate.model.enums.CertificateSignerType signerType = request == null ? null : request.getSignerType();
+        String signerName = request == null ? null : commonValidationHelper.normalizeOptionalText(request.getSignerName());
+        if (signerType == null || signerName == null) {
+            throw commonValidationHelper.validationError("Phải chọn người ký khi duyệt chứng nhận");
+        }
+        String signerTitle;
+        if (signerType == phucuong.ht.modules.certificate.model.enums.CertificateSignerType.OTHER) {
+            signerTitle = request == null ? null : commonValidationHelper.normalizeOptionalText(request.getSignerTitle());
+            if (signerTitle == null) {
+                throw commonValidationHelper.validationError("Phải nhập chức danh người ký khi chọn 'Khác'");
+            }
+        } else {
+            signerTitle = "Linh mục tuyên úy";
+        }
+        certificate.setSignerType(signerType);
+        certificate.setSignerName(signerName);
+        certificate.setSignerTitle(signerTitle);
+        certificate.setSignedBy((signerTitle + " " + signerName).trim());
+    }
+
     private Certificate approveInternal(String certificateCode, CertificateApproveRequest request, Authentication authentication) {
         Certificate certificate = certificateRepository.findByCodeWithLeaderAndCourse(certificateCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy chứng chỉ: " + certificateCode));
@@ -299,6 +327,9 @@ public class CertificateService {
         }
         if (certificate.getApprovalStatus() == WorkflowApprovalStatus.APPROVED) {
             throw commonValidationHelper.conflict("Chứng chỉ đã được duyệt trước đó");
+        }
+        if (certificate.getCourse().getFinishedAt() != null) {
+            throw commonValidationHelper.conflict("Khóa huấn luyện đã kết thúc nên không duyệt chứng nhận được, chỉ xuất được PDF");
         }
 
         CourseParticipation participation = courseParticipationRepository.findByLeaderIdAndCourseCode(
@@ -315,6 +346,9 @@ public class CertificateService {
         if (!passingScore && approvalReason == null) {
             throw commonValidationHelper.validationError("approvalReason là bắt buộc khi duyệt chứng chỉ cho leader chưa đạt điểm qua");
         }
+
+        // Người ký ghi trực tiếp vào chứng nhận khi duyệt.
+        applySigner(certificate, request);
 
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người duyệt chứng chỉ");
         OffsetDateTime now = OffsetDateTime.now();
@@ -475,12 +509,16 @@ public class CertificateService {
                 .leaderFullName(buildFullName(certificate.getLeader()))
                 .courseCode(certificate.getCourse() == null ? null : certificate.getCourse().getCourseCode())
                 .courseName(certificate.getCourse() == null ? null : certificate.getCourse().getCourseName())
+                .courseFinished(certificate.getCourse() != null && certificate.getCourse().getFinishedAt() != null)
                 .totalScore(participation == null ? null : participation.getTotalScore())
                 .passingScore(participation == null || participation.getCourse() == null ? null : participation.getCourse().getPassingScore())
                 .passed(participation == null || participation.getTotalScore() == null ? null : passed)
                 .approvalReasonRequired(participation != null && participation.getTotalScore() != null && !passed)
                 .result(certificate.getResult())
                 .signedBy(certificate.getSignedBy())
+                .signerType(certificate.getSignerType())
+                .signerName(certificate.getSignerName())
+                .signerTitle(certificate.getSignerTitle())
                 .issueDate(certificate.getIssueDate())
                 .imageUrl(certificate.getImageUrl())
                 .approvalStatus(certificate.getApprovalStatus())

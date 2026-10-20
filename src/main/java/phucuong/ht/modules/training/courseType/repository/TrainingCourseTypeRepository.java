@@ -4,6 +4,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Repository;
 import phucuong.ht.common.repository.BaseRepo;
+import phucuong.ht.modules.leader.model.enums.LeaderLevel;
 import phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType;
 
 import java.util.List;
@@ -37,6 +38,24 @@ public class TrainingCourseTypeRepository extends BaseRepo<TrainingCourseType, S
                 .setMaxResults(1)
                 .getResultList();
         return results.stream().findFirst();
+    }
+
+    // Loại khóa có yêu cầu chứng nhận: có cấp độ đạt được (resultingLevel khác null/NONE), đang hoạt động.
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<TrainingCourseType> findCertifiedTypes() {
+        return entityManager.createQuery(
+                        """
+                                select ct
+                                from TrainingCourseType ct
+                                where ct.resultingLevel is not null
+                                  and ct.resultingLevel <> :none
+                                  and ct.status = true
+                                order by ct.typeName
+                                """,
+                        TrainingCourseType.class
+                )
+                .setParameter("none", LeaderLevel.NONE)
+                .getResultList();
     }
 
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
