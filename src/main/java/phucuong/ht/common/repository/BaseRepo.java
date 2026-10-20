@@ -269,7 +269,7 @@ public abstract class BaseRepo<T extends BaseModel, ID> {
                 if (!StringUtils.hasText(field)) {
                     continue;
                 }
-                Expression<String> expression = cb.lower(resolvePath(root, field).as(String.class));
+                Expression<String> expression = searchExpression(cb, root, field);
                 searchPredicates.add(cb.like(expression, keyword));
             }
             if (!searchPredicates.isEmpty()) {
@@ -278,6 +278,22 @@ public abstract class BaseRepo<T extends BaseModel, ID> {
         }
 
         return predicates;
+    }
+
+    /**
+     * Builds the lower-cased expression a search keyword is matched against. A field written as
+     * `a.lastName+a.firstName` is matched against the space-joined values (full name search).
+     */
+    private Expression<String> searchExpression(CriteriaBuilder cb, Path<?> root, String field) {
+        if (!field.contains("+")) {
+            return cb.lower(resolvePath(root, field).as(String.class));
+        }
+        Expression<String> joined = null;
+        for (String part : field.split("\\+")) {
+            Expression<String> piece = cb.coalesce(resolvePath(root, part.trim()).as(String.class), "");
+            joined = joined == null ? piece : cb.concat(cb.concat(joined, " "), piece);
+        }
+        return cb.lower(joined);
     }
 
     /**
