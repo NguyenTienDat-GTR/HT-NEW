@@ -46,6 +46,8 @@ public class TrainingCourseAccessEvaluator {
     public static final String SUBMIT_PARISH = "training.participation.submit.parish";
     public static final String LOCK_SCORE_DIOCESE = "training.participation.lock.diocese";
     public static final String LOCK_SCORE_DEANERY = "training.participation.lock.deanery";
+    public static final String FINISH_DIOCESE = "training.course.finish.diocese";
+    public static final String FINISH_DEANERY = "training.course.finish.deanery";
 
     // Tài khoản giáo xứ cũng xem được danh sách khóa, nhưng chỉ các khóa đang mở đăng ký trong phạm vi.
     public boolean canList(Authentication authentication) {
@@ -93,6 +95,11 @@ public class TrainingCourseAccessEvaluator {
     // Khóa/mở chỉnh sửa điểm: admin giáo phận (khóa giáo phận) hoặc giáo hạt (khóa giáo hạt) sở hữu khóa.
     public boolean canLockScore(Authentication authentication, String courseCode) {
         return hasScopedAccess(authentication, courseCode, LOCK_SCORE_DIOCESE, LOCK_SCORE_DEANERY);
+    }
+
+    // Kết thúc khóa thủ công: admin giáo phận (khóa giáo phận) hoặc giáo hạt (khóa giáo hạt) sở hữu khóa.
+    public boolean canFinish(Authentication authentication, String courseCode) {
+        return hasScopedAccess(authentication, courseCode, FINISH_DIOCESE, FINISH_DEANERY);
     }
 
     public boolean canUpdate(Authentication authentication, String courseCode) {

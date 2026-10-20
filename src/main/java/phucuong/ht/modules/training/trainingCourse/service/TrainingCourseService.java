@@ -72,6 +72,8 @@ public class TrainingCourseService {
     private final AccountRepository accountRepository;
     private final DomainEventPublisher domainEventPublisher;
     private final AccountRoleRepository accountRoleRepository;
+    private final CourseFinishService courseFinishService;
+    private final phucuong.ht.modules.certificate.service.CertificateRealtimeNotifier certificateRealtimeNotifier;
 
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_LIST, allEntries = true),
@@ -596,6 +598,41 @@ public class TrainingCourseService {
         }
     }
 
+    // Kết thúc khóa thủ công: chốt kết quả chung, thăng cấp hồ sơ đạt và khóa điểm. Quyền kiểm tra ở controller.
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_DETAIL, allEntries = true)
+    })
+    @Transactional
+    public TrainingCourseResponse finishCourse(String courseCode, Authentication authentication) {
+        TrainingCourse course = trainingCourseRepository.findByCodeWithType(courseCode)
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy khóa huấn luyện " + courseCode));
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người kết thúc khóa");
+        if (course.getFinishedAt() != null) {
+            throw commonValidationHelper.conflict("Khóa huấn luyện đã được kết thúc");
+        }
+        if (course.getStartDate() == null || TrainingCourseStatusSupport.today().isBefore(course.getStartDate())) {
+            throw commonValidationHelper.conflict("Khóa huấn luyện chưa diễn ra nên chưa thể kết thúc");
+        }
+        courseFinishService.finish(course, actor, OffsetDateTime.now());
+        publishCourseFinishedEvent(course, "MANUAL", actor);
+        return toResponse(course, courseParticipationRepository.existsByCourseCode(courseCode));
+    }
+
+    private void publishCourseFinishedEvent(TrainingCourse course, String reason, String actor) {
+        domainEventPublisher.publishAfterCommit(DomainEventMessage.builder()
+                .eventType("training.course.finished")
+                .entityType("trainingCourse")
+                .entityId(course.getCourseCode())
+                .actor(actor)
+                .occurredAt(OffsetDateTime.now())
+                .payload(Map.of("courseCode", course.getCourseCode(), "reason", reason))
+                .build());
+        certificateRealtimeNotifier.notifyChanged("COURSE_FINISHED", course.getCourseCode(), null);
+    }
+
     // Khóa/mở chỉnh sửa điểm của khóa. Quyền kiểm tra ở controller (lock theo phạm vi sở hữu khóa).
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_LIST, allEntries = true),
@@ -605,6 +642,9 @@ public class TrainingCourseService {
     public TrainingCourseResponse setScoreLocked(String courseCode, boolean locked, Authentication authentication) {
         TrainingCourse course = trainingCourseRepository.findByCodeWithType(courseCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy khóa huấn luyện " + courseCode));
+        if (!locked && course.getFinishedAt() != null) {
+            throw commonValidationHelper.conflict("Khóa đã kết thúc nên không thể mở lại chỉnh sửa điểm");
+        }
         course.setScoreLocked(locked);
         course.setUpdatedAt(OffsetDateTime.now());
         course.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người khóa/mở điểm"));
@@ -634,6 +674,9 @@ public class TrainingCourseService {
                 .yearsActive(course.getYearsActive() == null ? 0 : course.getYearsActive())
                 .hasParticipations(hasParticipations)
                 .scoreLocked(Boolean.TRUE.equals(course.getScoreLocked()))
+                .certificateRequired(trainingWorkflowSupport.requiresCertificate(courseType))
+                .finishedAt(course.getFinishedAt())
+                .finishedBy(course.getFinishedBy())
                 .location(course.getLocation())
                 .startDate(course.getStartDate())
                 .endDate(course.getEndDate())

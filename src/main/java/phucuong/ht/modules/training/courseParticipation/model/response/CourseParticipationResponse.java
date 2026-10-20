@@ -43,6 +43,7 @@ public class CourseParticipationResponse {
     private WorkflowApprovalStatus certificateApprovalStatus;
     private OffsetDateTime certificateRequestedAt;
     private OffsetDateTime certificateApprovedAt;
+    private phucuong.ht.modules.training.enums.CourseFinalResult finalResult;
     private String approvedBy;
     private List<ComponentScoreResponse> componentScores;
     private Boolean status;

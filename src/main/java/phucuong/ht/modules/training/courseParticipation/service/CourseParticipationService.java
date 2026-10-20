@@ -509,19 +509,25 @@ public class CourseParticipationService {
         if (totalScore.compareTo(participation.getCourse().getPassingScore()) >= 0) {
             participation.setResult(CourseResult.COMPLETED);
             participation.setParticipationStatus(ParticipationStatus.COMPLETED);
-            participation.setCertificateApprovalStatus(WorkflowApprovalStatus.PENDING);
-            if (participation.getCertificateRequestedAt() == null) {
-                participation.setCertificateRequestedAt(now);
+            if (trainingWorkflowSupport.requiresCertificate(participation.getCourse().getCourseType())) {
+                participation.setCertificateApprovalStatus(WorkflowApprovalStatus.PENDING);
+                if (participation.getCertificateRequestedAt() == null) {
+                    participation.setCertificateRequestedAt(now);
+                }
+                currentCertificate
+                        .filter(item -> item.getApprovalStatus() == WorkflowApprovalStatus.REJECTED)
+                        .ifPresent(item -> {
+                            item.setApprovalStatus(WorkflowApprovalStatus.PENDING);
+                            item.setRejectionReason(null);
+                            item.setUpdatedAt(now);
+                            item.setUpdatedBy(actor);
+                        });
+                ensureSuggestedCertificateExists(participation, actor);
+            } else {
+                // Khóa không có cấp độ đạt được: chỉ cần điểm đạt, không tạo chứng nhận.
+                participation.setCertificateApprovalStatus(WorkflowApprovalStatus.NOT_REQUIRED);
+                participation.setCertificateRequestedAt(null);
             }
-            currentCertificate
-                    .filter(item -> item.getApprovalStatus() == WorkflowApprovalStatus.REJECTED)
-                    .ifPresent(item -> {
-                        item.setApprovalStatus(WorkflowApprovalStatus.PENDING);
-                        item.setRejectionReason(null);
-                        item.setUpdatedAt(now);
-                        item.setUpdatedBy(actor);
-                    });
-            ensureSuggestedCertificateExists(participation, actor);
         } else {
             participation.setResult(CourseResult.UNCOMPLETED);
             participation.setParticipationStatus(ParticipationStatus.ATTENDED);
@@ -871,6 +877,7 @@ public class CourseParticipationService {
                 .certificateApprovalStatus(participation.getCertificateApprovalStatus())
                 .certificateRequestedAt(participation.getCertificateRequestedAt())
                 .certificateApprovedAt(participation.getCertificateApprovedAt())
+                .finalResult(participation.getFinalResult())
                 .approvedBy(participation.getApprovedBy())
                 .componentScores(participation.getComponentScores().stream()
                         .sorted(Comparator.comparing(score -> score.getComponent().getDisplayOrder(), Comparator.nullsLast(Integer::compareTo)))
@@ -1019,12 +1026,10 @@ public class CourseParticipationService {
         TrainingCourse course = participation.getCourse();
         if (trainingWorkflowSupport.isDeaneryManaged(course.getCourseType())) {
             return hasAuthority(authentication, CourseParticipationAccessEvaluator.APPROVE_DEANERY)
-                    && accountScopeValidationHelper.hasDirectDeanery(authentication)
                     && course.getDeanery() != null
                     && course.getDeanery().getId().equals(accountScopeValidationHelper.requireActiveDeaneryId(authentication, CourseParticipationAccessEvaluator.APPROVE_DEANERY));
         }
         return hasAuthority(authentication, CourseParticipationAccessEvaluator.APPROVE_DIOCESE)
-                && accountScopeValidationHelper.hasDirectDiocese(authentication)
                 && course.getDiocese() != null
                 && course.getDiocese().getId().equals(accountScopeValidationHelper.requireActiveDioceseId(authentication, CourseParticipationAccessEvaluator.APPROVE_DIOCESE));
     }

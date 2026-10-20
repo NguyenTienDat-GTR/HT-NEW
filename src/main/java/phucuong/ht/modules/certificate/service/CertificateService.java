@@ -66,6 +66,7 @@ public class CertificateService {
     private final DomainEventPublisher domainEventPublisher;
     private final CertificateRealtimeNotifier certificateRealtimeNotifier;
     private final CertificateAccessEvaluator certificateAccessEvaluator;
+    private final phucuong.ht.modules.training.trainingCourse.service.CourseFinishService courseFinishService;
 
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.CERTIFICATE_LIST, allEntries = true),
@@ -76,6 +77,9 @@ public class CertificateService {
         TrainingCourse course = requireCourse(request.getCourseCode());
         Leader leader = requireLeader(request.getLeaderId());
         requireLeaderInCourseScope(leader, course);
+        if (!trainingWorkflowSupport.requiresCertificate(course.getCourseType())) {
+            throw commonValidationHelper.conflict("Khóa huấn luyện này không có cấp độ đạt được nên không có chứng nhận");
+        }
         if (certificateRepository.findByLeaderIdAndCourseCode(leader.getId(), course.getCourseCode()).isPresent()) {
             throw commonValidationHelper.conflict("Leader đã có chứng chỉ cho khóa huấn luyện này");
         }
@@ -279,6 +283,7 @@ public class CertificateService {
                     participation.setCertificateApprovalStatus(WorkflowApprovalStatus.REJECTED);
                     participation.setUpdatedAt(now);
                     participation.setUpdatedBy(actor);
+                    courseFinishService.reevaluateIfFinished(participation, actor);
                 });
         publishEvent("training.certificate.rejected", "certificate", certificateCode, actor,
                 Map.of("courseCode", certificate.getCourse().getCourseCode()));
@@ -330,9 +335,8 @@ public class CertificateService {
         participation.setUpdatedAt(now);
         participation.setUpdatedBy(actor);
 
-        trainingWorkflowSupport.certificateLevelFor(certificate.getCourse().getCourseType())
-                .filter(newLevel -> trainingWorkflowSupport.isPromotion(certificate.getLeader().getLeaderLevel(), newLevel))
-                .ifPresent(newLevel -> promoteLeader(certificate.getLeader(), newLevel, actor, certificateCode));
+        // Thăng cấp chỉ xảy ra khi kết thúc khóa; nếu khóa đã kết thúc thì đánh giá lại hồ sơ này ngay.
+        courseFinishService.reevaluateIfFinished(participation, actor);
 
         publishEvent("training.certificate.approved", "certificate", certificateCode, actor, Map.of(
                 "courseCode", certificate.getCourse().getCourseCode(),

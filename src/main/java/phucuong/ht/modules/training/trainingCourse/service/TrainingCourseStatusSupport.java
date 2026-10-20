@@ -33,6 +33,10 @@ public final class TrainingCourseStatusSupport {
     }
 
     public static CourseOrganizingStatus organizingStatus(TrainingCourse course, LocalDate today) {
+        // Đã kết thúc thủ công thì luôn là đã kết thúc, kể cả trước ngày kết thúc dự kiến.
+        if (course.getFinishedAt() != null) {
+            return CourseOrganizingStatus.ENDED;
+        }
         LocalDate start = course.getStartDate();
         LocalDate end = course.getEndDate();
         if (end != null && today.isAfter(end)) {
