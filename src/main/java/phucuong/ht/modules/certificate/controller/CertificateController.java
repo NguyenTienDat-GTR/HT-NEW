@@ -10,7 +10,10 @@ import phucuong.ht.common.dto.apiResponse;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.modules.certificate.model.request.CertificateApproveRequest;
+import phucuong.ht.modules.certificate.model.request.CertificateBulkApprovalRequest;
 import phucuong.ht.modules.certificate.model.request.CertificateCreateRequest;
+import phucuong.ht.modules.certificate.model.request.CertificateRejectRequest;
+import phucuong.ht.modules.training.courseParticipation.model.response.TrainingBulkApprovalResponse;
 import phucuong.ht.modules.certificate.model.request.CertificateUpdateRequest;
 import phucuong.ht.modules.certificate.model.response.CertificateResponse;
 import phucuong.ht.modules.certificate.service.CertificateService;
@@ -67,5 +70,21 @@ public class CertificateController {
             Authentication authentication
     ) {
         return apiResponse.success("Duyệt chứng chỉ thành công", certificateService.approve(certificateCode, request, authentication));
+    }
+
+    @PostMapping("/{certificateCode}/reject")
+    @PreAuthorize("@certificateAccessEvaluator.canApprove(authentication, #certificateCode)")
+    public apiResponse<CertificateResponse> reject(
+            @PathVariable String certificateCode,
+            @RequestBody CertificateRejectRequest request,
+            Authentication authentication
+    ) {
+        return apiResponse.success("Từ chối chứng chỉ thành công", certificateService.reject(certificateCode, request, authentication));
+    }
+
+    @PostMapping("/bulk-approval")
+    @PreAuthorize("@certificateAccessEvaluator.canBulkApprove(authentication)")
+    public apiResponse<TrainingBulkApprovalResponse> bulkApprove(@Valid @RequestBody CertificateBulkApprovalRequest request, Authentication authentication) {
+        return apiResponse.success("Xử lý duyệt hàng loạt hoàn tất", certificateService.bulkApprove(request, authentication));
     }
 }

@@ -84,5 +84,12 @@ public class TrainingCourse extends BaseModel {
     @Column(name = "score_locked", nullable = false)
     private Boolean scoreLocked = Boolean.FALSE;
 
+    // Kết thúc khóa: thời điểm và người kết thúc; có giá trị thì khóa luôn ở trạng thái đã kết thúc.
+    @Column(name = "finished_at")
+    private OffsetDateTime finishedAt;
+
+    @Column(name = "finished_by")
+    private String finishedBy;
+
     private String additionalNotes;
 }

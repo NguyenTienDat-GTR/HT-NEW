@@ -47,6 +47,11 @@ public class CourseParticipation extends BaseModel {
     @Enumerated(EnumType.STRING)
     private CourseResult result;
 
+    // Kết quả chung chốt khi kết thúc khóa: PASSED được thăng cấp, FAILED không thăng cấp.
+    @Enumerated(EnumType.STRING)
+    @Column(name = "final_result")
+    private phucuong.ht.modules.training.enums.CourseFinalResult finalResult;
+
     private String review;
 
     private Boolean eligible;

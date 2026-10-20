@@ -536,9 +536,10 @@ public class AccountRoleService {
     private Page<AccountRoleResponse> page(BaseSearchRequest request, List<AccountRoleResponse> accountRoles) {
         int page = request == null ? 0 : request.getPage();
         int size = request == null ? 10 : request.getSize();
-        int start = Math.min(page * size, accountRoles.size());
-        int end = Math.min(start + size, accountRoles.size());
-        return new PageImpl<>(accountRoles.subList(start, end), PageRequest.of(page, size), accountRoles.size());
+        List<AccountRoleResponse> ordered = request == null ? accountRoles : phucuong.ht.common.utils.InMemorySortSupport.sort(accountRoles, request.getSortBy(), request.getSortDirection());
+        int start = Math.min(page * size, ordered.size());
+        int end = Math.min(start + size, ordered.size());
+        return new PageImpl<>(ordered.subList(start, end), PageRequest.of(page, size), ordered.size());
     }
 
     private String safe(String value) {

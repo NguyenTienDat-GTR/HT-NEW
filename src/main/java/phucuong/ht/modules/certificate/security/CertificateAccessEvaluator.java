@@ -53,6 +53,15 @@ public class CertificateAccessEvaluator {
         return hasScopedAccess(authentication, certificateCode, "approve");
     }
 
+    // Duyệt hàng loạt: cần quyền duyệt chứng nhận ở một cấp; service kiểm tra phạm vi từng chứng nhận.
+    public boolean canBulkApprove(Authentication authentication) {
+        if (securityUtils.hasAuthority(authentication, SUPER_ADMIN_ROLE)) {
+            return false;
+        }
+        return securityUtils.hasAuthority(authentication, "training.certificate.approve.deanery")
+                || securityUtils.hasAuthority(authentication, "training.certificate.approve.diocese");
+    }
+
     private boolean hasScopedAccess(Authentication authentication, String certificateCode, String action) {
         return certificateRepository.findByCodeWithLeaderAndCourse(certificateCode)
                 .map(certificate -> {

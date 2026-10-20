@@ -17,4 +17,7 @@ public class TrainingBulkApprovalRequest {
     private Boolean approved;
 
     private String review;
+
+    // Lý do riêng theo từng hồ sơ (id -> lý do); ưu tiên hơn lý do chung. Bắt buộc có lý do khi từ chối.
+    private java.util.Map<String, String> reviews;
 }

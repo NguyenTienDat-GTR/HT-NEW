@@ -50,6 +50,12 @@ public class TrainingWorkflowSupport {
         return Optional.ofNullable(courseType.getResultingLevel());
     }
 
+    // Chỉ khóa có cấp độ đạt được (resultingLevel khác rỗng/NONE) mới có chứng nhận và duyệt chứng nhận;
+    // các khóa còn lại chỉ cần kết quả điểm đạt hay không.
+    public boolean requiresCertificate(TrainingCourseType courseType) {
+        return certificateLevelFor(courseType).filter(level -> level != LeaderLevel.NONE).isPresent();
+    }
+
     public boolean needsAutomaticEligibilityApproval(TrainingCourseType courseType) {
         return courseType != null;
     }

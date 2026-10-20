@@ -26,6 +26,10 @@ public class TrainingCourseResponse {
     // Chỉ có ở chi tiết/cập nhật khóa: đã có hồ sơ tham gia thì khóa các trường loại khóa, năm tổ chức, số năm hoạt động, điểm đạt.
     private Boolean hasParticipations;
     private Boolean scoreLocked;
+    // Khóa có cấp độ đạt được thì mới có chứng nhận và tab duyệt chứng nhận.
+    private Boolean certificateRequired;
+    private java.time.OffsetDateTime finishedAt;
+    private String finishedBy;
     private String location;
     private LocalDate startDate;
     private LocalDate endDate;

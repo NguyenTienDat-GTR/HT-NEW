@@ -86,7 +86,7 @@ public class CourseParticipationAccessEvaluator {
         return securityUtils.hasAuthority(authentication, APPROVE_DEANERY)
                 && courseParticipationRepository.findByIdWithLeaderAndCourse(participationId)
                 .map(participation -> trainingWorkflowSupport.isDeaneryManaged(participation.getCourse().getCourseType())
-                        && directDeaneryOwnsCourse(authentication, participation.getCourse().getCourseCode()))
+                        && deaneryScopeOwnsCourse(authentication, participation.getCourse().getCourseCode()))
                 .orElse(false);
     }
 
@@ -94,7 +94,7 @@ public class CourseParticipationAccessEvaluator {
         return securityUtils.hasAuthority(authentication, APPROVE_DIOCESE)
                 && courseParticipationRepository.findByIdWithLeaderAndCourse(participationId)
                 .map(participation -> !trainingWorkflowSupport.isDeaneryManaged(participation.getCourse().getCourseType())
-                        && directDioceseOwnsCourse(authentication, participation.getCourse().getCourseCode()))
+                        && dioceseScopeOwnsCourse(authentication, participation.getCourse().getCourseCode()))
                 .orElse(false);
     }
 
@@ -200,6 +200,27 @@ public class CourseParticipationAccessEvaluator {
         String username = securityUtils.currentUsername(authentication);
         if (username == null || username.isBlank()
                 || accountRepository.findDirectActiveDeaneryIdByUsername(username).isEmpty()) {
+            return false;
+        }
+        return accountRepository.findActiveDioceseIdByUsername(username)
+                .flatMap(activeId -> trainingCourseRepository.findDioceseIdByCourseCode(courseCode).map(activeId::equals))
+                .orElse(false);
+    }
+
+    // Duyệt: phạm vi của tài khoản (gắn trực tiếp hoặc theo huynh trưởng) phải chứa khóa; cấp duyệt do quyền quyết định.
+    private boolean deaneryScopeOwnsCourse(Authentication authentication, String courseCode) {
+        String username = securityUtils.currentUsername(authentication);
+        if (username == null || username.isBlank()) {
+            return false;
+        }
+        return accountRepository.findActiveDeaneryIdByUsername(username)
+                .flatMap(activeId -> trainingCourseRepository.findDeaneryIdByCourseCode(courseCode).map(activeId::equals))
+                .orElse(false);
+    }
+
+    private boolean dioceseScopeOwnsCourse(Authentication authentication, String courseCode) {
+        String username = securityUtils.currentUsername(authentication);
+        if (username == null || username.isBlank()) {
             return false;
         }
         return accountRepository.findActiveDioceseIdByUsername(username)

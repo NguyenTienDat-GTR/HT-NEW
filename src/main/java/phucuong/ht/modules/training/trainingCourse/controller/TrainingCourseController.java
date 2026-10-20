@@ -49,6 +49,12 @@ public class TrainingCourseController {
                 trainingCourseService.setScoreLocked(courseCode, Boolean.TRUE.equals(request.getLocked()), authentication));
     }
 
+    @PostMapping("/{courseCode}/finish")
+    @PreAuthorize("@trainingCourseAccessEvaluator.canFinish(authentication, #courseCode)")
+    public apiResponse<TrainingCourseResponse> finish(@PathVariable String courseCode, Authentication authentication) {
+        return apiResponse.success("Đã kết thúc khóa huấn luyện", trainingCourseService.finishCourse(courseCode, authentication));
+    }
+
     @GetMapping("/registrable")
     @PreAuthorize("@trainingCourseAccessEvaluator.canListRegistrable(authentication)")
     public apiResponse<java.util.List<TrainingCourseResponse>> findRegistrable(Authentication authentication) {
