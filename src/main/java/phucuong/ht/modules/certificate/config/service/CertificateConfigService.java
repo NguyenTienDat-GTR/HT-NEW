@@ -15,7 +15,6 @@ import phucuong.ht.modules.certificate.config.model.response.CertificateFieldCat
 import phucuong.ht.modules.certificate.config.model.response.CertifiedCourseTypeResponse;
 import phucuong.ht.modules.certificate.config.repository.CertificateConfigRepository;
 import phucuong.ht.modules.certificate.model.entity.Certificate;
-import phucuong.ht.modules.certificate.model.enums.CertificateSignerType;
 import phucuong.ht.modules.certificate.repository.CertificateRepository;
 import phucuong.ht.modules.leader.model.entity.Leader;
 import phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType;
@@ -88,11 +87,6 @@ public class CertificateConfigService {
 
     @Transactional
     public CertificateConfigResponse upsert(CertificateConfigUpsertRequest request, Authentication authentication) {
-        if (request.getSignerType() == CertificateSignerType.OTHER
-                && (request.getSignerTitle() == null || request.getSignerTitle().isBlank())) {
-            throw validationHelper.validationError("Phải nhập chức danh khi người ký là 'Khác'");
-        }
-
         String courseTypeCode = normalize(request.getCourseTypeCode());
         if (courseTypeCode != null) {
             TrainingCourseType type = courseTypeRepository.findByCodeWithPrerequisite(courseTypeCode)
@@ -118,9 +112,8 @@ public class CertificateConfigService {
             return created;
         });
 
-        config.setSignerType(request.getSignerType());
-        config.setSignerName(request.getSignerName());
-        config.setSignerTitle(request.getSignerType() == CertificateSignerType.OTHER ? request.getSignerTitle() : null);
+        config.setPaperSize(request.getPaperSize() == null || request.getPaperSize().isBlank() ? "A4" : request.getPaperSize().trim().toUpperCase());
+        config.setOrientation(request.getOrientation() == null || request.getOrientation().isBlank() ? "LANDSCAPE" : request.getOrientation().trim().toUpperCase());
         config.setBackgroundImage(request.getBackgroundImage());
         config.setFieldLayout(request.getFieldLayout() == null ? new ArrayList<>() : request.getFieldLayout());
         config.setUpdatedAt(now);
@@ -172,14 +165,38 @@ public class CertificateConfigService {
                             "Chưa có cấu hình chứng nhận (riêng hoặc chung) cho chứng nhận: " + code));
 
             Map<String, String> values = buildValues(certificate, config);
+            float[] dims = pageDimensions(config.getPaperSize(), config.getOrientation());
             pages.add(new CertificatePdfRenderer.RenderPage(
                     decodeBackground(config.getBackgroundImage()),
-                    toRenderItems(config.getFieldLayout(), values)));
+                    toRenderItems(config.getFieldLayout(), values),
+                    dims[0], dims[1]));
             certificates.add(certificate);
         }
 
-        byte[] content = pdfRenderer.renderPdf(pages);
+        byte[] content;
+        try {
+            content = pdfRenderer.renderPdf(pages);
+        } catch (Exception e) {
+            // Tránh lỗi 500 chung chung "không khả dụng"; trả thông báo rõ ràng.
+            throw validationHelper.validationError("Không thể tạo PDF chứng nhận: " + e.getMessage());
+        }
         return new PdfExport(content, buildFilename(certificates));
+    }
+
+    // Kích thước trang (điểm) theo khổ giấy + hướng in. Mặc định A4 ngang.
+    private float[] pageDimensions(String paperSize, String orientation) {
+        String size = paperSize == null ? "A4" : paperSize.trim().toUpperCase();
+        float w;
+        float h;
+        switch (size) {
+            case "A3" -> { w = 841.89f; h = 1190.55f; }
+            case "A5" -> { w = 419.53f; h = 595.28f; }
+            case "LETTER" -> { w = 612f; h = 792f; }
+            case "LEGAL" -> { w = 612f; h = 1008f; }
+            default -> { w = 595.28f; h = 841.89f; } // A4
+        }
+        boolean landscape = orientation == null || "LANDSCAPE".equalsIgnoreCase(orientation.trim());
+        return landscape ? new float[]{h, w} : new float[]{w, h};
     }
 
     // Resolve: ưu tiên cấu hình riêng của loại khóa, nếu không có thì dùng cấu hình chung.
@@ -226,11 +243,9 @@ public class CertificateConfigService {
         Leader l = c.getLeader();
         TrainingCourse course = c.getCourse();
 
-        String signerTitle = config.getSignerType() == CertificateSignerType.CHAPLAIN
-                ? "Linh mục tuyên úy"
-                : nullToEmpty(config.getSignerTitle());
-        v.put("signerName", nullToEmpty(config.getSignerName()));
-        v.put("signerTitle", signerTitle);
+        // Người ký lấy trực tiếp từ chứng nhận (xác định khi duyệt).
+        v.put("signerName", nullToEmpty(c.getSignerName()));
+        v.put("signerTitle", nullToEmpty(c.getSignerTitle()));
 
         if (l != null) {
             v.put("leaderFullName", buildFullName(l));
@@ -249,6 +264,12 @@ public class CertificateConfigService {
             v.put("courseName", nullToEmpty(course.getCourseName()));
             v.put("courseCode", nullToEmpty(course.getCourseCode()));
             v.put("hostYear", course.getHostYear() == null ? "" : String.valueOf(course.getHostYear()));
+            String start = course.getStartDate() == null ? "" : course.getStartDate().format(DATE_FORMAT);
+            String end = course.getEndDate() == null ? "" : course.getEndDate().format(DATE_FORMAT);
+            v.put("courseStartDate", start);
+            v.put("courseEndDate", end);
+            // Thời gian tổ chức: "từ ... đến ..." (rút gọn khi thiếu một đầu).
+            v.put("coursePeriod", !start.isEmpty() && !end.isEmpty() ? ("từ " + start + " đến " + end) : (start + end));
             var courseType = course.getCourseType();
             v.put("resultingLevel", courseType == null || courseType.getResultingLevel() == null
                     ? ""
@@ -318,9 +339,8 @@ public class CertificateConfigService {
                 .id(config.getId())
                 .courseTypeCode(config.getCourseTypeCode())
                 .courseTypeName(courseTypeName)
-                .signerType(config.getSignerType())
-                .signerName(config.getSignerName())
-                .signerTitle(config.getSignerTitle())
+                .paperSize(config.getPaperSize())
+                .orientation(config.getOrientation())
                 .backgroundImage(config.getBackgroundImage())
                 .fieldLayout(config.getFieldLayout())
                 .status(config.getStatus())

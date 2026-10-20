@@ -40,6 +40,17 @@ public class Certificate extends BaseModel {
 
     private String signedBy;
 
+    // Người ký ghi trực tiếp vào chứng nhận khi duyệt (dùng cho mail merge khi xuất).
+    @Enumerated(EnumType.STRING)
+    @Column(name = "signer_type")
+    private phucuong.ht.modules.certificate.model.enums.CertificateSignerType signerType;
+
+    @Column(name = "signer_name")
+    private String signerName;
+
+    @Column(name = "signer_title")
+    private String signerTitle;
+
     private LocalDate issueDate;
 
     private String imageUrl;

@@ -6,6 +6,8 @@ import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDType0Font;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
@@ -20,6 +22,8 @@ import java.util.Map;
 @Component
 public class CertificatePdfRenderer {
 
+    private static final Logger log = LoggerFactory.getLogger(CertificatePdfRenderer.class);
+
     // Trang mặc định khi không có ảnh nền (A4 dọc, điểm = points).
     private static final float DEFAULT_WIDTH = PDRectangle.A4.getWidth();
     private static final float DEFAULT_HEIGHT = PDRectangle.A4.getHeight();
@@ -28,7 +32,8 @@ public class CertificatePdfRenderer {
                              String fontFamily, boolean bold, boolean italic, boolean underline) {
     }
 
-    public record RenderPage(byte[] background, List<RenderItem> items) {
+    // pageWidth/pageHeight tính bằng điểm (points); <= 0 nghĩa là dùng kích thước ảnh nền (hoặc A4).
+    public record RenderPage(byte[] background, List<RenderItem> items, float pageWidth, float pageHeight) {
     }
 
     public byte[] renderPdf(List<RenderPage> pages) {
@@ -49,15 +54,7 @@ public class CertificatePdfRenderer {
     }
 
     private PDType0Font font(PDDocument document, Map<String, PDType0Font> cache, String family, boolean bold, boolean italic) {
-        boolean serif = "serif".equalsIgnoreCase(family);
-        String base = serif ? "DejaVuSerif" : "DejaVuSans";
-        String suffix;
-        if (serif) {
-            suffix = bold && italic ? "-BoldItalic" : bold ? "-Bold" : italic ? "-Italic" : "";
-        } else {
-            suffix = bold && italic ? "-BoldOblique" : bold ? "-Bold" : italic ? "-Oblique" : "";
-        }
-        String resource = "fonts/" + base + suffix + ".ttf";
+        String resource = fontResource(family, bold, italic);
         return cache.computeIfAbsent(resource, path -> {
             try (InputStream is = new ClassPathResource(path).getInputStream()) {
                 return PDType0Font.load(document, is, true);
@@ -67,15 +64,42 @@ public class CertificatePdfRenderer {
         });
     }
 
+    // Ánh xạ họ chữ + đậm/nghiêng -> file TTF (có dấu tiếng Việt). Font một kiểu bỏ qua đậm/nghiêng.
+    private String fontResource(String family, boolean bold, boolean italic) {
+        String fam = family == null ? "sans" : family.toLowerCase();
+        return switch (fam) {
+            case "serif" -> "fonts/DejaVuSerif" + (bold && italic ? "-BoldItalic" : bold ? "-Bold" : italic ? "-Italic" : "") + ".ttf";
+            case "bevietnam" -> "fonts/BeVietnamPro" + (bold && italic ? "-BoldItalic" : bold ? "-Bold" : italic ? "-Italic" : "-Regular") + ".ttf";
+            case "lobster" -> "fonts/Lobster-Regular.ttf";
+            case "pacifico" -> "fonts/Pacifico-Regular.ttf";
+            case "patrickhand" -> "fonts/PatrickHand-Regular.ttf";
+            default -> "fonts/DejaVuSans" + (bold && italic ? "-BoldOblique" : bold ? "-Bold" : italic ? "-Oblique" : "") + ".ttf";
+        };
+    }
+
     private void renderPage(PDDocument document, RenderPage page, Map<String, PDType0Font> fontCache) throws Exception {
         PDImageXObject image = null;
-        float width = DEFAULT_WIDTH;
-        float height = DEFAULT_HEIGHT;
-
         if (page.background() != null && page.background().length > 0) {
-            image = PDImageXObject.createFromByteArray(document, page.background(), "bg");
+            try {
+                image = PDImageXObject.createFromByteArray(document, page.background(), "bg");
+            } catch (Exception e) {
+                // Ảnh nền không đọc được (định dạng không hỗ trợ, hỏng...) thì vẫn xuất PDF, chỉ thiếu nền.
+                log.warn("Không đọc được ảnh nền chứng nhận, bỏ qua nền: {}", e.toString());
+            }
+        }
+
+        // Ưu tiên khổ giấy đã chọn; nếu không có thì theo ảnh nền; cuối cùng là A4.
+        float width;
+        float height;
+        if (page.pageWidth() > 0 && page.pageHeight() > 0) {
+            width = page.pageWidth();
+            height = page.pageHeight();
+        } else if (image != null) {
             width = image.getWidth();
             height = image.getHeight();
+        } else {
+            width = DEFAULT_WIDTH;
+            height = DEFAULT_HEIGHT;
         }
 
         PDPage pdPage = new PDPage(new PDRectangle(width, height));
@@ -87,7 +111,12 @@ public class CertificatePdfRenderer {
             }
             if (page.items() != null) {
                 for (RenderItem item : page.items()) {
-                    drawItem(document, cs, item, width, height, fontCache);
+                    try {
+                        drawItem(document, cs, item, width, height, fontCache);
+                    } catch (Exception e) {
+                        // Một phần tử lỗi (font thiếu, ký tự lạ...) không làm hỏng cả chứng nhận.
+                        log.warn("Bỏ qua phần tử chứng nhận do lỗi vẽ ({}): {}", item, e.toString());
+                    }
                 }
             }
         }

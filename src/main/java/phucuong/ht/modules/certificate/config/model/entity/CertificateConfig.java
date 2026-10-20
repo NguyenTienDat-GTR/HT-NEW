@@ -6,7 +6,6 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import phucuong.ht.common.model.BaseModel;
 import phucuong.ht.modules.certificate.config.model.CertificateLayoutItem;
-import phucuong.ht.modules.certificate.model.enums.CertificateSignerType;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -32,16 +31,12 @@ public class CertificateConfig extends BaseModel {
     @Column(name = "course_type_code")
     private String courseTypeCode;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "signer_type")
-    private CertificateSignerType signerType;
+    // Khổ giấy (A3/A4/A5/LETTER/LEGAL) và hướng in (PORTRAIT/LANDSCAPE).
+    @Column(name = "paper_size")
+    private String paperSize;
 
-    @Column(name = "signer_name")
-    private String signerName;
-
-    // Chỉ dùng khi signerType = OTHER.
-    @Column(name = "signer_title")
-    private String signerTitle;
+    @Column(name = "orientation")
+    private String orientation;
 
     // Ảnh nền chứng nhận lưu dạng data URL base64.
     @Column(name = "background_image", columnDefinition = "text")

@@ -21,6 +21,9 @@ public enum CertificateMergeField {
     COURSE_NAME("courseName", "Tên khóa", "Khóa học"),
     COURSE_CODE("courseCode", "Mã khóa", "Khóa học"),
     HOST_YEAR("hostYear", "Năm tổ chức", "Khóa học"),
+    COURSE_START_DATE("courseStartDate", "Ngày bắt đầu", "Khóa học"),
+    COURSE_END_DATE("courseEndDate", "Ngày kết thúc", "Khóa học"),
+    COURSE_PERIOD("coursePeriod", "Thời gian tổ chức", "Khóa học"),
     RESULTING_LEVEL("resultingLevel", "Cấp độ đạt được", "Khóa học"),
 
     CERTIFICATE_CODE("certificateCode", "Mã chứng nhận", "Chứng nhận"),

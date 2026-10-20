@@ -1,0 +1,6 @@
+Các font sau thuộc SIL Open Font License 1.1 (https://scripts.sil.org/OFL), tải từ Google Fonts (https://fonts.google.com):
+- Be Vietnam Pro
+- Lobster
+- Pacifico
+- Patrick Hand
+DejaVu Sans/Serif: xem DejaVu-LICENSE.txt.

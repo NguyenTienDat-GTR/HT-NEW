@@ -64,7 +64,7 @@ public class CertificateRepository extends BaseRepo<Certificate, String> {
                 .setParameter("certificateCode", certificateCode)
                 .setMaxResults(1)
                 .getResultList();
-        return results.stream().findFirst();
+        return results.stream().filter(java.util.Objects::nonNull).findFirst();
     }
 
     public Optional<UUID> findDeaneryIdByCertificateCode(String certificateCode) {
@@ -79,7 +79,7 @@ public class CertificateRepository extends BaseRepo<Certificate, String> {
                 .setParameter("certificateCode", certificateCode)
                 .setMaxResults(1)
                 .getResultList();
-        return results.stream().findFirst();
+        return results.stream().filter(java.util.Objects::nonNull).findFirst();
     }
 
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
