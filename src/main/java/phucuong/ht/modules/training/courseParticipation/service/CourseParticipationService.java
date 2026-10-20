@@ -2,6 +2,7 @@ package phucuong.ht.modules.training.courseParticipation.service;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.security.core.Authentication;
@@ -17,6 +18,7 @@ import phucuong.ht.config.DomainEventPublisher;
 import phucuong.ht.modules.certificate.CertificateCodeGenerator;
 import phucuong.ht.modules.certificate.model.entity.Certificate;
 import phucuong.ht.modules.certificate.repository.CertificateRepository;
+import phucuong.ht.modules.certificate.service.CertificateRealtimeNotifier;
 import phucuong.ht.modules.deanery.model.entity.Deanery;
 import phucuong.ht.modules.deanery.repository.DeaneryRepository;
 import phucuong.ht.modules.leader.model.entity.Leader;
@@ -75,6 +77,7 @@ public class CourseParticipationService {
     private final CertificateRepository certificateRepository;
     private final CertificateCodeGenerator certificateCodeGenerator;
     private final DomainEventPublisher domainEventPublisher;
+    private final CertificateRealtimeNotifier certificateRealtimeNotifier;
     private final TrainingNotificationRecipientResolver notificationRecipientResolver;
     private final TrainingNotificationService trainingNotificationService;
 
@@ -421,6 +424,11 @@ public class CourseParticipationService {
         return toResponse(participation);
     }
 
+    // Chấm điểm có thể tạo/xóa chứng nhận chờ duyệt nên phải xóa cache danh sách/chi tiết chứng nhận.
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_DETAIL, allEntries = true)
+    })
     @Transactional
     public CourseParticipationResponse score(String participationId, TrainingScoreRequest request, Authentication authentication) {
         CourseParticipation participation = courseParticipationRepository.findByIdWithLeaderAndCourse(participationId)
@@ -505,6 +513,14 @@ public class CourseParticipationService {
             if (participation.getCertificateRequestedAt() == null) {
                 participation.setCertificateRequestedAt(now);
             }
+            currentCertificate
+                    .filter(item -> item.getApprovalStatus() == WorkflowApprovalStatus.REJECTED)
+                    .ifPresent(item -> {
+                        item.setApprovalStatus(WorkflowApprovalStatus.PENDING);
+                        item.setRejectionReason(null);
+                        item.setUpdatedAt(now);
+                        item.setUpdatedBy(actor);
+                    });
             ensureSuggestedCertificateExists(participation, actor);
         } else {
             participation.setResult(CourseResult.UNCOMPLETED);
@@ -514,10 +530,12 @@ public class CourseParticipationService {
             // Sửa điểm xuống dưới điểm đạt: xóa chứng nhận đang chờ duyệt của hồ sơ.
             currentCertificate
                     .filter(item -> item.getApprovalStatus() == WorkflowApprovalStatus.PENDING
-                            || item.getApprovalStatus() == WorkflowApprovalStatus.SUBMITTED)
+                            || item.getApprovalStatus() == WorkflowApprovalStatus.SUBMITTED
+                            || item.getApprovalStatus() == WorkflowApprovalStatus.REJECTED)
                     .ifPresent(certificateRepository::delete);
         }
         publishEvent("training.score.updated", "courseParticipation", participationId, actor, Map.of("score", totalScore));
+        certificateRealtimeNotifier.notifyChanged("SCORE_UPDATED", participation.getCourse().getCourseCode(), null);
         return toResponse(participation);
     }
 
@@ -906,7 +924,11 @@ public class CourseParticipationService {
     }
 
     // Xóa hồ sơ khỏi danh sách tham dự: người có quyền duyệt, bất kể đã có điểm hay chưa, trừ hồ sơ đã có chứng nhận.
-    @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, allEntries = true)
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_DETAIL, allEntries = true)
+    })
     @Transactional
     public void removeParticipant(String participationId, Authentication authentication) {
         CourseParticipation participation = courseParticipationRepository.findByIdWithLeaderAndCourse(participationId)
@@ -928,6 +950,8 @@ public class CourseParticipationService {
         courseParticipationRepository.delete(participation);
         publishEvent("training.participant.removed", "courseParticipation", participationId, actor,
                 Map.of("courseCode", courseCode, "leaderId", String.valueOf(leaderId)));
+        // Chứng nhận chờ duyệt của hồ sơ bị xóa theo: báo realtime để tab duyệt chứng nhận và màn chứng nhận tải lại.
+        certificateRealtimeNotifier.notifyChanged("PARTICIPANT_REMOVED", courseCode, null);
     }
 
     // Duyệt hoặc từ chối nhiều hồ sơ một lần; hồ sơ không hợp lệ được bỏ qua và trả về kèm lý do.
@@ -951,8 +975,14 @@ public class CourseParticipationService {
                 failures.add(bulkFailure(id, leaderName, problem));
                 continue;
             }
+            String own = request.getReviews() == null ? null : request.getReviews().get(id);
+            String review = own != null && !own.isBlank() ? own : request.getReview();
+            if (!approved && (review == null || review.isBlank())) {
+                failures.add(bulkFailure(id, leaderName, "Phải nhập lý do khi từ chối hồ sơ"));
+                continue;
+            }
             applyApprovalDecision(participation, approved);
-            participation.setReview(request.getReview());
+            participation.setReview(review);
             participation.setApprovedBy(actor);
             participation.setUpdatedAt(now);
             participation.setUpdatedBy(actor);

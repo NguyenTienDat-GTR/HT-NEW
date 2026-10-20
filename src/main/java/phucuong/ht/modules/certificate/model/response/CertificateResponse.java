@@ -31,6 +31,7 @@ public class CertificateResponse {
     private Boolean systemSuggested;
     private Boolean approvedByException;
     private String exceptionApprovalReason;
+    private String rejectionReason;
     private OffsetDateTime approvedAt;
     private String approvedBy;
     private Boolean status;

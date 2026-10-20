@@ -19,6 +19,7 @@ import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 import phucuong.ht.common.utils.jwtUtils;
 import phucuong.ht.modules.auth.service.RedisTokenSessionService;
+import phucuong.ht.modules.certificate.service.CertificateRealtimeNotifier;
 import phucuong.ht.modules.system.service.RbacAuthRefreshNotifier;
 
 import java.util.Arrays;
@@ -32,7 +33,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     private static final String NOTIFICATION_DESTINATION = "/user/queue/notifications";
     private static final Set<String> USER_DESTINATIONS = Set.of(
             NOTIFICATION_DESTINATION,
-            "/user" + RbacAuthRefreshNotifier.DESTINATION
+            "/user" + RbacAuthRefreshNotifier.DESTINATION,
+            CertificateRealtimeNotifier.DESTINATION
     );
 
     private final jwtUtils jwtUtils;

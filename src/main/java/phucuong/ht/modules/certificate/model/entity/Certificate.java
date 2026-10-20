@@ -56,6 +56,9 @@ public class Certificate extends BaseModel {
     @Column(name = "exception_approval_reason")
     private String exceptionApprovalReason;
 
+    @Column(name = "rejection_reason")
+    private String rejectionReason;
+
     private OffsetDateTime approvedAt;
 
     private String approvedBy;

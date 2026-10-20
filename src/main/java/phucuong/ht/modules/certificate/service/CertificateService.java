@@ -18,6 +18,10 @@ import phucuong.ht.config.DomainEventMessage;
 import phucuong.ht.config.DomainEventPublisher;
 import phucuong.ht.modules.certificate.model.entity.Certificate;
 import phucuong.ht.modules.certificate.model.request.CertificateApproveRequest;
+import phucuong.ht.modules.certificate.model.request.CertificateBulkApprovalRequest;
+import phucuong.ht.modules.certificate.model.request.CertificateRejectRequest;
+import phucuong.ht.modules.certificate.security.CertificateAccessEvaluator;
+import phucuong.ht.modules.training.courseParticipation.model.response.TrainingBulkApprovalResponse;
 import phucuong.ht.modules.certificate.model.request.CertificateCreateRequest;
 import phucuong.ht.modules.certificate.model.request.CertificateUpdateRequest;
 import phucuong.ht.modules.certificate.model.response.CertificateResponse;
@@ -36,7 +40,10 @@ import phucuong.ht.modules.training.trainingCourse.repository.TrainingCourseRepo
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.Optional;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -57,6 +64,8 @@ public class CertificateService {
     private final AccountScopeValidationHelper accountScopeValidationHelper;
     private final CommonValidationHelper commonValidationHelper;
     private final DomainEventPublisher domainEventPublisher;
+    private final CertificateRealtimeNotifier certificateRealtimeNotifier;
+    private final CertificateAccessEvaluator certificateAccessEvaluator;
 
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.CERTIFICATE_LIST, allEntries = true),
@@ -92,6 +101,7 @@ public class CertificateService {
         certificate.setCreatedBy(actor);
         certificate.setUpdatedBy(actor);
         certificateRepository.save(certificate);
+        certificateRealtimeNotifier.notifyChanged("CREATED", request.getCourseCode(), certificate.getCertificateCode());
         return toResponse(certificate);
     }
 
@@ -164,6 +174,7 @@ public class CertificateService {
         }
         certificate.setUpdatedAt(OffsetDateTime.now());
         certificate.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật chứng chỉ"));
+        certificateRealtimeNotifier.notifyChanged("UPDATED", null, certificateCode);
         return toResponse(certificate);
     }
 
@@ -174,6 +185,7 @@ public class CertificateService {
     public CertificateResponse toggleStatus(String certificateCode, StatusToggleRequest request, Authentication authentication) {
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
         certificateRepository.toggleStatus(certificateCode, commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái chứng chỉ"));
+        certificateRealtimeNotifier.notifyChanged("TOGGLED", null, certificateCode);
         return findById(certificateCode, authentication);
     }
 
@@ -183,6 +195,98 @@ public class CertificateService {
     })
     @Transactional
     public CertificateResponse approve(String certificateCode, CertificateApproveRequest request, Authentication authentication) {
+        return toResponse(approveInternal(certificateCode, request, authentication));
+    }
+
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_DETAIL, allEntries = true)
+    })
+    @Transactional
+    public CertificateResponse reject(String certificateCode, CertificateRejectRequest request, Authentication authentication) {
+        return toResponse(rejectInternal(certificateCode, request == null ? null : request.getReason(), authentication));
+    }
+
+    // Duyệt hoặc từ chối nhiều chứng nhận một lần; hồ sơ không hợp lệ được bỏ qua và trả về kèm lý do.
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_DETAIL, allEntries = true)
+    })
+    @Transactional
+    public TrainingBulkApprovalResponse bulkApprove(CertificateBulkApprovalRequest request, Authentication authentication) {
+        boolean approved = Boolean.TRUE.equals(request.getApproved());
+        List<TrainingBulkApprovalResponse.Failure> failures = new ArrayList<>();
+        int success = 0;
+        for (String code : new LinkedHashSet<>(request.getIds())) {
+            Optional<Certificate> found = certificateRepository.findByCodeWithLeaderAndCourse(code);
+            if (found.isEmpty()) {
+                failures.add(bulkFailure(code, null, "Không tìm thấy chứng nhận"));
+                continue;
+            }
+            String leaderName = buildFullName(found.get().getLeader());
+            if (!certificateAccessEvaluator.canApprove(authentication, code)) {
+                failures.add(bulkFailure(code, leaderName, "Không có quyền duyệt chứng nhận này"));
+                continue;
+            }
+            String own = request.getReasons() == null ? null : request.getReasons().get(code);
+            String reason = own != null && !own.isBlank() ? own : request.getReason();
+            try {
+                if (approved) {
+                    CertificateApproveRequest single = new CertificateApproveRequest();
+                    single.setApprovalReason(reason);
+                    approveInternal(code, single, authentication);
+                } else {
+                    rejectInternal(code, reason, authentication);
+                }
+                success++;
+            } catch (RuntimeException ex) {
+                failures.add(bulkFailure(code, leaderName, ex.getMessage()));
+            }
+        }
+        return TrainingBulkApprovalResponse.builder()
+                .successCount(success)
+                .failedCount(failures.size())
+                .failures(failures)
+                .build();
+    }
+
+    private TrainingBulkApprovalResponse.Failure bulkFailure(String code, String leaderName, String reason) {
+        return TrainingBulkApprovalResponse.Failure.builder().id(code).leaderFullName(leaderName).reason(reason).build();
+    }
+
+    private Certificate rejectInternal(String certificateCode, String rawReason, Authentication authentication) {
+        Certificate certificate = certificateRepository.findByCodeWithLeaderAndCourse(certificateCode)
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy chứng chỉ: " + certificateCode));
+        if (certificate.getLeader() == null || certificate.getCourse() == null) {
+            throw commonValidationHelper.validationError("Chứng chỉ phải được liên kết với leader và khóa huấn luyện");
+        }
+        WorkflowApprovalStatus current = certificate.getApprovalStatus();
+        if (current != WorkflowApprovalStatus.PENDING && current != WorkflowApprovalStatus.SUBMITTED) {
+            throw commonValidationHelper.conflict("Chỉ từ chối được chứng nhận đang chờ duyệt");
+        }
+        String reason = commonValidationHelper.normalizeOptionalText(rawReason);
+        if (reason == null) {
+            throw commonValidationHelper.validationError("Phải nhập lý do khi từ chối chứng nhận");
+        }
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người từ chối chứng chỉ");
+        OffsetDateTime now = OffsetDateTime.now();
+        certificate.setApprovalStatus(WorkflowApprovalStatus.REJECTED);
+        certificate.setRejectionReason(reason);
+        certificate.setUpdatedAt(now);
+        certificate.setUpdatedBy(actor);
+        courseParticipationRepository.findByLeaderIdAndCourseCode(certificate.getLeader().getId(), certificate.getCourse().getCourseCode())
+                .ifPresent(participation -> {
+                    participation.setCertificateApprovalStatus(WorkflowApprovalStatus.REJECTED);
+                    participation.setUpdatedAt(now);
+                    participation.setUpdatedBy(actor);
+                });
+        publishEvent("training.certificate.rejected", "certificate", certificateCode, actor,
+                Map.of("courseCode", certificate.getCourse().getCourseCode()));
+        certificateRealtimeNotifier.notifyChanged("REJECTED", certificate.getCourse().getCourseCode(), certificateCode);
+        return certificate;
+    }
+
+    private Certificate approveInternal(String certificateCode, CertificateApproveRequest request, Authentication authentication) {
         Certificate certificate = certificateRepository.findByCodeWithLeaderAndCourse(certificateCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy chứng chỉ: " + certificateCode));
         if (certificate.getLeader() == null || certificate.getCourse() == null) {
@@ -234,7 +338,8 @@ public class CertificateService {
                 "courseCode", certificate.getCourse().getCourseCode(),
                 "approvedByException", !passingScore
         ));
-        return toResponse(certificate);
+        certificateRealtimeNotifier.notifyChanged("APPROVED", certificate.getCourse().getCourseCode(), certificateCode);
+        return certificate;
     }
 
     private void requireApprovedParticipationForCertificate(CourseParticipation participation) {
@@ -378,6 +483,7 @@ public class CertificateService {
                 .systemSuggested(certificate.getSystemSuggested())
                 .approvedByException(certificate.getApprovedByException())
                 .exceptionApprovalReason(certificate.getExceptionApprovalReason())
+                .rejectionReason(certificate.getRejectionReason())
                 .approvedAt(certificate.getApprovedAt())
                 .approvedBy(certificate.getApprovedBy())
                 .status(certificate.getStatus())
