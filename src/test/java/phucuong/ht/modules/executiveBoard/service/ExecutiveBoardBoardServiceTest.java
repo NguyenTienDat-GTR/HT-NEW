@@ -64,6 +64,27 @@ class ExecutiveBoardBoardServiceTest {
         assertFalse(seats.get(2).isAssigned());
     }
 
+    @Test
+    void futureDatedAssignmentIsOccupiedButNotShownAsCurrent() {
+        UUID unitId = UUID.randomUUID();
+        Position president = position("P1", "Trưởng ban");
+        when(positionRepository.findAll(any(BaseSearchRequest.class))).thenReturn(new PageImpl<>(List.of(president)));
+        Leader leader = new Leader();
+        leader.setId(UUID.randomUUID());
+        leader.setFirstName("An");
+        ExecutiveBoardAssignment assignment = new ExecutiveBoardAssignment();
+        assignment.setPosition(president);
+        assignment.setLeader(leader);
+        assignment.setStartDate(java.time.LocalDate.now().plusDays(30));
+        when(assignmentRepository.findCurrentByUnit(UnitType.DEANERY, unitId)).thenReturn(List.of(assignment));
+
+        var seat = new ExecutiveBoardBoardService(assignmentRepository, positionRepository, dioceseRepository, deaneryRepository, parishRepository)
+                .findBoard(UnitType.DEANERY, unitId).get(1);
+
+        assertFalse(seat.isAssigned());
+        assertTrue(seat.isOccupied());
+    }
+
     private Position position(String code, String name) {
         Position position = new Position();
         position.setPositionCode(code);

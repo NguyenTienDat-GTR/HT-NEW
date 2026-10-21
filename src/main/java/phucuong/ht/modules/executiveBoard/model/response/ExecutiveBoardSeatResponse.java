@@ -18,6 +18,8 @@ public class ExecutiveBoardSeatResponse {
     private Integer displayOrder;
     private boolean chaplain;
     private boolean assigned;
+    // Chức vụ còn người giữ (đang bật, chưa hết hạn), kể cả nhiệm kì đặt trước chưa tới ngày: không phân công thêm được.
+    private boolean occupied;
     private UUID assignmentId;
     private UUID leaderId;
     private String leaderHolyName;

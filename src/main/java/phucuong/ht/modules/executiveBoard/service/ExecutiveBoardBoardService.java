@@ -14,6 +14,9 @@ import phucuong.ht.modules.leader.model.entity.Leader;
 import phucuong.ht.modules.position.model.entity.Position;
 import phucuong.ht.modules.position.repository.PositionRepository;
 
+import java.time.LocalDate;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -47,14 +50,21 @@ public class ExecutiveBoardBoardService {
                 .toList();
 
         // Đã sắp mới bắt đầu nhất trước nên giữ phân công đầu tiên của mỗi chức vụ.
+        // Hiển thị phân công đang hiệu lực hôm nay (đã tới ngày bắt đầu); occupied gồm cả nhiệm kì đặt trước.
+        LocalDate today = LocalDate.now();
         Map<String, ExecutiveBoardAssignment> byPosition = new LinkedHashMap<>();
+        Set<String> occupied = new HashSet<>();
         for (ExecutiveBoardAssignment assignment : assignmentRepository.findCurrentByUnit(unitType, unitId)) {
-            byPosition.putIfAbsent(assignment.getPosition().getPositionCode(), assignment);
+            String code = assignment.getPosition().getPositionCode();
+            occupied.add(code);
+            if (assignment.getStartDate() == null || !assignment.getStartDate().isAfter(today)) {
+                byPosition.putIfAbsent(code, assignment);
+            }
         }
 
         List<ExecutiveBoardSeatResponse> seats = new java.util.ArrayList<>();
         seats.add(chaplainSeat(unitType, unitId));
-        positions.forEach(position -> seats.add(toSeat(position, byPosition.get(position.getPositionCode()))));
+        positions.forEach(position -> seats.add(toSeat(position, byPosition.get(position.getPositionCode()), occupied.contains(position.getPositionCode()))));
         return seats;
     }
 
@@ -71,16 +81,18 @@ public class ExecutiveBoardBoardService {
                 .displayOrder(0)
                 .chaplain(true)
                 .assigned(assigned)
+                .occupied(assigned)
                 .leaderFullName(assigned ? chaplain.trim() : null)
                 .build();
     }
 
-    private ExecutiveBoardSeatResponse toSeat(Position position, ExecutiveBoardAssignment assignment) {
+    private ExecutiveBoardSeatResponse toSeat(Position position, ExecutiveBoardAssignment assignment, boolean occupied) {
         ExecutiveBoardSeatResponse.ExecutiveBoardSeatResponseBuilder seat = ExecutiveBoardSeatResponse.builder()
                 .positionCode(position.getPositionCode())
                 .positionName(position.getPositionName())
                 .displayOrder(position.getDisplayOrder())
-                .assigned(assignment != null);
+                .assigned(assignment != null)
+                .occupied(occupied);
         if (assignment == null) {
             return seat.build();
         }

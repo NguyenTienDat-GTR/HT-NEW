@@ -161,9 +161,14 @@ public class ExecutiveBoardAssignmentService {
         ExecutiveBoardAssignment existing = assignmentRepository.findByIdWithRelations(id)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy phân công chức vụ " + id));
         if (!Boolean.TRUE.equals(existing.getStatus())) {
-            // Bật lại phân công: chức vụ phải còn hoạt động và chưa có huynh trưởng khác giữ chức vụ này.
-            enforcePositionActive(existing.getPosition());
-            enforceUniqueness(existing.getUnitType(), existing.getUnitId(), existing.getPosition().getPositionCode(), id);
+            // Mỗi nhiệm kì là một dòng lịch sử: phân công đã vô hiệu hóa không bật lại được, muốn giữ lại thì tạo phân công mới.
+            throw commonValidationHelper.validationError("Phân công đã kết thúc, không thể bật lại. Hãy tạo phân công mới");
+        }
+        // Vô hiệu hóa giữa nhiệm kì = kết thúc sớm: ghi nhận ngày kết thúc thực tế là hôm nay.
+        LocalDate today = LocalDate.now();
+        boolean started = existing.getStartDate() == null || !existing.getStartDate().isAfter(today);
+        if (started && (existing.getEndDate() == null || existing.getEndDate().isAfter(today))) {
+            existing.setEndDate(today);
         }
         assignmentRepository.toggleStatus(id, actor);
         return toDetailResponse(assignmentRepository.findByIdWithRelations(id)
