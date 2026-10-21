@@ -12,6 +12,7 @@ import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.modules.auth.model.AuthUserDetails;
+import phucuong.ht.common.utils.AuditActorNameResolver;
 import phucuong.ht.modules.position.model.entity.Position;
 import phucuong.ht.modules.position.repository.PositionRepository;
 
@@ -26,6 +27,9 @@ class PositionReadScopeTest {
 
     @Mock
     private PositionRepository positionRepository;
+
+    @Mock
+    private AuditActorNameResolver auditActorNameResolver;
 
     @Test
     void parishReaderOnlyReceivesParishPositionsBeforePagination() {
@@ -50,11 +54,22 @@ class PositionReadScopeTest {
         assertEquals("PAR", response.getContent().getFirst().getPositionCode());
     }
 
+    @Test
+    void detailOutsideReadScopeIsForbidden() {
+        when(positionRepository.findById("DIO")).thenReturn(java.util.Optional.of(position("DIO", UnitType.DIOCESE)));
+        AuthUserDetails principal = AuthUserDetails.tokenPrincipal(
+                "parish-admin", null, List.of("ADMIN_PARISH"), List.of("organization.position.read.parish"));
+        var authentication = new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
+
+        org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class, () -> service().findById("DIO", authentication));
+    }
+
     private PositionService service() {
         return new PositionService(
                 positionRepository,
                 new CommonValidationHelper(new securityUtils()),
-                new securityUtils()
+                new securityUtils(),
+                auditActorNameResolver
         );
     }
 

@@ -17,6 +17,7 @@ import phucuong.ht.common.exception.errorCode;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.security.UnitOperationalStatusService;
+import phucuong.ht.common.utils.AuditActorNameResolver;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.config.CacheNames;
 import phucuong.ht.modules.auth.exception.ApiException;
@@ -54,6 +55,7 @@ public class ParishService {
     private final ParishValidationHelper parishValidationHelper;
     private final ParishScopeHelper parishScopeHelper;
     private final securityUtils securityUtils;
+    private final AuditActorNameResolver auditActorNameResolver;
     @Autowired(required = false)
     private UnitOperationalStatusService unitOperationalStatusService;
     @Autowired(required = false)
@@ -132,7 +134,12 @@ public class ParishService {
 
     @Cacheable(cacheNames = CacheNames.PARISH_DETAIL, key = "@cacheScopeKeyHelper.detailKey(#authentication, #id)")
     public ParishResponse findById(UUID id, Authentication authentication) {
-        return toParishResponse(parishValidationHelper.requireExistingParishWithDeaneryAndDiocese(id));
+        Parish parish = parishValidationHelper.requireExistingParishWithDeaneryAndDiocese(id);
+        return toParishResponse(parish)
+                .toBuilder()
+                .createdByName(auditActorNameResolver.resolve(parish.getCreatedBy()))
+                .updatedByName(auditActorNameResolver.resolve(parish.getUpdatedBy()))
+                .build();
     }
 
     @EvictCaches.Analytics

@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
+import phucuong.ht.common.utils.AuditActorNameResolver;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.config.CacheNames;
@@ -32,6 +33,7 @@ public class PositionService {
     private final PositionRepository positionRepository;
     private final CommonValidationHelper commonValidationHelper;
     private final securityUtils securityUtils;
+    private final AuditActorNameResolver auditActorNameResolver;
 
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.POSITION_LIST, allEntries = true),
@@ -44,13 +46,14 @@ public class PositionService {
         Position position = new Position();
         position.setPositionName(commonValidationHelper.normalizeRequiredText(request.getPositionName()));
         position.setPositionType(request.getPositionType());
+        position.setDisplayOrder(request.getDisplayOrder() != null ? request.getDisplayOrder() : positionRepository.nextDisplayOrder(request.getPositionType()));
         position.setStatus(Boolean.TRUE);
         position.setCreatedAt(now);
         position.setUpdatedAt(now);
         position.setCreatedBy(actor);
         position.setUpdatedBy(actor);
         positionRepository.save(position);
-        return toResponse(position);
+        return toDetailResponse(position);
     }
 
     @Cacheable(cacheNames = CacheNames.POSITION_LIST, key = "@cacheScopeKeyHelper.listKey(#authentication, #request)")
@@ -63,8 +66,12 @@ public class PositionService {
 
     @Cacheable(cacheNames = CacheNames.POSITION_DETAIL, key = "@cacheScopeKeyHelper.detailKey(#authentication, #positionCode)")
     public PositionResponse findById(String positionCode, Authentication authentication) {
-        return toResponse(positionRepository.findById(positionCode)
-                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy chức vụ " + positionCode)));
+        Position position = positionRepository.findById(positionCode)
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy chức vụ " + positionCode));
+        if (!canReadType(authentication, position.getPositionType())) {
+            throw commonValidationHelper.forbidden("Bạn không có quyền xem chức vụ này");
+        }
+        return toDetailResponse(position);
     }
 
     @Caching(evict = {
@@ -81,9 +88,12 @@ public class PositionService {
         if (request.getPositionType() != null) {
             position.setPositionType(request.getPositionType());
         }
+        if (request.getDisplayOrder() != null) {
+            position.setDisplayOrder(request.getDisplayOrder());
+        }
         position.setUpdatedAt(OffsetDateTime.now());
         position.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật chức vụ"));
-        return toResponse(position);
+        return toDetailResponse(position);
     }
 
     @Caching(evict = {
@@ -93,8 +103,9 @@ public class PositionService {
     public PositionResponse toggleStatus(String positionCode, StatusToggleRequest request, Authentication authentication) {
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái chức vụ");
-        positionRepository.toggleStatus(positionCode, actor);
-        return findById(positionCode, authentication);
+        positionRepository.findById(positionCode)
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy chức vụ " + positionCode));
+        return toDetailResponse(positionRepository.toggleStatus(positionCode, actor));
     }
 
     private BaseSearchRequest copyRequest(BaseSearchRequest request) {
@@ -145,13 +156,26 @@ public class PositionService {
     }
 
     private PositionResponse toResponse(Position position) {
+        return responseBuilder(position).build();
+    }
+
+    private PositionResponse toDetailResponse(Position position) {
+        return responseBuilder(position)
+                .createdByName(auditActorNameResolver.resolve(position.getCreatedBy()))
+                .updatedByName(auditActorNameResolver.resolve(position.getUpdatedBy()))
+                .build();
+    }
+
+    private PositionResponse.PositionResponseBuilder responseBuilder(Position position) {
         return PositionResponse.builder()
                 .positionCode(position.getPositionCode())
                 .positionName(position.getPositionName())
                 .positionType(position.getPositionType())
+                .displayOrder(position.getDisplayOrder())
                 .status(position.getStatus())
                 .createdAt(position.getCreatedAt())
+                .createdBy(position.getCreatedBy())
                 .updatedAt(position.getUpdatedAt())
-                .build();
+                .updatedBy(position.getUpdatedBy());
     }
 }

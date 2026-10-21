@@ -40,7 +40,7 @@ public class PositionController {
     }
 
     @PutMapping("/{positionCode}")
-    @PreAuthorize("@positionAccessEvaluator.canUpdate(authentication, #positionCode)")
+    @PreAuthorize("@positionAccessEvaluator.canUpdate(authentication, #positionCode, #request.positionType)")
     public apiResponse<PositionResponse> update(
             @PathVariable String positionCode,
             @Valid @RequestBody PositionUpdateRequest request,
@@ -48,6 +48,7 @@ public class PositionController {
     ) {
         return apiResponse.success("Cập nhật chức vụ thành công", positionService.update(positionCode, request, authentication));
     }
+
     @PatchMapping("/{positionCode}/toggle-status")
     @PreAuthorize("@positionAccessEvaluator.canToggle(authentication, #positionCode)")
     public apiResponse<PositionResponse> toggleStatus(

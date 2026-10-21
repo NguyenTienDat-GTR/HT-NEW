@@ -3,6 +3,7 @@ package phucuong.ht.modules.position.repository;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Repository;
+import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.common.repository.BaseRepo;
 import phucuong.ht.modules.position.model.entity.Position;
 
@@ -11,6 +12,14 @@ public class PositionRepository extends BaseRepo<Position, String> {
 
     public PositionRepository(EntityManager entityManager) {
         super(entityManager, Position.class);
+    }
+
+    /** Thứ tự kế tiếp (cuối cùng) trong cấp. */
+    public int nextDisplayOrder(UnitType positionType) {
+        Integer max = entityManager.createQuery("select max(p.displayOrder) from Position p where p.positionType = :type", Integer.class)
+                .setParameter("type", positionType)
+                .getSingleResult();
+        return max == null ? 1 : max + 1;
     }
 
     @Transactional

@@ -56,9 +56,6 @@ class ExecutiveBoardAssignmentServiceTest {
                 .getMethod("create", ExecutiveBoardAssignmentCreateRequest.class, org.springframework.security.core.Authentication.class)
                 .isAnnotationPresent(Transactional.class));
         assertTrue(ExecutiveBoardAssignmentService.class
-                .getMethod("update", UUID.class, phucuong.ht.modules.executiveBoard.model.request.ExecutiveBoardAssignmentUpdateRequest.class, org.springframework.security.core.Authentication.class)
-                .isAnnotationPresent(Transactional.class));
-        assertTrue(ExecutiveBoardAssignmentService.class
                 .getMethod("toggleStatus", UUID.class, phucuong.ht.common.model.request.StatusToggleRequest.class, org.springframework.security.core.Authentication.class)
                 .isAnnotationPresent(Transactional.class));
     }
@@ -75,7 +72,8 @@ class ExecutiveBoardAssignmentServiceTest {
                 parishRepository,
                 accountScopeValidationHelper,
                 commonValidationHelper,
-                new securityUtils()
+                new securityUtils(),
+                org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class)
         );
 
         UUID deaneryId = UUID.randomUUID();
@@ -102,6 +100,7 @@ class ExecutiveBoardAssignmentServiceTest {
         Position position = new Position();
         position.setPositionCode("POS-1");
         position.setPositionType(UnitType.DEANERY);
+        position.setStatus(Boolean.TRUE);
 
         when(leaderRepository.findByIdWithParish(leaderId)).thenReturn(Optional.of(leader));
         when(positionRepository.findById("POS-1")).thenReturn(Optional.of(position));
@@ -119,6 +118,52 @@ class ExecutiveBoardAssignmentServiceTest {
         var authentication = new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
 
         var exception = assertThrows(Exception.class, () -> service.create(request, authentication));
-        assertEquals("Mỗi chức vụ chỉ được gán cho một Huynh Trưởng trong cùng đơn vị", exception.getMessage());
+        assertEquals("Chức vụ này đang có người được phân công. Hãy vô hiệu hóa phân công hiện tại trước khi phân công người khác", exception.getMessage());
+    }
+
+    @Test
+    void togglingActiveAssignmentEndsItToday() {
+        UUID id = UUID.randomUUID();
+        var assignment = new phucuong.ht.modules.executiveBoard.model.entity.ExecutiveBoardAssignment();
+        assignment.setId(id);
+        assignment.setUnitType(UnitType.DEANERY);
+        assignment.setStatus(Boolean.TRUE);
+        assignment.setStartDate(java.time.LocalDate.now().minusDays(10));
+        assignment.setEndDate(java.time.LocalDate.now().plusDays(300));
+        assignment.setLeader(new Leader());
+        assignment.setPosition(new Position());
+        when(assignmentRepository.findByIdWithRelations(id)).thenReturn(Optional.of(assignment));
+
+        var request = new phucuong.ht.common.model.request.StatusToggleRequest();
+        request.setConfirmationText("Xác nhận");
+        AuthUserDetails principal = AuthUserDetails.tokenPrincipal("admin", UUID.randomUUID().toString(), List.of("ADMIN_DEANERY"), List.of());
+        var authentication = new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
+
+        newService().toggleStatus(id, request, authentication);
+
+        assertEquals(java.time.LocalDate.now(), assignment.getEndDate());
+    }
+
+    @Test
+    void togglingInactiveAssignmentIsRejected() {
+        UUID id = UUID.randomUUID();
+        var assignment = new phucuong.ht.modules.executiveBoard.model.entity.ExecutiveBoardAssignment();
+        assignment.setId(id);
+        assignment.setStatus(Boolean.FALSE);
+        when(assignmentRepository.findByIdWithRelations(id)).thenReturn(Optional.of(assignment));
+
+        var request = new phucuong.ht.common.model.request.StatusToggleRequest();
+        request.setConfirmationText("Xác nhận");
+        AuthUserDetails principal = AuthUserDetails.tokenPrincipal("admin", UUID.randomUUID().toString(), List.of("ADMIN_DEANERY"), List.of());
+        var authentication = new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
+
+        assertThrows(Exception.class, () -> newService().toggleStatus(id, request, authentication));
+    }
+
+    private ExecutiveBoardAssignmentService newService() {
+        return new ExecutiveBoardAssignmentService(
+                assignmentRepository, leaderRepository, positionRepository, dioceseRepository, deaneryRepository, parishRepository,
+                accountScopeValidationHelper, new CommonValidationHelper(new securityUtils()), new securityUtils(),
+                org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class));
     }
 }

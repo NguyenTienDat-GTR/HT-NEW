@@ -39,8 +39,9 @@ PATCH /api/dioceses/{id}/toggle-status|200|401|403|400|404|N/A: status change ha
 # Executive board assignments
 POST /api/executive-board/assignments|200|401|403|400|404|409
 GET /api/executive-board/assignments|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/executive-board/assignments/years|200|401|403|N/A: endpoint has no request body or parameters|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/executive-board/boards/{unitType}/{unitId}|200|401|403|400|N/A: board is derived from the unit and always resolves|N/A: read-only endpoint does not mutate state
 GET /api/executive-board/assignments/{id}|200|401|403|400|404|N/A: read-only endpoint does not mutate state
-PUT /api/executive-board/assignments/{id}|200|401|403|400|404|409
 PATCH /api/executive-board/assignments/{id}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict
 
 # Leaders

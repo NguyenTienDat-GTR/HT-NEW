@@ -114,7 +114,7 @@ class ExecutiveBoardAssignmentControllerSecurityIntegrationTest {
                 .thenReturn(sampleResponse(assignmentId, unitId, leaderId));
 
         mockMvc.perform(patch("/api/executive-board/assignments/" + assignmentId + "/toggle-status")
-                        .header("Authorization", bearer(deaneryAdminToken(List.of(ExecutiveBoardAssignmentAccessEvaluator.UPDATE_DEANERY))))
+                        .header("Authorization", bearer(deaneryAdminToken(List.of(ExecutiveBoardAssignmentAccessEvaluator.TOGGLE_DEANERY))))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
