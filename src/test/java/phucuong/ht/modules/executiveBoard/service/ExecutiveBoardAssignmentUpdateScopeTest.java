@@ -96,7 +96,8 @@ class ExecutiveBoardAssignmentUpdateScopeTest {
                 parishRepository,
                 accountScopeValidationHelper,
                 new CommonValidationHelper(new securityUtils()),
-                new securityUtils()
+                new securityUtils(),
+                org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class)
         );
     }
 }

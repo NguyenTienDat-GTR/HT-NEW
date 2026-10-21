@@ -12,7 +12,7 @@ import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.modules.auth.model.AuthUserDetails;
-import phucuong.ht.modules.leader.repository.LeaderRepository;
+import phucuong.ht.common.utils.AuditActorNameResolver;
 import phucuong.ht.modules.position.model.entity.Position;
 import phucuong.ht.modules.position.repository.PositionRepository;
 
@@ -29,7 +29,7 @@ class PositionReadScopeTest {
     private PositionRepository positionRepository;
 
     @Mock
-    private LeaderRepository leaderRepository;
+    private AuditActorNameResolver auditActorNameResolver;
 
     @Test
     void parishReaderOnlyReceivesParishPositionsBeforePagination() {
@@ -69,7 +69,7 @@ class PositionReadScopeTest {
                 positionRepository,
                 new CommonValidationHelper(new securityUtils()),
                 new securityUtils(),
-                leaderRepository
+                auditActorNameResolver
         );
     }
 

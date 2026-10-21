@@ -42,7 +42,7 @@ public class ExecutiveBoardAssignmentController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("@executiveBoardAssignmentAccessEvaluator.canUpdate(authentication, #id)")
+    @PreAuthorize("@executiveBoardAssignmentAccessEvaluator.canUpdate(authentication, #id, #request.unitType)")
     public apiResponse<ExecutiveBoardAssignmentResponse> update(
             @PathVariable UUID id,
             @Valid @RequestBody ExecutiveBoardAssignmentUpdateRequest request,

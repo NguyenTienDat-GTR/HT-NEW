@@ -51,8 +51,12 @@ public class ExecutiveBoardAssignmentAccessEvaluator {
         return hasScopedAccess(authentication, id, "read");
     }
 
-    public boolean canUpdate(Authentication authentication, UUID id) {
-        return hasScopedAccess(authentication, id, "update");
+    /**
+     * Cần quyền cập nhật ở cấp hiện tại của phân công và, nếu đổi cấp, cả ở cấp mới.
+     */
+    public boolean canUpdate(Authentication authentication, UUID id, UnitType targetType) {
+        return hasScopedAccess(authentication, id, "update")
+                && (targetType == null || hasAuthorityForTarget(authentication, targetType, "update"));
     }
 
     public boolean canToggle(Authentication authentication, UUID id) {
@@ -105,19 +109,9 @@ public class ExecutiveBoardAssignmentAccessEvaluator {
         };
     }
 
+    // Mỗi tài khoản chỉ thao tác trên phân công thuộc đúng cấp mình được cấp quyền (không kế thừa cấp dưới).
     private boolean hasAuthorityForTarget(Authentication authentication, UnitType unitType, String action) {
-        if (unitType == null) {
-            return false;
-        }
-        if (hasAuthority(authentication, requiredAuthority(UnitType.DIOCESE, action))) {
-            return true;
-        }
-        if (unitType != UnitType.DIOCESE
-                && hasAuthority(authentication, requiredAuthority(UnitType.DEANERY, action))) {
-            return true;
-        }
-        return unitType == UnitType.PARISH
-                && hasAuthority(authentication, requiredAuthority(UnitType.PARISH, action));
+        return hasAuthority(authentication, requiredAuthority(unitType, action));
     }
 
     private boolean hasAuthority(Authentication authentication, String authority) {

@@ -75,7 +75,8 @@ class ExecutiveBoardAssignmentServiceTest {
                 parishRepository,
                 accountScopeValidationHelper,
                 commonValidationHelper,
-                new securityUtils()
+                new securityUtils(),
+                org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class)
         );
 
         UUID deaneryId = UUID.randomUUID();

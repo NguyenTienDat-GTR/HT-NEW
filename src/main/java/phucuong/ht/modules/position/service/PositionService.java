@@ -12,11 +12,10 @@ import org.springframework.transaction.annotation.Transactional;
 import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
+import phucuong.ht.common.utils.AuditActorNameResolver;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.config.CacheNames;
-import phucuong.ht.modules.leader.model.entity.Leader;
-import phucuong.ht.modules.leader.repository.LeaderRepository;
 import phucuong.ht.modules.position.model.entity.Position;
 import phucuong.ht.modules.position.model.request.PositionCreateRequest;
 import phucuong.ht.modules.position.model.request.PositionUpdateRequest;
@@ -26,7 +25,6 @@ import phucuong.ht.modules.position.repository.PositionRepository;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -35,7 +33,7 @@ public class PositionService {
     private final PositionRepository positionRepository;
     private final CommonValidationHelper commonValidationHelper;
     private final securityUtils securityUtils;
-    private final LeaderRepository leaderRepository;
+    private final AuditActorNameResolver auditActorNameResolver;
 
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.POSITION_LIST, allEntries = true),
@@ -159,8 +157,8 @@ public class PositionService {
 
     private PositionResponse toDetailResponse(Position position) {
         return responseBuilder(position)
-                .createdByName(resolveActorName(position.getCreatedBy()))
-                .updatedByName(resolveActorName(position.getUpdatedBy()))
+                .createdByName(auditActorNameResolver.resolve(position.getCreatedBy()))
+                .updatedByName(auditActorNameResolver.resolve(position.getUpdatedBy()))
                 .build();
     }
 
@@ -174,29 +172,5 @@ public class PositionService {
                 .createdBy(position.getCreatedBy())
                 .updatedAt(position.getUpdatedAt())
                 .updatedBy(position.getUpdatedBy());
-    }
-
-    // createdBy/updatedBy lưu mã huynh trưởng hoặc "super-admin"; trả thêm tên hiển thị cho màn hình chi tiết.
-    private String resolveActorName(String actor) {
-        if (actor == null || actor.isBlank()) {
-            return null;
-        }
-        if ("super-admin".equals(actor)) {
-            return "Quản trị tối cao";
-        }
-        try {
-            return leaderRepository.findById(UUID.fromString(actor))
-                    .map(this::leaderDisplayName)
-                    .orElse(actor);
-        } catch (IllegalArgumentException ex) {
-            return actor;
-        }
-    }
-
-    private String leaderDisplayName(Leader leader) {
-        String name = leader.getLastName() == null || leader.getLastName().isBlank()
-                ? leader.getFirstName()
-                : leader.getLastName() + " " + leader.getFirstName();
-        return leader.getHolyName() == null || leader.getHolyName().isBlank() ? name : leader.getHolyName() + " " + name;
     }
 }
