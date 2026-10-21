@@ -187,4 +187,29 @@ public class CourseParticipationRepository extends BaseRepo<CourseParticipation,
                 .setParameter("courseCode", courseCode).getSingleResult();
         return count != null && count > 0;
     }
+
+    // Số tham dự viên đã được duyệt của từng khóa (một truy vấn cho cả trang danh sách).
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public java.util.Map<String, Long> countApprovedByCourseCodes(java.util.Collection<String> courseCodes) {
+        java.util.Map<String, Long> result = new java.util.HashMap<>();
+        if (courseCodes == null || courseCodes.isEmpty()) {
+            return result;
+        }
+        List<Object[]> rows = entityManager.createQuery(
+                        """
+                                select cp.course.courseCode, count(cp)
+                                from CourseParticipation cp
+                                where cp.course.courseCode in :codes
+                                  and cp.approvalStatus = :approved
+                                group by cp.course.courseCode
+                                """,
+                        Object[].class)
+                .setParameter("codes", courseCodes)
+                .setParameter("approved", phucuong.ht.modules.training.enums.WorkflowApprovalStatus.APPROVED)
+                .getResultList();
+        for (Object[] row : rows) {
+            result.put((String) row[0], ((Number) row[1]).longValue());
+        }
+        return result;
+    }
 }

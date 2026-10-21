@@ -9,7 +9,6 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.validation.AccountScopeValidationHelper;
 import phucuong.ht.common.validation.CommonValidationHelper;
@@ -20,17 +19,18 @@ import phucuong.ht.modules.certificate.model.entity.Certificate;
 import phucuong.ht.modules.certificate.model.request.CertificateApproveRequest;
 import phucuong.ht.modules.certificate.model.request.CertificateBulkApprovalRequest;
 import phucuong.ht.modules.certificate.model.request.CertificateRejectRequest;
+import phucuong.ht.modules.certificate.model.request.CertificateRevokeRequest;
+import phucuong.ht.modules.training.enums.CourseFinalResult;
 import phucuong.ht.modules.certificate.security.CertificateAccessEvaluator;
 import phucuong.ht.modules.training.courseParticipation.model.response.TrainingBulkApprovalResponse;
-import phucuong.ht.modules.certificate.model.request.CertificateCreateRequest;
-import phucuong.ht.modules.certificate.model.request.CertificateUpdateRequest;
 import phucuong.ht.modules.certificate.model.response.CertificateResponse;
 import phucuong.ht.modules.certificate.repository.CertificateRepository;
 import phucuong.ht.modules.leader.model.entity.Leader;
-import phucuong.ht.modules.leader.model.enums.LeaderLevel;
 import phucuong.ht.modules.leader.repository.LeaderRepository;
-import phucuong.ht.modules.rankHistory.model.entity.RankHistory;
-import phucuong.ht.modules.rankHistory.repository.RankHistoryRepository;
+import phucuong.ht.modules.training.CourseActivityGuard;
+import phucuong.ht.modules.certificate.model.enums.CertificateRevocationSource;
+import phucuong.ht.modules.certificate.model.request.CertificateReissueRequest;
+import phucuong.ht.config.EvictCaches;
 import phucuong.ht.modules.training.TrainingWorkflowSupport;
 import phucuong.ht.modules.training.courseParticipation.model.entity.CourseParticipation;
 import phucuong.ht.modules.training.courseParticipation.repository.CourseParticipationRepository;
@@ -59,7 +59,8 @@ public class CertificateService {
     private final TrainingCourseRepository trainingCourseRepository;
     private final LeaderRepository leaderRepository;
     private final CourseParticipationRepository courseParticipationRepository;
-    private final RankHistoryRepository rankHistoryRepository;
+    private final CertificateLifecycleService certificateLifecycleService;
+    private final CourseActivityGuard courseActivityGuard;
     private final TrainingWorkflowSupport trainingWorkflowSupport;
     private final AccountScopeValidationHelper accountScopeValidationHelper;
     private final CommonValidationHelper commonValidationHelper;
@@ -67,47 +68,6 @@ public class CertificateService {
     private final CertificateRealtimeNotifier certificateRealtimeNotifier;
     private final CertificateAccessEvaluator certificateAccessEvaluator;
     private final phucuong.ht.modules.training.trainingCourse.service.CourseFinishService courseFinishService;
-
-    @Caching(evict = {
-            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_LIST, allEntries = true),
-            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_DETAIL, allEntries = true)
-    })
-    @Transactional
-    public CertificateResponse create(CertificateCreateRequest request, Authentication authentication) {
-        TrainingCourse course = requireCourse(request.getCourseCode());
-        Leader leader = requireLeader(request.getLeaderId());
-        requireLeaderInCourseScope(leader, course);
-        if (!trainingWorkflowSupport.requiresCertificate(course.getCourseType())) {
-            throw commonValidationHelper.conflict("Khóa huấn luyện này không có cấp độ đạt được nên không có chứng nhận");
-        }
-        if (certificateRepository.findByLeaderIdAndCourseCode(leader.getId(), course.getCourseCode()).isPresent()) {
-            throw commonValidationHelper.conflict("Leader đã có chứng chỉ cho khóa huấn luyện này");
-        }
-        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tạo chứng chỉ");
-        OffsetDateTime now = OffsetDateTime.now();
-
-        Certificate certificate = new Certificate();
-        certificate.setCertificateCode(request.getCertificateCode());
-        certificate.setOldCertificateCode(request.getOldCertificateCode());
-        certificate.setCertificateName(request.getCertificateName());
-        certificate.setLeader(leader);
-        certificate.setCourse(course);
-        certificate.setResult(request.getResult());
-        certificate.setSignedBy(request.getSignedBy());
-        certificate.setIssueDate(request.getIssueDate());
-        certificate.setImageUrl(request.getImageUrl());
-        certificate.setApprovalStatus(WorkflowApprovalStatus.PENDING);
-        certificate.setSystemSuggested(Boolean.FALSE);
-        certificate.setApprovedByException(Boolean.FALSE);
-        certificate.setStatus(Boolean.TRUE);
-        certificate.setCreatedAt(now);
-        certificate.setUpdatedAt(now);
-        certificate.setCreatedBy(actor);
-        certificate.setUpdatedBy(actor);
-        certificateRepository.save(certificate);
-        certificateRealtimeNotifier.notifyChanged("CREATED", request.getCourseCode(), certificate.getCertificateCode());
-        return toResponse(certificate);
-    }
 
     @Cacheable(cacheNames = CacheNames.CERTIFICATE_LIST, key = "@cacheScopeKeyHelper.listKey(#authentication, #request)")
     public Page<CertificateResponse> findAll(BaseSearchRequest request, Authentication authentication) {
@@ -125,78 +85,79 @@ public class CertificateService {
         return new PageImpl<>(page.getContent().stream().map(this::toResponse).toList(), page.getPageable(), page.getTotalElements());
     }
 
+    // Các năm cấp có chứng nhận thật trong phạm vi người xem (mới nhất trước), cho bộ lọc năm cấp:
+    // không cắt theo số năm gần đây nên không mất các năm cũ, và tự có năm mới khi có chứng nhận cấp trong năm đó.
+    @Transactional(readOnly = true)
+    public List<Integer> issueYears(Authentication authentication) {
+        UUID dioceseId = null;
+        UUID deaneryId = null;
+        if (hasAuthority(authentication, "training.certificate.read.diocese")) {
+            dioceseId = accountScopeValidationHelper.requireActiveDioceseId(authentication, "training.certificate.read.diocese");
+        } else if (hasAuthority(authentication, "training.certificate.read.deanery")) {
+            deaneryId = accountScopeValidationHelper.requireActiveDeaneryId(authentication, "training.certificate.read.deanery");
+        } else {
+            throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền xem chứng chỉ");
+        }
+        return certificateRepository.findDistinctIssueDates(dioceseId, deaneryId).stream()
+                .map(java.time.LocalDate::getYear)
+                .distinct()
+                .sorted(java.util.Comparator.reverseOrder())
+                .toList();
+    }
+
     @Cacheable(cacheNames = CacheNames.CERTIFICATE_DETAIL, key = "@cacheScopeKeyHelper.detailKey(#authentication, #certificateCode)")
     public CertificateResponse findById(String certificateCode, Authentication authentication) {
-        return toResponse(certificateRepository.findByCodeWithLeaderAndCourse(certificateCode)
+        return toDetailResponse(certificateRepository.findByCodeWithLeaderAndCourse(certificateCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy chứng chỉ: " + certificateCode)));
     }
 
-    @Caching(evict = {
-            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_LIST, allEntries = true),
-            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_DETAIL, allEntries = true)
-    })
+    // Thu hồi chứng nhận đã duyệt. Hồ sơ của khóa liên kết trở thành không đạt dù điểm cao hơn điểm đạt và huynh trưởng
+    // bị hạ về cấp trước đó đã đạt. Phải thu hồi từ chứng nhận cấp cao nhất của huynh trưởng trước.
+    @EvictCaches.Certificates
+    @EvictCaches.Leaders
+    @EvictCaches.Analytics
     @Transactional
-    public CertificateResponse update(String certificateCode, CertificateUpdateRequest request, Authentication authentication) {
-        Certificate certificate = certificateRepository.findByCodeWithLeaderAndCourse(certificateCode)
+    public CertificateResponse revoke(String certificateCode, CertificateRevokeRequest request, Authentication authentication) {
+        Certificate certificate = requireCertificate(certificateCode);
+        courseActivityGuard.requireActive(certificate.getCourse());
+        String reason = commonValidationHelper.normalizeOptionalText(request == null ? null : request.getReason());
+        if (reason == null) {
+            throw commonValidationHelper.validationError("Phải nhập lý do khi thu hồi chứng nhận");
+        }
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người thu hồi chứng chỉ");
+        certificateLifecycleService.revoke(certificate, reason, CertificateRevocationSource.MANUAL, true, actor, OffsetDateTime.now());
+        return toDetailResponse(certificate);
+    }
+
+    // Cấp lại chứng nhận đã bị thu hồi vì lý do khác (không phải do khóa bị vô hiệu hóa): trả về Đã duyệt, hồ sơ trở lại đạt
+    // và huynh trưởng được thăng cấp lại. Phải cấp lại từ chứng nhận cấp thấp nhất trước.
+    @EvictCaches.Certificates
+    @EvictCaches.Leaders
+    @EvictCaches.Analytics
+    @Transactional
+    public CertificateResponse reissue(String certificateCode, CertificateReissueRequest request, Authentication authentication) {
+        Certificate certificate = requireCertificate(certificateCode);
+        courseActivityGuard.requireActive(certificate.getCourse());
+        String reason = commonValidationHelper.normalizeOptionalText(request == null ? null : request.getReason());
+        if (reason == null) {
+            throw commonValidationHelper.validationError("Phải nhập lý do khi cấp lại chứng nhận");
+        }
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cấp lại chứng chỉ");
+        certificateLifecycleService.restore(certificate, reason, true, actor, OffsetDateTime.now());
+        return toDetailResponse(certificate);
+    }
+
+    private Certificate requireCertificate(String certificateCode) {
+        return certificateRepository.findByCodeWithLeaderAndCourse(certificateCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy chứng chỉ: " + certificateCode));
-        if (certificate.getApprovalStatus() == WorkflowApprovalStatus.APPROVED
-                && (request.getLeaderId() != null || request.getCourseCode() != null || request.getResult() != null)) {
-            throw commonValidationHelper.conflict("Không thể thay đổi leader, khóa học hoặc kết quả của chứng chỉ đã duyệt");
-        }
-
-        Leader targetLeader = request.getLeaderId() == null ? certificate.getLeader() : requireLeader(request.getLeaderId());
-        TrainingCourse targetCourse = request.getCourseCode() == null ? certificate.getCourse() : requireCourse(request.getCourseCode());
-        if (request.getLeaderId() != null || request.getCourseCode() != null) {
-            requireLeaderInCourseScope(targetLeader, targetCourse);
-            requireUpdateAuthorityForTargetCourse(targetCourse, authentication);
-        }
-
-        if (request.getOldCertificateCode() != null) {
-            certificate.setOldCertificateCode(request.getOldCertificateCode());
-        }
-        if (request.getCertificateName() != null) {
-            certificate.setCertificateName(request.getCertificateName());
-        }
-        if (request.getLeaderId() != null) {
-            certificate.setLeader(targetLeader);
-        }
-        if (request.getCourseCode() != null) {
-            certificate.setCourse(targetCourse);
-        }
-        requireLeaderInCourseScope(certificate.getLeader(), certificate.getCourse());
-        if (request.getResult() != null) {
-            certificate.setResult(request.getResult());
-        }
-        if (request.getSignedBy() != null) {
-            certificate.setSignedBy(request.getSignedBy());
-        }
-        if (request.getIssueDate() != null) {
-            certificate.setIssueDate(request.getIssueDate());
-        }
-        if (request.getImageUrl() != null) {
-            certificate.setImageUrl(request.getImageUrl());
-        }
-        certificate.setUpdatedAt(OffsetDateTime.now());
-        certificate.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật chứng chỉ"));
-        certificateRealtimeNotifier.notifyChanged("UPDATED", null, certificateCode);
-        return toResponse(certificate);
     }
 
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.CERTIFICATE_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.CERTIFICATE_DETAIL, allEntries = true)
     })
-    public CertificateResponse toggleStatus(String certificateCode, StatusToggleRequest request, Authentication authentication) {
-        commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
-        certificateRepository.toggleStatus(certificateCode, commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái chứng chỉ"));
-        certificateRealtimeNotifier.notifyChanged("TOGGLED", null, certificateCode);
-        return findById(certificateCode, authentication);
-    }
-
-    @Caching(evict = {
-            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_LIST, allEntries = true),
-            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_DETAIL, allEntries = true)
-    })
+    @EvictCaches.Leaders
+    @EvictCaches.Analytics
     @Transactional
     public CertificateResponse approve(String certificateCode, CertificateApproveRequest request, Authentication authentication) {
         return toResponse(approveInternal(certificateCode, request, authentication));
@@ -206,6 +167,8 @@ public class CertificateService {
             @CacheEvict(cacheNames = CacheNames.CERTIFICATE_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.CERTIFICATE_DETAIL, allEntries = true)
     })
+    @EvictCaches.Leaders
+    @EvictCaches.Analytics
     @Transactional
     public CertificateResponse reject(String certificateCode, CertificateRejectRequest request, Authentication authentication) {
         return toResponse(rejectInternal(certificateCode, request == null ? null : request.getReason(), authentication));
@@ -216,6 +179,8 @@ public class CertificateService {
             @CacheEvict(cacheNames = CacheNames.CERTIFICATE_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.CERTIFICATE_DETAIL, allEntries = true)
     })
+    @EvictCaches.Leaders
+    @EvictCaches.Analytics
     @Transactional
     public TrainingBulkApprovalResponse bulkApprove(CertificateBulkApprovalRequest request, Authentication authentication) {
         boolean approved = Boolean.TRUE.equals(request.getApproved());
@@ -267,6 +232,7 @@ public class CertificateService {
         if (certificate.getLeader() == null || certificate.getCourse() == null) {
             throw commonValidationHelper.validationError("Chứng chỉ phải được liên kết với leader và khóa huấn luyện");
         }
+        courseActivityGuard.requireActive(certificate.getCourse());
         if (certificate.getCourse().getFinishedAt() != null) {
             throw commonValidationHelper.conflict("Khóa huấn luyện đã kết thúc nên không từ chối chứng nhận được, chỉ xuất được PDF");
         }
@@ -325,8 +291,12 @@ public class CertificateService {
         if (certificate.getLeader() == null || certificate.getCourse() == null) {
             throw commonValidationHelper.validationError("Chứng chỉ phải được liên kết với leader và khóa huấn luyện");
         }
+        courseActivityGuard.requireActive(certificate.getCourse());
         if (certificate.getApprovalStatus() == WorkflowApprovalStatus.APPROVED) {
             throw commonValidationHelper.conflict("Chứng chỉ đã được duyệt trước đó");
+        }
+        if (certificate.getApprovalStatus() == WorkflowApprovalStatus.REVOKED) {
+            throw commonValidationHelper.conflict("Chứng nhận đã bị thu hồi nên không duyệt lại được");
         }
         if (certificate.getCourse().getFinishedAt() != null) {
             throw commonValidationHelper.conflict("Khóa huấn luyện đã kết thúc nên không duyệt chứng nhận được, chỉ xuất được PDF");
@@ -390,86 +360,6 @@ public class CertificateService {
         }
     }
 
-    private void promoteLeader(Leader leader, LeaderLevel newLevel, String actor, String certificateCode) {
-        if (leader.getLeaderLevel() == newLevel) {
-            return;
-        }
-
-        RankHistory rankHistory = new RankHistory();
-        OffsetDateTime now = OffsetDateTime.now();
-        rankHistory.setLeader(leader);
-        rankHistory.setOldLevel(leader.getLeaderLevel());
-        rankHistory.setNewLevel(newLevel);
-        rankHistory.setPromotionDate(LocalDate.now());
-        rankHistory.setNote("Duyệt từ chứng chỉ " + certificateCode);
-        rankHistory.setStatus(Boolean.TRUE);
-        rankHistory.setCreatedAt(now);
-        rankHistory.setUpdatedAt(now);
-        rankHistory.setCreatedBy(actor);
-        rankHistory.setUpdatedBy(actor);
-        rankHistoryRepository.save(rankHistory);
-        leader.setLeaderLevel(newLevel);
-        leader.setUpdatedAt(now);
-        leader.setUpdatedBy(actor);
-    }
-
-    private TrainingCourse requireCourse(String courseCode) {
-        if (courseCode == null || courseCode.isBlank()) {
-            throw commonValidationHelper.validationError("courseCode là bắt buộc");
-        }
-        return trainingCourseRepository.findByCodeWithType(courseCode)
-                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy khóa huấn luyện: " + courseCode));
-    }
-
-    private Leader requireLeader(UUID leaderId) {
-        if (leaderId == null) {
-            throw commonValidationHelper.validationError("leaderId là bắt buộc");
-        }
-        return leaderRepository.findByIdWithParish(leaderId)
-                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy leader: " + leaderId));
-    }
-
-    private void requireLeaderInCourseScope(Leader leader, TrainingCourse course) {
-        if (leader == null || leader.getParish() == null || leader.getParish().getDeanery() == null || course == null) {
-            throw commonValidationHelper.validationError("Leader và khóa huấn luyện phải có scope hợp lệ");
-        }
-        boolean sameScope = trainingWorkflowSupport.isDeaneryManaged(course.getCourseType())
-                ? course.getDeanery() != null && course.getDeanery().getId().equals(leader.getParish().getDeanery().getId())
-                : course.getDiocese() != null && course.getDiocese().getId().equals(leader.getParish().getDeanery().getDiocese().getId());
-        if (!sameScope) {
-            throw commonValidationHelper.validationError("Leader phải thuộc cùng scope quản lý với khóa huấn luyện");
-        }
-    }
-
-    private void requireUpdateAuthorityForTargetCourse(TrainingCourse course, Authentication authentication) {
-        if (course == null) {
-            throw commonValidationHelper.validationError("Khóa huấn luyện phải có scope sở hữu hợp lệ");
-        }
-
-        if (trainingWorkflowSupport.isDeaneryManaged(course.getCourseType())) {
-            String authority = "training.certificate.update.deanery";
-            if (!hasAuthority(authentication, authority)) {
-                throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền cập nhật chứng chỉ cấp giáo hạt");
-            }
-            UUID activeDeaneryId = accountScopeValidationHelper.requireActiveDeaneryId(authentication, authority);
-            if (course.getDeanery() == null || course.getDeanery().getId() == null
-                    || !activeDeaneryId.equals(course.getDeanery().getId())) {
-                throw commonValidationHelper.forbidden("Không được cập nhật chứng chỉ sang khóa huấn luyện ngoài giáo hạt quản lý");
-            }
-            return;
-        }
-
-        String authority = "training.certificate.update.diocese";
-        if (!hasAuthority(authentication, authority)) {
-            throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền cập nhật chứng chỉ cấp giáo phận");
-        }
-        UUID activeDioceseId = accountScopeValidationHelper.requireActiveDioceseId(authentication, authority);
-        if (course.getDiocese() == null || course.getDiocese().getId() == null
-                || !activeDioceseId.equals(course.getDiocese().getId())) {
-            throw commonValidationHelper.forbidden("Không được cập nhật chứng chỉ sang khóa huấn luyện ngoài giáo phận quản lý");
-        }
-    }
-
     private BaseSearchRequest copyRequest(BaseSearchRequest request) {
         BaseSearchRequest source = request == null ? new BaseSearchRequest() : request;
         BaseSearchRequest copy = new BaseSearchRequest();
@@ -490,13 +380,46 @@ public class CertificateService {
     }
 
     private CertificateResponse toResponse(Certificate certificate) {
-        CourseParticipation participation = null;
-        if (certificate.getLeader() != null && certificate.getCourse() != null) {
-            participation = courseParticipationRepository.findByLeaderIdAndCourseCode(
-                    certificate.getLeader().getId(),
-                    certificate.getCourse().getCourseCode()
-            ).orElse(null);
+        return responseBuilder(certificate, findParticipation(certificate)).build();
+    }
+
+    // Chi tiết: thêm thông tin huynh trưởng, khóa, kết quả. Chỉ dùng với chứng nhận đã fetch đủ quan hệ (findByCodeWithLeaderAndCourse).
+    private CertificateResponse toDetailResponse(Certificate certificate) {
+        CourseParticipation participation = findParticipation(certificate);
+        Leader leader = certificate.getLeader();
+        TrainingCourse course = certificate.getCourse();
+        var parish = leader == null ? null : leader.getParish();
+        var deanery = parish == null ? null : parish.getDeanery();
+        var diocese = deanery == null ? null : deanery.getDiocese();
+        var courseType = course == null ? null : course.getCourseType();
+        return responseBuilder(certificate, participation)
+                .leaderHolyName(leader == null ? null : leader.getHolyName())
+                .leaderBirthDate(leader == null ? null : leader.getBirthDate())
+                .leaderParishName(parish == null ? null : parish.getName())
+                .leaderDeaneryName(deanery == null ? null : deanery.getName())
+                .leaderDioceseName(diocese == null ? null : diocese.getName())
+                .courseTypeName(courseType == null ? null : courseType.getTypeName())
+                .courseHostYear(course == null ? null : course.getHostYear())
+                .courseStartDate(course == null ? null : course.getStartDate())
+                .courseEndDate(course == null ? null : course.getEndDate())
+                // Cấp độ đạt được: hồ sơ ngoại lệ theo cấp người duyệt đã chọn, còn lại theo loại khóa.
+                .resultingLevel(participation != null && participation.getTargetLevel() != null ? participation.getTargetLevel()
+                        : courseType == null ? null : courseType.getResultingLevel())
+                .finalResult(participation == null || participation.getFinalResult() == null ? null : participation.getFinalResult().name())
+                .build();
+    }
+
+    private CourseParticipation findParticipation(Certificate certificate) {
+        if (certificate.getLeader() == null || certificate.getCourse() == null) {
+            return null;
         }
+        return courseParticipationRepository.findByLeaderIdAndCourseCode(
+                certificate.getLeader().getId(),
+                certificate.getCourse().getCourseCode()
+        ).orElse(null);
+    }
+
+    private CertificateResponse.CertificateResponseBuilder responseBuilder(Certificate certificate, CourseParticipation participation) {
         boolean passed = participation != null
                 && participation.getTotalScore() != null
                 && participation.getCourse() != null
@@ -528,8 +451,14 @@ public class CertificateService {
                 .rejectionReason(certificate.getRejectionReason())
                 .approvedAt(certificate.getApprovedAt())
                 .approvedBy(certificate.getApprovedBy())
-                .status(certificate.getStatus())
-                .build();
+                .revokedAt(certificate.getRevokedAt())
+                .revokedBy(certificate.getRevokedBy())
+                .revocationReason(certificate.getRevocationReason())
+                .revocationSource(certificate.getRevocationSource() == null ? null : certificate.getRevocationSource().name())
+                .reissuedAt(certificate.getReissuedAt())
+                .reissuedBy(certificate.getReissuedBy())
+                .reissueReason(certificate.getReissueReason())
+                .status(certificate.getStatus());
     }
 
     private String buildFullName(Leader leader) {

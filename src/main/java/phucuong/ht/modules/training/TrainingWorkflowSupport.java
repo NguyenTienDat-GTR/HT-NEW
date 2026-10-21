@@ -2,7 +2,6 @@ package phucuong.ht.modules.training;
 
 import org.springframework.stereotype.Component;
 import phucuong.ht.common.enums.UnitType;
-import phucuong.ht.modules.leader.model.enums.LeaderLevel;
 import phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType;
 
 import java.util.Optional;
@@ -36,6 +35,17 @@ public class TrainingWorkflowSupport {
         return null;
     }
 
+    // Giáo phận sở hữu khóa: khóa giáo phận lưu trực tiếp, khóa giáo hạt lấy theo giáo hạt. Dùng để tra danh mục cấp độ.
+    public java.util.UUID dioceseIdOf(phucuong.ht.modules.training.trainingCourse.model.entity.TrainingCourse course) {
+        if (course == null) {
+            return null;
+        }
+        if (course.getDiocese() != null) {
+            return course.getDiocese().getId();
+        }
+        return course.getDeanery() != null && course.getDeanery().getDiocese() != null ? course.getDeanery().getDiocese().getId() : null;
+    }
+
     public Optional<TrainingCourseType> prerequisiteOf(TrainingCourseType courseType) {
         if (courseType == null) {
             return Optional.empty();
@@ -43,7 +53,7 @@ public class TrainingWorkflowSupport {
         return Optional.ofNullable(courseType.getPrerequisiteType());
     }
 
-    public Optional<LeaderLevel> certificateLevelFor(TrainingCourseType courseType) {
+    public Optional<String> certificateLevelFor(TrainingCourseType courseType) {
         if (courseType == null) {
             return Optional.empty();
         }
@@ -53,15 +63,11 @@ public class TrainingWorkflowSupport {
     // Chỉ khóa có cấp độ đạt được (resultingLevel khác rỗng/NONE) mới có chứng nhận và duyệt chứng nhận;
     // các khóa còn lại chỉ cần kết quả điểm đạt hay không.
     public boolean requiresCertificate(TrainingCourseType courseType) {
-        return certificateLevelFor(courseType).filter(level -> level != LeaderLevel.NONE).isPresent();
+        return certificateLevelFor(courseType).filter(level -> !"NONE".equals(level)).isPresent();
     }
 
     public boolean needsAutomaticEligibilityApproval(TrainingCourseType courseType) {
         return courseType != null;
-    }
-
-    public boolean isPromotion(LeaderLevel currentLevel, LeaderLevel targetLevel) {
-        return targetLevel != null && (currentLevel == null || targetLevel.ordinal() > currentLevel.ordinal());
     }
 
     // Hồ sơ đủ điều kiện được hệ thống tự duyệt ngay khi gửi đăng ký (khóa giáo hạt: giáo hạt duyệt; khóa giáo phận: giáo phận duyệt).

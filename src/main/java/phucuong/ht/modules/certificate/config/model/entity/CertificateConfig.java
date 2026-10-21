@@ -11,8 +11,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-// Cấu hình chứng nhận cho một loại khóa có yêu cầu chứng nhận.
-// courseTypeCode = null nghĩa là cấu hình chung mặc định, dùng khi loại khóa chưa có cấu hình riêng.
+// Một cấu hình chứng nhận trong thư viện. Thuộc một phạm vi (scopeKey), có tên duy nhất trong phạm vi;
+// mỗi phạm vi có đúng một cấu hình chung (isDefault). Việc dùng cho loại khóa nào nằm ở CertificateConfigAssignment.
 @Entity
 @Table(name = "certificate_config")
 @Getter
@@ -27,9 +27,16 @@ public class CertificateConfig extends BaseModel {
     @Column(name = "id")
     private UUID id;
 
-    // null = cấu hình chung mặc định.
-    @Column(name = "course_type_code")
-    private String courseTypeCode;
+    @Column(name = "name", nullable = false)
+    private String name;
+
+    // Cấu hình chung của phạm vi: dùng cho loại khóa chưa được gán cấu hình riêng; không được xóa.
+    @Column(name = "is_default", nullable = false)
+    private Boolean isDefault = Boolean.FALSE;
+
+    // Phạm vi sở hữu: SYSTEM | DIOCESE:<uuid> | DEANERY:<uuid>.
+    @Column(name = "scope_key", nullable = false)
+    private String scopeKey;
 
     // Khổ giấy (A3/A4/A5/LETTER/LEGAL) và hướng in (PORTRAIT/LANDSCAPE).
     @Column(name = "paper_size")

@@ -4,7 +4,6 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
-import phucuong.ht.modules.leader.model.enums.LeaderLevel;
 
 import java.time.LocalDate;
 import java.util.UUID;
@@ -16,10 +15,10 @@ public class RankHistoryCreateRequest {
     @NotBlank
     private UUID leaderId;
 
-    private LeaderLevel oldLevel;
+    private String oldLevel;
 
     @NotNull
-    private LeaderLevel newLevel;
+    private String newLevel;
 
     private LocalDate promotionDate;
 

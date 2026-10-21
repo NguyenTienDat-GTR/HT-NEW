@@ -5,5 +5,7 @@ public enum WorkflowApprovalStatus {
     PENDING,
     SUBMITTED,
     APPROVED,
-    REJECTED
+    REJECTED,
+    // Chứng nhận đã duyệt nhưng bị thu hồi: hồ sơ liên kết bị coi là không đạt.
+    REVOKED
 }

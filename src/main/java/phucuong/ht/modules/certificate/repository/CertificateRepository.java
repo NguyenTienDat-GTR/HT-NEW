@@ -5,6 +5,8 @@ import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Repository;
 import phucuong.ht.common.repository.BaseRepo;
 import phucuong.ht.modules.certificate.model.entity.Certificate;
+import phucuong.ht.modules.certificate.model.enums.CertificateRevocationSource;
+import phucuong.ht.modules.training.enums.WorkflowApprovalStatus;
 
 import java.util.List;
 import java.util.Optional;
@@ -135,5 +137,113 @@ public class CertificateRepository extends BaseRepo<Certificate, String> {
         entityManager.createNativeQuery("select pg_advisory_xact_lock(hashtext(:codePrefix))")
                 .setParameter("codePrefix", codePrefix)
                 .getSingleResult();
+    }
+
+    // Chứng nhận của khóa theo trạng thái, kèm huynh trưởng, giáo xứ - giáo hạt - giáo phận và loại khóa.
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<Certificate> findByCourseAndStatus(String courseCode, WorkflowApprovalStatus status) {
+        return entityManager.createQuery(
+                        """
+                                select certificate
+                                from Certificate certificate
+                                left join fetch certificate.leader l
+                                left join fetch l.parish p
+                                left join fetch p.deanery de
+                                left join fetch de.diocese
+                                left join fetch certificate.course tc
+                                left join fetch tc.courseType
+                                where tc.courseCode = :courseCode
+                                  and certificate.approvalStatus = :status
+                                """,
+                        Certificate.class
+                )
+                .setParameter("courseCode", courseCode)
+                .setParameter("status", status)
+                .getResultList();
+    }
+
+    // Chứng nhận của khóa bị thu hồi vì một nguồn cụ thể (ví dụ khóa bị vô hiệu hóa).
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<Certificate> findRevokedByCourseAndSource(String courseCode, CertificateRevocationSource source) {
+        return entityManager.createQuery(
+                        """
+                                select certificate
+                                from Certificate certificate
+                                left join fetch certificate.leader l
+                                left join fetch l.parish p
+                                left join fetch p.deanery de
+                                left join fetch de.diocese
+                                left join fetch certificate.course tc
+                                left join fetch tc.courseType
+                                where tc.courseCode = :courseCode
+                                  and certificate.approvalStatus = :status
+                                  and certificate.revocationSource = :source
+                                """,
+                        Certificate.class
+                )
+                .setParameter("courseCode", courseCode)
+                .setParameter("status", WorkflowApprovalStatus.REVOKED)
+                .setParameter("source", source)
+                .getResultList();
+    }
+
+    // Mọi chứng nhận khác của một huynh trưởng (để kiểm tra thứ tự cấp khi thu hồi / cấp lại).
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<Certificate> findOthersByLeader(UUID leaderId, String exceptCertificateCode) {
+        return entityManager.createQuery(
+                        """
+                                select certificate
+                                from Certificate certificate
+                                left join fetch certificate.course tc
+                                left join fetch tc.courseType
+                                left join fetch tc.diocese
+                                left join fetch tc.deanery
+                                where certificate.leader.id = :leaderId
+                                  and certificate.certificateCode <> :code
+                                """,
+                        Certificate.class
+                )
+                .setParameter("leaderId", leaderId)
+                .setParameter("code", exceptCertificateCode)
+                .getResultList();
+    }
+
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public long countByCourseAndStatus(String courseCode, WorkflowApprovalStatus status) {
+        Long count = entityManager.createQuery(
+                        "select count(c) from Certificate c where c.course.courseCode = :courseCode and c.approvalStatus = :status",
+                        Long.class)
+                .setParameter("courseCode", courseCode)
+                .setParameter("status", status)
+                .getSingleResult();
+        return count == null ? 0 : count;
+    }
+
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public long countRevokedByCourseAndSource(String courseCode, CertificateRevocationSource source) {
+        Long count = entityManager.createQuery(
+                        "select count(c) from Certificate c where c.course.courseCode = :courseCode and c.approvalStatus = :status and c.revocationSource = :source",
+                        Long.class)
+                .setParameter("courseCode", courseCode)
+                .setParameter("status", WorkflowApprovalStatus.REVOKED)
+                .setParameter("source", source)
+                .getSingleResult();
+        return count == null ? 0 : count;
+    }
+
+    // Các ngày cấp khác nhau của chứng nhận trong phạm vi (giáo phận hoặc giáo hạt của khóa), để lấy danh sách năm cấp có thật.
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<java.time.LocalDate> findDistinctIssueDates(UUID dioceseId, UUID deaneryId) {
+        StringBuilder jpql = new StringBuilder("select distinct c.issueDate from Certificate c where c.issueDate is not null");
+        if (dioceseId != null) {
+            jpql.append(" and c.course.diocese.id = :dioceseId");
+        }
+        if (deaneryId != null) {
+            jpql.append(" and c.course.deanery.id = :deaneryId");
+        }
+        var query = entityManager.createQuery(jpql.toString(), java.time.LocalDate.class);
+        if (dioceseId != null) query.setParameter("dioceseId", dioceseId);
+        if (deaneryId != null) query.setParameter("deaneryId", deaneryId);
+        return query.getResultList();
     }
 }

@@ -7,14 +7,13 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import phucuong.ht.common.dto.apiResponse;
-import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.modules.certificate.model.request.CertificateApproveRequest;
 import phucuong.ht.modules.certificate.model.request.CertificateBulkApprovalRequest;
-import phucuong.ht.modules.certificate.model.request.CertificateCreateRequest;
 import phucuong.ht.modules.certificate.model.request.CertificateRejectRequest;
+import phucuong.ht.modules.certificate.model.request.CertificateReissueRequest;
+import phucuong.ht.modules.certificate.model.request.CertificateRevokeRequest;
 import phucuong.ht.modules.training.courseParticipation.model.response.TrainingBulkApprovalResponse;
-import phucuong.ht.modules.certificate.model.request.CertificateUpdateRequest;
 import phucuong.ht.modules.certificate.model.response.CertificateResponse;
 import phucuong.ht.modules.certificate.service.CertificateService;
 
@@ -25,16 +24,18 @@ public class CertificateController {
 
     private final CertificateService certificateService;
 
-    @PostMapping
-    @PreAuthorize("@certificateAccessEvaluator.canCreate(authentication, #request.courseCode)")
-    public apiResponse<CertificateResponse> create(@Valid @RequestBody CertificateCreateRequest request, Authentication authentication) {
-        return apiResponse.success("Tạo chứng chỉ thành công", certificateService.create(request, authentication));
-    }
-
     @GetMapping
     @PreAuthorize("@certificateAccessEvaluator.canList(authentication)")
     public apiResponse<Page<CertificateResponse>> findAll(BaseSearchRequest request, Authentication authentication) {
         return apiResponse.success("Lấy danh sách chứng chỉ thành công", certificateService.findAll(request, authentication));
+    }
+
+    // Các năm cấp có chứng nhận (cho bộ lọc năm cấp), mỗi phần tử { "year": 2026 }.
+    @GetMapping("/issue-years")
+    @PreAuthorize("@certificateAccessEvaluator.canList(authentication)")
+    public apiResponse<java.util.List<java.util.Map<String, Integer>>> issueYears(Authentication authentication) {
+        return apiResponse.success("Lấy danh sách năm cấp thành công",
+                certificateService.issueYears(authentication).stream().map(year -> java.util.Map.of("year", year)).toList());
     }
 
     @GetMapping("/{certificateCode}")
@@ -43,23 +44,26 @@ public class CertificateController {
         return apiResponse.success("Lấy thông tin chứng chỉ thành công", certificateService.findById(certificateCode, authentication));
     }
 
-    @PutMapping("/{certificateCode}")
-    @PreAuthorize("@certificateAccessEvaluator.canUpdate(authentication, #certificateCode)")
-    public apiResponse<CertificateResponse> update(
+    // Thu hồi chứng nhận đã duyệt: hồ sơ của khóa liên kết trở thành không đạt.
+    @PostMapping("/{certificateCode}/revoke")
+    @PreAuthorize("@certificateAccessEvaluator.canRevoke(authentication, #certificateCode)")
+    public apiResponse<CertificateResponse> revoke(
             @PathVariable String certificateCode,
-            @Valid @RequestBody CertificateUpdateRequest request,
+            @RequestBody CertificateRevokeRequest request,
             Authentication authentication
     ) {
-        return apiResponse.success("Cập nhật chứng chỉ thành công", certificateService.update(certificateCode, request, authentication));
+        return apiResponse.success("Thu hồi chứng nhận thành công", certificateService.revoke(certificateCode, request, authentication));
     }
-    @PatchMapping("/{certificateCode}/toggle-status")
-    @PreAuthorize("@certificateAccessEvaluator.canToggle(authentication, #certificateCode)")
-    public apiResponse<CertificateResponse> toggleStatus(
+
+    // Cấp lại chứng nhận đã bị thu hồi vì lý do khác (không phải do khóa bị vô hiệu hóa); cần quyền cấp lại.
+    @PostMapping("/{certificateCode}/reissue")
+    @PreAuthorize("@certificateAccessEvaluator.canReissue(authentication, #certificateCode)")
+    public apiResponse<CertificateResponse> reissue(
             @PathVariable String certificateCode,
-            @Valid @RequestBody StatusToggleRequest request,
+            @RequestBody CertificateReissueRequest request,
             Authentication authentication
     ) {
-        return apiResponse.success("Đổi trạng thái chứng chỉ thành công", certificateService.toggleStatus(certificateCode, request, authentication));
+        return apiResponse.success("Cấp lại chứng nhận thành công", certificateService.reissue(certificateCode, request, authentication));
     }
 
     @PostMapping("/{certificateCode}/approve")

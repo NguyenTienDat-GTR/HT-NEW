@@ -2,7 +2,6 @@ package phucuong.ht.modules.rankHistory.model.request;
 
 import lombok.Getter;
 import lombok.Setter;
-import phucuong.ht.modules.leader.model.enums.LeaderLevel;
 
 import java.time.LocalDate;
 import java.util.UUID;
@@ -13,9 +12,9 @@ public class RankHistoryUpdateRequest {
 
     private UUID leaderId;
 
-    private LeaderLevel oldLevel;
+    private String oldLevel;
 
-    private LeaderLevel newLevel;
+    private String newLevel;
 
     private LocalDate promotionDate;
 

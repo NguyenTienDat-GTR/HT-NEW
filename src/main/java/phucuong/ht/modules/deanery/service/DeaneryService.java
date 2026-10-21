@@ -1,5 +1,6 @@
 package phucuong.ht.modules.deanery.service;
 
+import phucuong.ht.config.EvictCaches;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
@@ -61,6 +62,7 @@ public class DeaneryService {
     @Autowired(required = false)
     private RbacAuthRefreshNotifier authRefreshNotifier;
 
+    @EvictCaches.Analytics
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true),
@@ -124,6 +126,7 @@ public class DeaneryService {
         return toDeaneryResponse(deaneryValidationHelper.requireExistingDeaneryWithDiocese(id));
     }
 
+    @EvictCaches.Analytics
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true),
@@ -144,6 +147,7 @@ public class DeaneryService {
         }
     }
 
+    @EvictCaches.Analytics
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true),

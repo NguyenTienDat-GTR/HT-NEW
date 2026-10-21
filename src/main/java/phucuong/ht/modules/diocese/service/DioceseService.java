@@ -1,5 +1,6 @@
 package phucuong.ht.modules.diocese.service;
 
+import phucuong.ht.config.EvictCaches;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
@@ -56,7 +57,10 @@ public class DioceseService {
     private ToggleNotificationDispatcher toggleNotificationDispatcher;
     @Autowired(required = false)
     private RbacAuthRefreshNotifier authRefreshNotifier;
+    @Autowired(required = false)
+    private phucuong.ht.modules.leaderLevel.service.LeaderLevelService leaderLevelService;
 
+    @EvictCaches.Analytics
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true)
@@ -79,7 +83,12 @@ public class DioceseService {
             diocese.setUpdatedAt(diocese.getCreatedAt());
             diocese.setCreatedBy(auditActor);
             diocese.setUpdatedBy(auditActor);
-            return toDioceseResponse(dioceseRepository.save(diocese));
+            Diocese saved = dioceseRepository.save(diocese);
+            // Mỗi giáo phận có danh mục cấp độ riêng: tạo danh mục mặc định cho giáo phận mới.
+            if (leaderLevelService != null) {
+                leaderLevelService.seedDefaults(saved.getId(), auditActor);
+            }
+            return toDioceseResponse(saved);
         } catch (DataIntegrityViolationException exception) {
             throw new ApiException(HttpStatus.CONFLICT, errorCode.CONFLICT, "Dữ liệu giáo phận bị trùng hoặc xung đột với dữ liệu hiện có");
         }
@@ -112,6 +121,7 @@ public class DioceseService {
         return toDioceseResponse(dioceseValidationHelper.requireExistingDiocese(id));
     }
 
+    @EvictCaches.Analytics
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true)
@@ -129,6 +139,7 @@ public class DioceseService {
         }
     }
 
+    @EvictCaches.Analytics
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true)

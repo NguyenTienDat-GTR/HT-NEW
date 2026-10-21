@@ -15,7 +15,6 @@ import phucuong.ht.modules.leader.helper.LeaderScopeHelper;
 import phucuong.ht.modules.leader.helper.LeaderValidationHelper;
 import phucuong.ht.modules.leader.model.entity.Leader;
 import phucuong.ht.modules.leader.model.enums.LeaderGender;
-import phucuong.ht.modules.leader.model.enums.LeaderLevel;
 import phucuong.ht.modules.leader.model.request.LeaderCreateRequest;
 import phucuong.ht.modules.leader.model.request.LeaderUpdateRequest;
 import phucuong.ht.modules.leader.model.response.LeaderResponse;
@@ -45,6 +44,9 @@ class LeaderServiceTest {
     @Mock
     private LeaderScopeHelper leaderScopeHelper;
 
+    @Mock
+    private phucuong.ht.modules.leaderLevel.service.LeaderLevelService leaderLevelService;
+
     @InjectMocks
     private LeaderService leaderService;
 
@@ -58,20 +60,21 @@ class LeaderServiceTest {
         request.setEmail("leader@example.com");
         request.setImageUrl("https://cdn.example.com/leaders/an.jpg");
         request.setGender(LeaderGender.NAM);
-        request.setLeaderLevel(LeaderLevel.HT_XU);
+        request.setLeaderLevel("HT_XU");
         request.setParishId(parishId);
         Parish parish = parish(parishId);
         Leader created = leader(leaderId, parish);
         Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
 
         when(leaderValidationHelper.getRequiredAuditActor(authentication)).thenReturn("LEADER1");
+        when(leaderLevelService.requireExistingOrNull(org.mockito.ArgumentMatchers.eq("HT_XU"), org.mockito.ArgumentMatchers.eq("Cấp độ"), any())).thenReturn("HT_XU");
         when(leaderValidationHelper.requireExistingParish(parishId)).thenReturn(parish);
         when(leaderValidationHelper.splitFullName("Nguyen An"))
                 .thenReturn(new LeaderValidationHelper.LeaderNameParts("An", "Nguyen"));
         when(leaderRepository.save(argThat(entity ->
                 "leader@example.com".equals(entity.getEmail())
                         && LeaderGender.NAM == entity.getGender()
-                        && LeaderLevel.HT_XU == entity.getLeaderLevel()
+                        && "HT_XU".equals(entity.getLeaderLevel())
                         && "An".equals(entity.getFirstName())
                         && "Nguyen".equals(entity.getLastName())
                         && "https://cdn.example.com/leaders/an.jpg".equals(entity.getImageUrl())
@@ -176,7 +179,7 @@ class LeaderServiceTest {
         request.setImageUrl("https://cdn.example.com/leaders/binh.jpg");
         Leader existing = leader(leaderId, parish(parishId));
         existing.setEmail("leader@example.com");
-        existing.setLeaderLevel(LeaderLevel.HLV_I);
+        existing.setLeaderLevel("HLV_I");
         Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
         when(leaderValidationHelper.requireExistingLeaderWithParish(leaderId)).thenReturn(existing, existing);
         when(leaderValidationHelper.getRequiredAuditActor(authentication)).thenReturn("LEADER1");
@@ -188,7 +191,7 @@ class LeaderServiceTest {
 
         LeaderResponse result = leaderService.update(leaderId, request, authentication);
 
-        assertEquals(LeaderLevel.HLV_I, result.getLeaderLevel());
+        assertEquals("HLV_I", result.getLeaderLevel());
         assertEquals(LeaderGender.NU, result.getGender());
         assertEquals(existing.getFirstName(), result.getFirstName());
         assertEquals(existing.getLastName(), result.getLastName());
@@ -231,7 +234,7 @@ class LeaderServiceTest {
         leader.setHolyName("Phaolo");
         leader.setFirstName("An");
         leader.setLastName("Nguyen");
-        leader.setLeaderLevel(LeaderLevel.HLV_I);
+        leader.setLeaderLevel("HLV_I");
         leader.setGender(LeaderGender.NAM);
         leader.setImageUrl("https://cdn.example.com/leaders/sample.jpg");
         leader.setParish(parish);

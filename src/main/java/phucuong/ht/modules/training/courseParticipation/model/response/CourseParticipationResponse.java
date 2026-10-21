@@ -30,6 +30,10 @@ public class CourseParticipationResponse {
     private String review;
     private Boolean eligible;
     private String exceptionReason;
+    // Cấp hiện tại của huynh trưởng, cấp độ đạt được của loại khóa và cấp đạt được do người duyệt chọn (hồ sơ ngoại lệ).
+    private String leaderLevel;
+    private String courseResultingLevel;
+    private String targetLevel;
     private OffsetDateTime parishSubmittedAt;
     private WorkflowApprovalStatus approvalStatus;
     // Người gửi đăng ký (dùng để quyết định ai được thu hồi) và đơn vị của huynh trưởng.

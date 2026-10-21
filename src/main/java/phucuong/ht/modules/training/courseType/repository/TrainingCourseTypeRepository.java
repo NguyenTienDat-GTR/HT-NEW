@@ -4,7 +4,6 @@ import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Repository;
 import phucuong.ht.common.repository.BaseRepo;
-import phucuong.ht.modules.leader.model.enums.LeaderLevel;
 import phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType;
 
 import java.util.List;
@@ -54,7 +53,7 @@ public class TrainingCourseTypeRepository extends BaseRepo<TrainingCourseType, S
                                 """,
                         TrainingCourseType.class
                 )
-                .setParameter("none", LeaderLevel.NONE)
+                .setParameter("none", "NONE")
                 .getResultList();
     }
 

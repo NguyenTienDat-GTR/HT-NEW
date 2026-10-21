@@ -58,6 +58,10 @@ public class CourseParticipation extends BaseModel {
 
     private String exceptionReason;
 
+    // Cấp độ đạt được của hồ sơ ngoại lệ do người duyệt chọn; null = theo cấp độ đạt được của loại khóa.
+    @Column(name = "target_level")
+    private String targetLevel;
+
     private OffsetDateTime parishSubmittedAt;
 
     // Trạng thái duyệt đăng ký: khóa giáo hạt do giáo hạt duyệt, khóa giáo phận do giáo phận duyệt.

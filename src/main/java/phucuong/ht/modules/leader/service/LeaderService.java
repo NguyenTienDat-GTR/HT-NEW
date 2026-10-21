@@ -1,5 +1,6 @@
 package phucuong.ht.modules.leader.service;
 
+import phucuong.ht.config.EvictCaches;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
@@ -42,12 +43,14 @@ public class LeaderService {
     private static final String DEANERY_FILTER_FIELD = "parish.deanery.id";
     private static final String PARISH_FILTER_FIELD = "parish.id";
 
+    private final phucuong.ht.modules.leaderLevel.service.LeaderLevelService leaderLevelService;
     private final LeaderRepository leaderRepository;
     private final LeaderValidationHelper leaderValidationHelper;
     private final LeaderScopeHelper leaderScopeHelper;
     private final AccountRepository accountRepository;
     private final RankHistoryRepository rankHistoryRepository;
 
+    @EvictCaches.Analytics
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true),
@@ -76,7 +79,8 @@ public class LeaderService {
             leader.setPhoneNumber(request.getPhoneNumber());
             leader.setImageUrl(request.getImageUrl());
             leader.setGender(request.getGender());
-            leader.setLeaderLevel(request.getLeaderLevel());
+            leader.setLeaderLevel(java.util.Objects.requireNonNullElse(leaderLevelService.requireExistingOrNull(request.getLeaderLevel(), "Cấp độ",
+                    parish.getDeanery() == null || parish.getDeanery().getDiocese() == null ? null : parish.getDeanery().getDiocese().getId()), "NONE"));
             leader.setParish(parish);
             leader.setStatus(Boolean.TRUE);
             OffsetDateTime now = OffsetDateTime.now();
@@ -144,6 +148,7 @@ public class LeaderService {
                 .toList();
     }
 
+    @EvictCaches.Analytics
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true),
@@ -173,6 +178,7 @@ public class LeaderService {
         }
     }
 
+    @EvictCaches.Analytics
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true),

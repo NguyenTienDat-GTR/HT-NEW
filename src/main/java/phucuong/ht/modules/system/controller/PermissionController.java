@@ -21,8 +21,10 @@ public class PermissionController {
 
     private final PermissionManagementService permissionManagementService;
 
-    @GetMapping
-    @PreAuthorize("hasRole('SUPER_ADMIN')"
+    // Xem danh mục quyền (danh sách, chi tiết, taxonomy) dùng chung cho super admin và các admin có quyền
+    // đọc/gán/thu hồi role-permission theo phạm vi (để màn gán quyền cho vai trò hiển thị được danh mục quyền).
+    private static final String CAN_VIEW_PERMISSIONS =
+            "hasRole('SUPER_ADMIN')"
             + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.read.all')"
             + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.read.diocese')"
             + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.read.deanery')"
@@ -34,31 +36,22 @@ public class PermissionController {
             + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.all')"
             + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.diocese')"
             + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.deanery')"
-            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.parish')")
+            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.parish')";
+
+    @GetMapping
+    @PreAuthorize(CAN_VIEW_PERMISSIONS)
     public apiResponse<Page<PermissionResponse>> findAll(BaseSearchRequest request, Authentication authentication) {
         return apiResponse.success("Lấy danh sách quyền thành công", permissionManagementService.findAll(request, authentication));
     }
 
     @GetMapping("/taxonomy")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize(CAN_VIEW_PERMISSIONS)
     public apiResponse<PermissionTaxonomyResponse> taxonomy() {
         return apiResponse.success("Lấy taxonomy quyền thành công", permissionManagementService.taxonomy());
     }
 
     @GetMapping("/{permissionCode}")
-    @PreAuthorize("hasRole('SUPER_ADMIN')"
-            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.read.all')"
-            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.read.diocese')"
-            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.read.deanery')"
-            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.read.parish')"
-            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.all')"
-            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.diocese')"
-            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.deanery')"
-            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.parish')"
-            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.all')"
-            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.diocese')"
-            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.deanery')"
-            + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.parish')")
+    @PreAuthorize(CAN_VIEW_PERMISSIONS)
     public apiResponse<PermissionResponse> findById(@PathVariable String permissionCode, Authentication authentication) {
         return apiResponse.success("Lấy thông tin quyền thành công", permissionManagementService.findById(permissionCode, authentication));
     }
