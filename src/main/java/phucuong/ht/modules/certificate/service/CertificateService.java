@@ -440,6 +440,7 @@ public class CertificateService {
                 .oldCertificateCode(certificate.getOldCertificateCode())
                 .certificateName(certificate.getCertificateName())
                 .leaderId(certificate.getLeader() == null ? null : certificate.getLeader().getId())
+                .leaderHolyName(certificate.getLeader() == null ? null : certificate.getLeader().getHolyName())
                 .leaderFullName(buildFullName(certificate.getLeader()))
                 .courseCode(certificate.getCourse() == null ? null : certificate.getCourse().getCourseCode())
                 .courseName(certificate.getCourse() == null ? null : certificate.getCourse().getCourseName())

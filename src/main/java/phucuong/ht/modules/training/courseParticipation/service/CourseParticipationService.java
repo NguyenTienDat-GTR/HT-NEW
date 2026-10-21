@@ -913,6 +913,7 @@ public class CourseParticipationService {
         return CourseParticipationResponse.builder()
                 .id(participation.getId())
                 .leaderId(participation.getLeader() == null ? null : participation.getLeader().getId())
+                .leaderHolyName(participation.getLeader() == null ? null : participation.getLeader().getHolyName())
                 .leaderFullName(buildFullName(participation.getLeader()))
                 .courseCode(participation.getCourse() == null ? null : participation.getCourse().getCourseCode())
                 .courseName(participation.getCourse() == null ? null : participation.getCourse().getCourseName())

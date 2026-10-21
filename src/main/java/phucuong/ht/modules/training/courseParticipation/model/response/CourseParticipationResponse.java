@@ -17,6 +17,7 @@ import java.util.UUID;
 public class CourseParticipationResponse {
     private String id;
     private UUID leaderId;
+    private String leaderHolyName;
     private String leaderFullName;
     private String courseCode;
     private String courseName;
