@@ -37,7 +37,7 @@ public class globalExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<apiResponse<Void>> handleAccessDenied(AccessDeniedException exception) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(apiResponse.error("Bạn không có quyền truy cập taài nguyên này", errorCode.ACCESS_DENIED.name()));
+                .body(apiResponse.error("Bạn không có quyền truy cập tài nguyên này", errorCode.ACCESS_DENIED.name()));
     }
 
     @ExceptionHandler(EntityNotFoundException.class)
