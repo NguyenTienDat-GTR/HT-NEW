@@ -527,6 +527,9 @@ public class CourseParticipationService {
         BigDecimal totalScore = weightedSum.divide(coefficientSum, 2, java.math.RoundingMode.HALF_UP);
         participation.setTotalScore(totalScore);
         participation.setReview(request.getReview());
+        if (request.getScoreNote() != null) {
+            participation.setScoreNote(commonValidationHelper.normalizeOptionalText(request.getScoreNote()));
+        }
         participation.setUpdatedAt(now);
         participation.setUpdatedBy(actor);
         if (totalScore.compareTo(participation.getCourse().getPassingScore()) >= 0) {
@@ -565,6 +568,26 @@ public class CourseParticipationService {
         }
         publishEvent("training.score.updated", "courseParticipation", participationId, actor, Map.of("score", totalScore));
         certificateRealtimeNotifier.notifyChanged("SCORE_UPDATED", participation.getCourse().getCourseCode(), null);
+        return toResponse(participation);
+    }
+
+    // Lưu riêng ghi chú của hồ sơ: vẫn được khi điểm đã khóa (kể cả chứng nhận đã duyệt/thu hồi),
+    // nhưng không được khi khóa đã kết thúc hoặc bị vô hiệu hóa.
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_DETAIL, allEntries = true)
+    })
+    @Transactional
+    public CourseParticipationResponse updateScoreNote(String participationId, TrainingScoreNoteRequest request, Authentication authentication) {
+        CourseParticipation participation = courseParticipationRepository.findByIdWithLeaderAndCourse(participationId)
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy đăng ký khóa huấn luyện " + participationId));
+        courseActivityGuard.requireActive(participation.getCourse());
+        if (participation.getCourse().getFinishedAt() != null) {
+            throw commonValidationHelper.conflict("Khóa huấn luyện đã kết thúc nên không thể sửa ghi chú");
+        }
+        participation.setScoreNote(commonValidationHelper.normalizeOptionalText(request == null ? null : request.getNote()));
+        participation.setUpdatedAt(OffsetDateTime.now());
+        participation.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người sửa ghi chú"));
         return toResponse(participation);
     }
 
@@ -889,6 +912,7 @@ public class CourseParticipationService {
                         && participation.getTotalScore().compareTo(participation.getCourse().getPassingScore()) >= 0)
                 .result(participation.getResult())
                 .review(participation.getReview())
+                .scoreNote(participation.getScoreNote())
                 .eligible(participation.getEligible())
                 .exceptionReason(participation.getExceptionReason())
                 .leaderLevel(participation.getLeader() == null ? null : participation.getLeader().getLeaderLevel())

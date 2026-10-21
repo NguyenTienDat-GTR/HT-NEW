@@ -543,6 +543,34 @@ class CourseParticipationServiceTest {
     }
 
     @Test
+    void scoreNoteCanBeSavedWhileScoresAreLocked() {
+        courseParticipationService = buildService();
+        TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);
+        course.setScoreLocked(Boolean.TRUE);
+        CourseParticipation participation = pendingParticipation("cp-n", course, "leader-9");
+        when(courseParticipationRepository.findByIdWithLeaderAndCourse("cp-n")).thenReturn(Optional.of(participation));
+        var request = new phucuong.ht.modules.training.courseParticipation.model.request.TrainingScoreNoteRequest();
+        request.setNote("  Vắng buổi cuối  ");
+
+        var response = courseParticipationService.updateScoreNote("cp-n", request, authentication("admin-diocese", "training.participation.score.diocese"));
+
+        assertEquals("Vắng buổi cuối", response.getScoreNote());
+    }
+
+    @Test
+    void scoreNoteRejectedWhenCourseFinished() {
+        courseParticipationService = buildService();
+        TrainingCourse finished = course("SMTL_I", UnitType.DIOCESE);
+        finished.setFinishedAt(java.time.OffsetDateTime.now());
+        CourseParticipation participation = pendingParticipation("cp-f", finished, "leader-9");
+        when(courseParticipationRepository.findByIdWithLeaderAndCourse("cp-f")).thenReturn(Optional.of(participation));
+        var request = new phucuong.ht.modules.training.courseParticipation.model.request.TrainingScoreNoteRequest();
+        request.setNote("x");
+
+        assertThrows(RuntimeException.class, () -> courseParticipationService.updateScoreNote("cp-f", request, authentication("admin-diocese", "training.participation.score.diocese")));
+    }
+
+    @Test
     void scoreShouldRejectWhenScoreEditingIsLocked() {
         courseParticipationService = buildService();
         TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);

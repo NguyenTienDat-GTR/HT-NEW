@@ -446,6 +446,7 @@ public class CertificateService {
                 .courseFinished(certificate.getCourse() != null && certificate.getCourse().getFinishedAt() != null)
                 .totalScore(participation == null ? null : participation.getTotalScore())
                 .passingScore(participation == null || participation.getCourse() == null ? null : participation.getCourse().getPassingScore())
+                .scoreNote(participation == null ? null : participation.getScoreNote())
                 .passed(participation == null || participation.getTotalScore() == null ? null : passed)
                 .approvalReasonRequired(participation != null && participation.getTotalScore() != null && !passed)
                 .result(certificate.getResult())

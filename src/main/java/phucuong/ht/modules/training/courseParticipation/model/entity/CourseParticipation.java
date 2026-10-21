@@ -54,6 +54,10 @@ public class CourseParticipation extends BaseModel {
 
     private String review;
 
+    // Ghi chú nhập ở tab chấm điểm; vẫn sửa được khi điểm đã khóa, không sửa được khi khóa kết thúc hoặc bị vô hiệu hóa.
+    @Column(name = "score_note", columnDefinition = "TEXT")
+    private String scoreNote;
+
     private Boolean eligible;
 
     private String exceptionReason;

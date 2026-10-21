@@ -17,6 +17,7 @@ import phucuong.ht.common.dto.apiResponse;
 import phucuong.ht.modules.training.courseParticipation.model.request.TrainingApprovalRequest;
 import phucuong.ht.modules.training.courseParticipation.model.request.TrainingBulkApprovalRequest;
 import phucuong.ht.modules.training.courseParticipation.model.request.TrainingRegistrationRequest;
+import phucuong.ht.modules.training.courseParticipation.model.request.TrainingScoreNoteRequest;
 import phucuong.ht.modules.training.courseParticipation.model.request.TrainingScoreRequest;
 import phucuong.ht.modules.training.courseParticipation.model.response.CourseParticipationResponse;
 import phucuong.ht.modules.training.courseParticipation.model.response.RegistrationCandidateResponse;
@@ -133,6 +134,16 @@ public class CourseParticipationController {
             Authentication authentication
     ) {
         return apiResponse.success("Duyệt đăng ký cấp giáo phận thành công", courseParticipationService.dioceseApprove(id, request, authentication));
+    }
+
+    @PatchMapping("/participations/{id}/score-note")
+    @PreAuthorize("@courseParticipationAccessEvaluator.canScore(authentication, #id)")
+    public apiResponse<CourseParticipationResponse> updateScoreNote(
+            @PathVariable String id,
+            @Valid @RequestBody TrainingScoreNoteRequest request,
+            Authentication authentication
+    ) {
+        return apiResponse.success("Cập nhật ghi chú thành công", courseParticipationService.updateScoreNote(id, request, authentication));
     }
 
     @PatchMapping("/participations/{id}/score")
