@@ -248,6 +248,12 @@ public abstract class BaseRepo<T extends BaseModel, ID> {
                 continue;
             }
 
+            // Lọc theo năm của một trường ngày: `issueDate:year` = 2026 (hoặc danh sách năm) -> trong khoảng 01/01 - 31/12.
+            if (fieldPath.endsWith(YearFilterPredicate.SUFFIX)) {
+                predicates.add(YearFilterPredicate.build(cb, resolvePath(root, fieldPath.substring(0, fieldPath.length() - YearFilterPredicate.SUFFIX.length())), filterValue));
+                continue;
+            }
+
             Path<?> path = resolvePath(root, fieldPath);
             if (filterValue instanceof Collection<?> collection) {
                 List<Object> converted = new ArrayList<>();
