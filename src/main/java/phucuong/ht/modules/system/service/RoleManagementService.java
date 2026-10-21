@@ -159,7 +159,7 @@ public class RoleManagementService {
     }
 
     private boolean isVisibleRole(Role role) {
-        return Boolean.TRUE.equals(role.getIsSystem()) || "super-admin".equalsIgnoreCase(role.getCreatedBy());
+        return authorizationHelper.isManageableBySuperAdmin(role);
     }
 
     private BaseSearchRequest copyRequest(BaseSearchRequest request) {

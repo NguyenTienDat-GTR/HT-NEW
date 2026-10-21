@@ -18,6 +18,7 @@ import phucuong.ht.common.dto.apiResponse;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.modules.system.model.request.RolePermissionBulkRequest;
+import phucuong.ht.modules.system.model.request.RolePermissionRevokeRequest;
 import phucuong.ht.modules.system.model.request.RolePermissionCreateRequest;
 import phucuong.ht.modules.system.model.request.RolePermissionUpdateRequest;
 import phucuong.ht.modules.system.model.response.PermissionResponse;
@@ -90,6 +91,30 @@ public class RolePermissionController {
             Authentication authentication
     ) {
         return apiResponse.success("Lấy danh sách quyền chưa gán cho vai trò thành công", rolePermissionManagementService.findAssignablePermissions(roleCode, authentication));
+    }
+
+    @PostMapping("/revoke")
+    @PreAuthorize(
+            "@systemAdminAuthorizationHelper.isSuperAdmin(authentication)"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.all')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.diocese')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.deanery')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.parish')"
+    )
+    public apiResponse<Integer> bulkRevoke(@Valid @RequestBody RolePermissionRevokeRequest request, Authentication authentication) {
+        return apiResponse.success("Thu hồi quyền của vai trò thành công", rolePermissionManagementService.bulkRevoke(request, authentication));
+    }
+
+    @GetMapping("/revocable-permissions")
+    @PreAuthorize(
+            "@systemAdminAuthorizationHelper.isSuperAdmin(authentication)"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.all')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.diocese')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.deanery')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.parish')"
+    )
+    public apiResponse<List<PermissionResponse>> findRevocablePermissions(@RequestParam String roleCode, Authentication authentication) {
+        return apiResponse.success("Lấy danh sách quyền có thể thu hồi của vai trò thành công", rolePermissionManagementService.findRevocablePermissions(roleCode, authentication));
     }
 
     @GetMapping("/{id}")

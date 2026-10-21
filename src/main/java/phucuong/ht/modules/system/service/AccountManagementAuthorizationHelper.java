@@ -63,11 +63,8 @@ public class AccountManagementAuthorizationHelper {
             throw validation.forbidden("Tài khoản có vai trò SUPER_ADMIN không được cập nhật từ màn hình quản trị tài khoản");
         }
         if (hasRole(authentication, SUPER_ADMIN)) {
-            boolean onlyDioceseAdmin = accountRoleRepository.findActiveRoleCodesByUsername(target.getUsername()).stream()
-                    .allMatch(ADMIN_DIOCESE::equals);
-            if (!onlyDioceseAdmin || accountRoleRepository.findActiveRoleCodesByUsername(target.getUsername()).isEmpty()
-                    || target.getDiocese() == null) {
-                throw validation.forbidden("SUPER_ADMIN chỉ đượcc quản lý tài khoản ADMIN_DIOCESE");
+            if (!ManagementOwnership.isSuperAdminOwned(target.getCreatedBy())) {
+                throw validation.forbidden("SUPER_ADMIN chỉ được quản lý tài khoản do super-admin tạo");
             }
             return;
         }
@@ -77,6 +74,25 @@ public class AccountManagementAuthorizationHelper {
                 .min((left, right) -> Integer.compare(order(left), order(right)))
                 .orElse(null);
         requireScopedAccess(authentication, target, highestTargetRole);
+    }
+
+    /** Các cấp giáo phận / giáo hạt / giáo xứ chỉ thay đổi tài khoản do chính mình (hoặc cấp mình) tạo. */
+    public void requireOwnedByActorScope(Authentication authentication, Account target) {
+        if (hasRole(authentication, SUPER_ADMIN)) {
+            return;
+        }
+        String username = currentUsername(authentication);
+        if (!ManagementOwnership.isOwnedByActorScope(accountRepository, username, username, target.getCreatedBy())
+                && !ManagementOwnership.isOwnedByActorScope(accountRepository, username, auditActor(authentication), target.getCreatedBy())) {
+            throw validation.forbidden("Chỉ được thay đổi tài khoản do cấp của mình tạo");
+        }
+    }
+
+    private String auditActor(Authentication authentication) {
+        if (authentication != null && authentication.getPrincipal() instanceof AuthUserDetails principal && principal.getLeaderId() != null) {
+            return principal.getLeaderId();
+        }
+        return currentUsername(authentication);
     }
 
     public void requireTargetAccountNotAboveActor(Authentication authentication, Account target) {

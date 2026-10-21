@@ -106,8 +106,28 @@ public class SystemAdminAuthorizationHelper {
         }
     }
 
+    /** SUPER_ADMIN chỉ quản lý vai trò hệ thống hoặc vai trò do super-admin tạo. */
+    public boolean isManageableBySuperAdmin(Role role) {
+        return role != null && (Boolean.TRUE.equals(role.getIsSystem()) || ManagementOwnership.isSuperAdminOwned(role.getCreatedBy()));
+    }
+
+    public void requireManageableBySuperAdmin(Role role) {
+        if (!isManageableBySuperAdmin(role)) {
+            throw commonValidationHelper.forbidden("SUPER_ADMIN chỉ được quản lý vai trò hệ thống hoặc vai trò do super-admin tạo");
+        }
+    }
+
+    /** Các cấp giáo phận / giáo hạt / giáo xứ chỉ quản lý vai trò do chính mình (hoặc cấp mình) tạo. */
+    private void requireRoleOwnedByActorScope(Authentication authentication, Role role) {
+        if (!ManagementOwnership.isOwnedByActorScope(accountRepository, securityUtils.currentUsername(authentication),
+                securityUtils.currentAuditActor(authentication), role == null ? null : role.getCreatedBy())) {
+            throw commonValidationHelper.forbidden("Chỉ được quản lý vai trò do cấp của mình tạo; vai trò khác chỉ được xem");
+        }
+    }
+
     public void requireRoleWriteAccess(Authentication authentication, Role role, String actionCode) {
         if (isSuperAdmin(authentication)) {
+            requireManageableBySuperAdmin(role);
             return;
         }
         if (!hasRoleActionAuthority(authentication, actionCode)) {
@@ -117,6 +137,7 @@ public class SystemAdminAuthorizationHelper {
             throw commonValidationHelper.forbidden("Không được cập nhật vai trò hệ thống");
         }
         requireRoleAtOrBelowActor(authentication, role);
+        requireRoleOwnedByActorScope(authentication, role);
     }
 
     public void requirePermissionAssignableByDioceseAdmin(Permission permission) {
@@ -134,11 +155,13 @@ public class SystemAdminAuthorizationHelper {
 
     public void requireRolePermissionWriteAccess(Authentication authentication, Role role, Permission permission, String authority) {
         if (isSuperAdmin(authentication)) {
+            requireManageableBySuperAdmin(role);
             return;
         }
         if (Boolean.TRUE.equals(role.getIsSystem())) {
             throw commonValidationHelper.forbidden("Chỉ SUPER_ADMIN được thay đổi phân quyền của vai trò hệ thống");
         }
+        requireRoleOwnedByActorScope(authentication, role);
         requireRolePermissionOperationAuthority(authentication, authority);
         requireActorOwnsPermission(authentication, permission);
         requireTargetRoleBelowActor(authentication, role);
@@ -195,6 +218,7 @@ public class SystemAdminAuthorizationHelper {
 
     public void requireRolePermissionReadAccess(Authentication authentication, Role role, Permission permission) {
         if (isSuperAdmin(authentication)) {
+            requireManageableBySuperAdmin(role);
             return;
         }
         int scopeOrder = rolePermissionReadScopeOrder(authentication);
@@ -206,11 +230,19 @@ public class SystemAdminAuthorizationHelper {
     }
 
     public void requireAccountPermissionWriteAccess(Authentication authentication, String username, Permission permission) {
-        if (isSuperAdmin(authentication)) return;
+        if (isSuperAdmin(authentication)) {
+            Account target = accountRepository.findById(username)
+                    .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy tài khoản: " + username));
+            if (!ManagementOwnership.isSuperAdminOwned(target.getCreatedBy())) {
+                throw commonValidationHelper.forbidden("SUPER_ADMIN chỉ được phân quyền cho tài khoản do super-admin tạo");
+            }
+            return;
+        }
         if (accountManagementAuthorizationHelper != null) {
             Account target = accountRepository.findById(username)
                     .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy tài khoản: " + username));
             accountManagementAuthorizationHelper.requireCanManage(authentication, target);
+            accountManagementAuthorizationHelper.requireOwnedByActorScope(authentication, target);
         }
         if (!hasAuthority(authentication, permission.getPermissionCode())) {
             throw commonValidationHelper.forbidden("Không thể gán quyền mà tài khoản hiện tại không sở hữu");

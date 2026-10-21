@@ -37,6 +37,12 @@ public class RolePermissionRepository extends BaseRepo<RolePermission, String> {
         return results.stream().findFirst();
     }
 
+    /** Thu hồi quyền: xóa hẳn bản ghi phân quyền của vai trò. */
+    @Transactional
+    public void deleteAssignment(RolePermission rolePermission) {
+        entityManager.remove(entityManager.contains(rolePermission) ? rolePermission : entityManager.merge(rolePermission));
+    }
+
     public List<String> findPermissionCodesByRoleCode(String roleCode) {
         TypedQuery<String> query = entityManager.createQuery(
                 """

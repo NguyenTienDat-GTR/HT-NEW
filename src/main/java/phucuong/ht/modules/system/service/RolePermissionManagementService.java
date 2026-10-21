@@ -19,6 +19,7 @@ import phucuong.ht.modules.system.model.entity.Role;
 import phucuong.ht.modules.system.model.entity.RolePermission;
 import phucuong.ht.modules.system.model.enums.PermissionEffect;
 import phucuong.ht.modules.system.model.request.RolePermissionBulkRequest;
+import phucuong.ht.modules.system.model.request.RolePermissionRevokeRequest;
 import phucuong.ht.modules.system.model.request.RolePermissionCreateRequest;
 import phucuong.ht.modules.system.model.request.RolePermissionUpdateRequest;
 import phucuong.ht.modules.system.model.response.PermissionResponse;
@@ -139,6 +140,45 @@ public class RolePermissionManagementService {
 
         notifyRolePermissionChanged(request.getRoleCode(), "ROLE_PERMISSION_BULK_ASSIGNED");
         return responses;
+    }
+
+    /** Thu hồi nhiều quyền đã gán cho vai trò: xóa hẳn các bản ghi phân quyền. */
+    @Transactional
+    public int bulkRevoke(RolePermissionRevokeRequest request, Authentication authentication) {
+        Role role = roleRepository.findById(request.getRoleCode())
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy vai trò: " + request.getRoleCode()));
+        int revoked = 0;
+        for (String permissionCode : new LinkedHashSet<>(request.getPermissionCodes())) {
+            RolePermission rolePermission = rolePermissionRepository.findByRoleCodeAndPermissionCode(request.getRoleCode(), permissionCode)
+                    .orElseThrow(() -> commonValidationHelper.notFound("Vai trò chưa được gán quyền: " + permissionCode));
+            authorizationHelper.requireRolePermissionWriteAccess(authentication, role, rolePermission.getPermission(), SystemAdminAuthorizationHelper.ROLE_PERMISSION_REVOKE_DIOCESE);
+            rolePermissionRepository.deleteAssignment(rolePermission);
+            revoked++;
+        }
+        notifyRolePermissionChanged(request.getRoleCode(), "ROLE_PERMISSION_BULK_REVOKED");
+        return revoked;
+    }
+
+    /** Quyền đã gán cho vai trò mà tài khoản hiện tại được phép thu hồi. */
+    @Transactional(readOnly = true)
+    public List<PermissionResponse> findRevocablePermissions(String roleCode, Authentication authentication) {
+        Role role = roleRepository.findById(roleCode)
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy vai trò: " + roleCode));
+        return rolePermissionRepository.findPermissionCodesByRoleCode(roleCode).stream()
+                .map(systemPermissionRepository::findById)
+                .flatMap(java.util.Optional::stream)
+                .filter(permission -> canRevokePermission(authentication, role, permission))
+                .map(this::toPermissionResponse)
+                .toList();
+    }
+
+    private boolean canRevokePermission(Authentication authentication, Role role, Permission permission) {
+        try {
+            authorizationHelper.requireRolePermissionWriteAccess(authentication, role, permission, SystemAdminAuthorizationHelper.ROLE_PERMISSION_REVOKE_DIOCESE);
+            return true;
+        } catch (RuntimeException ignored) {
+            return false;
+        }
     }
 
     @Transactional(readOnly = true)
@@ -344,7 +384,9 @@ public class RolePermissionManagementService {
         return RolePermissionResponse.builder()
                 .id(rolePermission.getId())
                 .roleCode(rolePermission.getRole() == null ? null : rolePermission.getRole().getRoleCode())
+                .roleName(rolePermission.getRole() == null ? null : rolePermission.getRole().getRoleName())
                 .permissionCode(rolePermission.getPermission() == null ? null : rolePermission.getPermission().getPermissionCode())
+                .permissionName(rolePermission.getPermission() == null ? null : rolePermission.getPermission().getPermissionName())
                 .effect(rolePermission.getEffect())
                 .conditions(rolePermission.getConditions())
                 .assignedBy(rolePermission.getAssignedBy())

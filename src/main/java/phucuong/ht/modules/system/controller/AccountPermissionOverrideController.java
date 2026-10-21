@@ -10,6 +10,7 @@ import phucuong.ht.common.dto.apiResponse;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.modules.system.model.request.AccountPermissionOverrideBulkRequest;
+import phucuong.ht.modules.system.model.request.AccountPermissionOverrideRevokeRequest;
 import phucuong.ht.modules.system.model.request.AccountPermissionOverrideCreateRequest;
 import phucuong.ht.modules.system.model.request.AccountPermissionOverrideUpdateRequest;
 import phucuong.ht.modules.system.model.response.AccountPermissionOverrideResponse;
@@ -49,6 +50,16 @@ public class AccountPermissionOverrideController {
             Authentication authentication
     ) {
         return apiResponse.success("Lấy danh sách quyền chưa gán cho tài khoản thành công", service.findAssignablePermissions(username, authentication));
+    }
+
+    @PostMapping("/revoke")
+    public apiResponse<Integer> bulkRevoke(@Valid @RequestBody AccountPermissionOverrideRevokeRequest request, Authentication authentication) {
+        return apiResponse.success("Thu hồi quyền riêng của tài khoản thành công", service.bulkRevoke(request, authentication));
+    }
+
+    @GetMapping("/revocable-permissions")
+    public apiResponse<List<PermissionResponse>> findRevocablePermissions(@RequestParam String username, Authentication authentication) {
+        return apiResponse.success("Lấy danh sách quyền có thể thu hồi của tài khoản thành công", service.findRevocablePermissions(username, authentication));
     }
 
     @GetMapping("/{id}")
