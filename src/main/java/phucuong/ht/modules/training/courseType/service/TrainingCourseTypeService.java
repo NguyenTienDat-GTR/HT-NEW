@@ -131,7 +131,9 @@ public class TrainingCourseTypeService {
         if (request.getRequiredYearsActive() != null) {
             courseType.setRequiredYearsActive(request.getRequiredYearsActive());
         }
-        if (request.getMaxYearsAfterPrerequisite() != null) {
+        if (Boolean.TRUE.equals(request.getClearMaxYearsAfterPrerequisite())) {
+            courseType.setMaxYearsAfterPrerequisite(null);
+        } else if (request.getMaxYearsAfterPrerequisite() != null) {
             courseType.setMaxYearsAfterPrerequisite(request.getMaxYearsAfterPrerequisite());
         }
         if (request.getResultingLevel() != null) {

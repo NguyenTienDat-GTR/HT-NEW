@@ -21,6 +21,9 @@ public class TrainingCourseTypeUpdateRequest {
     @jakarta.validation.constraints.Min(1)
     private Integer maxYearsAfterPrerequisite;
 
+    // true = đặt về không giới hạn (xóa giá trị maxYearsAfterPrerequisite).
+    private Boolean clearMaxYearsAfterPrerequisite;
+
     private String prerequisiteTypeCode;
 
     private String resultingLevel;
