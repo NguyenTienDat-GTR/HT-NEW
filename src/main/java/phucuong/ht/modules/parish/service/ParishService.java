@@ -17,6 +17,10 @@ import phucuong.ht.common.exception.errorCode;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.security.UnitOperationalStatusService;
+import phucuong.ht.common.security.UnitStatusAuditService;
+import phucuong.ht.common.dto.UnitStatusHistoryResponse;
+import phucuong.ht.common.dto.UnitToggleImpactResponse;
+import org.springframework.transaction.annotation.Transactional;
 import phucuong.ht.common.utils.AuditActorNameResolver;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.config.CacheNames;
@@ -58,6 +62,8 @@ public class ParishService {
     private final AuditActorNameResolver auditActorNameResolver;
     @Autowired(required = false)
     private UnitOperationalStatusService unitOperationalStatusService;
+    @Autowired(required = false)
+    private UnitStatusAuditService unitStatusAuditService;
     @Autowired(required = false)
     private ToggleNotificationRecipientResolver toggleNotificationRecipientResolver;
     @Autowired(required = false)
@@ -172,7 +178,9 @@ public class ParishService {
         }
     }
 
+    @Transactional
     @EvictCaches.Analytics
+    @EvictCaches.Leaders
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true),
@@ -186,12 +194,31 @@ public class ParishService {
         requireUnitToggleAllowed(UnitType.PARISH, id);
         Set<String> recipients = toggleNotificationRecipientResolver == null ? Set.of() : toggleNotificationRecipientResolver.byUnit(UnitType.PARISH, id);
         parishValidationHelper.validateToggleConfirmation(request == null ? null : request.getConfirmationText());
+        UnitStatusAuditService.ToggleContext toggleContext = unitStatusAuditService == null ? null
+                : unitStatusAuditService.begin(UnitType.PARISH, id, request == null ? null : request.getReason());
         String auditActor = parishValidationHelper.getRequiredAuditActor(authentication);
         parishRepository.toggleStatus(id, auditActor);
+        if (toggleContext != null) {
+            unitStatusAuditService.finish(toggleContext, UnitType.PARISH, id, auditActor);
+        }
         ParishResponse response = toParishResponse(parishValidationHelper.requireExistingParishWithDeaneryAndDiocese(id));
         notifyUsers(recipients);
         dispatchUnitToggle(recipients, unitLabel("Giáo xứ", response.getName()), Boolean.TRUE.equals(response.getStatus()), auditActor);
         return response;
+    }
+
+    public UnitToggleImpactResponse toggleImpact(UUID id) {
+        if (unitStatusAuditService == null) {
+            throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, errorCode.CONFLICT, "Chưa sẵn sàng tính tác động");
+        }
+        return unitStatusAuditService.impact(UnitType.PARISH, id);
+    }
+
+    public List<UnitStatusHistoryResponse> statusHistory(UUID id, int page, int size) {
+        if (unitStatusAuditService == null) {
+            return List.of();
+        }
+        return unitStatusAuditService.history(UnitType.PARISH, id, page, size);
     }
 
     private void requireUnitOperational(UnitType unitType, UUID id) {
@@ -273,6 +300,9 @@ public class ParishService {
                 .updatedAt(parish.getUpdatedAt())
                 .updatedBy(parish.getUpdatedBy())
                 .status(parish.getStatus())
+                .effectiveStatus(Boolean.TRUE.equals(parish.getStatus())
+                        && parish.getDeanery() != null && Boolean.TRUE.equals(parish.getDeanery().getStatus())
+                        && parish.getDeanery().getDiocese() != null && Boolean.TRUE.equals(parish.getDeanery().getDiocese().getStatus()))
                 .name(parish.getName())
                 .patronSaintDay(parish.getPatronSaintDay())
                 .establishmentDate(parish.getEstablishmentDate())

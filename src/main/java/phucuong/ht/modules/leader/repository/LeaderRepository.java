@@ -81,7 +81,7 @@ public class LeaderRepository extends BaseRepo<Leader, UUID> {
                 join fetch l.parish p
                 join fetch p.deanery d
                 join fetch d.diocese di
-                where l.status = true
+                where l.status = true and p.status = true and d.status = true and di.status = true
                 """);
         if (dioceseId != null) jpql.append(" and di.id = :dioceseId");
         if (deaneryId != null) jpql.append(" and d.id = :deaneryId");

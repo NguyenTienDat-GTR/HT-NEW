@@ -15,6 +15,8 @@ public class AnalyticsFilterRequest {
     @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) private LocalDate toDate;
     private String timeBucket = "month";
     private String groupBy;
+    // Mặc định số liệu hiện tại (đơn vị, nhân sự) chỉ tính đơn vị đang hiệu lực; số liệu sự kiện lịch sử luôn đầy đủ.
+    private boolean includeInactiveUnits = false;
     public TimeBucket resolvedTimeBucket() { return TimeBucket.from(timeBucket); }
     public void validate() {
         resolvedTimeBucket();

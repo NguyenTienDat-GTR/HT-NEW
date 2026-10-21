@@ -62,6 +62,8 @@ public class ExecutiveBoardAssignmentService {
     private final CommonValidationHelper commonValidationHelper;
     private final securityUtils securityUtils;
     private final AuditActorNameResolver auditActorNameResolver;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private phucuong.ht.common.security.UnitOperationalStatusService unitOperationalStatusService;
 
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.EXECUTIVE_ASSIGNMENT_LIST, allEntries = true),
@@ -82,6 +84,10 @@ public class ExecutiveBoardAssignmentService {
         enforceUnitType(position, request.getUnitType());
         ScopeData scopeData = resolveScopeData(request.getUnitType(), request.getUnitId());
         enforceTargetScope(authentication, request.getUnitType(), scopeData, "create");
+        // Đóng băng: không gán chức vụ mới trong đơn vị đang bị khóa; kết thúc nhiệm kì (toggle) vẫn được phép.
+        if (unitOperationalStatusService != null) {
+            unitOperationalStatusService.requireUnitOperational(request.getUnitType(), request.getUnitId());
+        }
         enforceLeaderMembership(leader, request.getUnitType(), request.getUnitId());
         enforceUniqueness(request.getUnitType(), request.getUnitId(), request.getPositionCode(), null);
 

@@ -27,6 +27,8 @@ POST /api/certificates/{certificateCode}/approve|200|401|403|400|404|409
 POST /api/deaneries|200|401|403|400|404|409
 GET /api/deaneries|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
 GET /api/deaneries/{id}|200|401|403|400|404|N/A: read-only endpoint does not mutate state
+GET /api/deaneries/{id}/status-history|200|401|403|400|404|N/A: read-only endpoint does not mutate state
+GET /api/deaneries/{id}/toggle-impact|200|401|403|400|404|N/A: read-only endpoint does not mutate state
 PUT /api/deaneries/{id}|200|401|403|400|404|409
 PATCH /api/deaneries/{id}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict
 
@@ -34,6 +36,8 @@ PATCH /api/deaneries/{id}/toggle-status|200|401|403|400|404|N/A: status change h
 POST /api/dioceses|200|401|403|400|N/A: create does not reference an existing diocese|409
 GET /api/dioceses|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
 GET /api/dioceses/{id}|200|401|403|400|404|N/A: read-only endpoint does not mutate state
+GET /api/dioceses/{id}/status-history|200|401|403|400|404|N/A: read-only endpoint does not mutate state
+GET /api/dioceses/{id}/toggle-impact|200|401|403|400|404|N/A: read-only endpoint does not mutate state
 PUT /api/dioceses/{id}|200|401|403|400|404|409
 PATCH /api/dioceses/{id}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict
 
@@ -63,6 +67,8 @@ PATCH /api/system/notifications/{id}/read|200|401|403|N/A: notification id is an
 POST /api/parishes|200|401|403|400|404|409
 GET /api/parishes|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
 GET /api/parishes/{id}|200|401|403|400|404|N/A: read-only endpoint does not mutate state
+GET /api/parishes/{id}/status-history|200|401|403|400|404|N/A: read-only endpoint does not mutate state
+GET /api/parishes/{id}/toggle-impact|200|401|403|400|404|N/A: read-only endpoint does not mutate state
 PUT /api/parishes/{id}|200|401|403|400|404|409
 PATCH /api/parishes/{id}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict
 

@@ -85,6 +85,8 @@ public class CourseParticipationService {
     private final TrainingNotificationService trainingNotificationService;
     private final LeaderLevelService leaderLevelService;
     private final CourseActivityGuard courseActivityGuard;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private phucuong.ht.common.security.UnitOperationalStatusService unitOperationalStatusService;
 
     @Transactional(readOnly = true)
     public Page<CourseParticipationResponse> findAll(BaseSearchRequest request, Authentication authentication) {
@@ -201,6 +203,10 @@ public class CourseParticipationService {
                 throw commonValidationHelper.validationError("Chỉ được đăng ký Huynh Trưởng đang hoạt động");
             }
             requireLeaderWithinSender(leader, senderType, senderId);
+            // Đóng băng: không đăng ký mới cho huynh trưởng thuộc giáo xứ đang bị khóa (hồ sơ đã có vẫn được hoàn tất).
+            if (unitOperationalStatusService != null && leader.getParish() != null) {
+                unitOperationalStatusService.requireUnitOperational(UnitType.PARISH, leader.getParish().getId());
+            }
             if (senderType != UnitType.PARISH) {
                 requireParishWithinCourseScope(course, leader.getParish());
             }

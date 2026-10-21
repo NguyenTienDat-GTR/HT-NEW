@@ -19,6 +19,8 @@ public class DeaneryResponse {
     private final String createdByName;
     private final String updatedByName;
     private final Boolean status;
+    // Trạng thái hiệu lực: false nếu chính giáo hạt hoặc giáo phận cha đang bị tắt.
+    private final Boolean effectiveStatus;
     private final String name;
     private final LocalDate patronSaintDay;
     private final LocalDate establishmentDate;

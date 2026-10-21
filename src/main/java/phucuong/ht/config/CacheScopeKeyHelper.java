@@ -49,12 +49,25 @@ public class CacheScopeKeyHelper {
             Object timeBucket,
             Object groupBy
     ) {
+        return analyticsKey(authentication, endpoint, fromDate, toDate, timeBucket, groupBy, false);
+    }
+
+    public String analyticsKey(
+            Authentication authentication,
+            String endpoint,
+            Object fromDate,
+            Object toDate,
+            Object timeBucket,
+            Object groupBy,
+            Object includeInactiveUnits
+    ) {
         return authSignature(authentication)
                 + "|endpoint=" + Objects.toString(endpoint, "")
                 + "|fromDate=" + Objects.toString(fromDate, "")
                 + "|toDate=" + Objects.toString(toDate, "")
                 + "|timeBucket=" + Objects.toString(timeBucket, "month")
-                + "|groupBy=" + Objects.toString(groupBy, "");
+                + "|groupBy=" + Objects.toString(groupBy, "")
+                + "|includeInactiveUnits=" + Objects.toString(includeInactiveUnits, "false");
     }
 
     private String authSignature(Authentication authentication) {

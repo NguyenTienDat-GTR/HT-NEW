@@ -130,7 +130,7 @@ public class CertificateService {
     @Transactional
     public CertificateResponse revoke(String certificateCode, CertificateRevokeRequest request, Authentication authentication) {
         Certificate certificate = requireCertificate(certificateCode);
-        courseActivityGuard.requireActive(certificate.getCourse());
+        courseActivityGuard.requireCourseEnabled(certificate.getCourse());
         String reason = commonValidationHelper.normalizeOptionalText(request == null ? null : request.getReason());
         if (reason == null) {
             throw commonValidationHelper.validationError("Phải nhập lý do khi thu hồi chứng nhận");
