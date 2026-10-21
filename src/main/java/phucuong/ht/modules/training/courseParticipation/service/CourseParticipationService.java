@@ -874,10 +874,11 @@ public class CourseParticipationService {
                 .orElse(true);
     }
 
-    // Phải đạt khóa tiên quyết, và năm tổ chức khóa này - năm đạt khóa tiên quyết >= số năm hoạt động của khóa.
+    // Phải đạt khóa tiên quyết, và năm tổ chức khóa này - năm đạt khóa tiên quyết GẦN NHẤT >= số năm hoạt động của khóa
+    // (áp dụng cho cả khóa có và không có chứng nhận). Ví dụ khóa cấp 2 tổ chức 2026 yêu cầu 2 năm: lần đạt cấp 1 gần nhất phải từ 2024 trở về trước.
     private boolean meetsPrerequisite(Leader leader, TrainingCourse course, TrainingCourseType prerequisite) {
         Optional<Integer> achievedYear = courseParticipationRepository
-                .findEarliestCompletedYearByLeaderAndCourseType(leader.getId(), prerequisite.getTypeCode());
+                .findLatestCompletedYearByLeaderAndCourseType(leader.getId(), prerequisite.getTypeCode());
         if (achievedYear.isEmpty()) {
             return false;
         }

@@ -72,8 +72,9 @@ public class CourseParticipationRepository extends BaseRepo<CourseParticipation,
         return count != null && count > 0;
     }
 
-    // Năm sớm nhất huynh trưởng đạt khóa thuộc loại này: ưu tiên năm duyệt chứng chỉ, nếu thiếu thì lấy năm tổ chức/kết thúc khóa.
-    public Optional<Integer> findEarliestCompletedYearByLeaderAndCourseType(UUID leaderId, String typeCode) {
+    // Năm đạt GẦN NHẤT của huynh trưởng ở khóa thuộc loại này: ưu tiên năm duyệt chứng nhận, nếu thiếu (khóa không cấp chứng nhận)
+    // thì lấy năm tổ chức/kết thúc khóa.
+    public Optional<Integer> findLatestCompletedYearByLeaderAndCourseType(UUID leaderId, String typeCode) {
         List<Integer> years = entityManager.createQuery(
                         """
                                 select coalesce(
@@ -90,7 +91,7 @@ public class CourseParticipationRepository extends BaseRepo<CourseParticipation,
                 .setParameter("leaderId", leaderId)
                 .setParameter("typeCode", typeCode)
                 .getResultList();
-        return years.stream().filter(java.util.Objects::nonNull).min(Integer::compareTo);
+        return years.stream().filter(java.util.Objects::nonNull).max(Integer::compareTo);
     }
 
     public List<CourseParticipation> findAllByCourseCode(String courseCode) {

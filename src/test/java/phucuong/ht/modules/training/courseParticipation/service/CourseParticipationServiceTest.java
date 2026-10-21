@@ -571,6 +571,29 @@ class CourseParticipationServiceTest {
     }
 
     @Test
+    void prerequisiteYearsAreCountedFromTheLatestAchievedYear() throws Exception {
+        courseParticipationService = buildService();
+        TrainingCourse course = course("SMTL_II", UnitType.DIOCESE);
+        course.setHostYear(2026);
+        course.setYearsActive(2);
+        phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType prerequisite = new phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType();
+        prerequisite.setTypeCode("SMTL_I");
+        course.getCourseType().setPrerequisiteType(prerequisite);
+        phucuong.ht.modules.leader.model.entity.Leader leader = new phucuong.ht.modules.leader.model.entity.Leader();
+        leader.setId(java.util.UUID.randomUUID());
+        var method = CourseParticipationService.class.getDeclaredMethod("isEligible", phucuong.ht.modules.leader.model.entity.Leader.class, TrainingCourse.class);
+        method.setAccessible(true);
+
+        // Lần đạt gần nhất là 2024: 2026 - 2024 = 2 >= 2 nên đủ điều kiện.
+        when(courseParticipationRepository.findLatestCompletedYearByLeaderAndCourseType(leader.getId(), "SMTL_I")).thenReturn(Optional.of(2024));
+        org.junit.jupiter.api.Assertions.assertTrue((Boolean) method.invoke(courseParticipationService, leader, course));
+
+        // Lần đạt gần nhất là 2025 (dù trước đó đạt từ 2020): 2026 - 2025 = 1 < 2 nên chưa đủ.
+        when(courseParticipationRepository.findLatestCompletedYearByLeaderAndCourseType(leader.getId(), "SMTL_I")).thenReturn(Optional.of(2025));
+        org.junit.jupiter.api.Assertions.assertFalse((Boolean) method.invoke(courseParticipationService, leader, course));
+    }
+
+    @Test
     void scoreShouldRejectWhenScoreEditingIsLocked() {
         courseParticipationService = buildService();
         TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);
