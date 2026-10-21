@@ -262,7 +262,12 @@ class TrainingCourseUpdateScopeTest {
                 notificationRecipientResolver,
                 accountRepository,
                 domainEventPublisher,
-                accountRoleRepository
+                accountRoleRepository,
+                org.mockito.Mockito.mock(phucuong.ht.modules.training.trainingCourse.service.CourseFinishService.class),
+                org.mockito.Mockito.mock(phucuong.ht.modules.certificate.service.CertificateLifecycleService.class),
+                org.mockito.Mockito.mock(phucuong.ht.modules.certificate.repository.CertificateRepository.class),
+                org.mockito.Mockito.mock(phucuong.ht.modules.training.CourseActivityGuard.class),
+                org.mockito.Mockito.mock(phucuong.ht.modules.certificate.service.CertificateRealtimeNotifier.class)
         );
     }
 
