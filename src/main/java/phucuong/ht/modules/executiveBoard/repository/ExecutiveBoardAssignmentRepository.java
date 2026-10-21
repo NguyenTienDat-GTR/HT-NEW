@@ -96,6 +96,33 @@ public class ExecutiveBoardAssignmentRepository extends BaseRepo<ExecutiveBoardA
         return count != null && count > 0;
     }
 
+    /**
+     * Phân công đang hiệu lực của một đơn vị: đang bật và chưa kết thúc (kèm huynh trưởng, giáo xứ, giáo hạt),
+     * mới bắt đầu nhất đứng trước.
+     */
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<ExecutiveBoardAssignment> findCurrentByUnit(UnitType unitType, UUID unitId) {
+        return entityManager.createQuery(
+                        """
+                                select e
+                                from ExecutiveBoardAssignment e
+                                join fetch e.position
+                                join fetch e.leader l
+                                left join fetch l.parish p
+                                left join fetch p.deanery
+                                where e.unitType = :unitType
+                                  and e.unitId = :unitId
+                                  and e.status = true
+                                  and (e.endDate is null or e.endDate >= current_date)
+                                order by e.startDate desc nulls last
+                                """,
+                        ExecutiveBoardAssignment.class
+                )
+                .setParameter("unitType", unitType)
+                .setParameter("unitId", unitId)
+                .getResultList();
+    }
+
     public Optional<AuditScopeContext> findScopeById(UUID id) {
         return findByIdWithRelations(id).map(assignment -> AuditScopeContext.builder()
                 .unitType(assignment.getUnitType())

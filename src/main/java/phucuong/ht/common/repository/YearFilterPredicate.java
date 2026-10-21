@@ -22,6 +22,7 @@ import java.util.List;
 final class YearFilterPredicate {
 
     static final String SUFFIX = ":year";
+    static final String OVERLAP_SUFFIX = ":overlapYear";
     private static final ZoneOffset VIETNAM = ZoneOffset.ofHours(7);
 
     private YearFilterPredicate() {
@@ -48,6 +49,28 @@ final class YearFilterPredicate {
             }
         }
         return ranges.size() == 1 ? ranges.get(0) : cb.or(ranges.toArray(Predicate[]::new));
+    }
+
+    /**
+     * Khoảng ngày [start, end] giao với năm lọc: start trống hoặc trước hết năm, end trống hoặc không trước đầu năm.
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    static Predicate buildOverlap(CriteriaBuilder cb, Path<?> startPath, Path<?> endPath, Object filterValue) {
+        Collection<?> values = filterValue instanceof Collection<?> collection ? collection : List.of(filterValue);
+        if (values.isEmpty()) {
+            throw invalid("Danh sách năm lọc đang trống");
+        }
+        if (!LocalDate.class.equals(startPath.getJavaType()) || !LocalDate.class.equals(endPath.getJavaType())) {
+            throw invalid("Chỉ lọc năm theo khoảng ngày trên trường kiểu ngày");
+        }
+        List<Predicate> overlaps = new ArrayList<>();
+        for (Object value : values) {
+            int year = parseYear(value);
+            overlaps.add(cb.and(
+                    cb.or(cb.isNull(startPath), cb.lessThanOrEqualTo((Expression) startPath, LocalDate.of(year, 12, 31))),
+                    cb.or(cb.isNull(endPath), cb.greaterThanOrEqualTo((Expression) endPath, LocalDate.of(year, 1, 1)))));
+        }
+        return overlaps.size() == 1 ? overlaps.get(0) : cb.or(overlaps.toArray(Predicate[]::new));
     }
 
     static int parseYear(Object value) {

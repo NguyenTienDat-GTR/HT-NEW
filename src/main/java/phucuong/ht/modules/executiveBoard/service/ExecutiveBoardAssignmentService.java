@@ -24,7 +24,6 @@ import phucuong.ht.modules.diocese.model.entity.Diocese;
 import phucuong.ht.modules.diocese.repository.DioceseRepository;
 import phucuong.ht.modules.executiveBoard.model.entity.ExecutiveBoardAssignment;
 import phucuong.ht.modules.executiveBoard.model.request.ExecutiveBoardAssignmentCreateRequest;
-import phucuong.ht.modules.executiveBoard.model.request.ExecutiveBoardAssignmentUpdateRequest;
 import phucuong.ht.modules.executiveBoard.model.response.ExecutiveBoardAssignmentResponse;
 import phucuong.ht.modules.executiveBoard.repository.ExecutiveBoardAssignmentRepository;
 import phucuong.ht.modules.executiveBoard.security.ExecutiveBoardAssignmentAccessEvaluator;
@@ -79,6 +78,7 @@ public class ExecutiveBoardAssignmentService {
         Position position = positionRepository.findById(request.getPositionCode())
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy chức vụ " + request.getPositionCode()));
 
+        enforcePositionActive(position);
         enforceUnitType(position, request.getUnitType());
         ScopeData scopeData = resolveScopeData(request.getUnitType(), request.getUnitId());
         enforceTargetScope(authentication, request.getUnitType(), scopeData, "create");
@@ -155,57 +155,16 @@ public class ExecutiveBoardAssignmentService {
             @CacheEvict(cacheNames = CacheNames.EXECUTIVE_ASSIGNMENT_DETAIL, allEntries = true)
     })
     @Transactional
-    public ExecutiveBoardAssignmentResponse update(UUID id, ExecutiveBoardAssignmentUpdateRequest request, Authentication authentication) {
-        ExecutiveBoardAssignment existing = assignmentRepository.findByIdWithRelations(id)
-                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy phân công chức vụ " + id));
-        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật phân công chức vụ");
-
-        UnitType targetUnitType = request.getUnitType() == null ? existing.getUnitType() : request.getUnitType();
-        UUID targetUnitId = request.getUnitId() == null ? existing.getUnitId() : request.getUnitId();
-        String targetPositionCode = request.getPositionCode() == null ? existing.getPosition().getPositionCode() : request.getPositionCode();
-        UUID targetLeaderId = request.getLeaderId() == null ? existing.getLeader().getId() : request.getLeaderId();
-
-        validateRequest(targetUnitType, targetUnitId, targetLeaderId, targetPositionCode);
-        LocalDate targetStartDate = request.getStartDate() == null ? existing.getStartDate() : request.getStartDate();
-        validateDateRange(targetStartDate, request.getEndDate());
-        Leader leader = leaderRepository.findByIdWithParish(targetLeaderId)
-                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy Huynh Trưởng " + targetLeaderId));
-        Position position = positionRepository.findById(targetPositionCode)
-                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy chức vụ " + targetPositionCode));
-
-        enforceUnitType(position, targetUnitType);
-        ScopeData scopeData = resolveScopeData(targetUnitType, targetUnitId);
-        enforceTargetScope(authentication, targetUnitType, scopeData, "update");
-        enforceLeaderMembership(leader, targetUnitType, targetUnitId);
-        enforceUniqueness(targetUnitType, targetUnitId, targetPositionCode, id);
-
-        existing.setUnitType(targetUnitType);
-        existing.setUnitId(targetUnitId);
-        existing.setLeader(leader);
-        existing.setPosition(position);
-        existing.setDiocese(scopeData.diocese());
-        existing.setDeanery(scopeData.deanery());
-        existing.setParish(scopeData.parish());
-        if (request.getStartDate() != null) {
-            existing.setStartDate(request.getStartDate());
-        }
-        if (request.getEndDate() != null || request.getEndDate() == null) {
-            existing.setEndDate(request.getEndDate());
-        }
-        existing.setUpdatedAt(OffsetDateTime.now());
-        existing.setUpdatedBy(actor);
-        assignmentRepository.save(existing);
-        return toDetailResponse(assignmentRepository.findByIdWithRelations(existing.getId()).orElse(existing));
-    }
-
-    @Caching(evict = {
-            @CacheEvict(cacheNames = CacheNames.EXECUTIVE_ASSIGNMENT_LIST, allEntries = true),
-            @CacheEvict(cacheNames = CacheNames.EXECUTIVE_ASSIGNMENT_DETAIL, allEntries = true)
-    })
-    @Transactional
     public ExecutiveBoardAssignmentResponse toggleStatus(UUID id, StatusToggleRequest request, Authentication authentication) {
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái phân công chức vụ");
+        ExecutiveBoardAssignment existing = assignmentRepository.findByIdWithRelations(id)
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy phân công chức vụ " + id));
+        if (!Boolean.TRUE.equals(existing.getStatus())) {
+            // Bật lại phân công: chức vụ phải còn hoạt động và chưa có huynh trưởng khác giữ chức vụ này.
+            enforcePositionActive(existing.getPosition());
+            enforceUniqueness(existing.getUnitType(), existing.getUnitId(), existing.getPosition().getPositionCode(), id);
+        }
         assignmentRepository.toggleStatus(id, actor);
         return toDetailResponse(assignmentRepository.findByIdWithRelations(id)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy phân công chức vụ " + id)));
@@ -225,6 +184,12 @@ public class ExecutiveBoardAssignmentService {
     private void validateDateRange(java.time.LocalDate startDate, java.time.LocalDate endDate) {
         if (startDate != null && endDate != null && endDate.isBefore(startDate)) {
             throw commonValidationHelper.validationError("Ngày kết thúc không được trước ngày bắt đầu");
+        }
+    }
+
+    private void enforcePositionActive(Position position) {
+        if (!Boolean.TRUE.equals(position.getStatus())) {
+            throw commonValidationHelper.validationError("Chức vụ đang bị vô hiệu hóa, không thể phân công");
         }
     }
 
@@ -280,7 +245,7 @@ public class ExecutiveBoardAssignmentService {
 
     private void enforceUniqueness(UnitType unitType, UUID unitId, String positionCode, UUID excludedId) {
         if (assignmentRepository.existsActiveCurrentAssignment(unitType, unitId, positionCode, excludedId)) {
-            throw commonValidationHelper.conflict("Mỗi chức vụ chỉ được gán cho một Huynh Trưởng trong cùng đơn vị");
+            throw commonValidationHelper.conflict("Chức vụ này đang có người được phân công. Hãy vô hiệu hóa phân công hiện tại trước khi phân công người khác");
         }
     }
 

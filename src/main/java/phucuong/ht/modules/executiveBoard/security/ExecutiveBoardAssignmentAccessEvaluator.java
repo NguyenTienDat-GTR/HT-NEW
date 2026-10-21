@@ -51,14 +51,6 @@ public class ExecutiveBoardAssignmentAccessEvaluator {
         return hasScopedAccess(authentication, id, "read");
     }
 
-    /**
-     * Cần quyền cập nhật ở cấp hiện tại của phân công và, nếu đổi cấp, cả ở cấp mới.
-     */
-    public boolean canUpdate(Authentication authentication, UUID id, UnitType targetType) {
-        return hasScopedAccess(authentication, id, "update")
-                && (targetType == null || hasAuthorityForTarget(authentication, targetType, "update"));
-    }
-
     public boolean canToggle(Authentication authentication, UUID id) {
         return hasScopedAccess(authentication, id, "update");
     }

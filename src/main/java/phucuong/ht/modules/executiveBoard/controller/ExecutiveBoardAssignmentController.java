@@ -10,7 +10,6 @@ import phucuong.ht.common.dto.apiResponse;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.modules.executiveBoard.model.request.ExecutiveBoardAssignmentCreateRequest;
-import phucuong.ht.modules.executiveBoard.model.request.ExecutiveBoardAssignmentUpdateRequest;
 import phucuong.ht.modules.executiveBoard.model.response.ExecutiveBoardAssignmentResponse;
 import phucuong.ht.modules.executiveBoard.service.ExecutiveBoardAssignmentService;
 
@@ -39,16 +38,6 @@ public class ExecutiveBoardAssignmentController {
     @PreAuthorize("@executiveBoardAssignmentAccessEvaluator.canRead(authentication, #id)")
     public apiResponse<ExecutiveBoardAssignmentResponse> findById(@PathVariable UUID id, Authentication authentication) {
         return apiResponse.success("Lấy phân công chức vụ thành công", assignmentService.findById(id, authentication));
-    }
-
-    @PutMapping("/{id}")
-    @PreAuthorize("@executiveBoardAssignmentAccessEvaluator.canUpdate(authentication, #id, #request.unitType)")
-    public apiResponse<ExecutiveBoardAssignmentResponse> update(
-            @PathVariable UUID id,
-            @Valid @RequestBody ExecutiveBoardAssignmentUpdateRequest request,
-            Authentication authentication
-    ) {
-        return apiResponse.success("Cập nhật phân công chức vụ thành công", assignmentService.update(id, request, authentication));
     }
 
     @PatchMapping("/{id}/toggle-status")

@@ -56,9 +56,6 @@ class ExecutiveBoardAssignmentServiceTest {
                 .getMethod("create", ExecutiveBoardAssignmentCreateRequest.class, org.springframework.security.core.Authentication.class)
                 .isAnnotationPresent(Transactional.class));
         assertTrue(ExecutiveBoardAssignmentService.class
-                .getMethod("update", UUID.class, phucuong.ht.modules.executiveBoard.model.request.ExecutiveBoardAssignmentUpdateRequest.class, org.springframework.security.core.Authentication.class)
-                .isAnnotationPresent(Transactional.class));
-        assertTrue(ExecutiveBoardAssignmentService.class
                 .getMethod("toggleStatus", UUID.class, phucuong.ht.common.model.request.StatusToggleRequest.class, org.springframework.security.core.Authentication.class)
                 .isAnnotationPresent(Transactional.class));
     }
@@ -103,6 +100,7 @@ class ExecutiveBoardAssignmentServiceTest {
         Position position = new Position();
         position.setPositionCode("POS-1");
         position.setPositionType(UnitType.DEANERY);
+        position.setStatus(Boolean.TRUE);
 
         when(leaderRepository.findByIdWithParish(leaderId)).thenReturn(Optional.of(leader));
         when(positionRepository.findById("POS-1")).thenReturn(Optional.of(position));
@@ -120,6 +118,6 @@ class ExecutiveBoardAssignmentServiceTest {
         var authentication = new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
 
         var exception = assertThrows(Exception.class, () -> service.create(request, authentication));
-        assertEquals("Mỗi chức vụ chỉ được gán cho một Huynh Trưởng trong cùng đơn vị", exception.getMessage());
+        assertEquals("Chức vụ này đang có người được phân công. Hãy vô hiệu hóa phân công hiện tại trước khi phân công người khác", exception.getMessage());
     }
 }

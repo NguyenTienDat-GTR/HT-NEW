@@ -254,6 +254,16 @@ public abstract class BaseRepo<T extends BaseModel, ID> {
                 continue;
             }
 
+            // Lọc theo năm trong khoảng ngày: `startDate+endDate:overlapYear` = 2026 -> bản ghi có khoảng ngày giao với năm đó.
+            if (fieldPath.endsWith(YearFilterPredicate.OVERLAP_SUFFIX)) {
+                String[] bounds = fieldPath.substring(0, fieldPath.length() - YearFilterPredicate.OVERLAP_SUFFIX.length()).split("\\+");
+                if (bounds.length != 2) {
+                    throw new IllegalArgumentException("Bộ lọc năm theo khoảng ngày cần dạng trườngBắtĐầu+trườngKếtThúc:overlapYear");
+                }
+                predicates.add(YearFilterPredicate.buildOverlap(cb, resolvePath(root, bounds[0].trim()), resolvePath(root, bounds[1].trim()), filterValue));
+                continue;
+            }
+
             Path<?> path = resolvePath(root, fieldPath);
             if (filterValue instanceof Collection<?> collection) {
                 List<Object> converted = new ArrayList<>();
