@@ -22,4 +22,18 @@ public class AsyncConfig {
         executor.initialize();
         return executor;
     }
+
+    // Executor riêng sinh mã QR chứng nhận, chạy song song với việc chuẩn bị dữ liệu PDF.
+    // Hàng đợi đầy thì luồng gọi tự chạy (CallerRuns) để không bao giờ bỏ sót mã QR của chứng nhận nào.
+    @Bean(name = "certificateQrExecutor")
+    public Executor certificateQrExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(Math.max(2, Runtime.getRuntime().availableProcessors()));
+        executor.setQueueCapacity(500);
+        executor.setThreadNamePrefix("cert-qr-");
+        executor.setRejectedExecutionHandler(new java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy());
+        executor.initialize();
+        return executor;
+    }
 }
