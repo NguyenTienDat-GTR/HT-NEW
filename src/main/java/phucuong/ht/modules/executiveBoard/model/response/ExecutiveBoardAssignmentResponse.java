@@ -22,6 +22,8 @@ public class ExecutiveBoardAssignmentResponse {
     private String leaderHolyName;
     private String leaderFullName;
     private UUID leaderParishId;
+    private String leaderParishName;
+    private String leaderDeaneryName;
     private String positionCode;
     private String positionName;
     private LocalDate startDate;

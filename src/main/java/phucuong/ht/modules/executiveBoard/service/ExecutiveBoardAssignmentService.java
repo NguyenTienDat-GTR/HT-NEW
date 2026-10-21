@@ -353,6 +353,9 @@ public class ExecutiveBoardAssignmentService {
                 .leaderId(assignment.getLeader() == null ? null : assignment.getLeader().getId())
                 .leaderHolyName(assignment.getLeader() == null ? null : assignment.getLeader().getHolyName())
                 .leaderFullName(assignment.getLeader() == null ? null : buildFullName(assignment.getLeader()))
+                .leaderParishName(assignment.getLeader() == null || assignment.getLeader().getParish() == null ? null : assignment.getLeader().getParish().getName())
+                .leaderDeaneryName(assignment.getLeader() == null || assignment.getLeader().getParish() == null || assignment.getLeader().getParish().getDeanery() == null
+                        ? null : assignment.getLeader().getParish().getDeanery().getName())
                 .leaderParishId(assignment.getLeader() == null || assignment.getLeader().getParish() == null ? null : assignment.getLeader().getParish().getId())
                 .positionCode(assignment.getPosition() == null ? null : assignment.getPosition().getPositionCode())
                 .positionName(assignment.getPosition() == null ? null : assignment.getPosition().getPositionName())
