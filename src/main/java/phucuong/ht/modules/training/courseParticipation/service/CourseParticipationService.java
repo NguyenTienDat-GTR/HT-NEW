@@ -527,6 +527,9 @@ public class CourseParticipationService {
         BigDecimal totalScore = weightedSum.divide(coefficientSum, 2, java.math.RoundingMode.HALF_UP);
         participation.setTotalScore(totalScore);
         participation.setReview(request.getReview());
+        if (request.getScoreNote() != null) {
+            participation.setScoreNote(commonValidationHelper.normalizeOptionalText(request.getScoreNote()));
+        }
         participation.setUpdatedAt(now);
         participation.setUpdatedBy(actor);
         if (totalScore.compareTo(participation.getCourse().getPassingScore()) >= 0) {
@@ -565,6 +568,26 @@ public class CourseParticipationService {
         }
         publishEvent("training.score.updated", "courseParticipation", participationId, actor, Map.of("score", totalScore));
         certificateRealtimeNotifier.notifyChanged("SCORE_UPDATED", participation.getCourse().getCourseCode(), null);
+        return toResponse(participation);
+    }
+
+    // Lưu riêng nhận xét kết quả khóa của hồ sơ: vẫn được khi điểm đã khóa (kể cả chứng nhận đã duyệt/thu hồi),
+    // nhưng không được khi khóa đã kết thúc hoặc bị vô hiệu hóa.
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_DETAIL, allEntries = true)
+    })
+    @Transactional
+    public CourseParticipationResponse updateScoreNote(String participationId, TrainingScoreNoteRequest request, Authentication authentication) {
+        CourseParticipation participation = courseParticipationRepository.findByIdWithLeaderAndCourse(participationId)
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy đăng ký khóa huấn luyện " + participationId));
+        courseActivityGuard.requireActive(participation.getCourse());
+        if (participation.getCourse().getFinishedAt() != null) {
+            throw commonValidationHelper.conflict("Khóa huấn luyện đã kết thúc nên không thể sửa nhận xét");
+        }
+        participation.setScoreNote(commonValidationHelper.normalizeOptionalText(request == null ? null : request.getNote()));
+        participation.setUpdatedAt(OffsetDateTime.now());
+        participation.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người sửa nhận xét"));
         return toResponse(participation);
     }
 
@@ -851,15 +874,23 @@ public class CourseParticipationService {
                 .orElse(true);
     }
 
-    // Phải đạt khóa tiên quyết, và năm tổ chức khóa này - năm đạt khóa tiên quyết >= số năm hoạt động của khóa.
+    // Phải đạt khóa tiên quyết, và năm tổ chức khóa này - năm đạt khóa tiên quyết GẦN NHẤT >= số năm hoạt động của khóa
+    // (áp dụng cho cả khóa có và không có chứng nhận). Ví dụ khóa cấp 2 tổ chức 2026 yêu cầu 2 năm: lần đạt cấp 1 gần nhất phải từ 2024 trở về trước.
     private boolean meetsPrerequisite(Leader leader, TrainingCourse course, TrainingCourseType prerequisite) {
         Optional<Integer> achievedYear = courseParticipationRepository
-                .findEarliestCompletedYearByLeaderAndCourseType(leader.getId(), prerequisite.getTypeCode());
+                .findLatestCompletedYearByLeaderAndCourseType(leader.getId(), prerequisite.getTypeCode());
         if (achievedYear.isEmpty()) {
             return false;
         }
         int requiredYears = course.getYearsActive() == null ? 0 : course.getYearsActive();
-        return resolveHostYear(course) - achievedYear.get() >= requiredYears;
+        int yearsSinceAchieved = resolveHostYear(course) - achievedYear.get();
+        if (yearsSinceAchieved < requiredYears) {
+            return false;
+        }
+        // Giới hạn thời hạn: phải đi khóa này trong vòng N năm kể từ lần đạt khóa tiên quyết gần nhất.
+        // Ví dụ đạt khóa tiên quyết 2022, khóa 2026 tối đa 3 năm: 2026 - 2022 = 4 > 3 nên không đủ điều kiện (phải đạt từ 2023).
+        Integer maxYears = course.getCourseType() == null ? null : course.getCourseType().getMaxYearsAfterPrerequisite();
+        return maxYears == null || yearsSinceAchieved <= maxYears;
     }
 
     private int resolveHostYear(TrainingCourse course) {
@@ -889,6 +920,7 @@ public class CourseParticipationService {
                         && participation.getTotalScore().compareTo(participation.getCourse().getPassingScore()) >= 0)
                 .result(participation.getResult())
                 .review(participation.getReview())
+                .scoreNote(participation.getScoreNote())
                 .eligible(participation.getEligible())
                 .exceptionReason(participation.getExceptionReason())
                 .leaderLevel(participation.getLeader() == null ? null : participation.getLeader().getLeaderLevel())

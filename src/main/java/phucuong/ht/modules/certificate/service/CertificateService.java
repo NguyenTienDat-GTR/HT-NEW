@@ -85,6 +85,17 @@ public class CertificateService {
         return new PageImpl<>(page.getContent().stream().map(this::toResponse).toList(), page.getPageable(), page.getTotalElements());
     }
 
+    // Chứng nhận của một huynh trưởng (kể cả đã thu hồi), mới cấp nhất trước. Quyền kiểm tra ở controller theo phạm vi quản lý huynh trưởng.
+    @Cacheable(cacheNames = CacheNames.CERTIFICATE_LIST, key = "@cacheScopeKeyHelper.detailKey(#authentication, 'leader-certificates:' + #leaderId)")
+    public List<CertificateResponse> findByLeader(UUID leaderId, Authentication authentication) {
+        BaseSearchRequest request = new BaseSearchRequest();
+        request.setSize(BaseSearchRequest.MAX_PAGE_SIZE);
+        request.setSortBy("issueDate");
+        request.setSortDirection("DESC");
+        request.setFilters(new LinkedHashMap<>(Map.of("leader.id", leaderId)));
+        return certificateRepository.findAll(request).getContent().stream().map(this::toResponse).toList();
+    }
+
     // Các năm cấp có chứng nhận thật trong phạm vi người xem (mới nhất trước), cho bộ lọc năm cấp:
     // không cắt theo số năm gần đây nên không mất các năm cũ, và tự có năm mới khi có chứng nhận cấp trong năm đó.
     @Transactional(readOnly = true)
@@ -435,6 +446,7 @@ public class CertificateService {
                 .courseFinished(certificate.getCourse() != null && certificate.getCourse().getFinishedAt() != null)
                 .totalScore(participation == null ? null : participation.getTotalScore())
                 .passingScore(participation == null || participation.getCourse() == null ? null : participation.getCourse().getPassingScore())
+                .scoreNote(participation == null ? null : participation.getScoreNote())
                 .passed(participation == null || participation.getTotalScore() == null ? null : passed)
                 .approvalReasonRequired(participation != null && participation.getTotalScore() != null && !passed)
                 .result(certificate.getResult())

@@ -543,6 +543,81 @@ class CourseParticipationServiceTest {
     }
 
     @Test
+    void scoreNoteCanBeSavedWhileScoresAreLocked() {
+        courseParticipationService = buildService();
+        TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);
+        course.setScoreLocked(Boolean.TRUE);
+        CourseParticipation participation = pendingParticipation("cp-n", course, "leader-9");
+        when(courseParticipationRepository.findByIdWithLeaderAndCourse("cp-n")).thenReturn(Optional.of(participation));
+        var request = new phucuong.ht.modules.training.courseParticipation.model.request.TrainingScoreNoteRequest();
+        request.setNote("  Vắng buổi cuối  ");
+
+        var response = courseParticipationService.updateScoreNote("cp-n", request, authentication("admin-diocese", "training.participation.score.diocese"));
+
+        assertEquals("Vắng buổi cuối", response.getScoreNote());
+    }
+
+    @Test
+    void scoreNoteRejectedWhenCourseFinished() {
+        courseParticipationService = buildService();
+        TrainingCourse finished = course("SMTL_I", UnitType.DIOCESE);
+        finished.setFinishedAt(java.time.OffsetDateTime.now());
+        CourseParticipation participation = pendingParticipation("cp-f", finished, "leader-9");
+        when(courseParticipationRepository.findByIdWithLeaderAndCourse("cp-f")).thenReturn(Optional.of(participation));
+        var request = new phucuong.ht.modules.training.courseParticipation.model.request.TrainingScoreNoteRequest();
+        request.setNote("x");
+
+        assertThrows(RuntimeException.class, () -> courseParticipationService.updateScoreNote("cp-f", request, authentication("admin-diocese", "training.participation.score.diocese")));
+    }
+
+    @Test
+    void prerequisiteYearsAreCountedFromTheLatestAchievedYear() throws Exception {
+        courseParticipationService = buildService();
+        TrainingCourse course = course("SMTL_II", UnitType.DIOCESE);
+        course.setHostYear(2026);
+        course.setYearsActive(2);
+        phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType prerequisite = new phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType();
+        prerequisite.setTypeCode("SMTL_I");
+        course.getCourseType().setPrerequisiteType(prerequisite);
+        phucuong.ht.modules.leader.model.entity.Leader leader = new phucuong.ht.modules.leader.model.entity.Leader();
+        leader.setId(java.util.UUID.randomUUID());
+        var method = CourseParticipationService.class.getDeclaredMethod("isEligible", phucuong.ht.modules.leader.model.entity.Leader.class, TrainingCourse.class);
+        method.setAccessible(true);
+
+        // Lần đạt gần nhất là 2024: 2026 - 2024 = 2 >= 2 nên đủ điều kiện.
+        when(courseParticipationRepository.findLatestCompletedYearByLeaderAndCourseType(leader.getId(), "SMTL_I")).thenReturn(Optional.of(2024));
+        org.junit.jupiter.api.Assertions.assertTrue((Boolean) method.invoke(courseParticipationService, leader, course));
+
+        // Lần đạt gần nhất là 2025 (dù trước đó đạt từ 2020): 2026 - 2025 = 1 < 2 nên chưa đủ.
+        when(courseParticipationRepository.findLatestCompletedYearByLeaderAndCourseType(leader.getId(), "SMTL_I")).thenReturn(Optional.of(2025));
+        org.junit.jupiter.api.Assertions.assertFalse((Boolean) method.invoke(courseParticipationService, leader, course));
+    }
+
+    @Test
+    void courseMustBeTakenWithinMaxYearsAfterPrerequisite() throws Exception {
+        courseParticipationService = buildService();
+        TrainingCourse course = course("SMTL_II", UnitType.DIOCESE);
+        course.setHostYear(2026);
+        course.setYearsActive(1);
+        course.getCourseType().setMaxYearsAfterPrerequisite(3);
+        phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType prerequisite = new phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType();
+        prerequisite.setTypeCode("SMTL_I");
+        course.getCourseType().setPrerequisiteType(prerequisite);
+        phucuong.ht.modules.leader.model.entity.Leader leader = new phucuong.ht.modules.leader.model.entity.Leader();
+        leader.setId(java.util.UUID.randomUUID());
+        var method = CourseParticipationService.class.getDeclaredMethod("isEligible", phucuong.ht.modules.leader.model.entity.Leader.class, TrainingCourse.class);
+        method.setAccessible(true);
+
+        // Đạt khóa tiên quyết 2022, khóa 2026 chỉ cho phép trong vòng 3 năm: 2026 - 2022 = 4 > 3 nên không đủ điều kiện.
+        when(courseParticipationRepository.findLatestCompletedYearByLeaderAndCourseType(leader.getId(), "SMTL_I")).thenReturn(Optional.of(2022));
+        org.junit.jupiter.api.Assertions.assertFalse((Boolean) method.invoke(courseParticipationService, leader, course));
+
+        // Đạt lại năm 2023 thì còn trong hạn (2026 - 2023 = 3).
+        when(courseParticipationRepository.findLatestCompletedYearByLeaderAndCourseType(leader.getId(), "SMTL_I")).thenReturn(Optional.of(2023));
+        org.junit.jupiter.api.Assertions.assertTrue((Boolean) method.invoke(courseParticipationService, leader, course));
+    }
+
+    @Test
     void scoreShouldRejectWhenScoreEditingIsLocked() {
         courseParticipationService = buildService();
         TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);

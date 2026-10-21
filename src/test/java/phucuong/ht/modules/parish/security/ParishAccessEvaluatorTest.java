@@ -135,23 +135,35 @@ class ParishAccessEvaluatorTest {
     }
 
     @Test
-    void canToggleShouldDenySuperAdminAndDioceseAdminEvenWithTogglePermission() {
+    void canToggleShouldDenySuperAdminEvenWithTogglePermission() {
         UUID parishId = UUID.randomUUID();
         Authentication superAdmin = authentication(
                 "superadmin",
                 List.of("SUPER_ADMIN"),
                 List.of(ParishAccessEvaluator.TOGGLE_ALL)
         );
+
+        assertFalse(parishAccessEvaluator.canToggle(superAdmin, parishId));
+        verifyNoInteractions(accountRepository, parishRepository);
+    }
+
+    @Test
+    void canToggleShouldAllowDioceseAdminForParishInOwnDioceseOnly() {
+        UUID parishId = UUID.randomUUID();
+        UUID dioceseId = UUID.randomUUID();
+        UUID otherParishId = UUID.randomUUID();
         Authentication dioceseAdmin = authentication(
                 "admin-dio",
                 "LEADER1",
                 List.of("ADMIN_DIOCESE"),
                 List.of(ParishAccessEvaluator.TOGGLE_DIOCESE)
         );
+        when(accountRepository.findActiveDioceseIdByUsername("admin-dio")).thenReturn(Optional.of(dioceseId));
+        when(parishRepository.findDioceseIdByParishId(parishId)).thenReturn(Optional.of(dioceseId));
+        when(parishRepository.findDioceseIdByParishId(otherParishId)).thenReturn(Optional.of(UUID.randomUUID()));
 
-        assertFalse(parishAccessEvaluator.canToggle(superAdmin, parishId));
-        assertFalse(parishAccessEvaluator.canToggle(dioceseAdmin, parishId));
-        verifyNoInteractions(accountRepository, parishRepository);
+        assertTrue(parishAccessEvaluator.canToggle(dioceseAdmin, parishId));
+        assertFalse(parishAccessEvaluator.canToggle(dioceseAdmin, otherParishId));
     }
 
     private Authentication authentication(String username, List<String> roles, List<String> permissions) {

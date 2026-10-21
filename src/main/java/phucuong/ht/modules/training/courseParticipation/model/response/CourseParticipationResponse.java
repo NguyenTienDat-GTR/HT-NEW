@@ -28,6 +28,7 @@ public class CourseParticipationResponse {
     private Boolean passed;
     private CourseResult result;
     private String review;
+    private String scoreNote;
     private Boolean eligible;
     private String exceptionReason;
     // Cấp hiện tại của huynh trưởng, cấp độ đạt được của loại khóa và cấp đạt được do người duyệt chọn (hồ sơ ngoại lệ).

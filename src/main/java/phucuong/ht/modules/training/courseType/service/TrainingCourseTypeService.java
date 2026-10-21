@@ -32,6 +32,7 @@ public class TrainingCourseTypeService {
     private final TrainingCourseRepository trainingCourseRepository;
     private final CommonValidationHelper commonValidationHelper;
     private final LeaderLevelService leaderLevelService;
+    private final phucuong.ht.common.utils.AuditActorNameResolver auditActorNameResolver;
 
     @EvictCaches.Courses
     @EvictCaches.Certificates
@@ -51,6 +52,7 @@ public class TrainingCourseTypeService {
         courseType.setRequiredCurrentLevel(leaderLevelService.requireExistingOrNull(request.getRequiredCurrentLevel(), "Cấp yêu cầu", actorDioceseId(authentication)));
         courseType.setRequiredMinAge(request.getRequiredMinAge());
         courseType.setRequiredYearsActive(request.getRequiredYearsActive());
+        courseType.setMaxYearsAfterPrerequisite(request.getMaxYearsAfterPrerequisite());
         courseType.setResultingLevel(leaderLevelService.requireExistingOrNull(request.getResultingLevel(), "Cấp độ đạt được", actorDioceseId(authentication)));
         courseType.setCertificateShortCode(normalizeText(request.getCertificateShortCode()));
         requireShortCodeForCertified(courseType);
@@ -101,7 +103,11 @@ public class TrainingCourseTypeService {
     }
 
     public TrainingCourseTypeResponse findById(String typeCode, Authentication authentication) {
-        return toResponse(requireType(typeCode));
+        TrainingCourseType courseType = requireType(typeCode);
+        return toResponse(courseType).toBuilder()
+                .createdByName(auditActorNameResolver.resolve(courseType.getCreatedBy()))
+                .updatedByName(auditActorNameResolver.resolve(courseType.getUpdatedBy()))
+                .build();
     }
 
     @EvictCaches.Courses
@@ -129,6 +135,11 @@ public class TrainingCourseTypeService {
         }
         if (request.getRequiredYearsActive() != null) {
             courseType.setRequiredYearsActive(request.getRequiredYearsActive());
+        }
+        if (Boolean.TRUE.equals(request.getClearMaxYearsAfterPrerequisite())) {
+            courseType.setMaxYearsAfterPrerequisite(null);
+        } else if (request.getMaxYearsAfterPrerequisite() != null) {
+            courseType.setMaxYearsAfterPrerequisite(request.getMaxYearsAfterPrerequisite());
         }
         if (request.getResultingLevel() != null) {
             courseType.setResultingLevel(leaderLevelService.requireExistingOrNull(request.getResultingLevel(), "Cấp độ đạt được", actorDioceseId(authentication)));
@@ -227,6 +238,7 @@ public class TrainingCourseTypeService {
                 .requiredCurrentLevel(courseType.getRequiredCurrentLevel())
                 .requiredMinAge(courseType.getRequiredMinAge())
                 .requiredYearsActive(courseType.getRequiredYearsActive())
+                .maxYearsAfterPrerequisite(courseType.getMaxYearsAfterPrerequisite())
                 .prerequisiteTypeCode(courseType.getPrerequisiteType() == null ? null : courseType.getPrerequisiteType().getTypeCode())
                 .prerequisiteTypeName(courseType.getPrerequisiteType() == null ? null : courseType.getPrerequisiteType().getTypeName())
                 .resultingLevel(courseType.getResultingLevel())

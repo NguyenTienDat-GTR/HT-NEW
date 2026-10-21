@@ -14,4 +14,8 @@ public class TrainingScoreRequest {
     private List<ComponentScoreRequest> componentScores;
 
     private String review;
+
+    // Ghi chú kèm khi lưu điểm; null = giữ nguyên, chuỗi rỗng = xóa ghi chú.
+    @jakarta.validation.constraints.Size(max = 1000)
+    private String scoreNote;
 }

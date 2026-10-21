@@ -23,6 +23,8 @@ public class CertificateResponse {
     private Boolean courseFinished;
     private BigDecimal totalScore;
     private BigDecimal passingScore;
+    // Ghi chú của hồ sơ khóa huấn luyện (nhập ở tab chấm điểm).
+    private String scoreNote;
     private Boolean passed;
     private Boolean approvalReasonRequired;
     private String result;

@@ -63,11 +63,15 @@ public class ParishAccessEvaluator {
                 || hasParishScopedAccess(authentication, parishId, UPDATE_PARISH);
     }
 
+    // Admin giáo hạt bật/tắt giáo xứ trong giáo hạt; admin giáo phận bật/tắt giáo xứ trong giáo phận (quyền toggle.diocese).
     public boolean canToggle(Authentication authentication, UUID parishId) {
-        if (!hasRole(authentication, "ADMIN_DEANERY")) {
+        if (hasRole(authentication, "SUPER_ADMIN")) {
             return false;
         }
-        return hasDeaneryScopedAccess(authentication, parishId, TOGGLE_DEANERY);
+        if (hasRole(authentication, "ADMIN_DEANERY") && hasDeaneryScopedAccess(authentication, parishId, TOGGLE_DEANERY)) {
+            return true;
+        }
+        return hasRole(authentication, "ADMIN_DIOCESE") && hasDioceseScopedAccess(authentication, parishId, TOGGLE_DIOCESE);
     }
 
     private boolean hasDioceseScopedAccess(Authentication authentication, UUID parishId, String scopedAuthority) {
