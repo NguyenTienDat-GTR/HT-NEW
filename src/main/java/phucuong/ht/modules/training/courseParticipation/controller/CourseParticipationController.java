@@ -143,7 +143,7 @@ public class CourseParticipationController {
             @Valid @RequestBody TrainingScoreNoteRequest request,
             Authentication authentication
     ) {
-        return apiResponse.success("Cập nhật ghi chú thành công", courseParticipationService.updateScoreNote(id, request, authentication));
+        return apiResponse.success("Cập nhật nhận xét thành công", courseParticipationService.updateScoreNote(id, request, authentication));
     }
 
     @PatchMapping("/participations/{id}/score")

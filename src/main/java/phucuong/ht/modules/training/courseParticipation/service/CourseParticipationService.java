@@ -571,7 +571,7 @@ public class CourseParticipationService {
         return toResponse(participation);
     }
 
-    // Lưu riêng ghi chú của hồ sơ: vẫn được khi điểm đã khóa (kể cả chứng nhận đã duyệt/thu hồi),
+    // Lưu riêng nhận xét kết quả khóa của hồ sơ: vẫn được khi điểm đã khóa (kể cả chứng nhận đã duyệt/thu hồi),
     // nhưng không được khi khóa đã kết thúc hoặc bị vô hiệu hóa.
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.CERTIFICATE_LIST, allEntries = true),
@@ -583,11 +583,11 @@ public class CourseParticipationService {
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy đăng ký khóa huấn luyện " + participationId));
         courseActivityGuard.requireActive(participation.getCourse());
         if (participation.getCourse().getFinishedAt() != null) {
-            throw commonValidationHelper.conflict("Khóa huấn luyện đã kết thúc nên không thể sửa ghi chú");
+            throw commonValidationHelper.conflict("Khóa huấn luyện đã kết thúc nên không thể sửa nhận xét");
         }
         participation.setScoreNote(commonValidationHelper.normalizeOptionalText(request == null ? null : request.getNote()));
         participation.setUpdatedAt(OffsetDateTime.now());
-        participation.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người sửa ghi chú"));
+        participation.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người sửa nhận xét"));
         return toResponse(participation);
     }
 
