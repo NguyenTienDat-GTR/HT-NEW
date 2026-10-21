@@ -322,23 +322,43 @@ public abstract class BaseRepo<T extends BaseModel, ID> {
      * Applies runtime sorting if the request supplies a sort field.
      */
     private void applySort(BaseSearchRequest request, CriteriaBuilder cb, CriteriaQuery<T> query, Root<T> root) {
+        // Thứ tự ưu tiên của từng loại dữ liệu (nếu có) luôn đứng trước thứ tự người dùng chọn.
+        List<jakarta.persistence.criteria.Order> orders = new ArrayList<>(priorityOrders(cb, root));
         String sortBy = normalizeFieldPath(request.getSortBy());
-        if (!StringUtils.hasText(sortBy)) {
-            return;
-        }
+        boolean explicitSort = false;
 
-        // sortBy có thể ghép nhiều trường bằng dấu + (ví dụ firstName+lastName); trường không phải thuộc tính entity thì bỏ qua.
-        boolean desc = "DESC".equalsIgnoreCase(request.getSortDirection());
-        List<jakarta.persistence.criteria.Order> orders = new ArrayList<>();
-        for (String part : sortBy.split("\\+")) {
-            Path<?> path = tryResolvePath(root, part.trim());
-            if (path != null) {
-                orders.add(desc ? cb.desc(path) : cb.asc(path));
+        if (StringUtils.hasText(sortBy)) {
+            // sortBy có thể ghép nhiều trường bằng dấu + (ví dụ firstName+lastName); trường không phải thuộc tính entity thì bỏ qua.
+            boolean desc = "DESC".equalsIgnoreCase(request.getSortDirection());
+            for (String part : sortBy.split("\\+")) {
+                Path<?> path = tryResolvePath(root, part.trim());
+                if (path != null) {
+                    orders.add(desc ? cb.desc(path) : cb.asc(path));
+                    explicitSort = true;
+                }
             }
+        }
+        if (!explicitSort) {
+            orders.addAll(defaultOrders(cb, root));
         }
         if (!orders.isEmpty()) {
             query.orderBy(orders);
         }
+    }
+
+    /**
+     * Thứ tự ưu tiên luôn áp dụng trước mọi cách sắp xếp khác (mặc định: không có). Repository con ghi đè khi cần
+     * đưa một nhóm bản ghi lên đầu danh sách.
+     */
+    protected List<jakarta.persistence.criteria.Order> priorityOrders(CriteriaBuilder cb, Root<T> root) {
+        return List.of();
+    }
+
+    /**
+     * Thứ tự mặc định, chỉ dùng khi request không chỉ định sortBy hợp lệ (mặc định: không có).
+     */
+    protected List<jakarta.persistence.criteria.Order> defaultOrders(CriteriaBuilder cb, Root<T> root) {
+        return List.of();
     }
 
     private Path<?> tryResolvePath(Path<?> root, String fieldPath) {
