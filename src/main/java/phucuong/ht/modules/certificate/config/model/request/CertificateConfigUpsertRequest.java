@@ -10,8 +10,8 @@ import java.util.List;
 @Setter
 public class CertificateConfigUpsertRequest {
 
-    // null = cấu hình chung mặc định.
-    private String courseTypeCode;
+    // Tên cấu hình; trùng tên trong cùng phạm vi sẽ được thêm hậu tố số: "Tên (1)", "Tên (2)"...
+    private String name;
 
     // Khổ giấy (A3/A4/A5/LETTER/LEGAL) và hướng in (PORTRAIT/LANDSCAPE).
     private String paperSize;

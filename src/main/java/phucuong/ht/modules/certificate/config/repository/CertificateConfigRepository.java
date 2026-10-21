@@ -1,48 +1,56 @@
 package phucuong.ht.modules.certificate.config.repository;
 
 import jakarta.persistence.EntityManager;
-import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 import phucuong.ht.common.repository.BaseRepo;
 import phucuong.ht.modules.certificate.config.model.entity.CertificateConfig;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Repository
-public class CertificateConfigRepository extends BaseRepo<CertificateConfig, java.util.UUID> {
+public class CertificateConfigRepository extends BaseRepo<CertificateConfig, UUID> {
 
     public CertificateConfigRepository(EntityManager entityManager) {
         super(entityManager, CertificateConfig.class);
     }
 
-    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    @Transactional(readOnly = true)
+    public List<CertificateConfig> findByScopeKeys(Collection<String> scopeKeys) {
+        return entityManager.createQuery(
+                        "select c from CertificateConfig c where c.scopeKey in :keys order by c.isDefault desc, lower(c.name)",
+                        CertificateConfig.class)
+                .setParameter("keys", scopeKeys)
+                .getResultList();
+    }
+
+    @Transactional(readOnly = true)
     public List<CertificateConfig> findAllConfigs() {
         return entityManager.createQuery(
-                        "select c from CertificateConfig c order by c.courseTypeCode nulls first",
+                        "select c from CertificateConfig c order by c.scopeKey, c.isDefault desc, lower(c.name)",
                         CertificateConfig.class)
                 .getResultList();
     }
 
-    @org.springframework.transaction.annotation.Transactional(readOnly = true)
-    public Optional<CertificateConfig> findByCourseTypeCode(String courseTypeCode) {
+    @Transactional(readOnly = true)
+    public Optional<CertificateConfig> findDefault(String scopeKey) {
         return entityManager.createQuery(
-                        "select c from CertificateConfig c where c.courseTypeCode = :code",
+                        "select c from CertificateConfig c where c.scopeKey = :key and c.isDefault = true",
                         CertificateConfig.class)
-                .setParameter("code", courseTypeCode)
+                .setParameter("key", scopeKey)
                 .setMaxResults(1)
-                .getResultList()
-                .stream().findFirst();
+                .getResultList().stream().findFirst();
     }
 
-    @org.springframework.transaction.annotation.Transactional(readOnly = true)
-    public Optional<CertificateConfig> findDefaultConfig() {
+    @Transactional(readOnly = true)
+    public List<String> findNamesInScope(String scopeKey) {
         return entityManager.createQuery(
-                        "select c from CertificateConfig c where c.courseTypeCode is null",
-                        CertificateConfig.class)
-                .setMaxResults(1)
-                .getResultList()
-                .stream().findFirst();
+                        "select c.name from CertificateConfig c where c.scopeKey = :key", String.class)
+                .setParameter("key", scopeKey)
+                .getResultList();
     }
 
     @Transactional
@@ -57,7 +65,12 @@ public class CertificateConfigRepository extends BaseRepo<CertificateConfig, jav
     }
 
     @Transactional
-    public void remove(java.util.UUID id) {
+    public void flush() {
+        entityManager.flush();
+    }
+
+    @Transactional
+    public void remove(UUID id) {
         CertificateConfig managed = entityManager.find(CertificateConfig.class, id);
         if (managed != null) {
             entityManager.remove(managed);
