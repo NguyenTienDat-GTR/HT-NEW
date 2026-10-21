@@ -11,13 +11,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CertificateQrTest {
 
-    private final CertificateQrService qrService = new CertificateQrService(Runnable::run);
+    private final CertificateQrService qrService = new CertificateQrService(Runnable::run, "https://ht.example.com/");
 
     @Test
     void generatesMatrixAndSvgForCertificateCode() {
         BitMatrix matrix = qrService.generate("GPPC-HTI-2026-1");
         assertTrue(matrix.getWidth() >= 21);
         assertTrue(qrService.toSvgDataUrl(matrix).startsWith("data:image/svg+xml;base64,"));
+    }
+
+    @Test
+    void qrContentIsDetailPageLink() {
+        assertEquals("https://ht.example.com/certificates/GPPC-HTI-2026-1", qrService.contentFor(" GPPC-HTI-2026-1 "));
+        assertEquals("https://ht.example.com/certificates/A%20B", qrService.contentFor("A B"));
     }
 
     @Test

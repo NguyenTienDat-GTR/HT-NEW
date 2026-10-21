@@ -6,8 +6,10 @@ import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.QRCodeWriter;
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.EnumMap;
@@ -24,9 +26,19 @@ public class CertificateQrService {
     public static final int QUIET_ZONE = 2;
 
     private final Executor qrExecutor;
+    private final String frontendBaseUrl;
 
-    public CertificateQrService(@Qualifier("certificateQrExecutor") Executor qrExecutor) {
+    public CertificateQrService(@Qualifier("certificateQrExecutor") Executor qrExecutor,
+                                @Value("${app.frontend.base-url:http://localhost:3000}") String frontendBaseUrl) {
         this.qrExecutor = qrExecutor;
+        this.frontendBaseUrl = frontendBaseUrl == null ? "" : frontendBaseUrl.trim().replaceAll("/+$", "");
+    }
+
+    // Nội dung mã QR: đường dẫn tới trang chi tiết chứng nhận. Máy quét ngoài hệ thống mở được link này
+    // (chưa đăng nhập sẽ phải đăng nhập); trình quét trong hệ thống chỉ cần lấy mã ở cuối đường dẫn.
+    public String contentFor(String certificateCode) {
+        String encoded = URLEncoder.encode(certificateCode.trim(), StandardCharsets.UTF_8).replace("+", "%20");
+        return frontendBaseUrl + "/certificates/" + encoded;
     }
 
     // Sinh mã QR chạy nền song song; người gọi phải chờ (join) trước khi dựng PDF.
@@ -45,7 +57,7 @@ public class CertificateQrService {
         hints.put(EncodeHintType.MARGIN, 0);
         try {
             // Kích thước 1x1 => ZXing trả ma trận đúng số module (không phóng to).
-            return new QRCodeWriter().encode(certificateCode.trim(), BarcodeFormat.QR_CODE, 1, 1, hints);
+            return new QRCodeWriter().encode(contentFor(certificateCode), BarcodeFormat.QR_CODE, 1, 1, hints);
         } catch (Exception e) {
             throw new IllegalStateException("Không thể tạo mã QR cho chứng nhận " + certificateCode + ": " + e.getMessage(), e);
         }
