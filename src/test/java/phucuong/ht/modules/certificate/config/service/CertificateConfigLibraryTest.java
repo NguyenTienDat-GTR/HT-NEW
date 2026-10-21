@@ -18,7 +18,6 @@ import phucuong.ht.modules.certificate.config.repository.CertificateConfigAssign
 import phucuong.ht.modules.certificate.config.repository.CertificateConfigRepository;
 import phucuong.ht.modules.certificate.config.security.CertificateConfigScopeResolver;
 import phucuong.ht.modules.certificate.repository.CertificateRepository;
-import phucuong.ht.modules.leader.model.enums.LeaderLevel;
 import phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType;
 import phucuong.ht.modules.training.courseType.repository.TrainingCourseTypeRepository;
 
@@ -61,7 +60,9 @@ class CertificateConfigLibraryTest {
         CertificateConfigScopeResolver scopeResolver = new CertificateConfigScopeResolver(securityUtils, accountRepository, validationHelper);
         service = new CertificateConfigService(
                 configRepository, assignmentRepository, scopeResolver, mock(CertificateRepository.class),
-                courseTypeRepository, null, validationHelper, securityUtils);
+                courseTypeRepository, null, validationHelper, securityUtils,
+                mock(phucuong.ht.modules.leaderLevel.service.LeaderLevelService.class),
+                mock(phucuong.ht.modules.training.courseParticipation.repository.CourseParticipationRepository.class));
 
         when(configRepository.persist(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(configRepository.merge(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -202,7 +203,7 @@ class CertificateConfigLibraryTest {
     void assignRejectsConfigOutsideVisibleScopes() {
         TrainingCourseType type = new TrainingCourseType();
         type.setTypeCode("T1");
-        type.setResultingLevel(LeaderLevel.HT_I);
+        type.setResultingLevel("HT_I");
         when(courseTypeRepository.findByCodeWithPrerequisite("T1")).thenReturn(Optional.of(type));
         UUID deaneryId = UUID.randomUUID();
         Authentication deanery = deaneryAdmin(deaneryId, UUID.randomUUID());
@@ -220,7 +221,7 @@ class CertificateConfigLibraryTest {
     void assignStoresAssignmentInActorScopeAndNullClearsIt() {
         TrainingCourseType type = new TrainingCourseType();
         type.setTypeCode("T1");
-        type.setResultingLevel(LeaderLevel.HT_I);
+        type.setResultingLevel("HT_I");
         when(courseTypeRepository.findByCodeWithPrerequisite("T1")).thenReturn(Optional.of(type));
         CertificateConfig target = config("Mẫu A", SYSTEM, false);
         when(configRepository.findById(target.getId())).thenReturn(Optional.of(target));

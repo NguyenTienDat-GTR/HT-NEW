@@ -2,7 +2,6 @@ package phucuong.ht.modules.training.courseParticipation.model.response;
 
 import lombok.Builder;
 import lombok.Getter;
-import phucuong.ht.modules.leader.model.enums.LeaderLevel;
 
 import java.time.LocalDate;
 import java.util.UUID;
@@ -16,7 +15,7 @@ public class RegistrationCandidateResponse {
     private LocalDate birthDate;
     private String phoneNumber;
     private String email;
-    private LeaderLevel leaderLevel;
+    private String leaderLevel;
     private UUID parishId;
     private String parishName;
     private UUID deaneryId;

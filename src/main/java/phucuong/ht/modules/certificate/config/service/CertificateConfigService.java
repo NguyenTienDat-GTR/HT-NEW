@@ -20,6 +20,7 @@ import phucuong.ht.modules.certificate.config.model.request.CertificateConfigUps
 import phucuong.ht.modules.certificate.config.model.response.CertificateConfigAssignmentResponse;
 import phucuong.ht.modules.certificate.config.model.response.CertificateConfigResponse;
 import phucuong.ht.modules.certificate.config.model.response.CertificateFieldCatalogItem;
+import phucuong.ht.modules.certificate.config.model.response.CertificatePreviewResponse;
 import phucuong.ht.modules.certificate.config.model.response.CertifiedCourseTypeResponse;
 import phucuong.ht.modules.certificate.config.repository.CertificateConfigAssignmentRepository;
 import phucuong.ht.modules.certificate.config.repository.CertificateConfigRepository;
@@ -28,6 +29,8 @@ import phucuong.ht.modules.certificate.config.security.CertificateConfigScopeRes
 import phucuong.ht.modules.certificate.model.entity.Certificate;
 import phucuong.ht.modules.certificate.repository.CertificateRepository;
 import phucuong.ht.modules.leader.model.entity.Leader;
+import phucuong.ht.modules.leaderLevel.service.LeaderLevelService;
+import phucuong.ht.modules.training.courseParticipation.repository.CourseParticipationRepository;
 import phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType;
 import phucuong.ht.modules.training.courseType.repository.TrainingCourseTypeRepository;
 import phucuong.ht.modules.training.enums.WorkflowApprovalStatus;
@@ -54,17 +57,6 @@ public class CertificateConfigService {
 
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
-    private static final Map<String, String> LEVEL_LABELS = Map.ofEntries(
-            Map.entry("NONE", "Chưa có cấp"),
-            Map.entry("HT_XU", "Huynh trưởng xứ"),
-            Map.entry("DU_TRUONG", "Dự trưởng"),
-            Map.entry("HT_I", "Huynh trưởng cấp I"),
-            Map.entry("HT_II", "Huynh trưởng cấp II"),
-            Map.entry("HT_III", "Huynh trưởng cấp III"),
-            Map.entry("HLV_I", "Huấn luyện viên cấp I"),
-            Map.entry("HLV_II", "Huấn luyện viên cấp II"),
-            Map.entry("HLV_III", "Huấn luyện viên cấp III"));
-
     private final CertificateConfigRepository configRepository;
     private final CertificateConfigAssignmentRepository assignmentRepository;
     private final CertificateConfigScopeResolver scopeResolver;
@@ -73,6 +65,8 @@ public class CertificateConfigService {
     private final CertificatePdfRenderer pdfRenderer;
     private final CommonValidationHelper validationHelper;
     private final securityUtils securityUtils;
+    private final LeaderLevelService leaderLevelService;
+    private final CourseParticipationRepository courseParticipationRepository;
 
     public record PdfExport(byte[] content, String filename) {
     }
@@ -290,7 +284,7 @@ public class CertificateConfigService {
         String typeCode = normalize(request.getCourseTypeCode());
         TrainingCourseType type = courseTypeRepository.findByCodeWithPrerequisite(typeCode)
                 .orElseThrow(() -> validationHelper.notFound("Không tìm thấy loại khóa: " + typeCode));
-        if (type.getResultingLevel() == null || "NONE".equals(type.getResultingLevel().name())) {
+        if (type.getResultingLevel() == null || "NONE".equals(type.getResultingLevel())) {
             throw validationHelper.conflict("Loại khóa này không có yêu cầu chứng nhận nên không cấu hình được");
         }
 
@@ -448,6 +442,31 @@ public class CertificateConfigService {
         return usage;
     }
 
+    // Xem trước chứng nhận: cấu hình áp dụng cho khóa của chứng nhận + dữ liệu thật, giống bản PDF sẽ xuất.
+    @Transactional(readOnly = true)
+    public CertificatePreviewResponse preview(String certificateCode) {
+        Certificate certificate = certificateRepository.findByCodeWithLeaderAndCourse(certificateCode)
+                .orElseThrow(() -> validationHelper.notFound("Không tìm thấy chứng nhận: " + certificateCode));
+        TrainingCourse course = certificate.getCourse();
+        String courseTypeCode = course != null && course.getCourseType() != null ? course.getCourseType().getTypeCode() : null;
+        Optional<CertificateConfig> found = resolve(normalize(courseTypeCode), chainOf(course));
+        if (found.isEmpty()) {
+            return CertificatePreviewResponse.builder().configured(false).items(List.of()).build();
+        }
+        CertificateConfig config = found.get();
+        List<CertificatePreviewResponse.Item> items = toRenderItems(config.getFieldLayout(), buildValues(certificate, config)).stream()
+                .map(item -> new CertificatePreviewResponse.Item(item.text(), item.x(), item.y(), item.fontSize(), item.color(),
+                        item.align(), item.fontFamily(), item.bold(), item.italic(), item.underline()))
+                .toList();
+        return CertificatePreviewResponse.builder()
+                .configured(true)
+                .paperSize(config.getPaperSize())
+                .orientation(config.getOrientation())
+                .backgroundImage(config.getBackgroundImage())
+                .items(items)
+                .build();
+    }
+
     @Transactional(readOnly = true)
     public PdfExport exportPdf(List<String> certificateCodes) {
         List<Certificate> certificates = new ArrayList<>();
@@ -462,7 +481,11 @@ public class CertificateConfigService {
             loaded.add(certificate);
             if (certificate.getApprovalStatus() != WorkflowApprovalStatus.APPROVED) {
                 String leaderName = buildFullName(certificate.getLeader());
-                String status = certificate.getApprovalStatus() == WorkflowApprovalStatus.REJECTED ? "bị từ chối" : "chưa duyệt";
+                String status = switch (certificate.getApprovalStatus()) {
+                    case REJECTED -> "bị từ chối";
+                    case REVOKED -> "đã bị thu hồi";
+                    default -> "chưa duyệt";
+                };
                 notApproved.add((leaderName.isBlank() ? code : leaderName + " - " + code) + " (" + status + ")");
             }
         }
@@ -545,6 +568,9 @@ public class CertificateConfigService {
     private Map<String, String> buildValues(Certificate c, CertificateConfig config) {
         Map<String, String> v = new LinkedHashMap<>();
         Leader l = c.getLeader();
+        // Tên cấp độ tra theo danh mục của giáo phận của huynh trưởng.
+        var leaderDiocese = l == null || l.getParish() == null || l.getParish().getDeanery() == null ? null : l.getParish().getDeanery().getDiocese();
+        Map<String, String> levelNames = leaderLevelService.order(leaderDiocese == null ? null : leaderDiocese.getId()).names();
         TrainingCourse course = c.getCourse();
 
         // Người ký lấy trực tiếp từ chứng nhận (xác định khi duyệt).
@@ -562,7 +588,7 @@ public class CertificateConfigService {
             v.put("leaderParishName", parish == null ? "" : nullToEmpty(parish.getName()));
             v.put("leaderDeaneryName", deanery == null ? "" : nullToEmpty(deanery.getName()));
             v.put("leaderDioceseName", diocese == null ? "" : nullToEmpty(diocese.getName()));
-            v.put("leaderLevel", l.getLeaderLevel() == null ? "" : LEVEL_LABELS.getOrDefault(l.getLeaderLevel().name(), l.getLeaderLevel().name()));
+            v.put("leaderLevel", levelNames.getOrDefault(l.getLeaderLevel(), nullToEmpty(l.getLeaderLevel())));
         }
         if (course != null) {
             v.put("courseName", nullToEmpty(course.getCourseName()));
@@ -575,9 +601,13 @@ public class CertificateConfigService {
             // Thời gian tổ chức: "từ ... đến ..." (rút gọn khi thiếu một đầu).
             v.put("coursePeriod", !start.isEmpty() && !end.isEmpty() ? ("từ " + start + " đến " + end) : (start + end));
             var courseType = course.getCourseType();
-            v.put("resultingLevel", courseType == null || courseType.getResultingLevel() == null
-                    ? ""
-                    : LEVEL_LABELS.getOrDefault(courseType.getResultingLevel().name(), courseType.getResultingLevel().name()));
+            // Cấp độ đạt được: hồ sơ ngoại lệ theo cấp người duyệt đã chọn, còn lại theo loại khóa.
+            String achieved = l == null ? null : courseParticipationRepository.findByLeaderIdAndCourseCode(l.getId(), course.getCourseCode())
+                    .map(participation -> participation.getTargetLevel()).orElse(null);
+            if (achieved == null && courseType != null) {
+                achieved = courseType.getResultingLevel();
+            }
+            v.put("resultingLevel", achieved == null ? "" : levelNames.getOrDefault(achieved, achieved));
         }
         v.put("certificateCode", nullToEmpty(c.getCertificateCode()));
         v.put("certificateName", nullToEmpty(c.getCertificateName()));

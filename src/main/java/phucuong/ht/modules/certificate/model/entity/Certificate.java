@@ -73,4 +73,14 @@ public class Certificate extends BaseModel {
     private OffsetDateTime approvedAt;
 
     private String approvedBy;
+
+    // Thu hồi chứng nhận đã duyệt (approvalStatus = REVOKED).
+    @Column(name = "revoked_at")
+    private OffsetDateTime revokedAt;
+
+    @Column(name = "revoked_by")
+    private String revokedBy;
+
+    @Column(name = "revocation_reason")
+    private String revocationReason;
 }

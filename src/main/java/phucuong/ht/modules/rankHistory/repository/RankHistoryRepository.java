@@ -36,4 +36,25 @@ public class RankHistoryRepository {
                 .setParameter("leaderId", leaderId)
                 .getResultList();
     }
+
+    // Lần thăng cấp gần nhất chưa bị hạ cấp của huynh trưởng do một khóa sinh ra.
+    public java.util.Optional<RankHistory> findLatestActivePromotion(UUID leaderId, String courseCode) {
+        return entityManager.createQuery(
+                        """
+                                select rh
+                                from RankHistory rh
+                                where rh.leader.id = :leaderId
+                                  and rh.courseCode = :courseCode
+                                  and rh.reverted = false
+                                  and rh.newLevel is not null
+                                order by rh.id desc
+                                """,
+                        RankHistory.class
+                )
+                .setParameter("leaderId", leaderId)
+                .setParameter("courseCode", courseCode)
+                .setMaxResults(1)
+                .getResultList()
+                .stream().findFirst();
+    }
 }

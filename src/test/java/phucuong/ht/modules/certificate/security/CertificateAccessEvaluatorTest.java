@@ -15,7 +15,6 @@ class CertificateAccessEvaluatorTest {
     void superAdminCannotApproveEvenWhenAuthorityIsPresent() {
         CertificateAccessEvaluator evaluator = new CertificateAccessEvaluator(
                 new securityUtils(), mock(phucuong.ht.modules.auth.repository.AccountRepository.class),
-                mock(phucuong.ht.modules.training.trainingCourse.repository.TrainingCourseRepository.class),
                 mock(phucuong.ht.modules.certificate.repository.CertificateRepository.class),
                 new phucuong.ht.modules.training.TrainingWorkflowSupport());
         var authentication = new UsernamePasswordAuthenticationToken(
@@ -25,5 +24,20 @@ class CertificateAccessEvaluatorTest {
                         () -> "training.certificate.approve.diocese"));
 
         assertFalse(evaluator.canApprove(authentication, "certificate-1"));
+    }
+
+    @Test
+    void superAdminCannotRevokeEvenWhenAuthorityIsPresent() {
+        CertificateAccessEvaluator evaluator = new CertificateAccessEvaluator(
+                new securityUtils(), mock(phucuong.ht.modules.auth.repository.AccountRepository.class),
+                mock(phucuong.ht.modules.certificate.repository.CertificateRepository.class),
+                new phucuong.ht.modules.training.TrainingWorkflowSupport());
+        var authentication = new UsernamePasswordAuthenticationToken(
+                "super-admin", null,
+                List.of(
+                        () -> "ROLE_SUPER_ADMIN",
+                        () -> "training.certificate.revoke.diocese"));
+
+        assertFalse(evaluator.canRevoke(authentication, "certificate-1"));
     }
 }

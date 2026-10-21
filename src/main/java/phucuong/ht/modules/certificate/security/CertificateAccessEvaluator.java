@@ -7,7 +7,6 @@ import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.modules.auth.repository.AccountRepository;
 import phucuong.ht.modules.certificate.repository.CertificateRepository;
 import phucuong.ht.modules.training.TrainingWorkflowSupport;
-import phucuong.ht.modules.training.trainingCourse.repository.TrainingCourseRepository;
 
 @Component("certificateAccessEvaluator")
 @RequiredArgsConstructor
@@ -17,17 +16,8 @@ public class CertificateAccessEvaluator {
 
     private final securityUtils securityUtils;
     private final AccountRepository accountRepository;
-    private final TrainingCourseRepository trainingCourseRepository;
     private final CertificateRepository certificateRepository;
     private final TrainingWorkflowSupport trainingWorkflowSupport;
-
-    public boolean canCreate(Authentication authentication, String courseCode) {
-        return trainingCourseRepository.findByCodeWithType(courseCode)
-                .map(course -> trainingWorkflowSupport.isDeaneryManaged(course.getCourseType())
-                        ? securityUtils.hasAuthority(authentication, "training.certificate.create.deanery") && scopedDeanery(authentication, courseCode)
-                        : securityUtils.hasAuthority(authentication, "training.certificate.create.diocese") && scopedDiocese(authentication, courseCode))
-                .orElse(false);
-    }
 
     public boolean canList(Authentication authentication) {
         return securityUtils.hasAuthority(authentication, "training.certificate.read.deanery")
@@ -38,12 +28,12 @@ public class CertificateAccessEvaluator {
         return hasScopedAccess(authentication, certificateCode, "read");
     }
 
-    public boolean canUpdate(Authentication authentication, String certificateCode) {
-        return hasScopedAccess(authentication, certificateCode, "update");
-    }
-
-    public boolean canToggle(Authentication authentication, String certificateCode) {
-        return hasScopedAccess(authentication, certificateCode, "toggle");
+    // Thu hồi chứng nhận đã duyệt: quyền training.certificate.revoke.{diocese,deanery} trong phạm vi quản lý.
+    public boolean canRevoke(Authentication authentication, String certificateCode) {
+        if (securityUtils.hasAuthority(authentication, SUPER_ADMIN_ROLE)) {
+            return false;
+        }
+        return hasScopedAccess(authentication, certificateCode, "revoke");
     }
 
     public boolean canApprove(Authentication authentication, String certificateCode) {
@@ -81,17 +71,5 @@ public class CertificateAccessEvaluator {
                             .orElse(false);
                 })
                 .orElse(false);
-    }
-
-    private boolean scopedDeanery(Authentication authentication, String courseCode) {
-        String username = securityUtils.currentUsername(authentication);
-        return username != null && accountRepository.findActiveDeaneryIdByUsername(username)
-                .flatMap(id -> trainingCourseRepository.findDeaneryIdByCourseCode(courseCode).map(id::equals)).orElse(false);
-    }
-
-    private boolean scopedDiocese(Authentication authentication, String courseCode) {
-        String username = securityUtils.currentUsername(authentication);
-        return username != null && accountRepository.findActiveDioceseIdByUsername(username)
-                .flatMap(id -> trainingCourseRepository.findDioceseIdByCourseCode(courseCode).map(id::equals)).orElse(false);
     }
 }

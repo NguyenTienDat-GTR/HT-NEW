@@ -42,6 +42,7 @@ public class LeaderService {
     private static final String DEANERY_FILTER_FIELD = "parish.deanery.id";
     private static final String PARISH_FILTER_FIELD = "parish.id";
 
+    private final phucuong.ht.modules.leaderLevel.service.LeaderLevelService leaderLevelService;
     private final LeaderRepository leaderRepository;
     private final LeaderValidationHelper leaderValidationHelper;
     private final LeaderScopeHelper leaderScopeHelper;
@@ -76,7 +77,8 @@ public class LeaderService {
             leader.setPhoneNumber(request.getPhoneNumber());
             leader.setImageUrl(request.getImageUrl());
             leader.setGender(request.getGender());
-            leader.setLeaderLevel(request.getLeaderLevel());
+            leader.setLeaderLevel(java.util.Objects.requireNonNullElse(leaderLevelService.requireExistingOrNull(request.getLeaderLevel(), "Cấp độ",
+                    parish.getDeanery() == null || parish.getDeanery().getDiocese() == null ? null : parish.getDeanery().getDiocese().getId()), "NONE"));
             leader.setParish(parish);
             leader.setStatus(Boolean.TRUE);
             OffsetDateTime now = OffsetDateTime.now();

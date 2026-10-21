@@ -39,5 +39,22 @@ public class CertificateResponse {
     private String rejectionReason;
     private OffsetDateTime approvedAt;
     private String approvedBy;
+    private OffsetDateTime revokedAt;
+    private String revokedBy;
+    private String revocationReason;
     private Boolean status;
+
+    // Chỉ có ở chi tiết (findById): thông tin huynh trưởng, khóa và kết quả để hiển thị theo nhóm.
+    private String leaderHolyName;
+    private LocalDate leaderBirthDate;
+    private String leaderParishName;
+    private String leaderDeaneryName;
+    private String leaderDioceseName;
+    private String courseTypeName;
+    private Integer courseHostYear;
+    private LocalDate courseStartDate;
+    private LocalDate courseEndDate;
+    private String resultingLevel;
+    // Kết quả chung của hồ sơ sau khi kết thúc khóa / bị thu hồi chứng nhận: PASSED | FAILED.
+    private String finalResult;
 }

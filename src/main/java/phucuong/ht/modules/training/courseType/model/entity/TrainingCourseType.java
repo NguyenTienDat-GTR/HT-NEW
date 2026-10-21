@@ -4,7 +4,6 @@ import jakarta.persistence.*;
 import lombok.*;
 import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.common.model.BaseModel;
-import phucuong.ht.modules.leader.model.enums.LeaderLevel;
 
 @Entity
 @Table(name = "training_course_type")
@@ -29,9 +28,8 @@ public class TrainingCourseType extends BaseModel {
     private UnitType managementUnitType;
 
     // Điều kiện tham dự (gộp từ course_requirement cũ).
-    @Enumerated(EnumType.STRING)
     @Column(name = "required_current_level")
-    private LeaderLevel requiredCurrentLevel;
+    private String requiredCurrentLevel;
 
     @Column(name = "required_min_age")
     private Integer requiredMinAge;
@@ -45,9 +43,8 @@ public class TrainingCourseType extends BaseModel {
     private TrainingCourseType prerequisiteType;
 
     // Cấp bậc được thăng khi chứng chỉ của khóa thuộc loại này được duyệt.
-    @Enumerated(EnumType.STRING)
     @Column(name = "resulting_level")
-    private LeaderLevel resultingLevel;
+    private String resultingLevel;
 
     // Mã viết tắt dùng khi sinh mã chứng chỉ.
     @Column(name = "certificate_short_code")

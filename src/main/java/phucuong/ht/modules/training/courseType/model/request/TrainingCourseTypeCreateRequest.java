@@ -5,7 +5,6 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
 import phucuong.ht.common.enums.UnitType;
-import phucuong.ht.modules.leader.model.enums.LeaderLevel;
 
 @Getter
 @Setter
@@ -19,7 +18,7 @@ public class TrainingCourseTypeCreateRequest {
     @NotNull
     private UnitType managementUnitType;
 
-    private LeaderLevel requiredCurrentLevel;
+    private String requiredCurrentLevel;
 
     private Integer requiredMinAge;
 
@@ -27,7 +26,7 @@ public class TrainingCourseTypeCreateRequest {
 
     private String prerequisiteTypeCode;
 
-    private LeaderLevel resultingLevel;
+    private String resultingLevel;
 
     private String certificateShortCode;
 }

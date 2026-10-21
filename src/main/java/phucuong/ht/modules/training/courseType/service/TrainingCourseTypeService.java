@@ -1,7 +1,7 @@
 package phucuong.ht.modules.training.courseType.service;
 
 import lombok.RequiredArgsConstructor;
-import phucuong.ht.modules.leader.model.enums.LeaderLevel;
+import phucuong.ht.modules.leaderLevel.service.LeaderLevelService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.security.core.Authentication;
@@ -30,6 +30,7 @@ public class TrainingCourseTypeService {
     private final TrainingCourseTypeRepository trainingCourseTypeRepository;
     private final TrainingCourseRepository trainingCourseRepository;
     private final CommonValidationHelper commonValidationHelper;
+    private final LeaderLevelService leaderLevelService;
 
     @Transactional
     public TrainingCourseTypeResponse create(TrainingCourseTypeCreateRequest request, Authentication authentication) {
@@ -43,10 +44,10 @@ public class TrainingCourseTypeService {
         courseType.setTypeCode(typeCode);
         courseType.setTypeName(normalizeText(request.getTypeName()));
         courseType.setManagementUnitType(request.getManagementUnitType());
-        courseType.setRequiredCurrentLevel(request.getRequiredCurrentLevel());
+        courseType.setRequiredCurrentLevel(leaderLevelService.requireExistingOrNull(request.getRequiredCurrentLevel(), "Cấp yêu cầu", actorDioceseId(authentication)));
         courseType.setRequiredMinAge(request.getRequiredMinAge());
         courseType.setRequiredYearsActive(request.getRequiredYearsActive());
-        courseType.setResultingLevel(request.getResultingLevel());
+        courseType.setResultingLevel(leaderLevelService.requireExistingOrNull(request.getResultingLevel(), "Cấp độ đạt được", actorDioceseId(authentication)));
         courseType.setCertificateShortCode(normalizeText(request.getCertificateShortCode()));
         requireShortCodeForCertified(courseType);
         courseType.setPrerequisiteType(resolvePrerequisite(typeCode, request.getPrerequisiteTypeCode()));
@@ -114,7 +115,7 @@ public class TrainingCourseTypeService {
             courseType.setTypeName(normalizeText(request.getTypeName()));
         }
         if (request.getRequiredCurrentLevel() != null) {
-            courseType.setRequiredCurrentLevel(request.getRequiredCurrentLevel());
+            courseType.setRequiredCurrentLevel(leaderLevelService.requireExistingOrNull(request.getRequiredCurrentLevel(), "Cấp yêu cầu", actorDioceseId(authentication)));
         }
         if (request.getRequiredMinAge() != null) {
             courseType.setRequiredMinAge(request.getRequiredMinAge());
@@ -123,7 +124,7 @@ public class TrainingCourseTypeService {
             courseType.setRequiredYearsActive(request.getRequiredYearsActive());
         }
         if (request.getResultingLevel() != null) {
-            courseType.setResultingLevel(request.getResultingLevel());
+            courseType.setResultingLevel(leaderLevelService.requireExistingOrNull(request.getResultingLevel(), "Cấp độ đạt được", actorDioceseId(authentication)));
         }
         if (request.getCertificateShortCode() != null) {
             courseType.setCertificateShortCode(normalizeText(request.getCertificateShortCode()));
@@ -150,11 +151,16 @@ public class TrainingCourseTypeService {
 
     // Loại khóa có cấp độ đạt được (yêu cầu chứng nhận) bắt buộc có mã viết tắt để sinh mã chứng chỉ.
     private void requireShortCodeForCertified(TrainingCourseType courseType) {
-        LeaderLevel level = courseType.getResultingLevel();
-        boolean certified = level != null && level != LeaderLevel.NONE;
+        String level = courseType.getResultingLevel();
+        boolean certified = level != null && !"NONE".equals(level);
         if (certified && (courseType.getCertificateShortCode() == null || courseType.getCertificateShortCode().isBlank())) {
             throw commonValidationHelper.validationError("Phải nhập mã viết tắt chứng chỉ cho loại khóa có cấp độ đạt được");
         }
+    }
+
+    // Giáo phận của người thao tác, để đối chiếu cấp độ với danh mục của giáo phận (null nếu không xác định).
+    private java.util.UUID actorDioceseId(Authentication authentication) {
+        return leaderLevelService.activeDioceseId(authentication).orElse(null);
     }
 
     private void requireManagementUnitType(UnitType managementUnitType) {

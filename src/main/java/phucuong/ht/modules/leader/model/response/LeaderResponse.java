@@ -3,7 +3,6 @@ package phucuong.ht.modules.leader.model.response;
 import lombok.Builder;
 import lombok.Getter;
 import phucuong.ht.modules.leader.model.enums.LeaderGender;
-import phucuong.ht.modules.leader.model.enums.LeaderLevel;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -28,7 +27,7 @@ public class LeaderResponse {
     private String phoneNumber;
     private String imageUrl;
     private LeaderGender gender;
-    private LeaderLevel leaderLevel;
+    private String leaderLevel;
     private UUID deaneryId;
     private String deaneryName;
     private UUID parishId;

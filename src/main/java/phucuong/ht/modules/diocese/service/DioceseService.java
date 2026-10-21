@@ -56,6 +56,8 @@ public class DioceseService {
     private ToggleNotificationDispatcher toggleNotificationDispatcher;
     @Autowired(required = false)
     private RbacAuthRefreshNotifier authRefreshNotifier;
+    @Autowired(required = false)
+    private phucuong.ht.modules.leaderLevel.service.LeaderLevelService leaderLevelService;
 
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
@@ -79,7 +81,12 @@ public class DioceseService {
             diocese.setUpdatedAt(diocese.getCreatedAt());
             diocese.setCreatedBy(auditActor);
             diocese.setUpdatedBy(auditActor);
-            return toDioceseResponse(dioceseRepository.save(diocese));
+            Diocese saved = dioceseRepository.save(diocese);
+            // Mỗi giáo phận có danh mục cấp độ riêng: tạo danh mục mặc định cho giáo phận mới.
+            if (leaderLevelService != null) {
+                leaderLevelService.seedDefaults(saved.getId(), auditActor);
+            }
+            return toDioceseResponse(saved);
         } catch (DataIntegrityViolationException exception) {
             throw new ApiException(HttpStatus.CONFLICT, errorCode.CONFLICT, "Dữ liệu giáo phận bị trùng hoặc xung đột với dữ liệu hiện có");
         }

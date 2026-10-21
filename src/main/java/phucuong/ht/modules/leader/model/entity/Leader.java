@@ -4,7 +4,6 @@ import jakarta.persistence.*;
 import lombok.*;
 import phucuong.ht.common.model.BaseModel;
 import phucuong.ht.modules.leader.model.enums.LeaderGender;
-import phucuong.ht.modules.leader.model.enums.LeaderLevel;
 import phucuong.ht.modules.parish.model.entity.Parish;
 
 import java.time.LocalDate;
@@ -50,9 +49,8 @@ public class Leader extends BaseModel {
     @Column(name = "gender", length = 20)
     private LeaderGender gender;
 
-    @Enumerated(EnumType.STRING)
     @Column(name = "leader_level", nullable = false)
-    private LeaderLevel leaderLevel;
+    private String leaderLevel;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parish_id", nullable = false)

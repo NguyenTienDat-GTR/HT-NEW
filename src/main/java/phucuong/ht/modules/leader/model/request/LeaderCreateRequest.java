@@ -9,7 +9,6 @@ import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 import phucuong.ht.modules.leader.model.enums.LeaderGender;
-import phucuong.ht.modules.leader.model.enums.LeaderLevel;
 
 import java.time.LocalDate;
 import java.util.UUID;
@@ -51,7 +50,7 @@ public class LeaderCreateRequest {
     private LeaderGender gender;
 
     @NotNull
-    private LeaderLevel leaderLevel;
+    private String leaderLevel;
 
     @NotNull
     private UUID parishId;

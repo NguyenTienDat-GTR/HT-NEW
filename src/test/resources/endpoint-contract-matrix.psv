@@ -18,11 +18,8 @@ POST /api/auth/change-password|200|401|N/A: authenticated caller changes only it
 GET /api/auth/admin/summary|200|401|403|N/A: endpoint accepts no client request data|N/A: summary is scoped to the authenticated administrator|N/A: read-only endpoint does not mutate state
 
 # Certificates
-POST /api/certificates|200|401|403|400|404|409
 GET /api/certificates|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
 GET /api/certificates/{certificateCode}|200|401|403|400|404|N/A: read-only endpoint does not mutate state
-PUT /api/certificates/{certificateCode}|200|401|403|400|404|409
-PATCH /api/certificates/{certificateCode}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict
 POST /api/certificates/{certificateCode}/approve|200|401|403|400|404|409
 
 # Deaneries
@@ -168,3 +165,30 @@ PUT /api/training/courses/{courseCode}|200|401|403|400|404|409
 PATCH /api/training/courses/{courseCode}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict
 PATCH /api/training/courses/{courseCode}/registration|200|401|403|400|404|N/A: open/close flag has no uniqueness conflict
 PATCH /api/training/courses/{courseCode}/score-lock|200|401|403|400|404|N/A: locking is idempotent
+POST /api/certificates/{certificateCode}/revoke|200|401|403|400|404|409
+GET /api/certificates/{certificateCode}/preview|200|401|403|400|404|N/A: read-only endpoint does not mutate state
+GET /api/certificates/config|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/certificates/config/fields|200|401|403|N/A: fixed catalog with no request parameters to validate|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/certificates/config/course-types|200|401|403|N/A: fixed catalog with no request parameters to validate|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/certificates/config/options|200|401|403|N/A: fixed catalog with no request parameters to validate|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/certificates/config/resolve|200|401|403|400|N/A: resolve returns an empty result when no config applies|N/A: read-only endpoint does not mutate state
+GET /api/certificates/config/assignments|200|401|403|N/A: fixed catalog with no request parameters to validate|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+PUT /api/certificates/config/assignments|200|401|403|400|404|N/A: assigning a config to a course type is idempotent
+POST /api/certificates/config|200|401|403|400|N/A: creation has no existing resource lookup|N/A: duplicate names get an automatic numeric suffix
+GET /api/certificates/config/{id}|200|401|403|400|404|N/A: read-only endpoint does not mutate state
+PUT /api/certificates/config/{id}|200|401|403|400|404|N/A: duplicate names get an automatic numeric suffix
+PUT /api/certificates/config/{id}/default|200|401|403|400|404|N/A: setting the default config is idempotent
+DELETE /api/certificates/config/{id}|200|401|403|400|404|409
+POST /api/certificates/export-pdf|200|401|403|400|404|N/A: export does not change state
+POST /api/certificates/export-pdf/jobs|200|401|403|400|404|N/A: export does not change state
+GET /api/certificates/export-pdf/jobs/{jobId}|200|401|403|N/A: job id is a path variable only|N/A: unknown jobs report FAILED status|N/A: read-only endpoint does not mutate state
+GET /api/certificates/export-pdf/jobs/{jobId}/file|200|401|403|N/A: job id is a path variable only|404|N/A: read-only endpoint does not mutate state
+GET /api/leader-levels/options|200|401|N/A: any authenticated account may read the options|N/A: fixed catalog with no request parameters to validate|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/leader-levels|200|401|403|N/A: fixed catalog with no request parameters to validate|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+POST /api/leader-levels|200|401|403|400|N/A: creation has no existing resource lookup|409
+PUT /api/leader-levels/reorder|200|401|403|400|N/A: reorder addresses the whole catalog|N/A: reorder has no uniqueness conflict
+PUT /api/leader-levels/{levelCode}|200|401|403|400|404|409
+DELETE /api/leader-levels/{levelCode}|200|401|403|N/A: level code is a path variable only|404|409
+POST /api/certificates/bulk-approval|200|401|403|400|N/A: bulk endpoint reports per-item failures in the response body|N/A: bulk endpoint reports per-item failures in the response body
+POST /api/certificates/{certificateCode}/reject|200|401|403|400|404|409
+POST /api/training/courses/{courseCode}/finish|200|401|403|400|404|409

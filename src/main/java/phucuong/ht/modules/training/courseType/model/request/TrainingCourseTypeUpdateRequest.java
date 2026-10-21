@@ -3,7 +3,6 @@ package phucuong.ht.modules.training.courseType.model.request;
 import lombok.Getter;
 import lombok.Setter;
 import phucuong.ht.common.enums.UnitType;
-import phucuong.ht.modules.leader.model.enums.LeaderLevel;
 
 @Getter
 @Setter
@@ -13,7 +12,7 @@ public class TrainingCourseTypeUpdateRequest {
 
     private UnitType managementUnitType;
 
-    private LeaderLevel requiredCurrentLevel;
+    private String requiredCurrentLevel;
 
     private Integer requiredMinAge;
 
@@ -21,7 +20,7 @@ public class TrainingCourseTypeUpdateRequest {
 
     private String prerequisiteTypeCode;
 
-    private LeaderLevel resultingLevel;
+    private String resultingLevel;
 
     private String certificateShortCode;
 

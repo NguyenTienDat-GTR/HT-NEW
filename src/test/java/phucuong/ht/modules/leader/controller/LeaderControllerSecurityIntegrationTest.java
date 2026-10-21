@@ -15,7 +15,6 @@ import phucuong.ht.common.utils.jwtUtils;
 import phucuong.ht.modules.auth.model.AuthUserDetails;
 import phucuong.ht.modules.auth.service.RedisTokenSessionService;
 import phucuong.ht.modules.leader.model.enums.LeaderGender;
-import phucuong.ht.modules.leader.model.enums.LeaderLevel;
 import phucuong.ht.modules.leader.model.request.LeaderCreateRequest;
 import phucuong.ht.modules.leader.model.request.LeaderUpdateRequest;
 import phucuong.ht.modules.leader.model.response.LeaderResponse;
@@ -86,7 +85,7 @@ class LeaderControllerSecurityIntegrationTest {
         createRequest.setEmail("leader@example.com");
         createRequest.setImageUrl("https://cdn.example.com/leaders/an.jpg");
         createRequest.setGender(LeaderGender.NAM);
-        createRequest.setLeaderLevel(LeaderLevel.HT_XU);
+        createRequest.setLeaderLevel("HT_XU");
         createRequest.setParishId(parishId);
 
         LeaderUpdateRequest updateRequest = new LeaderUpdateRequest();
@@ -155,7 +154,7 @@ class LeaderControllerSecurityIntegrationTest {
         request.setBirthDate(java.time.LocalDate.of(2000, 1, 1));
         request.setEmail("leader@example.com");
         request.setGender(LeaderGender.NAM);
-        request.setLeaderLevel(LeaderLevel.NONE);
+        request.setLeaderLevel("NONE");
         request.setParishId(UUID.randomUUID());
         request.setPhoneNumber("09123456789");
 
@@ -177,7 +176,7 @@ class LeaderControllerSecurityIntegrationTest {
                 .lastName("Nguyen")
                 .imageUrl("https://cdn.example.com/leaders/an.jpg")
                 .gender(LeaderGender.NAM)
-                .leaderLevel(LeaderLevel.HT_XU)
+                .leaderLevel("HT_XU")
                 .status(true)
                 .build();
     }

@@ -17,6 +17,7 @@ import phucuong.ht.modules.certificate.config.model.response.CertificateConfigRe
 import phucuong.ht.modules.certificate.config.model.response.CertificateFieldCatalogItem;
 import phucuong.ht.modules.certificate.config.model.response.CertifiedCourseTypeResponse;
 import phucuong.ht.modules.certificate.config.model.response.CertificatePdfJobResponse;
+import phucuong.ht.modules.certificate.config.model.response.CertificatePreviewResponse;
 import phucuong.ht.modules.certificate.config.service.CertificateConfigService;
 import phucuong.ht.modules.certificate.config.service.CertificatePdfJobService;
 
@@ -114,6 +115,13 @@ public class CertificateConfigController {
     public apiResponse<Void> delete(@PathVariable UUID id, Authentication authentication) {
         service.delete(id, authentication);
         return apiResponse.<Void>success("Xóa cấu hình chứng nhận thành công", null);
+    }
+
+    // Xem trước chứng nhận với cấu hình đang áp dụng và dữ liệu thật; quyền như xem chi tiết chứng nhận.
+    @GetMapping("/{certificateCode}/preview")
+    @PreAuthorize("@certificateAccessEvaluator.canRead(authentication, #certificateCode)")
+    public apiResponse<CertificatePreviewResponse> preview(@PathVariable String certificateCode) {
+        return apiResponse.success("Lấy bản xem trước chứng nhận thành công", service.preview(certificateCode));
     }
 
     // Xuất PDF chứng nhận đồng bộ (giữ cho tương thích). Yêu cầu quyền đọc chứng nhận.

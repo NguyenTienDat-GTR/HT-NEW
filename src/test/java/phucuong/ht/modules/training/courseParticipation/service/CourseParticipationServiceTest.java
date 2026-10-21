@@ -20,7 +20,6 @@ import phucuong.ht.modules.deanery.model.entity.Deanery;
 import phucuong.ht.modules.deanery.repository.DeaneryRepository;
 import phucuong.ht.modules.diocese.model.entity.Diocese;
 import phucuong.ht.modules.leader.model.entity.Leader;
-import phucuong.ht.modules.leader.model.enums.LeaderLevel;
 import phucuong.ht.modules.leader.repository.LeaderRepository;
 import phucuong.ht.modules.notification.service.TrainingNotificationRecipientResolver;
 import phucuong.ht.modules.notification.service.TrainingNotificationService;
@@ -120,8 +119,8 @@ class CourseParticipationServiceTest {
         UUID parishId = UUID.randomUUID();
         UUID leaderId = UUID.randomUUID();
         TrainingCourse course = course("SMKN_DT", UnitType.DEANERY);
-        Leader leader = leader(leaderId, parishId, LeaderLevel.HT_XU);
-        course.getCourseType().setRequiredCurrentLevel(LeaderLevel.DU_TRUONG);
+        Leader leader = leader(leaderId, parishId, "HT_XU");
+        course.getCourseType().setRequiredCurrentLevel("DU_TRUONG");
 
         Parish parish = parish(parishId, course);
         when(trainingCourseRepository.findByCodeWithType("SMKNDT-2026")).thenReturn(Optional.of(course));
@@ -181,7 +180,7 @@ class CourseParticipationServiceTest {
         UUID leaderId = UUID.randomUUID();
         TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);
         course.getCourseType().setRequiredMinAge(18);
-        Leader leader = leader(leaderId, parishId, LeaderLevel.HT_XU);
+        Leader leader = leader(leaderId, parishId, "HT_XU");
         leader.setBirthDate(null);
 
         when(trainingCourseRepository.findByCodeWithType("SMTLI-2026")).thenReturn(Optional.of(course));
@@ -204,7 +203,7 @@ class CourseParticipationServiceTest {
         UUID parishId = UUID.randomUUID();
         UUID leaderId = UUID.randomUUID();
         TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);
-        Leader leader = leader(leaderId, parishId, LeaderLevel.HT_XU);
+        Leader leader = leader(leaderId, parishId, "HT_XU");
         leader.setStatus(Boolean.FALSE);
 
         when(trainingCourseRepository.findByCodeWithType("SMTLI-2026")).thenReturn(Optional.of(course));
@@ -277,7 +276,7 @@ class CourseParticipationServiceTest {
         UUID parishId = UUID.randomUUID();
         UUID leaderId = UUID.randomUUID();
         TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);
-        Leader leader = leader(leaderId, parishId, LeaderLevel.HT_XU);
+        Leader leader = leader(leaderId, parishId, "HT_XU");
         Parish parish = parish(parishId, course);
 
         when(trainingCourseRepository.findByCodeWithType("SMTLI-2026")).thenReturn(Optional.of(course));
@@ -335,7 +334,7 @@ class CourseParticipationServiceTest {
         when(scoreComponentTemplateRepository.findActiveForCourse(org.mockito.ArgumentMatchers.eq("SMKN_I"), any(), any()))
                 .thenReturn(List.of(tinhThan, kyNang, chuyenCan));
         participation.setCourse(course);
-        participation.setLeader(leader(UUID.randomUUID(), UUID.randomUUID(), LeaderLevel.HT_XU));
+        participation.setLeader(leader(UUID.randomUUID(), UUID.randomUUID(), "HT_XU"));
         participation.setApprovalStatus(WorkflowApprovalStatus.APPROVED);
 
         when(courseParticipationRepository.findByIdWithLeaderAndCourse("cp-1")).thenReturn(Optional.of(participation));
@@ -495,7 +494,7 @@ class CourseParticipationServiceTest {
         CourseParticipation participation = new CourseParticipation();
         participation.setId(id);
         participation.setCourse(course);
-        participation.setLeader(leader(UUID.randomUUID(), UUID.randomUUID(), LeaderLevel.HT_XU));
+        participation.setLeader(leader(UUID.randomUUID(), UUID.randomUUID(), "HT_XU"));
         participation.setCreatedBy(createdBy);
         participation.setApprovalStatus(WorkflowApprovalStatus.PENDING);
         participation.setParticipationStatus(phucuong.ht.modules.training.enums.ParticipationStatus.REGISTERED);
@@ -517,7 +516,7 @@ class CourseParticipationServiceTest {
         when(scoreComponentTemplateRepository.findActiveForCourse(org.mockito.ArgumentMatchers.eq("SMKN_I"), any(), any()))
                 .thenReturn(List.of(first, second));
         participation.setCourse(course);
-        participation.setLeader(leader(UUID.randomUUID(), UUID.randomUUID(), LeaderLevel.HT_XU));
+        participation.setLeader(leader(UUID.randomUUID(), UUID.randomUUID(), "HT_XU"));
         participation.setApprovalStatus(WorkflowApprovalStatus.APPROVED);
         when(courseParticipationRepository.findByIdWithLeaderAndCourse("cp-re")).thenReturn(Optional.of(participation));
         when(certificateRepository.findByLeaderIdAndCourseCode(any(), any())).thenReturn(Optional.empty());
@@ -588,7 +587,7 @@ class CourseParticipationServiceTest {
         when(scoreComponentTemplateRepository.findActiveForCourse(org.mockito.ArgumentMatchers.eq("SMKN_I"), any(), any()))
                 .thenReturn(List.of(first, second));
         participation.setCourse(course);
-        participation.setLeader(leader(UUID.randomUUID(), UUID.randomUUID(), LeaderLevel.HT_XU));
+        participation.setLeader(leader(UUID.randomUUID(), UUID.randomUUID(), "HT_XU"));
         participation.setApprovalStatus(WorkflowApprovalStatus.APPROVED);
         participation.setCertificateApprovalStatus(WorkflowApprovalStatus.PENDING);
         phucuong.ht.modules.certificate.model.entity.Certificate pending = new phucuong.ht.modules.certificate.model.entity.Certificate();
@@ -690,7 +689,7 @@ class CourseParticipationServiceTest {
         return course;
     }
 
-    private Leader leader(UUID leaderId, UUID parishId, LeaderLevel level) {
+    private Leader leader(UUID leaderId, UUID parishId, String level) {
         Leader leader = new Leader();
         leader.setId(leaderId);
         leader.setLeaderLevel(level);

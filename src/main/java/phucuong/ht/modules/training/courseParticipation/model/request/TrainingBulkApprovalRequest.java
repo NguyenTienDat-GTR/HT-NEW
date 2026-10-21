@@ -20,4 +20,8 @@ public class TrainingBulkApprovalRequest {
 
     // Lý do riêng theo từng hồ sơ (id -> lý do); ưu tiên hơn lý do chung. Bắt buộc có lý do khi từ chối.
     private java.util.Map<String, String> reviews;
+
+    // Cấp độ đạt được của hồ sơ ngoại lệ khi duyệt: chung cho mọi hồ sơ ngoại lệ, hoặc riêng theo id (ưu tiên hơn).
+    private String achievedLevel;
+    private java.util.Map<String, String> achievedLevels;
 }
