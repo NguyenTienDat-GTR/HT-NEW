@@ -194,3 +194,4 @@ POST /api/certificates/{certificateCode}/reject|200|401|403|400|404|409
 POST /api/training/courses/{courseCode}/finish|200|401|403|400|404|409
 POST /api/certificates/{certificateCode}/reissue|200|401|403|400|404|409
 GET /api/training/courses/{courseCode}/status-impact|200|401|403|N/A: course code is a path variable only|404|N/A: read-only endpoint does not mutate state
+GET /api/certificates/issue-years|200|401|403|N/A: no request parameters to validate|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state

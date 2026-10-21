@@ -85,6 +85,26 @@ public class CertificateService {
         return new PageImpl<>(page.getContent().stream().map(this::toResponse).toList(), page.getPageable(), page.getTotalElements());
     }
 
+    // Các năm cấp có chứng nhận thật trong phạm vi người xem (mới nhất trước), cho bộ lọc năm cấp:
+    // không cắt theo số năm gần đây nên không mất các năm cũ, và tự có năm mới khi có chứng nhận cấp trong năm đó.
+    @Transactional(readOnly = true)
+    public List<Integer> issueYears(Authentication authentication) {
+        UUID dioceseId = null;
+        UUID deaneryId = null;
+        if (hasAuthority(authentication, "training.certificate.read.diocese")) {
+            dioceseId = accountScopeValidationHelper.requireActiveDioceseId(authentication, "training.certificate.read.diocese");
+        } else if (hasAuthority(authentication, "training.certificate.read.deanery")) {
+            deaneryId = accountScopeValidationHelper.requireActiveDeaneryId(authentication, "training.certificate.read.deanery");
+        } else {
+            throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền xem chứng chỉ");
+        }
+        return certificateRepository.findDistinctIssueDates(dioceseId, deaneryId).stream()
+                .map(java.time.LocalDate::getYear)
+                .distinct()
+                .sorted(java.util.Comparator.reverseOrder())
+                .toList();
+    }
+
     @Cacheable(cacheNames = CacheNames.CERTIFICATE_DETAIL, key = "@cacheScopeKeyHelper.detailKey(#authentication, #certificateCode)")
     public CertificateResponse findById(String certificateCode, Authentication authentication) {
         return toDetailResponse(certificateRepository.findByCodeWithLeaderAndCourse(certificateCode)

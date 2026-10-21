@@ -30,6 +30,14 @@ public class CertificateController {
         return apiResponse.success("Lấy danh sách chứng chỉ thành công", certificateService.findAll(request, authentication));
     }
 
+    // Các năm cấp có chứng nhận (cho bộ lọc năm cấp), mỗi phần tử { "year": 2026 }.
+    @GetMapping("/issue-years")
+    @PreAuthorize("@certificateAccessEvaluator.canList(authentication)")
+    public apiResponse<java.util.List<java.util.Map<String, Integer>>> issueYears(Authentication authentication) {
+        return apiResponse.success("Lấy danh sách năm cấp thành công",
+                certificateService.issueYears(authentication).stream().map(year -> java.util.Map.of("year", year)).toList());
+    }
+
     @GetMapping("/{certificateCode}")
     @PreAuthorize("@certificateAccessEvaluator.canRead(authentication, #certificateCode)")
     public apiResponse<CertificateResponse> findById(@PathVariable String certificateCode, Authentication authentication) {

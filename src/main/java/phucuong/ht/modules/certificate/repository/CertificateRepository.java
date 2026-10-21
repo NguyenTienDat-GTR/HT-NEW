@@ -230,4 +230,20 @@ public class CertificateRepository extends BaseRepo<Certificate, String> {
                 .getSingleResult();
         return count == null ? 0 : count;
     }
+
+    // Các ngày cấp khác nhau của chứng nhận trong phạm vi (giáo phận hoặc giáo hạt của khóa), để lấy danh sách năm cấp có thật.
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<java.time.LocalDate> findDistinctIssueDates(UUID dioceseId, UUID deaneryId) {
+        StringBuilder jpql = new StringBuilder("select distinct c.issueDate from Certificate c where c.issueDate is not null");
+        if (dioceseId != null) {
+            jpql.append(" and c.course.diocese.id = :dioceseId");
+        }
+        if (deaneryId != null) {
+            jpql.append(" and c.course.deanery.id = :deaneryId");
+        }
+        var query = entityManager.createQuery(jpql.toString(), java.time.LocalDate.class);
+        if (dioceseId != null) query.setParameter("dioceseId", dioceseId);
+        if (deaneryId != null) query.setParameter("deaneryId", deaneryId);
+        return query.getResultList();
+    }
 }
