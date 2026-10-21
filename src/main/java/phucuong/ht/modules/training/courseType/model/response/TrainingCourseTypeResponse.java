@@ -7,7 +7,7 @@ import phucuong.ht.common.enums.UnitType;
 import java.time.OffsetDateTime;
 
 @Getter
-@Builder
+@Builder(toBuilder = true)
 public class TrainingCourseTypeResponse {
     private String typeCode;
     private String typeName;
@@ -22,7 +22,9 @@ public class TrainingCourseTypeResponse {
     private String certificateShortCode;
     private Boolean status;
     private String createdBy;
+    private String createdByName;
     private String updatedBy;
+    private String updatedByName;
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;
 }

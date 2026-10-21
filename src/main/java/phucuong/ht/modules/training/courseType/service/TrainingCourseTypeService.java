@@ -32,6 +32,7 @@ public class TrainingCourseTypeService {
     private final TrainingCourseRepository trainingCourseRepository;
     private final CommonValidationHelper commonValidationHelper;
     private final LeaderLevelService leaderLevelService;
+    private final phucuong.ht.common.utils.AuditActorNameResolver auditActorNameResolver;
 
     @EvictCaches.Courses
     @EvictCaches.Certificates
@@ -102,7 +103,11 @@ public class TrainingCourseTypeService {
     }
 
     public TrainingCourseTypeResponse findById(String typeCode, Authentication authentication) {
-        return toResponse(requireType(typeCode));
+        TrainingCourseType courseType = requireType(typeCode);
+        return toResponse(courseType).toBuilder()
+                .createdByName(auditActorNameResolver.resolve(courseType.getCreatedBy()))
+                .updatedByName(auditActorNameResolver.resolve(courseType.getUpdatedBy()))
+                .build();
     }
 
     @EvictCaches.Courses

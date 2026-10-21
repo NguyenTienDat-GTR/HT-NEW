@@ -37,7 +37,8 @@ class TrainingCourseTypeServiceTest {
         type.setTypeCode("SMKN_I");
         when(trainingCourseTypeRepository.findByCodeWithPrerequisite("SMKN_I")).thenReturn(Optional.of(type));
         var service = new TrainingCourseTypeService(trainingCourseTypeRepository, trainingCourseRepository,
-                new CommonValidationHelper(new securityUtils()), leaderLevelService);
+                new CommonValidationHelper(new securityUtils()), leaderLevelService,
+                org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class));
         AuthUserDetails principal = AuthUserDetails.tokenPrincipal("admin", null, List.of("ADMIN_DIOCESE"), List.of());
         var authentication = new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
 
