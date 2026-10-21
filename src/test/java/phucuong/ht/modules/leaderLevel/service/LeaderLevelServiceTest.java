@@ -172,6 +172,27 @@ class LeaderLevelServiceTest {
     }
 
     @Test
+    void firstTierCanBeEqualToTheStartingLevel() {
+        LeaderLevelReorderRequest request = new LeaderLevelReorderRequest();
+        // Dự trưởng bằng cấp với cấp khởi đầu (Chưa có cấp), rồi HT I, HT II, HT III cao dần.
+        request.setTiers(List.of(List.of("DU_TRUONG"), List.of("HT_I"), List.of("HT_II"), List.of("HT_III")));
+        request.setFirstTierBase(true);
+
+        service.reorder(request, authentication);
+
+        // Cấp hệ thống và bậc thấp nhất cùng bậc 0 nên bằng cấp nhau.
+        assertEquals(0, levels.get(0).getDisplayOrder());
+        assertEquals(0, levels.get(1).getDisplayOrder());
+        assertEquals(1, levels.get(2).getDisplayOrder());
+        var order = service.order(diocese);
+        assertFalse(order.higher("DU_TRUONG", "NONE"));
+        assertFalse(order.higher("NONE", "DU_TRUONG"));
+        assertTrue(order.higher("HT_I", "DU_TRUONG"));
+        // Bậc thấp nhất bằng cấp khởi đầu nên không cần cấp trước.
+        assertEquals(List.of(), service.previousOf(diocese, "DU_TRUONG"));
+    }
+
+    @Test
     void systemAndUsedLevelsCannotBeDeleted() {
         assertThrows(ApiException.class, () -> service.delete("NONE", authentication));
 

@@ -273,8 +273,9 @@ public class LeaderLevelService {
         }
         String actor = securityUtils.currentAuditActor(authentication);
         OffsetDateTime now = OffsetDateTime.now();
-        // Cấp hệ thống giữ bậc 0, các bậc còn lại đánh số 1..n; các cấp cùng bậc có cùng số thứ tự.
-        int order = 1;
+        // Cấp hệ thống giữ bậc 0. Mặc định các bậc còn lại đánh số 1..n; nếu firstTierBase = true thì bậc thấp nhất
+        // cũng mang số 0 để bằng cấp với cấp khởi đầu. Các cấp cùng bậc có cùng số thứ tự.
+        int order = Boolean.TRUE.equals(request.getFirstTierBase()) ? 0 : 1;
         for (List<String> tier : tiers) {
             for (String code : tier) {
                 LeaderLevel level = movable.get(code);

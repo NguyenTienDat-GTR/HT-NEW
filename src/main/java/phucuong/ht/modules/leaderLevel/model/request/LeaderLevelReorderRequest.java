@@ -13,4 +13,7 @@ public class LeaderLevelReorderRequest {
     // Ví dụ [["DU_TRUONG"], ["HT_I", "HT_I_B"], ["HT_II"]]: HT_I và HT_I_B bằng cấp nhau, cùng cao hơn Dự trưởng.
     @NotEmpty
     private List<List<String>> tiers;
+
+    // true = bậc thấp nhất (tiers[0]) bằng cấp với cấp khởi đầu (cấp hệ thống NONE), tức cùng bậc 0 và không cần cấp trước.
+    private Boolean firstTierBase;
 }
