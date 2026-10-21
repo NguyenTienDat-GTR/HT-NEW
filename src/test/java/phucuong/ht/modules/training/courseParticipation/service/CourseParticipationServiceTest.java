@@ -339,9 +339,9 @@ class CourseParticipationServiceTest {
 
         when(courseParticipationRepository.findByIdWithLeaderAndCourse("cp-1")).thenReturn(Optional.of(participation));
         when(certificateRepository.findByLeaderIdAndCourseCode(any(), any())).thenReturn(Optional.empty());
-        when(certificateCodeGenerator.buildPrefix(any(), any(), any())).thenReturn("PC-I-2026-");
+        when(certificateCodeGenerator.buildPrefix(any(), any(), any(), any())).thenReturn("PC-I-2026-");
         when(certificateRepository.findHighestSequenceByCodePrefix("PC-I-2026-")).thenReturn(Optional.of(0L));
-        when(certificateCodeGenerator.buildCode(any(), any(), any(), any(Long.class))).thenReturn("PC-I-2026-1");
+        when(certificateCodeGenerator.buildCode(any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyLong())).thenReturn("PC-I-2026-1");
 
         TrainingScoreRequest request = new TrainingScoreRequest();
         ComponentScoreRequest scoreOne = new ComponentScoreRequest();
@@ -408,7 +408,6 @@ class CourseParticipationServiceTest {
         CourseParticipation participation = pendingParticipation("cp-1", course, "leader-9");
         when(courseParticipationRepository.findByIdWithLeaderAndCourse("cp-1")).thenReturn(Optional.of(participation));
         when(courseParticipationRepository.findByIdWithLeaderAndCourse("missing")).thenReturn(Optional.empty());
-        when(accountScopeValidationHelper.hasDirectDiocese(any())).thenReturn(true);
         when(accountScopeValidationHelper.requireActiveDioceseId(any(), any())).thenReturn(course.getDiocese().getId());
 
         phucuong.ht.modules.training.courseParticipation.model.request.TrainingBulkApprovalRequest request =
@@ -430,7 +429,6 @@ class CourseParticipationServiceTest {
         TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);
         CourseParticipation participation = pendingParticipation("cp-1", course, "leader-9");
         when(courseParticipationRepository.findByIdWithLeaderAndCourse("cp-1")).thenReturn(Optional.of(participation));
-        when(accountScopeValidationHelper.hasDirectDiocese(any())).thenReturn(true);
         when(accountScopeValidationHelper.requireActiveDioceseId(any(), any())).thenReturn(course.getDiocese().getId());
 
         phucuong.ht.modules.training.courseParticipation.model.request.TrainingBulkApprovalRequest request =
@@ -454,7 +452,6 @@ class CourseParticipationServiceTest {
         participation.setTotalScore(BigDecimal.valueOf(8));
         when(courseParticipationRepository.findByIdWithLeaderAndCourse("cp-r")).thenReturn(Optional.of(participation));
         when(certificateRepository.findByLeaderIdAndCourseCode(any(), any())).thenReturn(Optional.empty());
-        when(accountScopeValidationHelper.hasDirectDiocese(any())).thenReturn(true);
         when(accountScopeValidationHelper.requireActiveDioceseId(any(), any())).thenReturn(course.getDiocese().getId());
 
         courseParticipationService.removeParticipant("cp-r", authentication("admin-diocese", "training.participation.approve.diocese"));
@@ -470,7 +467,6 @@ class CourseParticipationServiceTest {
         participation.setApprovalStatus(WorkflowApprovalStatus.APPROVED);
         participation.setCertificateApprovalStatus(WorkflowApprovalStatus.APPROVED);
         when(courseParticipationRepository.findByIdWithLeaderAndCourse("cp-r")).thenReturn(Optional.of(participation));
-        when(accountScopeValidationHelper.hasDirectDiocese(any())).thenReturn(true);
         when(accountScopeValidationHelper.requireActiveDioceseId(any(), any())).thenReturn(course.getDiocese().getId());
 
         assertThrows(RuntimeException.class, () -> courseParticipationService.removeParticipant("cp-r", authentication("admin-diocese", "training.participation.approve.diocese")));
@@ -483,7 +479,6 @@ class CourseParticipationServiceTest {
         TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);
         CourseParticipation participation = pendingParticipation("cp-r", course, "leader-9");
         when(courseParticipationRepository.findByIdWithLeaderAndCourse("cp-r")).thenReturn(Optional.of(participation));
-        when(accountScopeValidationHelper.hasDirectDiocese(any())).thenReturn(true);
         when(accountScopeValidationHelper.requireActiveDioceseId(any(), any())).thenReturn(UUID.randomUUID());
 
         assertThrows(RuntimeException.class, () -> courseParticipationService.removeParticipant("cp-r", authentication("admin-diocese", "training.participation.approve.diocese")));
@@ -520,9 +515,9 @@ class CourseParticipationServiceTest {
         participation.setApprovalStatus(WorkflowApprovalStatus.APPROVED);
         when(courseParticipationRepository.findByIdWithLeaderAndCourse("cp-re")).thenReturn(Optional.of(participation));
         when(certificateRepository.findByLeaderIdAndCourseCode(any(), any())).thenReturn(Optional.empty());
-        when(certificateCodeGenerator.buildPrefix(any(), any(), any())).thenReturn("PC-I-2026-");
+        when(certificateCodeGenerator.buildPrefix(any(), any(), any(), any())).thenReturn("PC-I-2026-");
         when(certificateRepository.findHighestSequenceByCodePrefix("PC-I-2026-")).thenReturn(Optional.of(0L));
-        when(certificateCodeGenerator.buildCode(any(), any(), any(), any(Long.class))).thenReturn("PC-I-2026-1");
+        when(certificateCodeGenerator.buildCode(any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyLong())).thenReturn("PC-I-2026-1");
 
         courseParticipationService.score("cp-re", scoreRequest(5, 5), authentication("admin-diocese", "training.participation.score.diocese"));
         var firstRows = List.copyOf(participation.getComponentScores());
@@ -652,8 +647,11 @@ class CourseParticipationServiceTest {
                 certificateRepository,
                 certificateCodeGenerator,
                 domainEventPublisher,
+                org.mockito.Mockito.mock(phucuong.ht.modules.certificate.service.CertificateRealtimeNotifier.class),
                 trainingNotificationRecipientResolver,
-                trainingNotificationService
+                trainingNotificationService,
+                org.mockito.Mockito.mock(phucuong.ht.modules.leaderLevel.service.LeaderLevelService.class),
+                org.mockito.Mockito.mock(phucuong.ht.modules.training.CourseActivityGuard.class)
         );
     }
 
@@ -667,6 +665,8 @@ class CourseParticipationServiceTest {
         type.setTypeCode(typeCode);
         type.setTypeName(typeCode);
         type.setManagementUnitType(managementUnitType);
+        // Khóa có cấp độ đạt được nên chấm đạt sẽ sinh chứng nhận.
+        type.setResultingLevel("HT_I");
         type.setStatus(Boolean.TRUE);
         TrainingCourse course = new TrainingCourse();
         course.setCourseCode("COURSE");

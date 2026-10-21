@@ -41,7 +41,7 @@ class LeaderScopeHelperTest {
 
         ApiException exception = assertThrows(ApiException.class, () -> helper.enforceCreateScope(request, authentication));
 
-        assertEquals("Không thể tạo leader ngoài phạm vi giáo xứ hiện tại", exception.getMessage());
+        assertEquals("Không thể tạo Huynh Trưởng ngoài phạm vi giáo xứ hiện tại", exception.getMessage());
     }
 
     @Test
@@ -73,7 +73,7 @@ class LeaderScopeHelperTest {
         ApiException exception = assertThrows(ApiException.class,
                 () -> helper.enforceUpdateParishScope(authentication, leader, activeParishId));
 
-        assertEquals("Không thể chuyển leader ra ngoài giáo xứ hiện tại", exception.getMessage());
+        assertEquals("Không thể chuyển Huynh Trưởng ra ngoài giáo xứ hiện tại", exception.getMessage());
     }
 
     @Test

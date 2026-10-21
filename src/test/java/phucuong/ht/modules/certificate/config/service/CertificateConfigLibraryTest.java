@@ -62,7 +62,8 @@ class CertificateConfigLibraryTest {
                 configRepository, assignmentRepository, scopeResolver, mock(CertificateRepository.class),
                 courseTypeRepository, null, validationHelper, securityUtils,
                 mock(phucuong.ht.modules.leaderLevel.service.LeaderLevelService.class),
-                mock(phucuong.ht.modules.training.courseParticipation.repository.CourseParticipationRepository.class));
+                mock(phucuong.ht.modules.training.courseParticipation.repository.CourseParticipationRepository.class),
+                new CertificateQrService(Runnable::run, "http://localhost:3000"));
 
         when(configRepository.persist(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(configRepository.merge(any())).thenAnswer(invocation -> invocation.getArgument(0));

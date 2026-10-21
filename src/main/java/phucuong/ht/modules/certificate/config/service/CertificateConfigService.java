@@ -1,5 +1,6 @@
 package phucuong.ht.modules.certificate.config.service;
 
+import com.google.zxing.common.BitMatrix;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -50,12 +51,21 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 @Service
 @RequiredArgsConstructor
 public class CertificateConfigService {
 
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+
+    // Thời gian tối đa chờ toàn bộ mã QR của một lần xuất sinh xong.
+    private static final long QR_TIMEOUT_SECONDS = 120;
+
+    private static final String QR_TYPE = "QR";
 
     private final CertificateConfigRepository configRepository;
     private final CertificateConfigAssignmentRepository assignmentRepository;
@@ -67,6 +77,7 @@ public class CertificateConfigService {
     private final securityUtils securityUtils;
     private final LeaderLevelService leaderLevelService;
     private final CourseParticipationRepository courseParticipationRepository;
+    private final CertificateQrService qrService;
 
     public record PdfExport(byte[] content, String filename) {
     }
@@ -457,10 +468,20 @@ public class CertificateConfigService {
             return CertificatePreviewResponse.builder().configured(false).items(List.of()).build();
         }
         CertificateConfig config = found.get();
-        List<CertificatePreviewResponse.Item> items = toRenderItems(config.getFieldLayout(), buildValues(certificate, config)).stream()
-                .map(item -> new CertificatePreviewResponse.Item(item.text(), item.x(), item.y(), item.fontSize(), item.color(),
-                        item.align(), item.fontFamily(), item.bold(), item.italic(), item.underline()))
-                .toList();
+        List<CertificatePreviewResponse.Item> items = new ArrayList<>(toRenderItems(config.getFieldLayout(), buildValues(certificate, config)).stream()
+                .map(item -> new CertificatePreviewResponse.Item("TEXT", item.text(), item.x(), item.y(), item.fontSize(), item.color(),
+                        item.align(), item.fontFamily(), item.bold(), item.italic(), item.underline(), null, null))
+                .toList());
+        // Mã QR chỉ sinh khi bố cục có phần tử QR, trả kèm bản xem trước rồi bỏ (không lưu).
+        List<CertificateLayoutItem> qrItems = qrItems(config.getFieldLayout());
+        if (!qrItems.isEmpty()) {
+            String image = qrService.toSvgDataUrl(qrService.generate(certificate.getCertificateCode()));
+            for (CertificateLayoutItem qr : qrItems) {
+                items.add(new CertificatePreviewResponse.Item(QR_TYPE, certificate.getCertificateCode(),
+                        valueOr(qr.getX(), 0.5), valueOr(qr.getY(), 0.5), 0, null, "center", null, false, false, false,
+                        qrSize(qr), image));
+            }
+        }
         return CertificatePreviewResponse.builder()
                 .configured(true)
                 .paperSize(config.getPaperSize())
@@ -497,22 +518,55 @@ public class CertificateConfigService {
                     "Chỉ xuất được chứng nhận đã duyệt. Vui lòng bỏ các chứng nhận sau: " + String.join("; ", notApproved));
         }
 
-        for (Certificate certificate : loaded) {
-            String code = certificate.getCertificateCode();
-            TrainingCourse course = certificate.getCourse();
-            String courseTypeCode = course != null && course.getCourseType() != null
-                    ? course.getCourseType().getTypeCode() : null;
-            CertificateConfig config = resolve(normalize(courseTypeCode), chainOf(course))
-                    .orElseThrow(() -> validationHelper.validationError(
-                            "Chưa có cấu hình chứng nhận (riêng hoặc chung) cho chứng nhận: " + code));
+        // Bước 1: xác định cấu hình của từng chứng nhận và khởi động sinh mã QR chạy nền song song
+        // (chỉ với chứng nhận có cấu hình chứa phần tử QR), trong lúc tiếp tục chuẩn bị dữ liệu chữ.
+        List<CertificateConfig> configs = new ArrayList<>();
+        List<CompletableFuture<BitMatrix>> qrFutures = new ArrayList<>();
+        try {
+            for (Certificate certificate : loaded) {
+                String code = certificate.getCertificateCode();
+                TrainingCourse course = certificate.getCourse();
+                String courseTypeCode = course != null && course.getCourseType() != null
+                        ? course.getCourseType().getTypeCode() : null;
+                CertificateConfig config = resolve(normalize(courseTypeCode), chainOf(course))
+                        .orElseThrow(() -> validationHelper.validationError(
+                                "Chưa có cấu hình chứng nhận (riêng hoặc chung) cho chứng nhận: " + code));
+                configs.add(config);
+                qrFutures.add(qrItems(config.getFieldLayout()).isEmpty() ? null : qrService.generateAsync(code));
+            }
 
-            Map<String, String> values = buildValues(certificate, config);
-            float[] dims = pageDimensions(config.getPaperSize(), config.getOrientation());
-            pages.add(new CertificatePdfRenderer.RenderPage(
-                    decodeBackground(config.getBackgroundImage()),
-                    toRenderItems(config.getFieldLayout(), values),
-                    dims[0], dims[1]));
-            certificates.add(certificate);
+            // Bước 2: dựng phần chữ của từng trang (truy vấn dữ liệu) song song với việc sinh QR.
+            List<Map<String, String>> valuesList = new ArrayList<>();
+            for (int i = 0; i < loaded.size(); i++) {
+                valuesList.add(buildValues(loaded.get(i), configs.get(i)));
+            }
+
+            // Bước 3: chờ TẤT CẢ mã QR xong rồi mới dựng PDF, nên không bao giờ có PDF thiếu mã QR
+            // khi cấu hình có phần tử QR. Một mã QR lỗi / quá thời gian thì cả lần xuất thất bại.
+            awaitQrCodes(qrFutures, loaded);
+
+            for (int i = 0; i < loaded.size(); i++) {
+                Certificate certificate = loaded.get(i);
+                CertificateConfig config = configs.get(i);
+                List<CertificatePdfRenderer.RenderQr> qrCodes = new ArrayList<>();
+                CompletableFuture<BitMatrix> future = qrFutures.get(i);
+                if (future != null) {
+                    BitMatrix matrix = future.join();
+                    for (CertificateLayoutItem qr : qrItems(config.getFieldLayout())) {
+                        qrCodes.add(new CertificatePdfRenderer.RenderQr(matrix, valueOr(qr.getX(), 0.5), valueOr(qr.getY(), 0.5), qrSize(qr)));
+                    }
+                }
+                float[] dims = pageDimensions(config.getPaperSize(), config.getOrientation());
+                pages.add(new CertificatePdfRenderer.RenderPage(
+                        decodeBackground(config.getBackgroundImage()),
+                        toRenderItems(config.getFieldLayout(), valuesList.get(i)),
+                        qrCodes,
+                        dims[0], dims[1]));
+                certificates.add(certificate);
+            }
+        } finally {
+            // Lỗi giữa chừng: hủy các mã QR còn đang sinh.
+            qrFutures.stream().filter(f -> f != null && !f.isDone()).forEach(f -> f.cancel(true));
         }
 
         byte[] content;
@@ -523,6 +577,51 @@ public class CertificateConfigService {
             throw validationHelper.validationError("Không thể tạo PDF chứng nhận: " + e.getMessage());
         }
         return new PdfExport(content, buildFilename(certificates));
+    }
+
+    // Chờ toàn bộ mã QR đang sinh nền; báo rõ chứng nhận nào không tạo được mã QR.
+    private void awaitQrCodes(List<CompletableFuture<BitMatrix>> futures, List<Certificate> certificates) {
+        CompletableFuture<?>[] pending = futures.stream().filter(f -> f != null).toArray(CompletableFuture[]::new);
+        if (pending.length == 0) {
+            return;
+        }
+        try {
+            CompletableFuture.allOf(pending).get(QR_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        } catch (TimeoutException e) {
+            throw validationHelper.validationError("Tạo mã QR chứng nhận quá thời gian, vui lòng thử lại với ít chứng nhận hơn");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw validationHelper.validationError("Tạo mã QR chứng nhận bị gián đoạn, vui lòng thử lại");
+        } catch (Exception e) {
+            List<String> failed = new ArrayList<>();
+            for (int i = 0; i < futures.size(); i++) {
+                CompletableFuture<BitMatrix> future = futures.get(i);
+                if (future != null && future.isCompletedExceptionally()) {
+                    failed.add(certificates.get(i).getCertificateCode());
+                }
+            }
+            Throwable cause = e.getCause() instanceof CompletionException && e.getCause().getCause() != null
+                    ? e.getCause().getCause() : e.getCause();
+            throw validationHelper.validationError("Không thể tạo mã QR cho chứng nhận: " + String.join(", ", failed)
+                    + (cause != null && cause.getMessage() != null ? " (" + cause.getMessage() + ")" : ""));
+        }
+    }
+
+    private List<CertificateLayoutItem> qrItems(List<CertificateLayoutItem> layout) {
+        if (layout == null) {
+            return List.of();
+        }
+        return layout.stream().filter(item -> QR_TYPE.equalsIgnoreCase(item.getType())).toList();
+    }
+
+    // Cạnh mã QR theo tỉ lệ chiều cao trang; giới hạn để mã luôn đủ lớn để quét và không tràn trang.
+    private double qrSize(CertificateLayoutItem item) {
+        double size = item.getSize() == null || item.getSize() <= 0 ? 0.15 : item.getSize();
+        return Math.min(0.9, Math.max(0.03, size));
+    }
+
+    private static double valueOr(Double value, double fallback) {
+        return value == null ? fallback : value;
     }
 
     // Kích thước trang (điểm) theo khổ giấy + hướng in. Mặc định A4 ngang.
@@ -547,6 +646,9 @@ public class CertificateConfigService {
             return items;
         }
         for (CertificateLayoutItem item : layout) {
+            if (QR_TYPE.equalsIgnoreCase(item.getType())) {
+                continue; // Mã QR vẽ riêng (xem RenderQr).
+            }
             String text = "TEXT".equalsIgnoreCase(item.getType())
                     ? item.getText()
                     : values.getOrDefault(item.getFieldKey(), "");

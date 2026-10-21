@@ -57,7 +57,7 @@ class LeaderValidationHelperTest {
 
         ApiException exception = assertThrows(ApiException.class, () -> helper.validateCreateEmailUniqueness("leader@example.com"));
 
-        assertEquals("Email leader đã tồn tại", exception.getMessage());
+        assertEquals("Email Huynh Trưởng đã tồn tại", exception.getMessage());
     }
 
     @Test
@@ -70,7 +70,7 @@ class LeaderValidationHelperTest {
                 () -> helper.validateUpdateEmailUniqueness(leaderId, "leader@example.com", "old@example.com")
         );
 
-        assertEquals("Email leader đã tồn tại", exception.getMessage());
+        assertEquals("Email Huynh Trưởng đã tồn tại", exception.getMessage());
     }
 
     @Test

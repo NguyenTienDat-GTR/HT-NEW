@@ -1,5 +1,6 @@
 package phucuong.ht.modules.certificate.config.service;
 
+import com.google.zxing.common.BitMatrix;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
@@ -18,7 +19,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-// Vẽ PDF chứng nhận: mỗi trang = một ảnh nền + các phần tử text đặt theo tọa độ tỉ lệ.
+// Vẽ PDF chứng nhận: mỗi trang = một ảnh nền + các phần tử text (và mã QR nếu bố cục có) đặt theo tọa độ tỉ lệ.
 @Component
 public class CertificatePdfRenderer {
 
@@ -32,8 +33,12 @@ public class CertificatePdfRenderer {
                              String fontFamily, boolean bold, boolean italic, boolean underline) {
     }
 
+    // Mã QR đã sinh xong: x,y là tâm (tỉ lệ 0..1), size là cạnh theo tỉ lệ chiều cao trang.
+    public record RenderQr(BitMatrix matrix, double x, double y, double size) {
+    }
+
     // pageWidth/pageHeight tính bằng điểm (points); <= 0 nghĩa là dùng kích thước ảnh nền (hoặc A4).
-    public record RenderPage(byte[] background, List<RenderItem> items, float pageWidth, float pageHeight) {
+    public record RenderPage(byte[] background, List<RenderItem> items, List<RenderQr> qrCodes, float pageWidth, float pageHeight) {
     }
 
     public byte[] renderPdf(List<RenderPage> pages) {
@@ -109,6 +114,12 @@ public class CertificatePdfRenderer {
             if (image != null) {
                 cs.drawImage(image, 0, 0, width, height);
             }
+            if (page.qrCodes() != null) {
+                for (RenderQr qr : page.qrCodes()) {
+                    // Không nuốt lỗi QR: thiếu mã QR thì không được xuất PDF.
+                    drawQr(cs, qr, width, height);
+                }
+            }
             if (page.items() != null) {
                 for (RenderItem item : page.items()) {
                     try {
@@ -165,6 +176,43 @@ public class CertificatePdfRenderer {
             cs.addRect(x, underlineY, textWidth, thickness);
             cs.fill();
         }
+    }
+
+    // Vẽ mã QR dạng vector (sắc nét khi in): nền trắng kèm vùng yên tĩnh rồi các module đen gộp theo từng hàng.
+    private void drawQr(PDPageContentStream cs, RenderQr qr, float pageWidth, float pageHeight) throws Exception {
+        BitMatrix matrix = qr.matrix();
+        if (matrix == null) {
+            throw new IllegalStateException("Thiếu mã QR của chứng nhận");
+        }
+        double sizeRatio = qr.size() > 0 ? qr.size() : 0.15;
+        float side = (float) sizeRatio * pageHeight;
+        int modules = matrix.getWidth() + CertificateQrService.QUIET_ZONE * 2;
+        float module = side / modules;
+        float left = (float) qr.x() * pageWidth - side / 2f;
+        float top = pageHeight - ((float) qr.y() * pageHeight - side / 2f);
+
+        cs.setNonStrokingColor(Color.WHITE);
+        cs.addRect(left, top - side, side, side);
+        cs.fill();
+
+        cs.setNonStrokingColor(Color.BLACK);
+        for (int y = 0; y < matrix.getHeight(); y++) {
+            int x = 0;
+            while (x < matrix.getWidth()) {
+                if (!matrix.get(x, y)) {
+                    x++;
+                    continue;
+                }
+                int start = x;
+                while (x < matrix.getWidth() && matrix.get(x, y)) {
+                    x++;
+                }
+                float rx = left + (start + CertificateQrService.QUIET_ZONE) * module;
+                float ry = top - (y + CertificateQrService.QUIET_ZONE + 1) * module;
+                cs.addRect(rx, ry, (x - start) * module, module);
+            }
+        }
+        cs.fill();
     }
 
     // Loại bỏ ký tự font không mã hoá được để showText không ném lỗi.

@@ -119,6 +119,6 @@ class ExecutiveBoardAssignmentServiceTest {
         var authentication = new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
 
         var exception = assertThrows(Exception.class, () -> service.create(request, authentication));
-        assertEquals("Mỗi chức vụ chỉ được gán cho một leader trong cùng đơn vị", exception.getMessage());
+        assertEquals("Mỗi chức vụ chỉ được gán cho một Huynh Trưởng trong cùng đơn vị", exception.getMessage());
     }
 }
