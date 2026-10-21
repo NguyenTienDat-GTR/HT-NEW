@@ -102,10 +102,10 @@ class LeaderLevelServiceTest {
 
     @Test
     void previousLevelIsTheRequirementForTheNextOne() {
-        assertEquals(Optional.of("DU_TRUONG"), service.previousOf(diocese, "HT_I"));
-        assertEquals(Optional.of("HT_I"), service.previousOf(diocese, "HT_II"));
-        assertEquals(Optional.empty(), service.previousOf(diocese, "NONE"));
-        assertEquals("DU_TRUONG", service.list(authentication).get(2).getPreviousCode());
+        assertEquals(List.of("DU_TRUONG"), service.previousOf(diocese, "HT_I"));
+        assertEquals(List.of("HT_I"), service.previousOf(diocese, "HT_II"));
+        assertEquals(List.of(), service.previousOf(diocese, "NONE"));
+        assertEquals(List.of("DU_TRUONG"), service.list(authentication).get(2).getPreviousCodes());
     }
 
     @Test
@@ -127,16 +127,48 @@ class LeaderLevelServiceTest {
     @Test
     void reorderRequiresExactlyTheMovableLevels() {
         LeaderLevelReorderRequest request = new LeaderLevelReorderRequest();
-        request.setLevelCodes(List.of("HT_I", "DU_TRUONG", "HT_II"));
+        // Thiếu một cấp.
+        request.setTiers(List.of(List.of("HT_I"), List.of("DU_TRUONG"), List.of("HT_II")));
+        assertThrows(ApiException.class, () -> service.reorder(request, authentication));
+        // Bậc rỗng.
+        request.setTiers(List.of(List.of("HT_III"), List.of(), List.of("HT_II"), List.of("HT_I"), List.of("DU_TRUONG")));
+        assertThrows(ApiException.class, () -> service.reorder(request, authentication));
+        // Một cấp xuất hiện hai lần.
+        request.setTiers(List.of(List.of("HT_III", "HT_III"), List.of("HT_II"), List.of("HT_I"), List.of("DU_TRUONG")));
         assertThrows(ApiException.class, () -> service.reorder(request, authentication));
 
-        request.setLevelCodes(List.of("HT_III", "HT_II", "HT_I", "DU_TRUONG"));
+        request.setTiers(List.of(List.of("HT_III"), List.of("HT_II"), List.of("HT_I"), List.of("DU_TRUONG")));
         service.reorder(request, authentication);
 
         assertEquals(1, levels.get(4).getDisplayOrder());
         assertEquals(4, levels.get(1).getDisplayOrder());
         // Cấp hệ thống giữ thứ tự 0.
         assertEquals(0, levels.get(0).getDisplayOrder());
+    }
+
+    @Test
+    void levelsInTheSameTierAreEqualAndShareTheSameRequirement() {
+        LeaderLevelReorderRequest request = new LeaderLevelReorderRequest();
+        // Dự trưởng < (HT cấp I = HT cấp II) < HT cấp III.
+        request.setTiers(List.of(List.of("DU_TRUONG"), List.of("HT_I", "HT_II"), List.of("HT_III")));
+
+        service.reorder(request, authentication);
+
+        assertEquals(1, levels.get(1).getDisplayOrder());
+        assertEquals(2, levels.get(2).getDisplayOrder());
+        assertEquals(2, levels.get(3).getDisplayOrder());
+        assertEquals(3, levels.get(4).getDisplayOrder());
+        var order = service.order(diocese);
+        // Bằng cấp: không bên nào cao hơn bên nào, nhưng cùng cao hơn Dự trưởng và cùng thấp hơn HT cấp III.
+        assertFalse(order.higher("HT_II", "HT_I"));
+        assertFalse(order.higher("HT_I", "HT_II"));
+        assertTrue(order.higher("HT_I", "DU_TRUONG"));
+        assertTrue(order.higher("HT_III", "HT_II"));
+        // Cấp cùng bậc cùng có điều kiện là bậc ngay trước.
+        var responses = service.list(authentication);
+        assertEquals(List.of("DU_TRUONG"), responses.get(2).getPreviousCodes());
+        assertEquals(List.of("DU_TRUONG"), responses.get(3).getPreviousCodes());
+        assertEquals(List.of("HT_I", "HT_II"), responses.get(4).getPreviousCodes());
     }
 
     @Test
@@ -177,7 +209,7 @@ class LeaderLevelServiceTest {
 
         assertEquals("HUAN_LUYEN_VIEN_CAP_IV", response.getLevelCode());
         assertEquals(5, response.getDisplayOrder());
-        assertEquals("HT_III", response.getPreviousCode());
+        assertEquals(List.of("HT_III"), response.getPreviousCodes());
         ArgumentCaptor<LeaderLevel> saved = ArgumentCaptor.forClass(LeaderLevel.class);
         verify(repository).persist(saved.capture());
         assertEquals(diocese, saved.getValue().getDioceseId());

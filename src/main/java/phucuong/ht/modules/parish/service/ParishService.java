@@ -1,5 +1,6 @@
 package phucuong.ht.modules.parish.service;
 
+import phucuong.ht.config.EvictCaches;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
@@ -62,6 +63,7 @@ public class ParishService {
     @Autowired(required = false)
     private RbacAuthRefreshNotifier authRefreshNotifier;
 
+    @EvictCaches.Analytics
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true),
@@ -133,6 +135,7 @@ public class ParishService {
         return toParishResponse(parishValidationHelper.requireExistingParishWithDeaneryAndDiocese(id));
     }
 
+    @EvictCaches.Analytics
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true),
@@ -162,6 +165,7 @@ public class ParishService {
         }
     }
 
+    @EvictCaches.Analytics
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true),

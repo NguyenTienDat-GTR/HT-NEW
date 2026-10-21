@@ -100,17 +100,17 @@ public class LeaderLevelService {
         return new LevelOrder(orders, names);
     }
 
-    // Cấp đứng ngay trước trong thứ tự (điều kiện để đạt cấp này).
+    // Các cấp của bậc ngay trước (điều kiện để đạt cấp này); rỗng nếu là bậc thấp nhất hoặc không có mã.
     @Transactional(readOnly = true)
-    public Optional<String> previousOf(UUID dioceseId, String code) {
-        String previous = null;
-        for (LeaderLevel level : repository.findAllOrdered(dioceseId)) {
-            if (level.getLevelCode().equals(code)) {
-                return Optional.ofNullable(previous);
-            }
-            previous = level.getLevelCode();
-        }
-        return Optional.empty();
+    public List<String> previousOf(UUID dioceseId, String code) {
+        List<LeaderLevel> levels = repository.findAllOrdered(dioceseId);
+        Integer current = levels.stream().filter(level -> level.getLevelCode().equals(code)).map(LeaderLevel::getDisplayOrder).findFirst().orElse(null);
+        return current == null ? List.of() : previousTier(levels, current).stream().map(LeaderLevel::getLevelCode).toList();
+    }
+
+    private static List<LeaderLevel> previousTier(List<LeaderLevel> levels, int order) {
+        int previousOrder = levels.stream().map(LeaderLevel::getDisplayOrder).filter(value -> value < order).max(Integer::compare).orElse(Integer.MIN_VALUE);
+        return levels.stream().filter(level -> level.getDisplayOrder() == previousOrder).toList();
     }
 
     // Mã cấp độ phải có trong danh mục của giáo phận; trả về mã đã chuẩn hóa (hoặc null nếu để trống).
@@ -247,33 +247,45 @@ public class LeaderLevelService {
         return listOne(dioceseId, code);
     }
 
-    // Sắp xếp lại thứ tự: danh sách phải gồm đủ và đúng các cấp không phải cấp hệ thống, từ thấp đến cao.
+    // Sắp xếp lại: danh sách các bậc từ thấp đến cao, mỗi bậc gồm các cấp bằng nhau. Phải gồm đủ và đúng các cấp
+    // không phải cấp hệ thống, mỗi cấp một lần và không có bậc rỗng.
     @Transactional
     public List<LeaderLevelResponse> reorder(LeaderLevelReorderRequest request, Authentication authentication) {
         UUID dioceseId = requireActorDiocese(authentication);
         List<LeaderLevel> all = repository.findAllOrdered(dioceseId);
-        List<LeaderLevel> movable = all.stream().filter(level -> !Boolean.TRUE.equals(level.getIsSystem())).toList();
-        List<String> requested = request.getLevelCodes();
-        Set<String> expected = new HashSet<>();
-        movable.forEach(level -> expected.add(level.getLevelCode()));
-        if (requested.size() != expected.size() || !expected.equals(new HashSet<>(requested))) {
-            throw validationHelper.validationError("Danh sách sắp xếp phải gồm đủ và đúng các cấp độ hiện có (không tính cấp hệ thống)");
+        Map<String, LeaderLevel> movable = new LinkedHashMap<>();
+        all.stream().filter(level -> !Boolean.TRUE.equals(level.getIsSystem())).forEach(level -> movable.put(level.getLevelCode(), level));
+
+        List<List<String>> tiers = request.getTiers();
+        Set<String> seen = new HashSet<>();
+        int count = 0;
+        for (List<String> tier : tiers) {
+            if (tier == null || tier.isEmpty()) {
+                throw validationHelper.validationError("Mỗi bậc cấp độ phải có ít nhất một cấp");
+            }
+            for (String code : tier) {
+                count++;
+                seen.add(code);
+            }
+        }
+        if (count != movable.size() || !seen.equals(movable.keySet())) {
+            throw validationHelper.validationError("Danh sách sắp xếp phải gồm đủ và đúng các cấp độ hiện có (không tính cấp hệ thống), mỗi cấp một lần");
         }
         String actor = securityUtils.currentAuditActor(authentication);
         OffsetDateTime now = OffsetDateTime.now();
-        // Cấp hệ thống giữ thứ tự 0, các cấp còn lại đánh số 1..n. Ràng buộc duy nhất kiểm tra khi commit.
-        int next = 1;
-        Map<String, LeaderLevel> byCode = new LinkedHashMap<>();
-        movable.forEach(level -> byCode.put(level.getLevelCode(), level));
-        for (String code : requested) {
-            LeaderLevel level = byCode.get(code);
-            if (level.getDisplayOrder() != next) {
-                level.setDisplayOrder(next);
-                level.setUpdatedAt(now);
-                level.setUpdatedBy(actor);
-                repository.merge(level);
+        // Cấp hệ thống giữ bậc 0, các bậc còn lại đánh số 1..n; các cấp cùng bậc có cùng số thứ tự.
+        int order = 1;
+        for (List<String> tier : tiers) {
+            for (String code : tier) {
+                LeaderLevel level = movable.get(code);
+                if (level.getDisplayOrder() != order) {
+                    level.setDisplayOrder(order);
+                    level.setUpdatedAt(now);
+                    level.setUpdatedBy(actor);
+                    repository.merge(level);
+                }
             }
-            next++;
+            order++;
         }
         return listFor(dioceseId);
     }
@@ -324,22 +336,20 @@ public class LeaderLevelService {
 
     private List<LeaderLevelResponse> toResponses(List<LeaderLevel> levels, Map<String, Usage> usage) {
         List<LeaderLevelResponse> result = new ArrayList<>();
-        LeaderLevel previous = null;
         for (LeaderLevel level : levels) {
             Usage used = usage == null ? null : usage.getOrDefault(level.getLevelCode(), new Usage(0, 0, 0, 0));
+            List<LeaderLevel> previous = previousTier(levels, level.getDisplayOrder());
             result.add(LeaderLevelResponse.builder()
                     .levelCode(level.getLevelCode())
                     .levelName(level.getLevelName())
                     .displayOrder(level.getDisplayOrder())
                     .isSystem(level.getIsSystem())
                     .description(level.getDescription())
-                    .previousCode(previous == null ? null : previous.getLevelCode())
-                    .previousName(previous == null ? null : previous.getLevelName())
-                    .leaderCount(used == null ? null : used.leaders())
+                    .previousCodes(previous.stream().map(LeaderLevel::getLevelCode).toList())
+                    .previousNames(previous.stream().map(LeaderLevel::getLevelName).toList())
                     .courseTypeCount(used == null ? null : used.courseTypes())
                     .deletable(used == null ? null : !Boolean.TRUE.equals(level.getIsSystem()) && !used.inUse())
                     .build());
-            previous = level;
         }
         return result;
     }

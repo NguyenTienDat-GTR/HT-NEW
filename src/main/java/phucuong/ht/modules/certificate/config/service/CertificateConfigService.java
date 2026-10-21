@@ -447,6 +447,9 @@ public class CertificateConfigService {
     public CertificatePreviewResponse preview(String certificateCode) {
         Certificate certificate = certificateRepository.findByCodeWithLeaderAndCourse(certificateCode)
                 .orElseThrow(() -> validationHelper.notFound("Không tìm thấy chứng nhận: " + certificateCode));
+        if (certificate.getApprovalStatus() == WorkflowApprovalStatus.REVOKED) {
+            throw validationHelper.conflict("Chứng nhận đã bị thu hồi nên không có bản xem trước");
+        }
         TrainingCourse course = certificate.getCourse();
         String courseTypeCode = course != null && course.getCourseType() != null ? course.getCourseType().getTypeCode() : null;
         Optional<CertificateConfig> found = resolve(normalize(courseTypeCode), chainOf(course));

@@ -22,7 +22,9 @@ import phucuong.ht.modules.certificate.service.CertificateRealtimeNotifier;
 import phucuong.ht.modules.deanery.model.entity.Deanery;
 import phucuong.ht.modules.deanery.repository.DeaneryRepository;
 import phucuong.ht.modules.leader.model.entity.Leader;
+import phucuong.ht.config.EvictCaches;
 import phucuong.ht.modules.leaderLevel.service.LeaderLevelService;
+import phucuong.ht.modules.training.CourseActivityGuard;
 import phucuong.ht.modules.leaderLevel.service.LeaderLevelService.LevelOrder;
 import phucuong.ht.modules.leader.repository.LeaderRepository;
 import phucuong.ht.modules.notification.service.TrainingNotificationCommand;
@@ -82,6 +84,7 @@ public class CourseParticipationService {
     private final TrainingNotificationRecipientResolver notificationRecipientResolver;
     private final TrainingNotificationService trainingNotificationService;
     private final LeaderLevelService leaderLevelService;
+    private final CourseActivityGuard courseActivityGuard;
 
     @Transactional(readOnly = true)
     public Page<CourseParticipationResponse> findAll(BaseSearchRequest request, Authentication authentication) {
@@ -150,10 +153,12 @@ public class CourseParticipationService {
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy hồ sơ đào tạo: " + participationId)));
     }
 
-    @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, allEntries = true)
+    @EvictCaches.Courses
+    @EvictCaches.Analytics
     @Transactional
     public TrainingRegistrationBatchResponse register(String courseCode, TrainingRegistrationRequest request, Authentication authentication) {
         TrainingCourse course = requireCourse(courseCode);
+        courseActivityGuard.requireActive(course);
         requireActiveRegistrationData(course);
         requireRegistrationWindowOpen(course);
 
@@ -388,10 +393,13 @@ public class CourseParticipationService {
                 .build();
     }
 
+    @EvictCaches.Courses
+    @EvictCaches.Analytics
     @Transactional
     public CourseParticipationResponse deaneryApprove(String participationId, TrainingApprovalRequest request, Authentication authentication) {
         CourseParticipation participation = courseParticipationRepository.findByIdWithLeaderAndCourse(participationId)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy đăng ký khóa huấn luyện " + participationId));
+        courseActivityGuard.requireActive(participation.getCourse());
         if (!trainingWorkflowSupport.isDeaneryManaged(participation.getCourse().getCourseType())) {
             throw commonValidationHelper.validationError("Chỉ khóa Dự trưởng chỉ cần giáo hạt duyệt danh sách");
         }
@@ -409,10 +417,13 @@ public class CourseParticipationService {
         return toResponse(participation);
     }
 
+    @EvictCaches.Courses
+    @EvictCaches.Analytics
     @Transactional
     public CourseParticipationResponse dioceseApprove(String participationId, TrainingApprovalRequest request, Authentication authentication) {
         CourseParticipation participation = courseParticipationRepository.findByIdWithLeaderAndCourse(participationId)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy đăng ký khóa huấn luyện " + participationId));
+        courseActivityGuard.requireActive(participation.getCourse());
         if (trainingWorkflowSupport.isDeaneryManaged(participation.getCourse().getCourseType())) {
             throw commonValidationHelper.validationError("Khóa Dự trưởng không không cần giáo phận duyệt danh sách");
         }
@@ -435,10 +446,12 @@ public class CourseParticipationService {
             @CacheEvict(cacheNames = CacheNames.CERTIFICATE_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.CERTIFICATE_DETAIL, allEntries = true)
     })
+    @EvictCaches.Analytics
     @Transactional
     public CourseParticipationResponse score(String participationId, TrainingScoreRequest request, Authentication authentication) {
         CourseParticipation participation = courseParticipationRepository.findByIdWithLeaderAndCourse(participationId)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy đăng ký khóa huấn luyện " + participationId));
+        courseActivityGuard.requireActive(participation.getCourse());
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người nhập điểm");
         OffsetDateTime now = OffsetDateTime.now();
 
@@ -924,11 +937,13 @@ public class CourseParticipationService {
     }
 
     // Thu hồi đăng ký: chỉ người gửi đăng ký, và chỉ khi hồ sơ còn chờ duyệt. Hồ sơ bị xóa để huynh trưởng có thể được đăng ký lại.
-    @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, allEntries = true)
+    @EvictCaches.Courses
+    @EvictCaches.Analytics
     @Transactional
     public void withdraw(String participationId, Authentication authentication) {
         CourseParticipation participation = courseParticipationRepository.findByIdWithLeaderAndCourse(participationId)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy đăng ký khóa huấn luyện " + participationId));
+        courseActivityGuard.requireActive(participation.getCourse());
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người thu hồi đăng ký");
         if (!actor.equals(participation.getCreatedBy())) {
             throw commonValidationHelper.forbidden("Chỉ người gửi đăng ký mới được thu hồi đăng ký");
@@ -951,10 +966,13 @@ public class CourseParticipationService {
             @CacheEvict(cacheNames = CacheNames.CERTIFICATE_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.CERTIFICATE_DETAIL, allEntries = true)
     })
+    @EvictCaches.Courses
+    @EvictCaches.Analytics
     @Transactional
     public void removeParticipant(String participationId, Authentication authentication) {
         CourseParticipation participation = courseParticipationRepository.findByIdWithLeaderAndCourse(participationId)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy hồ sơ tham dự " + participationId));
+        courseActivityGuard.requireActive(participation.getCourse());
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người xóa hồ sơ");
         if (!canApproveCourseOf(participation, authentication)) {
             throw commonValidationHelper.forbidden("Không có quyền xóa hồ sơ khỏi danh sách tham dự");
@@ -977,6 +995,8 @@ public class CourseParticipationService {
     }
 
     // Duyệt hoặc từ chối nhiều hồ sơ một lần; hồ sơ không hợp lệ được bỏ qua và trả về kèm lý do.
+    @EvictCaches.Courses
+    @EvictCaches.Analytics
     @Transactional
     public TrainingBulkApprovalResponse bulkApprove(TrainingBulkApprovalRequest request, Authentication authentication) {
         boolean approved = Boolean.TRUE.equals(request.getApproved());
@@ -1035,6 +1055,9 @@ public class CourseParticipationService {
     private String bulkApprovalProblem(CourseParticipation participation, Authentication authentication) {
         if (!canApproveCourseOf(participation, authentication)) {
             return "Không có quyền duyệt hồ sơ này";
+        }
+        if (participation.getCourse() != null && Boolean.FALSE.equals(participation.getCourse().getStatus())) {
+            return "Khóa huấn luyện đã bị vô hiệu hóa nên không thể thao tác";
         }
         WorkflowApprovalStatus status = participation.getApprovalStatus();
         if (status != WorkflowApprovalStatus.PENDING && status != WorkflowApprovalStatus.SUBMITTED) {

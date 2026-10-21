@@ -22,7 +22,15 @@ import phucuong.ht.modules.training.scoreComponentTemplate.repository.ScoreCompo
 import phucuong.ht.modules.training.trainingCourse.model.request.CourseRegistrationToggleRequest;
 import phucuong.ht.modules.training.trainingCourse.model.response.CoursePassingScoreLimitResponse;
 import phucuong.ht.modules.training.trainingCourse.model.response.CourseRecipientCandidateResponse;
-import phucuong.ht.common.model.request.StatusToggleRequest;
+import phucuong.ht.config.EvictCaches;
+import phucuong.ht.modules.certificate.model.entity.Certificate;
+import phucuong.ht.modules.certificate.model.enums.CertificateRevocationSource;
+import phucuong.ht.modules.certificate.repository.CertificateRepository;
+import phucuong.ht.modules.certificate.service.CertificateLifecycleService;
+import phucuong.ht.modules.training.CourseActivityGuard;
+import phucuong.ht.modules.training.enums.WorkflowApprovalStatus;
+import phucuong.ht.modules.training.trainingCourse.model.request.CourseStatusToggleRequest;
+import phucuong.ht.modules.training.trainingCourse.model.response.CourseStatusImpactResponse;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.common.validation.AccountScopeValidationHelper;
@@ -73,12 +81,16 @@ public class TrainingCourseService {
     private final DomainEventPublisher domainEventPublisher;
     private final AccountRoleRepository accountRoleRepository;
     private final CourseFinishService courseFinishService;
+    private final CertificateLifecycleService certificateLifecycleService;
+    private final CertificateRepository certificateRepository;
+    private final CourseActivityGuard courseActivityGuard;
     private final phucuong.ht.modules.certificate.service.CertificateRealtimeNotifier certificateRealtimeNotifier;
 
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, allEntries = true)
     })
+    @EvictCaches.Analytics
     @Transactional
     public TrainingCourseResponse create(TrainingCourseCreateRequest request, Authentication authentication) {
         TrainingCourseType courseType = resolveCourseType(request.getCourseTypeCode());
@@ -129,8 +141,11 @@ public class TrainingCourseService {
         }
 
         Page<TrainingCourse> page = trainingCourseRepository.findAll(scopedRequest);
+        // Số tham dự viên đã duyệt của cả trang trong một truy vấn.
+        Map<String, Long> approvedCounts = courseParticipationRepository.countApprovedByCourseCodes(
+                page.getContent().stream().map(TrainingCourse::getCourseCode).toList());
         List<TrainingCourseResponse> content = page.getContent().stream()
-                .map(this::toResponse)
+                .map(course -> toResponse(course, null, approvedCounts.getOrDefault(course.getCourseCode(), 0L)))
                 .toList();
         return new PageImpl<>(content, page.getPageable(), page.getTotalElements());
     }
@@ -198,10 +213,12 @@ public class TrainingCourseService {
             @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, allEntries = true)
     })
+    @EvictCaches.Analytics
     @Transactional
     public TrainingCourseResponse update(String courseCode, TrainingCourseUpdateRequest request, Authentication authentication) {
         TrainingCourse existing = trainingCourseRepository.findByCodeWithType(courseCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy khóa huấn luyện " + courseCode));
+        courseActivityGuard.requireActive(existing);
 
         TrainingCourseType currentType = existing.getCourseType();
         boolean typeChanging = request.getCourseTypeCode() != null
@@ -269,16 +286,70 @@ public class TrainingCourseService {
         return toResponse(existing, courseParticipationRepository.existsByCourseCode(courseCode));
     }
 
-    @Caching(evict = {
-            @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_LIST, allEntries = true),
-            @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, allEntries = true)
-    })
+    // Tác động của việc đổi trạng thái khóa, để cảnh báo trước khi xác nhận: vô hiệu hóa thì thu hồi các chứng nhận đã duyệt,
+    // bật lại thì mở lại các chứng nhận bị thu hồi do vô hiệu hóa.
+    @Transactional(readOnly = true)
+    public CourseStatusImpactResponse statusImpact(String courseCode) {
+        TrainingCourse course = trainingCourseRepository.findByCodeWithType(courseCode)
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy khóa huấn luyện " + courseCode));
+        return CourseStatusImpactResponse.builder()
+                .active(Boolean.TRUE.equals(course.getStatus()))
+                .approvedCertificates(certificateRepository.countByCourseAndStatus(courseCode, WorkflowApprovalStatus.APPROVED))
+                .restorableCertificates(certificateRepository.countRevokedByCourseAndSource(courseCode, CertificateRevocationSource.COURSE_DISABLED))
+                .build();
+    }
+
+    // Vô hiệu hóa / bật lại khóa. Phải gửi đúng trạng thái đích và chữ "Xác nhận"; BE kiểm tra lại cả hai.
+    // Vô hiệu hóa: thu hồi mọi chứng nhận đã duyệt của khóa (lý do: khóa bị vô hiệu hóa), bỏ qua thứ tự cấp.
+    // Bật lại: chỉ mở lại các chứng nhận bị thu hồi do vô hiệu hóa, chứng nhận thu hồi vì lý do khác giữ nguyên.
+    @EvictCaches.Courses
+    @EvictCaches.Certificates
+    @EvictCaches.Leaders
+    @EvictCaches.Analytics
     @Transactional
-    public TrainingCourseResponse toggleStatus(String courseCode, StatusToggleRequest request, Authentication authentication) {
+    public TrainingCourseResponse toggleStatus(String courseCode, CourseStatusToggleRequest request, Authentication authentication) {
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
+        if (request.getTargetStatus() == null) {
+            throw commonValidationHelper.validationError("Phải chỉ rõ trạng thái đích của khóa huấn luyện");
+        }
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái khóa huấn luyện");
-        trainingCourseRepository.toggleStatus(courseCode, actor);
-        return findById(courseCode, authentication);
+        TrainingCourse course = trainingCourseRepository.findByCodeWithType(courseCode)
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy khóa huấn luyện " + courseCode));
+        boolean current = Boolean.TRUE.equals(course.getStatus());
+        boolean target = request.getTargetStatus();
+        if (current == target) {
+            throw commonValidationHelper.conflict("Khóa huấn luyện đã " + (target ? "được bật" : "bị vô hiệu hóa")
+                    + " trước đó, vui lòng tải lại trang");
+        }
+        OffsetDateTime now = OffsetDateTime.now();
+        if (!target) {
+            for (Certificate certificate : certificateLifecycleService.approvedOf(courseCode)) {
+                certificateLifecycleService.revoke(certificate, CertificateLifecycleService.COURSE_DISABLED_REASON,
+                        CertificateRevocationSource.COURSE_DISABLED, false, actor, now);
+            }
+        }
+        course.setStatus(target);
+        course.setUpdatedAt(now);
+        course.setUpdatedBy(actor);
+        if (target) {
+            for (Certificate certificate : certificateLifecycleService.revokedByCourseDisableOf(courseCode)) {
+                certificateLifecycleService.restore(certificate, null, false, actor, now);
+            }
+        }
+        publishCourseStatusEvent(course, target, actor);
+        return toResponse(course, courseParticipationRepository.existsByCourseCode(courseCode));
+    }
+
+    private void publishCourseStatusEvent(TrainingCourse course, boolean active, String actor) {
+        domainEventPublisher.publishAfterCommit(DomainEventMessage.builder()
+                .eventType(active ? "training.course.enabled" : "training.course.disabled")
+                .entityType("trainingCourse")
+                .entityId(course.getCourseCode())
+                .actor(actor)
+                .occurredAt(OffsetDateTime.now())
+                .payload(Map.of("courseCode", course.getCourseCode()))
+                .build());
+        certificateRealtimeNotifier.notifyChanged(active ? "COURSE_ENABLED" : "COURSE_DISABLED", course.getCourseCode(), null);
     }
 
     private String generateUniqueCourseCode() {
@@ -386,10 +457,12 @@ public class TrainingCourseService {
             @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, allEntries = true)
     })
+    @EvictCaches.Analytics
     @Transactional
     public TrainingCourseResponse setRegistrationOpen(String courseCode, CourseRegistrationToggleRequest request, Authentication authentication) {
         TrainingCourse course = trainingCourseRepository.findByCodeWithType(courseCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy khóa huấn luyện " + courseCode));
+        courseActivityGuard.requireActive(course);
         OffsetDateTime now = OffsetDateTime.now();
         CourseRegistrationStatus current = TrainingCourseStatusSupport.registrationStatus(course, now);
         if (current == CourseRegistrationStatus.ENDED) {
@@ -416,6 +489,7 @@ public class TrainingCourseService {
             @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, allEntries = true)
     })
+    @EvictCaches.Analytics
     @Transactional
     public int refreshCourseStatuses() {
         OffsetDateTime now = OffsetDateTime.now();
@@ -605,10 +679,13 @@ public class TrainingCourseService {
             @CacheEvict(cacheNames = CacheNames.CERTIFICATE_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.CERTIFICATE_DETAIL, allEntries = true)
     })
+    @EvictCaches.Leaders
+    @EvictCaches.Analytics
     @Transactional
     public TrainingCourseResponse finishCourse(String courseCode, Authentication authentication) {
         TrainingCourse course = trainingCourseRepository.findByCodeWithType(courseCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy khóa huấn luyện " + courseCode));
+        courseActivityGuard.requireActive(course);
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người kết thúc khóa");
         if (course.getFinishedAt() != null) {
             throw commonValidationHelper.conflict("Khóa huấn luyện đã được kết thúc");
@@ -642,6 +719,7 @@ public class TrainingCourseService {
     public TrainingCourseResponse setScoreLocked(String courseCode, boolean locked, Authentication authentication) {
         TrainingCourse course = trainingCourseRepository.findByCodeWithType(courseCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy khóa huấn luyện " + courseCode));
+        courseActivityGuard.requireActive(course);
         if (!locked && course.getFinishedAt() != null) {
             throw commonValidationHelper.conflict("Khóa đã kết thúc nên không thể mở lại chỉnh sửa điểm");
         }
@@ -663,6 +741,11 @@ public class TrainingCourseService {
     }
 
     private TrainingCourseResponse toResponse(TrainingCourse course, Boolean hasParticipations) {
+        return toResponse(course, hasParticipations,
+                courseParticipationRepository.countApprovedByCourseCodes(List.of(course.getCourseCode())).getOrDefault(course.getCourseCode(), 0L));
+    }
+
+    private TrainingCourseResponse toResponse(TrainingCourse course, Boolean hasParticipations, long approvedParticipantCount) {
         TrainingCourseType courseType = course.getCourseType();
         return TrainingCourseResponse.builder()
                 .courseCode(course.getCourseCode())
@@ -673,6 +756,7 @@ public class TrainingCourseService {
                 .hostYear(course.getHostYear())
                 .yearsActive(course.getYearsActive() == null ? 0 : course.getYearsActive())
                 .hasParticipations(hasParticipations)
+                .approvedParticipantCount(approvedParticipantCount)
                 .scoreLocked(Boolean.TRUE.equals(course.getScoreLocked()))
                 .certificateRequired(trainingWorkflowSupport.requiresCertificate(courseType))
                 .finishedAt(course.getFinishedAt())

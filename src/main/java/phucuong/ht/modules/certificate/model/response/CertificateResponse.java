@@ -42,6 +42,12 @@ public class CertificateResponse {
     private OffsetDateTime revokedAt;
     private String revokedBy;
     private String revocationReason;
+    // MANUAL | COURSE_DISABLED (chỉ khi đang bị thu hồi); chứng nhận do khóa bị vô hiệu hóa không cấp lại riêng lẻ được.
+    private String revocationSource;
+    // Cấp lại chứng nhận đã bị thu hồi.
+    private OffsetDateTime reissuedAt;
+    private String reissuedBy;
+    private String reissueReason;
     private Boolean status;
 
     // Chỉ có ở chi tiết (findById): thông tin huynh trưởng, khóa và kết quả để hiển thị theo nhóm.

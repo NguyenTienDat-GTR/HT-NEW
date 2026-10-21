@@ -83,4 +83,19 @@ public class Certificate extends BaseModel {
 
     @Column(name = "revocation_reason")
     private String revocationReason;
+
+    // Nguồn thu hồi: MANUAL (người dùng thu hồi) hoặc COURSE_DISABLED (khóa bị vô hiệu hóa, tự mở lại khi bật lại khóa).
+    @Enumerated(EnumType.STRING)
+    @Column(name = "revocation_source")
+    private phucuong.ht.modules.certificate.model.enums.CertificateRevocationSource revocationSource;
+
+    // Cấp lại chứng nhận đã bị thu hồi.
+    @Column(name = "reissued_at")
+    private OffsetDateTime reissuedAt;
+
+    @Column(name = "reissued_by")
+    private String reissuedBy;
+
+    @Column(name = "reissue_reason")
+    private String reissueReason;
 }

@@ -6,6 +6,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.config.DomainEventMessage;
+import phucuong.ht.config.EvictCaches;
 import phucuong.ht.config.rabbitMQConfig;
 import phucuong.ht.modules.notification.service.TrainingNotificationCommand;
 import phucuong.ht.modules.notification.service.TrainingNotificationRecipientResolver;
@@ -30,6 +31,8 @@ public class TrainingRegistrationAutoApprovalConsumer {
     private final TrainingNotificationService trainingNotificationService;
 
     @RabbitListener(queues = rabbitMQConfig.DOMAIN_WORKFLOW_QUEUE)
+    @EvictCaches.Courses
+    @EvictCaches.Analytics
     @Transactional
     public void handle(DomainEventMessage message) {
         if (message == null || message.getPayload() == null) {
@@ -48,6 +51,10 @@ public class TrainingRegistrationAutoApprovalConsumer {
         int approvedCount = 0;
         for (CourseParticipation participation : participations) {
             if (!Boolean.TRUE.equals(participation.getEligible())) {
+                continue;
+            }
+            // Khóa đã bị vô hiệu hóa thì không tự duyệt.
+            if (participation.getCourse() != null && Boolean.FALSE.equals(participation.getCourse().getStatus())) {
                 continue;
             }
             if (participation.getApprovalStatus() == WorkflowApprovalStatus.APPROVED

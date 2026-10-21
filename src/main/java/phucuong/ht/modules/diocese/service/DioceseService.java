@@ -1,5 +1,6 @@
 package phucuong.ht.modules.diocese.service;
 
+import phucuong.ht.config.EvictCaches;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
@@ -59,6 +60,7 @@ public class DioceseService {
     @Autowired(required = false)
     private phucuong.ht.modules.leaderLevel.service.LeaderLevelService leaderLevelService;
 
+    @EvictCaches.Analytics
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true)
@@ -119,6 +121,7 @@ public class DioceseService {
         return toDioceseResponse(dioceseValidationHelper.requireExistingDiocese(id));
     }
 
+    @EvictCaches.Analytics
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true)
@@ -136,6 +139,7 @@ public class DioceseService {
         }
     }
 
+    @EvictCaches.Analytics
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true)

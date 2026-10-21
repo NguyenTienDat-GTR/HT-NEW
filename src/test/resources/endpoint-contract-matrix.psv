@@ -192,3 +192,5 @@ DELETE /api/leader-levels/{levelCode}|200|401|403|N/A: level code is a path vari
 POST /api/certificates/bulk-approval|200|401|403|400|N/A: bulk endpoint reports per-item failures in the response body|N/A: bulk endpoint reports per-item failures in the response body
 POST /api/certificates/{certificateCode}/reject|200|401|403|400|404|409
 POST /api/training/courses/{courseCode}/finish|200|401|403|400|404|409
+POST /api/certificates/{certificateCode}/reissue|200|401|403|400|404|409
+GET /api/training/courses/{courseCode}/status-impact|200|401|403|N/A: course code is a path variable only|404|N/A: read-only endpoint does not mutate state

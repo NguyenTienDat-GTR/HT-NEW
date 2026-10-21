@@ -3,20 +3,21 @@ package phucuong.ht.modules.leaderLevel.model.response;
 import lombok.Builder;
 import lombok.Getter;
 
+import java.util.List;
+
 @Getter
 @Builder
 public class LeaderLevelResponse {
     private String levelCode;
     private String levelName;
-    // Thứ tự càng lớn cấp càng cao.
+    // Bậc của cấp: số càng lớn cấp càng cao; các cấp cùng số là bằng cấp nhau.
     private Integer displayOrder;
     private Boolean isSystem;
     private String description;
-    // Cấp đứng ngay trước: điều kiện để đạt cấp này (null với cấp thấp nhất).
-    private String previousCode;
-    private String previousName;
-    // Số nơi đang dùng cấp này (chỉ có ở danh sách quản lý).
-    private Long leaderCount;
+    // Các cấp của bậc ngay trước: điều kiện để đạt cấp này (rỗng với bậc thấp nhất). Bậc có nhiều cấp thì đang ở một trong các cấp đó.
+    private List<String> previousCodes;
+    private List<String> previousNames;
+    // Số loại khóa đang dùng cấp này (chỉ có ở danh sách quản lý).
     private Long courseTypeCount;
     private Boolean deletable;
 }

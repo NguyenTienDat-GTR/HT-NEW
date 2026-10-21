@@ -11,6 +11,7 @@ import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.modules.certificate.model.request.CertificateApproveRequest;
 import phucuong.ht.modules.certificate.model.request.CertificateBulkApprovalRequest;
 import phucuong.ht.modules.certificate.model.request.CertificateRejectRequest;
+import phucuong.ht.modules.certificate.model.request.CertificateReissueRequest;
 import phucuong.ht.modules.certificate.model.request.CertificateRevokeRequest;
 import phucuong.ht.modules.training.courseParticipation.model.response.TrainingBulkApprovalResponse;
 import phucuong.ht.modules.certificate.model.response.CertificateResponse;
@@ -44,6 +45,17 @@ public class CertificateController {
             Authentication authentication
     ) {
         return apiResponse.success("Thu hồi chứng nhận thành công", certificateService.revoke(certificateCode, request, authentication));
+    }
+
+    // Cấp lại chứng nhận đã bị thu hồi vì lý do khác (không phải do khóa bị vô hiệu hóa); cần quyền cấp lại.
+    @PostMapping("/{certificateCode}/reissue")
+    @PreAuthorize("@certificateAccessEvaluator.canReissue(authentication, #certificateCode)")
+    public apiResponse<CertificateResponse> reissue(
+            @PathVariable String certificateCode,
+            @RequestBody CertificateReissueRequest request,
+            Authentication authentication
+    ) {
+        return apiResponse.success("Cấp lại chứng nhận thành công", certificateService.reissue(certificateCode, request, authentication));
     }
 
     @PostMapping("/{certificateCode}/approve")

@@ -1,5 +1,6 @@
 package phucuong.ht.modules.training.courseType.service;
 
+import phucuong.ht.config.EvictCaches;
 import lombok.RequiredArgsConstructor;
 import phucuong.ht.modules.leaderLevel.service.LeaderLevelService;
 import org.springframework.data.domain.Page;
@@ -32,6 +33,9 @@ public class TrainingCourseTypeService {
     private final CommonValidationHelper commonValidationHelper;
     private final LeaderLevelService leaderLevelService;
 
+    @EvictCaches.Courses
+    @EvictCaches.Certificates
+    @EvictCaches.Analytics
     @Transactional
     public TrainingCourseTypeResponse create(TrainingCourseTypeCreateRequest request, Authentication authentication) {
         requireManagementUnitType(request.getManagementUnitType());
@@ -100,6 +104,9 @@ public class TrainingCourseTypeService {
         return toResponse(requireType(typeCode));
     }
 
+    @EvictCaches.Courses
+    @EvictCaches.Certificates
+    @EvictCaches.Analytics
     @Transactional
     public TrainingCourseTypeResponse update(String typeCode, TrainingCourseTypeUpdateRequest request, Authentication authentication) {
         TrainingCourseType courseType = requireType(typeCode);
@@ -141,6 +148,9 @@ public class TrainingCourseTypeService {
         return toResponse(courseType);
     }
 
+    @EvictCaches.Courses
+    @EvictCaches.Certificates
+    @EvictCaches.Analytics
     @Transactional
     public TrainingCourseTypeResponse toggleStatus(String typeCode, StatusToggleRequest request, Authentication authentication) {
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());

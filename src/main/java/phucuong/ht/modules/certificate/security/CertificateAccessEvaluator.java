@@ -36,6 +36,14 @@ public class CertificateAccessEvaluator {
         return hasScopedAccess(authentication, certificateCode, "revoke");
     }
 
+    // Cấp lại chứng nhận đã thu hồi: quyền training.certificate.reissue.{diocese,deanery} trong phạm vi quản lý.
+    public boolean canReissue(Authentication authentication, String certificateCode) {
+        if (securityUtils.hasAuthority(authentication, SUPER_ADMIN_ROLE)) {
+            return false;
+        }
+        return hasScopedAccess(authentication, certificateCode, "reissue");
+    }
+
     public boolean canApprove(Authentication authentication, String certificateCode) {
         if (securityUtils.hasAuthority(authentication, SUPER_ADMIN_ROLE)) {
             return false;

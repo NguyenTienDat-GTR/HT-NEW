@@ -7,7 +7,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import phucuong.ht.common.dto.apiResponse;
-import phucuong.ht.common.model.request.StatusToggleRequest;
+import phucuong.ht.modules.training.trainingCourse.model.request.CourseStatusToggleRequest;
+import phucuong.ht.modules.training.trainingCourse.model.response.CourseStatusImpactResponse;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.modules.training.trainingCourse.model.request.CourseRegistrationToggleRequest;
 import phucuong.ht.modules.training.trainingCourse.model.request.CourseScoreLockRequest;
@@ -102,9 +103,16 @@ public class TrainingCourseController {
     @PreAuthorize("@trainingCourseAccessEvaluator.canToggle(authentication, #courseCode)")
     public apiResponse<TrainingCourseResponse> toggleStatus(
             @PathVariable String courseCode,
-            @Valid @RequestBody StatusToggleRequest request,
+            @Valid @RequestBody CourseStatusToggleRequest request,
             Authentication authentication
     ) {
         return apiResponse.success("Đổi trạng thái khóa huấn luyện thành công", trainingCourseService.toggleStatus(courseCode, request, authentication));
+    }
+
+    // Cảnh báo trước khi vô hiệu hóa / bật lại khóa: số chứng nhận bị thu hồi hoặc được mở lại.
+    @GetMapping("/{courseCode}/status-impact")
+    @PreAuthorize("@trainingCourseAccessEvaluator.canToggle(authentication, #courseCode)")
+    public apiResponse<CourseStatusImpactResponse> statusImpact(@PathVariable String courseCode) {
+        return apiResponse.success("Lấy tác động đổi trạng thái khóa thành công", trainingCourseService.statusImpact(courseCode));
     }
 }
