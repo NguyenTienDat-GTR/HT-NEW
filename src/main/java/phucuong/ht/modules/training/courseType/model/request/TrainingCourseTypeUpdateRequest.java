@@ -18,6 +18,9 @@ public class TrainingCourseTypeUpdateRequest {
 
     private Integer requiredYearsActive;
 
+    @jakarta.validation.constraints.Min(1)
+    private Integer maxYearsAfterPrerequisite;
+
     private String prerequisiteTypeCode;
 
     private String resultingLevel;

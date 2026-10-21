@@ -594,6 +594,30 @@ class CourseParticipationServiceTest {
     }
 
     @Test
+    void courseMustBeTakenWithinMaxYearsAfterPrerequisite() throws Exception {
+        courseParticipationService = buildService();
+        TrainingCourse course = course("SMTL_II", UnitType.DIOCESE);
+        course.setHostYear(2026);
+        course.setYearsActive(1);
+        course.getCourseType().setMaxYearsAfterPrerequisite(3);
+        phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType prerequisite = new phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType();
+        prerequisite.setTypeCode("SMTL_I");
+        course.getCourseType().setPrerequisiteType(prerequisite);
+        phucuong.ht.modules.leader.model.entity.Leader leader = new phucuong.ht.modules.leader.model.entity.Leader();
+        leader.setId(java.util.UUID.randomUUID());
+        var method = CourseParticipationService.class.getDeclaredMethod("isEligible", phucuong.ht.modules.leader.model.entity.Leader.class, TrainingCourse.class);
+        method.setAccessible(true);
+
+        // Đạt khóa tiên quyết 2022, khóa 2026 chỉ cho phép trong vòng 3 năm: 2026 - 2022 = 4 > 3 nên không đủ điều kiện.
+        when(courseParticipationRepository.findLatestCompletedYearByLeaderAndCourseType(leader.getId(), "SMTL_I")).thenReturn(Optional.of(2022));
+        org.junit.jupiter.api.Assertions.assertFalse((Boolean) method.invoke(courseParticipationService, leader, course));
+
+        // Đạt lại năm 2023 thì còn trong hạn (2026 - 2023 = 3).
+        when(courseParticipationRepository.findLatestCompletedYearByLeaderAndCourseType(leader.getId(), "SMTL_I")).thenReturn(Optional.of(2023));
+        org.junit.jupiter.api.Assertions.assertTrue((Boolean) method.invoke(courseParticipationService, leader, course));
+    }
+
+    @Test
     void scoreShouldRejectWhenScoreEditingIsLocked() {
         courseParticipationService = buildService();
         TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);

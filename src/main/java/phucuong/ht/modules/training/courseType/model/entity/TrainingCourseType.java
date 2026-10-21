@@ -37,6 +37,10 @@ public class TrainingCourseType extends BaseModel {
     @Column(name = "required_years_active")
     private Integer requiredYearsActive;
 
+    // Phải đi khóa này trong vòng bao nhiêu năm kể từ lần đạt khóa tiên quyết gần nhất (năm tổ chức khóa - năm đạt <= giá trị này).
+    @Column(name = "max_years_after_prerequisite")
+    private Integer maxYearsAfterPrerequisite;
+
     // Khóa tiên quyết: tham chiếu tới chính loại khóa khác.
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "prerequisite_type_code")

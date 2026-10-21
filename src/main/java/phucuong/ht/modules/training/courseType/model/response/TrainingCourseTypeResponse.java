@@ -15,6 +15,7 @@ public class TrainingCourseTypeResponse {
     private String requiredCurrentLevel;
     private Integer requiredMinAge;
     private Integer requiredYearsActive;
+    private Integer maxYearsAfterPrerequisite;
     private String prerequisiteTypeCode;
     private String prerequisiteTypeName;
     private String resultingLevel;

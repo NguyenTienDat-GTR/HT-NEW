@@ -883,7 +883,14 @@ public class CourseParticipationService {
             return false;
         }
         int requiredYears = course.getYearsActive() == null ? 0 : course.getYearsActive();
-        return resolveHostYear(course) - achievedYear.get() >= requiredYears;
+        int yearsSinceAchieved = resolveHostYear(course) - achievedYear.get();
+        if (yearsSinceAchieved < requiredYears) {
+            return false;
+        }
+        // Giới hạn thời hạn: phải đi khóa này trong vòng N năm kể từ lần đạt khóa tiên quyết gần nhất.
+        // Ví dụ đạt khóa tiên quyết 2022, khóa 2026 tối đa 3 năm: 2026 - 2022 = 4 > 3 nên không đủ điều kiện (phải đạt từ 2023).
+        Integer maxYears = course.getCourseType() == null ? null : course.getCourseType().getMaxYearsAfterPrerequisite();
+        return maxYears == null || yearsSinceAchieved <= maxYears;
     }
 
     private int resolveHostYear(TrainingCourse course) {
