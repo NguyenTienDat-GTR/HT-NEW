@@ -22,6 +22,7 @@ import phucuong.ht.modules.system.model.entity.Permission;
 import phucuong.ht.modules.system.model.entity.Role;
 import phucuong.ht.modules.system.model.enums.PermissionEffect;
 import phucuong.ht.modules.system.model.request.AccountPermissionOverrideBulkRequest;
+import phucuong.ht.modules.system.model.request.AccountPermissionOverrideRevokeRequest;
 import phucuong.ht.modules.system.model.request.AccountPermissionOverrideCreateRequest;
 import phucuong.ht.modules.system.model.request.AccountPermissionOverrideUpdateRequest;
 import phucuong.ht.modules.system.model.response.AccountPermissionOverrideResponse;
@@ -122,6 +123,39 @@ public class AccountPermissionOverrideManagementService {
 
         notifyAccountPermissionChanged(request.getUsername(), "ACCOUNT_PERMISSION_BULK_ASSIGNED");
         return responses;
+    }
+
+    /** Thu hồi nhiều quyền riêng của tài khoản: xóa hẳn các bản ghi. */
+    @Transactional
+    public int bulkRevoke(AccountPermissionOverrideRevokeRequest request, Authentication authentication) {
+        Account account = accountRepository.findActiveByUsername(request.getUsername())
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy tài khoản: " + request.getUsername()));
+        requireAccountWritable(account.getUsername());
+        requireValidSuperAdminTarget(authentication, account);
+        int revoked = 0;
+        for (String permissionCode : new LinkedHashSet<>(request.getPermissionCodes())) {
+            AccountPermissionOverride override = accountPermissionOverrideRepository.findByUsernameAndPermissionCode(request.getUsername(), permissionCode)
+                    .orElseThrow(() -> commonValidationHelper.notFound("Tài khoản chưa được gán quyền riêng: " + permissionCode));
+            authorizationHelper.requireAccountPermissionWriteAccess(authentication, request.getUsername(), override.getPermission());
+            accountPermissionOverrideRepository.deleteOverride(override);
+            revoked++;
+        }
+        notifyAccountPermissionChanged(request.getUsername(), "ACCOUNT_PERMISSION_BULK_REVOKED");
+        return revoked;
+    }
+
+    /** Quyền riêng đã gán cho tài khoản mà tài khoản hiện tại được phép thu hồi. */
+    @Transactional(readOnly = true)
+    public List<PermissionResponse> findRevocablePermissions(String username, Authentication authentication) {
+        Account account = accountRepository.findActiveByUsername(username)
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy tài khoản: " + username));
+        requireValidSuperAdminTarget(authentication, account);
+        return accountPermissionOverrideRepository.findPermissionCodesByUsername(username).stream()
+                .map(systemPermissionRepository::findById)
+                .flatMap(java.util.Optional::stream)
+                .filter(permission -> authorizationHelper.canManageAccountPermission(authentication, username, permission))
+                .map(this::toPermissionResponse)
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -292,6 +326,7 @@ public class AccountPermissionOverrideManagementService {
                 .id(override.getId())
                 .username(override.getAccount() == null ? null : override.getAccount().getUsername())
                 .permissionCode(override.getPermission() == null ? null : override.getPermission().getPermissionCode())
+                .permissionName(override.getPermission() == null ? null : override.getPermission().getPermissionName())
                 .effect(override.getEffect())
                 .reason(override.getReason())
                 .expiresAt(override.getExpiresAt())
@@ -325,18 +360,13 @@ public class AccountPermissionOverrideManagementService {
 
     private void requireValidSuperAdminTarget(Authentication authentication, Account account) {
         if (authorizationHelper.isSuperAdmin(authentication) && !isValidSuperAdminTarget(account)) {
-            throw commonValidationHelper.forbidden("SUPER_ADMIN chỉ được phân quyền riêng cho tài khoản admin hoặc vai trò tự tạo do super-admin tạo");
+            throw commonValidationHelper.forbidden("SUPER_ADMIN chỉ được phân quyền riêng cho tài khoản do super-admin tạo");
         }
     }
 
+    // SUPER_ADMIN chỉ phân quyền riêng cho tài khoản do super-admin tạo; tài khoản do các cấp nhỏ hơn tạo không có quyền CRUD.
     private boolean isValidSuperAdminTarget(Account account) {
-        if (account == null) return false;
-        return accountRoleRepository.findActiveByUsername(account.getUsername()).stream().anyMatch(accountRole -> {
-            Role role = accountRole.getRole();
-            if (role == null) return false;
-            if (ADMIN_ROLE_CODES.contains(role.getRoleCode())) return true;
-            return !Boolean.TRUE.equals(role.getIsSystem()) && "super-admin".equalsIgnoreCase(role.getCreatedBy());
-        });
+        return account != null && ManagementOwnership.isSuperAdminOwned(account.getCreatedBy());
     }
 
     private AccountPermissionOverride createOverride(Account account, Permission permission, String actor) {

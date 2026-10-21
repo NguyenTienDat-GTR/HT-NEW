@@ -184,6 +184,7 @@ public class AccountManagementService {
         Account account = require(username);
         requireAccountWritable(account.getUsername());
         authorizationHelper.requireCanManage(authentication, account);
+        authorizationHelper.requireOwnedByActorScope(authentication, account);
         account.setStatus(!Boolean.TRUE.equals(account.getStatus()));
         account.setUpdatedAt(OffsetDateTime.now());
         account.setUpdatedBy(validation.requireAuditActor(authentication, "Không xác định được người đổi trạng thái tài khoản"));

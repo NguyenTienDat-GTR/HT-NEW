@@ -163,6 +163,58 @@ class RolePermissionManagementServiceTest {
         assertThrows(RuntimeException.class, () -> service().create(request, authentication()));
     }
 
+    @Test
+    void createShouldRejectRoleCreatedByAnotherScope() {
+        Role targetRole = role("OTHER_ROLE", 200);
+        targetRole.setCreatedBy("someone-else");
+        Permission permission = permission("organization.position.read.diocese", "diocese");
+        RolePermissionCreateRequest request = request("OTHER_ROLE", "organization.position.read.diocese");
+        when(roleRepository.findById("OTHER_ROLE")).thenReturn(Optional.of(targetRole));
+        when(roleRepository.findByRoleCodeAndStatusTrue("ADMIN_DIOCESE")).thenReturn(Optional.of(role("ADMIN_DIOCESE", 100)));
+        when(systemPermissionRepository.findById("organization.position.read.diocese")).thenReturn(Optional.of(permission));
+
+        var exception = assertThrows(RuntimeException.class, () -> service().create(request, authentication("organization.position.read.diocese")));
+        assertEquals("Chỉ được quản lý vai trò do cấp của mình tạo; vai trò khác chỉ được xem", exception.getMessage());
+    }
+
+    @Test
+    void superAdminCannotManageRoleCreatedByLowerScope() {
+        Role targetRole = role("LD_TRUONG", 101);
+        targetRole.setIsSystem(false);
+        targetRole.setCreatedBy("phucuongadmin");
+        Permission permission = permission("organization.position.read.diocese", "diocese");
+        RolePermissionCreateRequest request = request("LD_TRUONG", "organization.position.read.diocese");
+        when(roleRepository.findById("LD_TRUONG")).thenReturn(Optional.of(targetRole));
+        when(systemPermissionRepository.findById("organization.position.read.diocese")).thenReturn(Optional.of(permission));
+        AuthUserDetails principal = AuthUserDetails.tokenPrincipal("superadmin", null, List.of("SUPER_ADMIN"), List.of());
+        var authentication = new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
+
+        assertThrows(RuntimeException.class, () -> service().create(request, authentication));
+    }
+
+    @Test
+    void bulkRevokeShouldDeleteAssignmentsOfOwnedRole() {
+        Role targetRole = role("CUSTOM_DIOCESE", 100);
+        targetRole.setIsSystem(false);
+        Permission permission = permission("organization.position.read.diocese", "diocese");
+        RolePermission assignment = new RolePermission();
+        assignment.setRole(targetRole);
+        assignment.setPermission(permission);
+        when(roleRepository.findById("CUSTOM_DIOCESE")).thenReturn(Optional.of(targetRole));
+        when(roleRepository.findByRoleCodeAndStatusTrue("ADMIN_DIOCESE")).thenReturn(Optional.of(role("ADMIN_DIOCESE", 100)));
+        when(rolePermissionRepository.findByRoleCodeAndPermissionCode("CUSTOM_DIOCESE", "organization.position.read.diocese")).thenReturn(Optional.of(assignment));
+        var revokeRequest = new phucuong.ht.modules.system.model.request.RolePermissionRevokeRequest();
+        revokeRequest.setRoleCode("CUSTOM_DIOCESE");
+        revokeRequest.setPermissionCodes(List.of("organization.position.read.diocese"));
+        AuthUserDetails principal = AuthUserDetails.tokenPrincipal("admin-dio", "LEADER1", List.of("ADMIN_DIOCESE"),
+                List.of("system.role_permission.revoke.diocese", "organization.position.read.diocese"));
+
+        int revoked = service().bulkRevoke(revokeRequest, new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities()));
+
+        assertEquals(1, revoked);
+        org.mockito.Mockito.verify(rolePermissionRepository).deleteAssignment(assignment);
+    }
+
     private RolePermissionManagementService service() {
         return service(null);
     }
@@ -191,6 +243,7 @@ class RolePermissionManagementServiceTest {
         role.setRoleCode(roleCode);
         role.setDisplayOrder(displayOrder);
         role.setStatus(true);
+        role.setCreatedBy("admin-dio");
         return role;
     }
 

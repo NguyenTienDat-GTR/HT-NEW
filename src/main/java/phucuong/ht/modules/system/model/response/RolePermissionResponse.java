@@ -11,7 +11,9 @@ import java.time.OffsetDateTime;
 public class RolePermissionResponse {
     private String id;
     private String roleCode;
+    private String roleName;
     private String permissionCode;
+    private String permissionName;
     private PermissionEffect effect;
     private String conditions;
     private String assignedBy;

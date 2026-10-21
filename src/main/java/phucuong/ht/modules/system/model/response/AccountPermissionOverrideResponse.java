@@ -12,6 +12,7 @@ public class AccountPermissionOverrideResponse {
     private String id;
     private String username;
     private String permissionCode;
+    private String permissionName;
     private PermissionEffect effect;
     private String reason;
     private OffsetDateTime expiresAt;

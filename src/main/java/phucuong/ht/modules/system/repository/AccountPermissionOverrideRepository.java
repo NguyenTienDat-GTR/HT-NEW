@@ -36,6 +36,12 @@ public class AccountPermissionOverrideRepository extends BaseRepo<AccountPermiss
         return results.stream().findFirst();
     }
 
+    /** Thu hồi quyền: xóa hẳn bản ghi quyền riêng của tài khoản. */
+    @org.springframework.transaction.annotation.Transactional
+    public void deleteOverride(AccountPermissionOverride override) {
+        entityManager.remove(entityManager.contains(override) ? override : entityManager.merge(override));
+    }
+
     public List<String> findPermissionCodesByUsername(String username) {
         TypedQuery<String> query = entityManager.createQuery(
                 """
