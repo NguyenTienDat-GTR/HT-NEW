@@ -83,7 +83,7 @@ public class ExecutiveBoardAssignmentRepository extends BaseRepo<ExecutiveBoardA
                                   and e.unitId = :unitId
                                   and e.position.positionCode = :positionCode
                                   and e.status = true
-                                  and e.endDate is null
+                                  and (e.endDate is null or e.endDate >= current_date)
                                   and (:excludedId is null or e.id <> :excludedId)
                                 """,
                         Long.class
@@ -118,6 +118,17 @@ public class ExecutiveBoardAssignmentRepository extends BaseRepo<ExecutiveBoardA
                                 """,
                         ExecutiveBoardAssignment.class
                 )
+                .setParameter("unitType", unitType)
+                .setParameter("unitId", unitId)
+                .getResultList();
+    }
+
+    /** Khoảng ngày của mọi phân công trong một đơn vị (để tính danh sách năm lọc). */
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<Object[]> findDateRangesByUnit(UnitType unitType, UUID unitId) {
+        return entityManager.createQuery(
+                        "select e.startDate, e.endDate from ExecutiveBoardAssignment e where e.unitType = :unitType and e.unitId = :unitId",
+                        Object[].class)
                 .setParameter("unitType", unitType)
                 .setParameter("unitId", unitId)
                 .getResultList();

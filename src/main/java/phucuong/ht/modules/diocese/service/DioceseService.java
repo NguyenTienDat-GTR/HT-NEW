@@ -17,6 +17,7 @@ import phucuong.ht.common.exception.errorCode;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.security.UnitOperationalStatusService;
+import phucuong.ht.common.utils.AuditActorNameResolver;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.config.CacheNames;
 import phucuong.ht.modules.auth.exception.ApiException;
@@ -49,6 +50,7 @@ public class DioceseService {
     private final DioceseValidationHelper dioceseValidationHelper;
     private final AccountRepository accountRepository;
     private final securityUtils securityUtils;
+    private final AuditActorNameResolver auditActorNameResolver;
     @Autowired(required = false)
     private UnitOperationalStatusService unitOperationalStatusService;
     @Autowired(required = false)
@@ -118,7 +120,12 @@ public class DioceseService {
 
     @Cacheable(cacheNames = CacheNames.DIOCESE_DETAIL, key = "@cacheScopeKeyHelper.detailKey(#authentication, #id)")
     public DioceseResponse findById(UUID id, Authentication authentication) {
-        return toDioceseResponse(dioceseValidationHelper.requireExistingDiocese(id));
+        Diocese diocese = dioceseValidationHelper.requireExistingDiocese(id);
+        return toDioceseResponse(diocese)
+                .toBuilder()
+                .createdByName(auditActorNameResolver.resolve(diocese.getCreatedBy()))
+                .updatedByName(auditActorNameResolver.resolve(diocese.getUpdatedBy()))
+                .build();
     }
 
     @EvictCaches.Analytics

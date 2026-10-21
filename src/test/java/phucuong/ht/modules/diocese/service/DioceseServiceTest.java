@@ -53,6 +53,9 @@ class DioceseServiceTest {
     @Mock
     private securityUtils securityUtils;
 
+    @Mock
+    private phucuong.ht.common.utils.AuditActorNameResolver auditActorNameResolver;
+
     @InjectMocks
     private DioceseService dioceseService;
 

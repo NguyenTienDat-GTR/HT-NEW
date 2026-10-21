@@ -17,6 +17,7 @@ import phucuong.ht.common.exception.errorCode;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.security.UnitOperationalStatusService;
+import phucuong.ht.common.utils.AuditActorNameResolver;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.config.CacheNames;
 import phucuong.ht.modules.auth.exception.ApiException;
@@ -53,6 +54,7 @@ public class DeaneryService {
     private final DeaneryValidationHelper deaneryValidationHelper;
     private final DeaneryScopeHelper deaneryScopeHelper;
     private final securityUtils securityUtils;
+    private final AuditActorNameResolver auditActorNameResolver;
     @Autowired(required = false)
     private UnitOperationalStatusService unitOperationalStatusService;
     @Autowired(required = false)
@@ -123,7 +125,12 @@ public class DeaneryService {
 
     @Cacheable(cacheNames = CacheNames.DEANERY_DETAIL, key = "@cacheScopeKeyHelper.detailKey(#authentication, #id)")
     public DeaneryResponse findById(UUID id, Authentication authentication) {
-        return toDeaneryResponse(deaneryValidationHelper.requireExistingDeaneryWithDiocese(id));
+        Deanery deanery = deaneryValidationHelper.requireExistingDeaneryWithDiocese(id);
+        return toDeaneryResponse(deanery)
+                .toBuilder()
+                .createdByName(auditActorNameResolver.resolve(deanery.getCreatedBy()))
+                .updatedByName(auditActorNameResolver.resolve(deanery.getUpdatedBy()))
+                .build();
     }
 
     @EvictCaches.Analytics

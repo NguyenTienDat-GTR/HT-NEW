@@ -15,13 +15,13 @@ public class ExecutiveBoardAssignmentAccessEvaluator {
 
     public static final String CREATE_DIOCESE = "organization.executive_board_assignment.create.diocese";
     public static final String READ_DIOCESE = "organization.executive_board_assignment.read.diocese";
-    public static final String UPDATE_DIOCESE = "organization.executive_board_assignment.update.diocese";
+    public static final String TOGGLE_DIOCESE = "organization.executive_board_assignment.toggle.diocese";
     public static final String CREATE_DEANERY = "organization.executive_board_assignment.create.deanery";
     public static final String READ_DEANERY = "organization.executive_board_assignment.read.deanery";
-    public static final String UPDATE_DEANERY = "organization.executive_board_assignment.update.deanery";
+    public static final String TOGGLE_DEANERY = "organization.executive_board_assignment.toggle.deanery";
     public static final String CREATE_PARISH = "organization.executive_board_assignment.create.parish";
     public static final String READ_PARISH = "organization.executive_board_assignment.read.parish";
-    public static final String UPDATE_PARISH = "organization.executive_board_assignment.update.parish";
+    public static final String TOGGLE_PARISH = "organization.executive_board_assignment.toggle.parish";
 
     private final securityUtils securityUtils;
     private final AccountRepository accountRepository;
@@ -52,7 +52,7 @@ public class ExecutiveBoardAssignmentAccessEvaluator {
     }
 
     public boolean canToggle(Authentication authentication, UUID id) {
-        return hasScopedAccess(authentication, id, "update");
+        return hasScopedAccess(authentication, id, "toggle");
     }
 
     private boolean hasScopedAccess(Authentication authentication, UUID id, String action) {

@@ -12,6 +12,7 @@ public class PositionResponse {
     private String positionCode;
     private String positionName;
     private UnitType positionType;
+    private Integer displayOrder;
     private Boolean status;
     private OffsetDateTime createdAt;
     private String createdBy;

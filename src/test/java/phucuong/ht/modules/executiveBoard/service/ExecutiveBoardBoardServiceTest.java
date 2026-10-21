@@ -29,6 +29,12 @@ class ExecutiveBoardBoardServiceTest {
     private ExecutiveBoardAssignmentRepository assignmentRepository;
     @Mock
     private PositionRepository positionRepository;
+    @Mock
+    private phucuong.ht.modules.diocese.repository.DioceseRepository dioceseRepository;
+    @Mock
+    private phucuong.ht.modules.deanery.repository.DeaneryRepository deaneryRepository;
+    @Mock
+    private phucuong.ht.modules.parish.repository.ParishRepository parishRepository;
 
     @Test
     void positionWithoutCurrentAssignmentIsShownAsUnassigned() {
@@ -47,13 +53,15 @@ class ExecutiveBoardBoardServiceTest {
         assignment.setLeader(leader);
         when(assignmentRepository.findCurrentByUnit(UnitType.DEANERY, unitId)).thenReturn(List.of(assignment));
 
-        var seats = new ExecutiveBoardBoardService(assignmentRepository, positionRepository).findBoard(UnitType.DEANERY, unitId);
+        var seats = new ExecutiveBoardBoardService(assignmentRepository, positionRepository, dioceseRepository, deaneryRepository, parishRepository).findBoard(UnitType.DEANERY, unitId);
 
-        assertEquals(2, seats.size());
-        assertEquals("Thư ký", seats.get(0).getPositionName());
-        assertFalse(seats.get(0).isAssigned());
+        assertEquals(3, seats.size());
+        assertTrue(seats.get(0).isChaplain());
+        // Sau tuyên úy (thứ tự 0), chức vụ xếp theo thứ tự hiển thị: Trưởng ban (1) rồi Thư ký (2).
+        assertEquals("Trưởng ban", seats.get(1).getPositionName());
         assertTrue(seats.get(1).isAssigned());
         assertEquals("Nguyễn An", seats.get(1).getLeaderFullName());
+        assertFalse(seats.get(2).isAssigned());
     }
 
     private Position position(String code, String name) {
@@ -62,6 +70,7 @@ class ExecutiveBoardBoardServiceTest {
         position.setPositionName(name);
         position.setPositionType(UnitType.DEANERY);
         position.setStatus(Boolean.TRUE);
+        position.setDisplayOrder(code.equals("P1") ? 1 : 2);
         return position;
     }
 }

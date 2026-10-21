@@ -8,12 +8,15 @@ import java.util.UUID;
 
 /**
  * Một vị trí trong ban điều hành của đơn vị: chức vụ và huynh trưởng đang giữ (assigned = false khi chưa phân công).
+ * Linh mục tuyên úy (chaplain = true) luôn đứng đầu với thứ tự 0; tên lấy từ thông tin đơn vị.
  */
 @Getter
 @Builder
 public class ExecutiveBoardSeatResponse {
     private String positionCode;
     private String positionName;
+    private Integer displayOrder;
+    private boolean chaplain;
     private boolean assigned;
     private UUID assignmentId;
     private UUID leaderId;

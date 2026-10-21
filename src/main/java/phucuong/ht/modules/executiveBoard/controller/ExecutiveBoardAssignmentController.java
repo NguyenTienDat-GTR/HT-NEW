@@ -34,6 +34,13 @@ public class ExecutiveBoardAssignmentController {
         return apiResponse.success("Lấy danh sách phân công chức vụ thành công", assignmentService.findAll(request, authentication));
     }
 
+    // Các năm có phân công trong phạm vi tài khoản, dùng cho bộ lọc năm.
+    @GetMapping("/years")
+    @PreAuthorize("@executiveBoardAssignmentAccessEvaluator.canList(authentication)")
+    public apiResponse<java.util.List<java.util.Map<String, Object>>> findYears(Authentication authentication) {
+        return apiResponse.success("Lấy danh sách năm phân công thành công", assignmentService.findYears(authentication));
+    }
+
     @GetMapping("/{id}")
     @PreAuthorize("@executiveBoardAssignmentAccessEvaluator.canRead(authentication, #id)")
     public apiResponse<ExecutiveBoardAssignmentResponse> findById(@PathVariable UUID id, Authentication authentication) {

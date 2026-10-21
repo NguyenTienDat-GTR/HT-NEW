@@ -23,6 +23,9 @@ public class Position extends BaseModel {
     @Column(name = "position_name", nullable = false)
     private String positionName;
 
+    @Column(name = "display_order", nullable = false)
+    private Integer displayOrder = 1;
+
     @Column(name = "position_type")
     @Enumerated(EnumType.STRING)
     private UnitType positionType;

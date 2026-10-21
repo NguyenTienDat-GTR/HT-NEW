@@ -46,6 +46,7 @@ public class PositionService {
         Position position = new Position();
         position.setPositionName(commonValidationHelper.normalizeRequiredText(request.getPositionName()));
         position.setPositionType(request.getPositionType());
+        position.setDisplayOrder(request.getDisplayOrder() != null ? request.getDisplayOrder() : positionRepository.nextDisplayOrder(request.getPositionType()));
         position.setStatus(Boolean.TRUE);
         position.setCreatedAt(now);
         position.setUpdatedAt(now);
@@ -86,6 +87,9 @@ public class PositionService {
         }
         if (request.getPositionType() != null) {
             position.setPositionType(request.getPositionType());
+        }
+        if (request.getDisplayOrder() != null) {
+            position.setDisplayOrder(request.getDisplayOrder());
         }
         position.setUpdatedAt(OffsetDateTime.now());
         position.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật chức vụ"));
@@ -167,6 +171,7 @@ public class PositionService {
                 .positionCode(position.getPositionCode())
                 .positionName(position.getPositionName())
                 .positionType(position.getPositionType())
+                .displayOrder(position.getDisplayOrder())
                 .status(position.getStatus())
                 .createdAt(position.getCreatedAt())
                 .createdBy(position.getCreatedBy())

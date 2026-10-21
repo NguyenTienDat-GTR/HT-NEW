@@ -8,7 +8,7 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Getter
-@Builder
+@Builder(toBuilder = true)
 public class ParishResponse {
 
     private UUID id;
@@ -16,6 +16,8 @@ public class ParishResponse {
     private String createdBy;
     private OffsetDateTime updatedAt;
     private String updatedBy;
+    private String createdByName;
+    private String updatedByName;
     private Boolean status;
     private String name;
     private LocalDate patronSaintDay;

@@ -170,6 +170,42 @@ public class ExecutiveBoardAssignmentService {
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy phân công chức vụ " + id)));
     }
 
+    /**
+     * Các năm có phân công của đơn vị trong phạm vi tài khoản, mới nhất trước. Phân công chưa kết thúc tính tới năm hiện tại.
+     */
+    public List<Map<String, Object>> findYears(Authentication authentication) {
+        UnitType unitType;
+        UUID unitId;
+        if (securityUtils.hasAuthority(authentication, ExecutiveBoardAssignmentAccessEvaluator.READ_DIOCESE)) {
+            unitType = UnitType.DIOCESE;
+            unitId = accountScopeValidationHelper.requireActiveDioceseId(authentication, ExecutiveBoardAssignmentAccessEvaluator.READ_DIOCESE);
+        } else if (securityUtils.hasAuthority(authentication, ExecutiveBoardAssignmentAccessEvaluator.READ_DEANERY)) {
+            unitType = UnitType.DEANERY;
+            unitId = accountScopeValidationHelper.requireActiveDeaneryId(authentication, ExecutiveBoardAssignmentAccessEvaluator.READ_DEANERY);
+        } else if (securityUtils.hasAuthority(authentication, ExecutiveBoardAssignmentAccessEvaluator.READ_PARISH)) {
+            unitType = UnitType.PARISH;
+            unitId = accountScopeValidationHelper.requireActiveParishId(authentication, ExecutiveBoardAssignmentAccessEvaluator.READ_PARISH);
+        } else {
+            throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền xem phân công chức vụ");
+        }
+
+        int currentYear = LocalDate.now().getYear();
+        java.util.TreeSet<Integer> years = new java.util.TreeSet<>(java.util.Comparator.reverseOrder());
+        for (Object[] range : assignmentRepository.findDateRangesByUnit(unitType, unitId)) {
+            LocalDate start = (LocalDate) range[0];
+            LocalDate end = (LocalDate) range[1];
+            if (start == null && end == null) {
+                continue;
+            }
+            int from = start != null ? start.getYear() : end.getYear();
+            int to = end != null ? end.getYear() : Math.max(currentYear, from);
+            for (int year = from; year <= to; year++) {
+                years.add(year);
+            }
+        }
+        return years.stream().map(year -> Map.<String, Object>of("year", year, "label", "Năm " + year)).toList();
+    }
+
     private void validateRequest(UnitType unitType, UUID unitId, UUID leaderId, String positionCode) {
         if (unitType == null) {
             throw commonValidationHelper.validationError("unitType là bắt buộc");
