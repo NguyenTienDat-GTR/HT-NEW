@@ -1,9 +1,15 @@
 package phucuong.ht.modules.training.trainingCourse.repository;
 
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.Expression;
+import jakarta.persistence.criteria.Order;
+import jakarta.persistence.criteria.Root;
 import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Repository;
 import phucuong.ht.common.repository.BaseRepo;
+import phucuong.ht.modules.training.enums.CourseOrganizingStatus;
+import phucuong.ht.modules.training.enums.CourseRegistrationStatus;
 import phucuong.ht.modules.training.trainingCourse.model.entity.TrainingCourse;
 
 import java.util.List;
@@ -15,6 +21,28 @@ public class TrainingCourseRepository extends BaseRepo<TrainingCourse, String> {
 
     public TrainingCourseRepository(EntityManager entityManager) {
         super(entityManager, TrainingCourse.class);
+    }
+
+    /**
+     * Khóa đang hoạt động (đang diễn ra hoặc đang mở đăng ký, chưa bị vô hiệu hóa) luôn đứng đầu danh sách,
+     * bất kể cách sắp xếp người dùng chọn.
+     */
+    @Override
+    protected List<Order> priorityOrders(CriteriaBuilder cb, Root<TrainingCourse> root) {
+        Expression<Integer> rank = cb.<Integer>selectCase()
+                .when(cb.and(
+                        cb.isTrue(root.get("status")),
+                        cb.or(
+                                cb.equal(root.get("organizingStatus"), CourseOrganizingStatus.ONGOING),
+                                cb.equal(root.get("registrationStatus"), CourseRegistrationStatus.OPEN))), 0)
+                .otherwise(1);
+        return List.of(cb.asc(rank));
+    }
+
+    /** Không chọn cột sắp xếp: khóa bắt đầu gần đây xếp trước. */
+    @Override
+    protected List<Order> defaultOrders(CriteriaBuilder cb, Root<TrainingCourse> root) {
+        return List.of(cb.desc(root.get("startDate")), cb.asc(root.get("courseCode")));
     }
 
     @Transactional
