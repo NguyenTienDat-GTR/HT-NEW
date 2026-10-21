@@ -31,9 +31,14 @@ public class PositionAccessEvaluator {
                 .orElse(false);
     }
 
-    public boolean canUpdate(Authentication authentication, String positionCode) {
+    /**
+     * Cần quyền cập nhật ở cấp hiện tại của chức vụ và, nếu đổi cấp, cả ở cấp mới
+     * để tài khoản không thể chuyển chức vụ ra ngoài phạm vi mình quản lý.
+     */
+    public boolean canUpdate(Authentication authentication, String positionCode, UnitType targetType) {
         return positionRepository.findById(positionCode)
-                .map(position -> hasAuthorityForType(authentication, position.getPositionType(), "update"))
+                .map(position -> hasAuthorityForType(authentication, position.getPositionType(), "update")
+                        && (targetType == null || hasAuthorityForType(authentication, targetType, "update")))
                 .orElse(false);
     }
 

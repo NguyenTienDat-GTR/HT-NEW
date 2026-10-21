@@ -14,5 +14,9 @@ public class PositionResponse {
     private UnitType positionType;
     private Boolean status;
     private OffsetDateTime createdAt;
+    private String createdBy;
+    private String createdByName;
     private OffsetDateTime updatedAt;
+    private String updatedBy;
+    private String updatedByName;
 }
