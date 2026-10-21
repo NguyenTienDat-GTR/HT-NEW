@@ -19,6 +19,7 @@ GET /api/auth/admin/summary|200|401|403|N/A: endpoint accepts no client request 
 
 # Certificates
 GET /api/certificates|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/leaders/{leaderId}/certificates|200|401|403|N/A: path identifier is a validated UUID|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
 GET /api/certificates/{certificateCode}|200|401|403|400|404|N/A: read-only endpoint does not mutate state
 POST /api/certificates/{certificateCode}/approve|200|401|403|400|404|409
 
