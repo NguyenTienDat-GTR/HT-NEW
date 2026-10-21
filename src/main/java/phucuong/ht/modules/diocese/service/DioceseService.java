@@ -17,6 +17,10 @@ import phucuong.ht.common.exception.errorCode;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.security.UnitOperationalStatusService;
+import phucuong.ht.common.security.UnitStatusAuditService;
+import phucuong.ht.common.dto.UnitStatusHistoryResponse;
+import phucuong.ht.common.dto.UnitToggleImpactResponse;
+import org.springframework.transaction.annotation.Transactional;
 import phucuong.ht.common.utils.AuditActorNameResolver;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.config.CacheNames;
@@ -53,6 +57,8 @@ public class DioceseService {
     private final AuditActorNameResolver auditActorNameResolver;
     @Autowired(required = false)
     private UnitOperationalStatusService unitOperationalStatusService;
+    @Autowired(required = false)
+    private UnitStatusAuditService unitStatusAuditService;
     @Autowired(required = false)
     private ToggleNotificationRecipientResolver toggleNotificationRecipientResolver;
     @Autowired(required = false)
@@ -146,21 +152,46 @@ public class DioceseService {
         }
     }
 
+    @Transactional
     @EvictCaches.Analytics
+    @EvictCaches.Leaders
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
-            @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true)
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DEANERY_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DEANERY_DETAIL, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.PARISH_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.PARISH_DETAIL, allEntries = true)
     })
     public DioceseResponse toggleStatus(UUID id, StatusToggleRequest request, Authentication authentication) {
         dioceseValidationHelper.requireExistingDiocese(id);
         requireUnitToggleAllowed(UnitType.DIOCESE, id);
         Set<String> recipients = toggleNotificationRecipientResolver == null ? Set.of() : toggleNotificationRecipientResolver.byUnit(UnitType.DIOCESE, id);
         dioceseValidationHelper.validateToggleConfirmation(request == null ? null : request.getConfirmationText());
+        UnitStatusAuditService.ToggleContext toggleContext = unitStatusAuditService == null ? null
+                : unitStatusAuditService.begin(UnitType.DIOCESE, id, request == null ? null : request.getReason());
         String auditActor = dioceseValidationHelper.getRequiredAuditActor(authentication);
         Diocese updated = dioceseRepository.toggleStatus(id, auditActor);
+        if (toggleContext != null) {
+            unitStatusAuditService.finish(toggleContext, UnitType.DIOCESE, id, auditActor);
+        }
         notifyUsers(recipients);
         dispatchUnitToggle(recipients, unitLabel("Giáo phận", updated.getName()), Boolean.TRUE.equals(updated.getStatus()), auditActor);
         return toDioceseResponse(updated);
+    }
+
+    public UnitToggleImpactResponse toggleImpact(UUID id) {
+        if (unitStatusAuditService == null) {
+            throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, errorCode.CONFLICT, "Chưa sẵn sàng tính tác động");
+        }
+        return unitStatusAuditService.impact(UnitType.DIOCESE, id);
+    }
+
+    public List<UnitStatusHistoryResponse> statusHistory(UUID id, int page, int size) {
+        if (unitStatusAuditService == null) {
+            return List.of();
+        }
+        return unitStatusAuditService.history(UnitType.DIOCESE, id, page, size);
     }
 
     private void requireUnitOperational(UnitType unitType, UUID id) {

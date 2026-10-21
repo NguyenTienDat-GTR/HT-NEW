@@ -49,6 +49,8 @@ public class LeaderService {
     private final LeaderScopeHelper leaderScopeHelper;
     private final AccountRepository accountRepository;
     private final RankHistoryRepository rankHistoryRepository;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private phucuong.ht.common.security.UnitOperationalStatusService unitOperationalStatusService;
 
     @EvictCaches.Analytics
     @Caching(evict = {
@@ -68,6 +70,7 @@ public class LeaderService {
 
         try {
             Parish parish = leaderValidationHelper.requireExistingParish(request.getParishId());
+            requireParishOperational(parish.getId());
             leaderValidationHelper.validateCreateEmailUniqueness(request.getEmail());
             LeaderValidationHelper.LeaderNameParts nameParts = leaderValidationHelper.splitFullName(request.getFullName());
             Leader leader = new Leader();
@@ -165,10 +168,14 @@ public class LeaderService {
         String auditActor = leaderValidationHelper.getRequiredAuditActor(authentication);
         leaderValidationHelper.validateUpdateEmailUniqueness(id, request.getEmail(), existingLeader.getEmail());
 
+        UUID currentParishId = existingLeader.getParish() == null ? null : existingLeader.getParish().getId();
+        boolean transferringParish = request.getParishId() != null && !request.getParishId().equals(currentParishId);
         if (request.getParishId() != null) {
             leaderValidationHelper.requireExistingParish(request.getParishId());
             leaderScopeHelper.enforceUpdateParishScope(authentication, existingLeader, request.getParishId());
         }
+        // Đóng băng: không sửa hồ sơ trong đơn vị bị khóa; riêng chuyển sang giáo xứ đang hoạt động thì được phép.
+        requireParishOperational(transferringParish ? request.getParishId() : currentParishId);
 
         try {
             leaderRepository.update(id, request, auditActor);
@@ -201,6 +208,12 @@ public class LeaderService {
             @CacheEvict(cacheNames = CacheNames.LEADER_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.LEADER_DETAIL, allEntries = true)
     })
+    private void requireParishOperational(UUID parishId) {
+        if (unitOperationalStatusService != null && parishId != null) {
+            unitOperationalStatusService.requireUnitOperational(phucuong.ht.common.enums.UnitType.PARISH, parishId);
+        }
+    }
+
     private boolean hasReadAuthority(Authentication authentication) {
         return authentication != null && authentication.getAuthorities().stream()
                 .map(org.springframework.security.core.GrantedAuthority::getAuthority)

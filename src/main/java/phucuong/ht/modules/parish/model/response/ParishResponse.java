@@ -19,6 +19,8 @@ public class ParishResponse {
     private String createdByName;
     private String updatedByName;
     private Boolean status;
+    // Trạng thái hiệu lực: false nếu chính giáo xứ hoặc giáo hạt/giáo phận cha đang bị tắt.
+    private Boolean effectiveStatus;
     private String name;
     private LocalDate patronSaintDay;
     private LocalDate establishmentDate;

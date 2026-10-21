@@ -27,24 +27,25 @@ public class AnalyticsService {
     private final AnalyticsRepository repository;
     private final AnalyticsScopeResolver scopeResolver;
 
-    @Cacheable(cacheNames = CacheNames.ANALYTICS_OVERVIEW, key = "@cacheScopeKeyHelper.analyticsKey(#authentication, 'overview', #request.fromDate, #request.toDate, #request.timeBucket, #request.groupBy)")
+    @Cacheable(cacheNames = CacheNames.ANALYTICS_OVERVIEW, key = "@cacheScopeKeyHelper.analyticsKey(#authentication, 'overview', #request.fromDate, #request.toDate, #request.timeBucket, #request.groupBy, #request.includeInactiveUnits)")
     public AnalyticsResponse overview(AnalyticsFilterRequest request, Authentication authentication) {
         AnalyticsFilterRequest filters = validate(request);
         AnalyticsScope scope = scopeResolver.resolve(authentication, true);
         if (scope.isSystemOverview()) {
             Map<String, Object> kpis = new LinkedHashMap<>();
-            kpis.put("totalDioceses", repository.scalar("select count(*) from diocese", Map.of()));
-            kpis.put("totalDeaneries", repository.scalar("select count(*) from deanery", Map.of()));
-            kpis.put("totalParishes", repository.scalar("select count(*) from parish", Map.of()));
-            kpis.put("totalLeaders", repository.scalar("select count(*) from leader", Map.of()));
+            kpis.put("totalDioceses", repository.scalar(filters.isIncludeInactiveUnits() ? "select count(*) from diocese" : "select count(*) from diocese where status = true", Map.of()));
+            kpis.put("totalDeaneries", repository.scalar(filters.isIncludeInactiveUnits() ? "select count(*) from deanery" : "select count(*) from deanery de where " + repository.operationalDeanery("de"), Map.of()));
+            kpis.put("totalParishes", repository.scalar(filters.isIncludeInactiveUnits() ? "select count(*) from parish" : "select count(*) from parish p where " + repository.operationalParish("p"), Map.of()));
+            kpis.put("totalLeaders", repository.scalar(filters.isIncludeInactiveUnits() ? "select count(*) from leader" : "select count(*) from leader l where " + repository.operationalLeaderUnits("l"), Map.of()));
             return response(scope, filters, kpis, List.of(), List.of(), List.of());
         }
 
         Map<String, Object> params = repository.params(scope);
         String leaderScope = repository.leaderScope(scope, "l");
         Map<String, Object> kpis = new LinkedHashMap<>();
-        kpis.put("totalLeaders", count("leader l", leaderScope, "", params));
-        kpis.put("activeLeaders", count("leader l", leaderScope + " and l.status = true", "", params));
+        String snapshotLeaderScope = snapshotLeaderScope(filters, leaderScope);
+        kpis.put("totalLeaders", count("leader l", snapshotLeaderScope, "", params));
+        kpis.put("activeLeaders", count("leader l", snapshotLeaderScope + " and l.status = true", "", params));
         kpis.put("courseRegistrations", count("course_participation cp join leader l on l.id = cp.leader_id", leaderScope, date("cp.registration_date", filters, params), params));
         kpis.put("approvedCertificates", count("certificate c join leader l on l.id = c.leader_id", leaderScope + " and c.approval_status = 'APPROVED'", date("c.issue_date", filters, params), params));
         return response(scope, filters, kpis, List.of(), List.of(), List.of());
@@ -92,31 +93,40 @@ public class AnalyticsService {
         );
     }
 
-    @Cacheable(cacheNames = CacheNames.ANALYTICS_ORGANIZATION, key = "@cacheScopeKeyHelper.analyticsKey(#authentication, 'organization', #request.fromDate, #request.toDate, #request.timeBucket, #request.groupBy)")
+    @Cacheable(cacheNames = CacheNames.ANALYTICS_ORGANIZATION, key = "@cacheScopeKeyHelper.analyticsKey(#authentication, 'organization', #request.fromDate, #request.toDate, #request.timeBucket, #request.groupBy, #request.includeInactiveUnits)")
     public AnalyticsResponse organization(AnalyticsFilterRequest request, Authentication authentication) {
         AnalyticsFilterRequest filters = validate(request);
         AnalyticsScope scope = scopeResolver.resolve(authentication, false);
         Map<String, Object> params = repository.params(scope);
         Map<String, Object> kpis = new LinkedHashMap<>();
-        if (scope.type() == AnalyticsScopeType.DIOCESE)
-            kpis.put("totalDeaneries", repository.scalar("select count(*) from deanery where diocese_id = :dioceseId", params));
-        kpis.put("totalParishes", repository.scalar("select count(*) from parish p where " + parishScope(scope, "p"), params));
+        boolean includeInactive = filters.isIncludeInactiveUnits();
+        String parishFilter = parishScope(scope, "p");
+        String snapshotParish = includeInactive ? parishFilter : parishFilter + " and " + repository.operationalParish("p");
+        if (scope.type() == AnalyticsScopeType.DIOCESE) {
+            kpis.put("totalDeaneries", repository.scalar("select count(*) from deanery de where de.diocese_id = :dioceseId" + (includeInactive ? "" : " and de.status = true"), params));
+            kpis.put("inactiveDeaneries", repository.scalar("select count(*) from deanery de where de.diocese_id = :dioceseId and de.status = false", params));
+        }
+        kpis.put("totalParishes", repository.scalar("select count(*) from parish p where " + snapshotParish, params));
         String leaderScope = repository.leaderScope(scope, "l");
-        kpis.put("activeParishes", repository.scalar("select count(*) from parish p where " + parishScope(scope, "p") + " and p.status = true", params));
-        kpis.put("totalLeaders", count("leader l", leaderScope, "", params));
-        kpis.put("activeLeaders", count("leader l", leaderScope + " and l.status = true", "", params));
+        String snapshotLeaderScope = snapshotLeaderScope(filters, leaderScope);
+        kpis.put("activeParishes", repository.scalar("select count(*) from parish p where " + parishFilter + " and " + repository.operationalParish("p"), params));
+        kpis.put("inactiveParishes", repository.scalar("select count(*) from parish p where " + parishFilter + " and not (" + repository.operationalParish("p") + ")", params));
+        kpis.put("totalLeaders", count("leader l", snapshotLeaderScope, "", params));
+        kpis.put("activeLeaders", count("leader l", snapshotLeaderScope + " and l.status = true", "", params));
+        kpis.put("leadersInInactiveUnits", count("leader l", leaderScope + " and not (" + repository.operationalLeaderUnits("l") + ")", "", params));
         long totalLeaders = number(kpis.get("totalLeaders"));
         long activeLeaders = number(kpis.get("activeLeaders"));
         long totalParishes = number(kpis.get("totalParishes"));
-        return response(scope, filters, kpis, organizationBreakdowns(scope, params), organizationTrends(leaderScope, filters, params), organizationComparisons(leaderScope, filters, params));
+        return response(scope, filters, kpis, organizationBreakdowns(scope, params, includeInactive), organizationTrends(leaderScope, filters, params), organizationComparisons(leaderScope, filters, params));
     }
 
-    @Cacheable(cacheNames = CacheNames.ANALYTICS_LEADERS, key = "@cacheScopeKeyHelper.analyticsKey(#authentication, 'leaders', #request.fromDate, #request.toDate, #request.timeBucket, #request.groupBy)")
+    @Cacheable(cacheNames = CacheNames.ANALYTICS_LEADERS, key = "@cacheScopeKeyHelper.analyticsKey(#authentication, 'leaders', #request.fromDate, #request.toDate, #request.timeBucket, #request.groupBy, #request.includeInactiveUnits)")
     public AnalyticsResponse leaders(AnalyticsFilterRequest request, Authentication authentication) {
         AnalyticsFilterRequest filters = validate(request);
         AnalyticsScope scope = scopeResolver.resolve(authentication, false);
         Map<String, Object> params = repository.params(scope);
-        String leaderScope = repository.leaderScope(scope, "l");
+        String historyLeaderScope = repository.leaderScope(scope, "l");
+        String leaderScope = snapshotLeaderScope(filters, historyLeaderScope);
         String dateFilter = date("l.created_at::date", filters, params);
         Map<String, Object> kpis = new LinkedHashMap<>();
         long totalLeaders = count("leader l", leaderScope, "", params);
@@ -143,10 +153,10 @@ public class AnalyticsService {
         breakdowns.addAll(leaderDistribution("status", "case when l.status then 'ACTIVE' else 'INACTIVE' end", leaderScope, "", params));
         breakdowns.addAll(leaderDistribution("tenureGroup", "case when extract(year from age(current_date, l.created_at)) < 1 then 'UNDER_1_YEAR' when extract(year from age(current_date, l.created_at)) between 1 and 2 then 'YEAR_1_2' when extract(year from age(current_date, l.created_at)) between 3 and 5 then 'YEAR_3_5' else 'OVER_5_YEARS' end", leaderScope, "", params));
         breakdowns.addAll(groupedBreakdown("leader l", "l", leaderScope, "", "l.created_at::date", filters, params));
-        return response(scope, filters, kpis, breakdowns, leaderTrends(leaderScope, dateFilter, filters, params), leaderComparisons(leaderScope, dateFilter, params));
+        return response(scope, filters, kpis, breakdowns, leaderTrends(historyLeaderScope, dateFilter, filters, params), leaderComparisons(historyLeaderScope, dateFilter, params));
     }
 
-    @Cacheable(cacheNames = CacheNames.ANALYTICS_COURSES, key = "@cacheScopeKeyHelper.analyticsKey(#authentication, 'courses', #request.fromDate, #request.toDate, #request.timeBucket, #request.groupBy)")
+    @Cacheable(cacheNames = CacheNames.ANALYTICS_COURSES, key = "@cacheScopeKeyHelper.analyticsKey(#authentication, 'courses', #request.fromDate, #request.toDate, #request.timeBucket, #request.groupBy, #request.includeInactiveUnits)")
     public AnalyticsResponse courses(AnalyticsFilterRequest request, Authentication authentication) {
         AnalyticsFilterRequest filters = validate(request);
         AnalyticsScope scope = scopeResolver.resolve(authentication, false);
@@ -185,7 +195,7 @@ public class AnalyticsService {
         return response(scope, filters, kpis, breakdowns, courseTrends(participationScope, participationDate, filters, params), courseComparisons(participationScope, participationDate, params));
     }
 
-    @Cacheable(cacheNames = CacheNames.ANALYTICS_CERTIFICATES, key = "@cacheScopeKeyHelper.analyticsKey(#authentication, 'certificates', #request.fromDate, #request.toDate, #request.timeBucket, #request.groupBy)")
+    @Cacheable(cacheNames = CacheNames.ANALYTICS_CERTIFICATES, key = "@cacheScopeKeyHelper.analyticsKey(#authentication, 'certificates', #request.fromDate, #request.toDate, #request.timeBucket, #request.groupBy, #request.includeInactiveUnits)")
     public AnalyticsResponse certificates(AnalyticsFilterRequest request, Authentication authentication) {
         AnalyticsFilterRequest filters = validate(request);
         AnalyticsScope scope = scopeResolver.resolve(authentication, false);
@@ -360,14 +370,14 @@ public class AnalyticsService {
         return result;
     }
 
-    private List<AnalyticsResponse.Breakdown> organizationBreakdowns(AnalyticsScope scope, Map<String, Object> params) {
+    private List<AnalyticsResponse.Breakdown> organizationBreakdowns(AnalyticsScope scope, Map<String, Object> params, boolean includeInactive) {
         String sql;
         String type;
         if (scope.type() == AnalyticsScopeType.DIOCESE) {
-            sql = "select d.id, d.name, count(distinct p.id), count(l.id) from deanery d left join parish p on p.deanery_id = d.id left join leader l on l.parish_id = p.id where d.diocese_id = :dioceseId group by d.id, d.name order by d.name";
+            sql = "select d.id, d.name, count(distinct p.id), count(l.id) from deanery d left join parish p on p.deanery_id = d.id" + (includeInactive ? "" : " and p.status = true") + " left join leader l on l.parish_id = p.id where d.diocese_id = :dioceseId" + (includeInactive ? "" : " and d.status = true") + " group by d.id, d.name order by d.name";
             type = "deanery";
         } else if (scope.type() == AnalyticsScopeType.DEANERY) {
-            sql = "select p.id, p.name, count(l.id) from parish p left join leader l on l.parish_id = p.id where p.deanery_id = :deaneryId group by p.id, p.name order by p.name";
+            sql = "select p.id, p.name, count(l.id) from parish p left join leader l on l.parish_id = p.id where p.deanery_id = :deaneryId" + (includeInactive ? "" : " and p.status = true") + " group by p.id, p.name order by p.name";
             type = "parish";
         } else return List.of();
         List<AnalyticsResponse.Breakdown> result = new ArrayList<>();
@@ -398,6 +408,11 @@ public class AnalyticsService {
         AnalyticsFilterRequest result = request == null ? new AnalyticsFilterRequest() : request;
         result.validate();
         return result;
+    }
+
+    // Số liệu snapshot (hiện tại): mặc định bỏ huynh trưởng thuộc đơn vị đang bị khóa.
+    private String snapshotLeaderScope(AnalyticsFilterRequest filters, String leaderScope) {
+        return filters.isIncludeInactiveUnits() ? leaderScope : leaderScope + " and " + repository.operationalLeaderUnits("l");
     }
 
     private String parishScope(AnalyticsScope scope, String alias) {

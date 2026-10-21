@@ -14,6 +14,17 @@
 - Response analytics chỉ trả dữ liệu cấu trúc: `scope`, `filters`, `kpis`, `breakdowns`, `trends`, `comparisons`. Không trả `insights`, message, label, định nghĩa KPI hoặc ghi chú diễn giải; FE ánh xạ các `type`/`key` và hiển thị biểu đồ theo nhu cầu.
 - Phân biệt thời gian: snapshot tổ chức/leader phản ánh hiện tại; biểu đồ leader dùng ngày tạo để thể hiện nhân sự mới; course dùng ngày đăng ký hoặc ngày bắt đầu khóa; certificate dùng ngày cấp, hoặc ngày tạo khi hồ sơ chưa được cấp để không bỏ sót trạng thái chờ duyệt.
 
+## Tắt đơn vị tổ chức (giáo phận / giáo hạt / giáo xứ)
+
+- Tắt đơn vị **không ghi đè** `status` của đơn vị con, tài khoản hay huynh trưởng; trạng thái hiệu lực được suy ra khi truy vấn (đơn vị hoặc đơn vị cha có `status=false`). Bật lại đơn vị là khôi phục đúng nguyên trạng.
+- Tài khoản thuộc đơn vị bị khóa chỉ đăng nhập và đọc thông báo (`UnitOperationalAccessFilter`).
+- `StatusToggleRequest` có thêm `reason` (tối đa 500 ký tự); **bắt buộc khi tắt** đơn vị đang hoạt động. Lịch sử ghi vào bảng `org_unit_status_history` (migration `V088`): trạng thái mới, lý do, người đổi, thời điểm, số tài khoản và số đơn vị con bị ảnh hưởng, kèm dòng `BASELINE` ban đầu.
+- `GET /api/{dioceses|deaneries|parishes}/{id}/toggle-impact` (quyền toggle) trả số đơn vị con, tài khoản, huynh trưởng, khóa chưa kết thúc, đăng ký và chứng nhận chờ duyệt; `GET .../{id}/status-history` (quyền đọc) trả lịch sử trạng thái. Logic ở `UnitStatusAuditService`.
+- Đóng băng ghi dữ liệu: `CourseActivityGuard.requireActive` chặn mọi thao tác khóa học / đăng ký / chấm điểm / duyệt chứng nhận khi đơn vị tổ chức khóa bị khóa; `requireCourseEnabled` (dùng cho thu hồi chứng nhận) không chặn theo đơn vị. Không đăng ký mới cho huynh trưởng thuộc giáo xứ bị khóa nhưng hồ sơ đã có vẫn được đơn vị tổ chức hoàn tất. `LeaderService` chặn tạo/sửa trong giáo xứ bị khóa (chuyển sang giáo xứ đang hoạt động thì được phép); `ExecutiveBoardAssignmentService.create` chặn gán chức vụ trong đơn vị bị khóa.
+- Chứng nhận đã cấp vẫn hợp lệ khi đơn vị bị tắt; chỉ thu hồi bằng chức năng thu hồi có lý do.
+- `DeaneryResponse` / `ParishResponse` có `effectiveStatus`; danh sách huynh trưởng chọn được chỉ gồm giáo xứ hiệu lực.
+- Analytics có `includeInactiveUnits` (mặc định `false`, nằm trong cache key): số liệu snapshot (số đơn vị, huynh trưởng hiện tại, cơ cấu) loại đơn vị bị khóa; số liệu sự kiện lịch sử (đăng ký, chứng nhận, huynh trưởng mới theo thời gian) luôn đầy đủ. Thêm KPI `inactiveDeaneries`, `inactiveParishes`, `leadersInInactiveUnits`.
+
 ## Session Rules
 
 - Tất cả message trả về cho người dùng, message validation, message success hoặc failure, và message cảnh báo liên quan tới thao tác nghiệp vụ phải dùng tiếng Việt.

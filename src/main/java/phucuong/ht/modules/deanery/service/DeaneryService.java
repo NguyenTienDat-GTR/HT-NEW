@@ -17,6 +17,10 @@ import phucuong.ht.common.exception.errorCode;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.security.UnitOperationalStatusService;
+import phucuong.ht.common.security.UnitStatusAuditService;
+import phucuong.ht.common.dto.UnitStatusHistoryResponse;
+import phucuong.ht.common.dto.UnitToggleImpactResponse;
+import org.springframework.transaction.annotation.Transactional;
 import phucuong.ht.common.utils.AuditActorNameResolver;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.config.CacheNames;
@@ -57,6 +61,8 @@ public class DeaneryService {
     private final AuditActorNameResolver auditActorNameResolver;
     @Autowired(required = false)
     private UnitOperationalStatusService unitOperationalStatusService;
+    @Autowired(required = false)
+    private UnitStatusAuditService unitStatusAuditService;
     @Autowired(required = false)
     private ToggleNotificationRecipientResolver toggleNotificationRecipientResolver;
     @Autowired(required = false)
@@ -154,24 +160,47 @@ public class DeaneryService {
         }
     }
 
+    @Transactional
     @EvictCaches.Analytics
+    @EvictCaches.Leaders
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.DEANERY_LIST, allEntries = true),
-            @CacheEvict(cacheNames = CacheNames.DEANERY_DETAIL, allEntries = true)
+            @CacheEvict(cacheNames = CacheNames.DEANERY_DETAIL, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.PARISH_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.PARISH_DETAIL, allEntries = true)
     })
     public DeaneryResponse toggleStatus(UUID id, StatusToggleRequest request, Authentication authentication) {
         deaneryValidationHelper.requireExistingDeaneryWithDiocese(id);
         requireUnitToggleAllowed(UnitType.DEANERY, id);
         Set<String> recipients = toggleNotificationRecipientResolver == null ? Set.of() : toggleNotificationRecipientResolver.byUnit(UnitType.DEANERY, id);
         deaneryValidationHelper.validateToggleConfirmation(request == null ? null : request.getConfirmationText());
+        UnitStatusAuditService.ToggleContext toggleContext = unitStatusAuditService == null ? null
+                : unitStatusAuditService.begin(UnitType.DEANERY, id, request == null ? null : request.getReason());
         String auditActor = deaneryValidationHelper.getRequiredAuditActor(authentication);
         deaneryRepository.toggleStatus(id, auditActor);
+        if (toggleContext != null) {
+            unitStatusAuditService.finish(toggleContext, UnitType.DEANERY, id, auditActor);
+        }
         DeaneryResponse response = toDeaneryResponse(deaneryValidationHelper.requireExistingDeaneryWithDiocese(id));
         notifyUsers(recipients);
         dispatchUnitToggle(recipients, unitLabel("Giáo hạt", response.getName()), Boolean.TRUE.equals(response.getStatus()), auditActor);
         return response;
+    }
+
+    public UnitToggleImpactResponse toggleImpact(UUID id) {
+        if (unitStatusAuditService == null) {
+            throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, errorCode.CONFLICT, "Chưa sẵn sàng tính tác động");
+        }
+        return unitStatusAuditService.impact(UnitType.DEANERY, id);
+    }
+
+    public List<UnitStatusHistoryResponse> statusHistory(UUID id, int page, int size) {
+        if (unitStatusAuditService == null) {
+            return List.of();
+        }
+        return unitStatusAuditService.history(UnitType.DEANERY, id, page, size);
     }
 
     private void requireUnitOperational(UnitType unitType, UUID id) {
@@ -262,6 +291,8 @@ public class DeaneryService {
                 .updatedAt(deanery.getUpdatedAt())
                 .updatedBy(deanery.getUpdatedBy())
                 .status(deanery.getStatus())
+                .effectiveStatus(Boolean.TRUE.equals(deanery.getStatus())
+                        && deanery.getDiocese() != null && Boolean.TRUE.equals(deanery.getDiocese().getStatus()))
                 .name(deanery.getName())
                 .patronSaintDay(deanery.getPatronSaintDay())
                 .establishmentDate(deanery.getEstablishmentDate())

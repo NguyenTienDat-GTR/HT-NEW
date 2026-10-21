@@ -27,6 +27,16 @@ public class AnalyticsRepository {
         case PARISH -> leaderAlias + ".parish_id = :parishId";
         case ALL -> "1=1";
     }; }
+    // Chỉ huynh trưởng thuộc giáo xứ đang hiệu lực (giáo xứ, giáo hạt và giáo phận cha đều bật).
+    public String operationalLeaderUnits(String leaderAlias) {
+        return leaderAlias + ".parish_id in (select p.id from parish p join deanery d on d.id = p.deanery_id join diocese di on di.id = d.diocese_id where p.status = true and d.status = true and di.status = true)";
+    }
+    public String operationalDeanery(String deaneryAlias) {
+        return deaneryAlias + ".status = true and " + deaneryAlias + ".diocese_id in (select di.id from diocese di where di.status = true)";
+    }
+    public String operationalParish(String parishAlias) {
+        return parishAlias + ".status = true and " + parishAlias + ".deanery_id in (select d.id from deanery d join diocese di on di.id = d.diocese_id where d.status = true and di.status = true)";
+    }
     public String courseScope(AnalyticsScope scope, String courseAlias) { return switch (scope.type()) {
         case DIOCESE -> "(" + courseAlias + ".diocese_id = :dioceseId or " + courseAlias + ".deanery_id in (select id from deanery where diocese_id = :dioceseId))";
         case DEANERY -> courseAlias + ".deanery_id = :deaneryId";
