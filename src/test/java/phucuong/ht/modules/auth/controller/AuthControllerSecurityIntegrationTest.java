@@ -74,7 +74,7 @@ class AuthControllerSecurityIntegrationTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(cookie().doesNotExist("accessToken"))
+                .andExpect(cookie().exists("accessToken"))
                 .andExpect(cookie().exists("refreshToken"))
                 .andExpect(jsonPath("$.data.user.username").value("superadminpc"));
     }
@@ -146,7 +146,7 @@ class AuthControllerSecurityIntegrationTest {
         mockMvc.perform(post("/api/auth/refresh")
                         .cookie(new jakarta.servlet.http.Cookie("refreshToken", "refresh-token-cookie")))
                 .andExpect(status().isOk())
-                .andExpect(cookie().doesNotExist("accessToken"))
+                .andExpect(cookie().exists("accessToken"))
                 .andExpect(cookie().exists("refreshToken"))
                 .andExpect(jsonPath("$.success").value(true));
 
@@ -169,7 +169,8 @@ class AuthControllerSecurityIntegrationTest {
                         .header("Authorization", "Bearer access-token-header"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(cookie().maxAge("refreshToken", 0));
+                .andExpect(cookie().maxAge("refreshToken", 0))
+                .andExpect(cookie().maxAge("accessToken", 0));
 
         verify(authService).logout(eq("refresh-token-cookie"), eq("access-token-header"));
     }
