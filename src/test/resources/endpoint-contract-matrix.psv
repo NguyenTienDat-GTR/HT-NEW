@@ -132,6 +132,7 @@ GET /api/system/role-permissions|200|401|403|400|N/A: collection endpoint does n
 POST /api/system/role-permissions/revoke|200|401|403|400|404|N/A: revoke has no uniqueness conflict
 GET /api/system/role-permissions/revocable-permissions|200|401|403|400|404|N/A: read-only endpoint does not mutate state
 GET /api/system/role-permissions/assignable-permissions|200|401|403|400|404|N/A: read-only endpoint does not mutate state
+GET /api/system/role-permissions/manageable-roles|200|401|403|400|404|N/A: read-only endpoint does not mutate state
 GET /api/system/role-permissions/{id}|200|401|403|N/A: identifier is an opaque string|404|N/A: read-only endpoint does not mutate state
 PUT /api/system/role-permissions/{id}|200|401|403|400|404|409
 

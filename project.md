@@ -506,6 +506,8 @@ Administration behavior:
 **Cấp quyền (phân quyền)**
 
 - `SUPER_ADMIN` cấp được cho mọi vai trò / tài khoản trong phạm vi quản lý của mình.
+- Phân quyền / thu hồi quyền cho vai trò theo cấp: cấp giáo phận (authority `*.diocese`) được phân quyền và thu hồi cho vai trò hệ thống `ADMIN_DEANERY` và `ADMIN_PARISH`; cấp giáo hạt (`*.deanery`) cho `ADMIN_PARISH`; cấp giáo xứ không phân quyền cho vai trò hệ thống nào. Vai trò tùy biến chỉ quản lý được khi do chính cấp mình tạo (cùng đơn vị), nên vai trò do admin giáo hạt / giáo xứ tạo thì cấp giáo phận không phân quyền được. Mọi trường hợp vai trò đích không được cao hơn vai trò cao nhất của người thao tác.
+- Dropdown vai trò ở form phân quyền / thu hồi quyền vai trò dùng `GET /api/system/role-permissions/manageable-roles?action=assign|revoke`, chỉ trả vai trò mà người dùng được phép thao tác (đã loại vai trò cấp cao hơn).
 - Admin cấp cao hơn chỉ cấp được cho role / tài khoản của admin cấp thấp hơn, và chỉ trong bộ quyền mình đang có: vai trò đích phải thấp hơn vai trò cao nhất của người cấp, phạm vi quyền không cao hơn phạm vi người cấp được phép, và người cấp phải đang sở hữu đúng quyền đó.
 - Bản ghi lưu `assignedBy` / `createdBy` (người cấp) và `assignedAt`.
 - `expiresAt` tùy chọn: để trống thì quyền có hiệu lực vĩnh viễn.

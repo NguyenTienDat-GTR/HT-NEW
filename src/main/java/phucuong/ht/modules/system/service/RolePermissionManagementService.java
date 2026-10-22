@@ -20,6 +20,7 @@ import phucuong.ht.modules.system.model.request.RolePermissionRevokeRequest;
 import phucuong.ht.modules.system.model.request.RolePermissionCreateRequest;
 import phucuong.ht.modules.system.model.request.RolePermissionUpdateRequest;
 import phucuong.ht.modules.system.model.response.PermissionResponse;
+import phucuong.ht.modules.system.model.response.RoleResponse;
 import phucuong.ht.modules.system.model.response.RolePermissionResponse;
 import phucuong.ht.modules.system.repository.RolePermissionRepository;
 import phucuong.ht.modules.system.repository.SystemPermissionRepository;
@@ -206,6 +207,29 @@ public class RolePermissionManagementService {
                         authentication, rolePermission.getRole(), rolePermission.getPermission()))
                 .toList();
         return page(request, manageable, authentication);
+    }
+
+    /** Vai trò mà người dùng hiện tại được phép phân quyền / thu hồi quyền (action = assign | revoke); đã loại vai trò cấp cao hơn. */
+    @Transactional(readOnly = true)
+    public List<RoleResponse> findManageableRoles(String action, Authentication authentication) {
+        String authority = "revoke".equalsIgnoreCase(action)
+                ? SystemAdminAuthorizationHelper.ROLE_PERMISSION_REVOKE_DIOCESE
+                : SystemAdminAuthorizationHelper.ROLE_PERMISSION_ASSIGN_DIOCESE;
+        boolean assign = !"revoke".equalsIgnoreCase(action);
+        return roleRepository.findAll().stream()
+                .filter(role -> !assign || Boolean.TRUE.equals(role.getStatus()))
+                .filter(role -> authorizationHelper.canManageRolePermissionRole(authentication, role, authority))
+                .sorted(java.util.Comparator.comparing(Role::getDisplayOrder, java.util.Comparator.nullsLast(Integer::compareTo))
+                        .thenComparing(Role::getRoleCode))
+                .map(role -> RoleResponse.builder()
+                        .roleCode(role.getRoleCode())
+                        .roleName(role.getRoleName())
+                        .description(role.getDescription())
+                        .isSystem(role.getIsSystem())
+                        .displayOrder(role.getDisplayOrder())
+                        .status(role.getStatus())
+                        .build())
+                .toList();
     }
 
     @Transactional(readOnly = true)

@@ -21,6 +21,7 @@ import phucuong.ht.modules.system.model.request.RolePermissionRevokeRequest;
 import phucuong.ht.modules.system.model.request.RolePermissionCreateRequest;
 import phucuong.ht.modules.system.model.request.RolePermissionUpdateRequest;
 import phucuong.ht.modules.system.model.response.PermissionResponse;
+import phucuong.ht.modules.system.model.response.RoleResponse;
 import phucuong.ht.modules.system.model.response.RolePermissionResponse;
 import phucuong.ht.modules.system.service.RolePermissionManagementService;
 
@@ -75,6 +76,23 @@ public class RolePermissionController {
     )
     public apiResponse<Page<RolePermissionResponse>> findAll(BaseSearchRequest request, Authentication authentication) {
         return apiResponse.success("Lấy danh sách quyền của vai trò thành công", rolePermissionManagementService.findAll(request, authentication));
+    }
+
+    @GetMapping("/manageable-roles")
+    @PreAuthorize(
+            "@systemAdminAuthorizationHelper.isSuperAdmin(authentication)"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.diocese')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.deanery')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.parish')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.diocese')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.deanery')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.parish')"
+    )
+    public apiResponse<List<RoleResponse>> findManageableRoles(
+            @RequestParam(defaultValue = "assign") String action,
+            Authentication authentication
+    ) {
+        return apiResponse.success("Lấy danh sách vai trò được phân quyền thành công", rolePermissionManagementService.findManageableRoles(action, authentication));
     }
 
     @GetMapping("/assignable-permissions")

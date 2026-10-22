@@ -154,18 +154,61 @@ public class SystemAdminAuthorizationHelper {
     }
 
     public void requireRolePermissionWriteAccess(Authentication authentication, Role role, Permission permission, String authority) {
+        requireRolePermissionRoleAccess(authentication, role, authority);
+        if (isSuperAdmin(authentication)) {
+            return;
+        }
+        requireActorOwnsPermission(authentication, permission);
+        requirePermissionAtOrBelowScope(permission, rolePermissionAuthorityScopeOrder(authentication, authority));
+    }
+
+    /**
+     * Phần kiểm tra theo vai trò đích (không xét quyền cụ thể) của phân quyền / thu hồi quyền cho vai trò:
+     * - SUPER_ADMIN: vai trò hệ thống hoặc do super-admin tạo;
+     * - cấp giáo phận được phân quyền cho admin-deanery và admin-parish, cấp giáo hạt cho admin-parish (vai trò hệ thống cấp thấp hơn);
+     * - ngoài ra chỉ vai trò tùy biến do chính cấp mình tạo, và không được cao hơn vai trò cao nhất của người thao tác.
+     * Vai trò do admin cấp thấp hơn tạo thuộc cấp của họ nên cấp trên không phân quyền được.
+     */
+    public void requireRolePermissionRoleAccess(Authentication authentication, Role role, String authority) {
         if (isSuperAdmin(authentication)) {
             requireManageableBySuperAdmin(role);
             return;
         }
+        requireRolePermissionOperationAuthority(authentication, authority);
+        if (isLowerAdminSystemRole(authentication, role, authority)) {
+            requireTargetRoleBelowActor(authentication, role);
+            return;
+        }
         if (Boolean.TRUE.equals(role.getIsSystem())) {
-            throw commonValidationHelper.forbidden("Chỉ SUPER_ADMIN được thay đổi phân quyền của vai trò hệ thống");
+            throw commonValidationHelper.forbidden("Chỉ SUPER_ADMIN được thay đổi phân quyền của vai trò hệ thống cùng hoặc cao hơn cấp của mình");
         }
         requireRoleOwnedByActorScope(authentication, role);
-        requireRolePermissionOperationAuthority(authentication, authority);
-        requireActorOwnsPermission(authentication, permission);
         requireTargetRoleBelowActor(authentication, role);
-        requirePermissionAtOrBelowScope(permission, rolePermissionAuthorityScopeOrder(authentication, authority));
+    }
+
+    public boolean canManageRolePermissionRole(Authentication authentication, Role role, String authority) {
+        try {
+            requireRolePermissionRoleAccess(authentication, role, authority);
+            return true;
+        } catch (RuntimeException ignored) {
+            return false;
+        }
+    }
+
+    private static final java.util.Map<String, Integer> ADMIN_SYSTEM_ROLE_TIER = java.util.Map.of(
+            "ADMIN_DIOCESE", 1,
+            "ADMIN_DEANERY", 2,
+            "ADMIN_PARISH", 3
+    );
+
+    // Vai trò admin hệ thống thuộc cấp thấp hơn cấp thao tác của người dùng (giáo phận > giáo hạt > giáo xứ).
+    private boolean isLowerAdminSystemRole(Authentication authentication, Role role, String authority) {
+        if (role == null || !Boolean.TRUE.equals(role.getIsSystem())) {
+            return false;
+        }
+        Integer targetTier = ADMIN_SYSTEM_ROLE_TIER.get(role.getRoleCode());
+        int actorTier = rolePermissionAuthorityScopeOrder(authentication, authority);
+        return targetTier != null && actorTier >= 1 && actorTier != Integer.MAX_VALUE && targetTier > actorTier;
     }
 
     public boolean canReadRole(Authentication authentication, Role role) {
