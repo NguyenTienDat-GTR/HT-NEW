@@ -132,4 +132,12 @@ public interface AccountRepository extends JpaRepository<Account, String> {
             @Param("dioceseId") UUID dioceseId,
             @Param("username") String username
     );
+
+    @Query("""
+            select count(ar) > 0
+            from AccountRole ar
+            where lower(ar.account.username) = lower(:username)
+              and ar.role.roleCode = :roleCode
+            """)
+    boolean existsAccountRole(@Param("username") String username, @Param("roleCode") String roleCode);
 }

@@ -392,9 +392,17 @@ public class SystemAdminAuthorizationHelper {
         if (isSuperAdmin(authentication)) {
             return;
         }
-        if (ManagementOwnership.isSuperAdminOwned(assignedBy) || ManagementOwnership.isSuperAdminOwned(createdBy)) {
+        if (isGrantedBySuperAdmin(assignedBy) || isGrantedBySuperAdmin(createdBy)) {
             throw commonValidationHelper.forbidden("Quyền do super-admin hoặc hệ thống cấp, chỉ super-admin được thu hồi");
         }
+    }
+
+    // Người cấp là hệ thống hoặc tài khoản mang vai trò SUPER_ADMIN.
+    private boolean isGrantedBySuperAdmin(String actor) {
+        if (actor == null || actor.isBlank()) {
+            return false;
+        }
+        return "system".equalsIgnoreCase(actor.trim()) || accountRepository.existsAccountRole(actor.trim(), "SUPER_ADMIN");
     }
 
     /** Admin không thu hồi quyền của chính vai trò mình đang giữ. */
