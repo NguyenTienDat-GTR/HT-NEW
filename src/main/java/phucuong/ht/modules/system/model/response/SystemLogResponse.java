@@ -16,6 +16,10 @@ public class SystemLogResponse {
     private String module;
     private String resource;
     private String resourceId;
+    private String resourceName;
+    private String operation;
+    private String queryString;
+    private Integer durationMs;
     private String httpMethod;
     private String requestPath;
     private Integer statusCode;

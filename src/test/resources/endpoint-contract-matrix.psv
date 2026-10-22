@@ -8,6 +8,11 @@ GET /api/analytics/organization|200|401|403|400|N/A: aggregate endpoint has no i
 GET /api/analytics/leaders|200|401|403|400|N/A: aggregate endpoint has no individual resource lookup|N/A: read-only aggregate does not mutate state
 GET /api/analytics/courses|200|401|403|400|N/A: aggregate endpoint has no individual resource lookup|N/A: read-only aggregate does not mutate state
 GET /api/analytics/certificates|200|401|403|400|N/A: aggregate endpoint has no individual resource lookup|N/A: read-only aggregate does not mutate state
+GET /api/analytics/open-courses|200|401|403|400|N/A: aggregate endpoint has no individual resource lookup|N/A: read-only aggregate does not mutate state
+GET /api/analytics/scopes|200|401|403|N/A: endpoint accepts no client request data|N/A: aggregate endpoint has no individual resource lookup|N/A: read-only aggregate does not mutate state
+GET /api/analytics/filter-options|200|401|403|N/A: endpoint accepts no client request data|N/A: aggregate endpoint has no individual resource lookup|N/A: read-only aggregate does not mutate state
+GET /api/analytics/records|200|401|403|400|N/A: aggregate endpoint has no individual resource lookup|N/A: read-only aggregate does not mutate state
+GET /api/analytics/records/export|200|401|403|400|N/A: aggregate endpoint has no individual resource lookup|N/A: read-only aggregate does not mutate state
 
 # Authentication and session
 POST /api/auth/login|200|401|N/A: public login endpoint has no permission gate|400|N/A: invalid credentials must not expose account existence|N/A: login does not create a persistent conflict
