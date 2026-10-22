@@ -18,6 +18,24 @@ public class AuthCookieService {
         this.authProperties = authProperties;
     }
 
+    // Cookie access token (httpOnly, sống đúng bằng hạn token) để server FE render sẵn dữ liệu khi tải trang
+    // mà không cần refresh (refresh sẽ xoay vòng refresh token). Bộ lọc JWT đã chấp nhận cookie này.
+    public void writeAccessCookie(HttpServletResponse response, AuthTokenResponse tokens) {
+        response.addHeader("Set-Cookie", buildCookie(
+                authProperties.getCookie().getAccessTokenName(),
+                tokens.getAccessToken(),
+                tokens.getAccessTokenExpiresInMs()
+        ).toString());
+    }
+
+    public void clearAccessCookie(HttpServletResponse response) {
+        response.addHeader("Set-Cookie", buildCookie(
+                authProperties.getCookie().getAccessTokenName(),
+                "",
+                0
+        ).toString());
+    }
+
     public void writeRefreshCookie(HttpServletResponse response, AuthTokenResponse tokens) {
         response.addHeader("Set-Cookie", buildCookie(
                 authProperties.getCookie().getRefreshTokenName(),
