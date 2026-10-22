@@ -12,11 +12,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 class AuditActorNameResolverTest {
 
@@ -28,7 +24,7 @@ class AuditActorNameResolverTest {
     void resolvesSpecialActorsWithoutQueries() {
         assertNull(resolver.resolve(null));
         assertNull(resolver.resolve(" "));
-        assertEquals("Quản trị tối cao", resolver.resolve("super-admin"));
+        assertEquals("Quản trị viên", resolver.resolve("super-admin"));
         assertEquals("Hệ thống", resolver.resolve("SYSTEM"));
         assertEquals("Hệ thống tự duyệt", resolver.resolve("SYSTEM_AUTO_APPROVAL"));
         verify(leaderRepository, never()).findById(any());

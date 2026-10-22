@@ -43,7 +43,7 @@ public class AuditActorNameResolver {
             return null;
         }
         if (SUPER_ADMIN_ACTOR.equals(actor)) {
-            return "Quản trị tối cao";
+            return "Quản trị viên";
         }
         String systemName = SYSTEM_ACTOR_NAMES.get(actor);
         if (systemName != null) {
@@ -70,7 +70,9 @@ public class AuditActorNameResolver {
         return resolved;
     }
 
-    /** Xóa cache (dùng cho test hoặc khi cần làm mới ngay). */
+    /**
+     * Xóa cache (dùng cho test hoặc khi cần làm mới ngay).
+     */
     public void evictAll() {
         cache.clear();
     }
