@@ -11,6 +11,8 @@ import phucuong.ht.config.rabbitMQConfig;
 import phucuong.ht.modules.notification.service.TrainingNotificationCommand;
 import phucuong.ht.modules.notification.service.TrainingNotificationRecipientResolver;
 import phucuong.ht.modules.notification.service.TrainingNotificationService;
+import phucuong.ht.modules.notification.service.WorkflowDecisionNotifier.Decision;
+import phucuong.ht.modules.training.TrainingDecisionNotifier;
 import phucuong.ht.modules.training.TrainingWorkflowSupport;
 import phucuong.ht.modules.training.courseParticipation.model.entity.CourseParticipation;
 import phucuong.ht.modules.training.courseParticipation.repository.CourseParticipationRepository;
@@ -29,6 +31,8 @@ public class TrainingRegistrationAutoApprovalConsumer {
     private final TrainingWorkflowSupport trainingWorkflowSupport;
     private final TrainingNotificationRecipientResolver notificationRecipientResolver;
     private final TrainingNotificationService trainingNotificationService;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private TrainingDecisionNotifier trainingDecisionNotifier;
 
     @RabbitListener(queues = rabbitMQConfig.DOMAIN_WORKFLOW_QUEUE)
     @EvictCaches.Courses
@@ -48,7 +52,13 @@ public class TrainingRegistrationAutoApprovalConsumer {
             return;
         }
 
-        int approvedCount = 0;
+        // Chỉ khóa bật "tự duyệt hồ sơ hợp lệ" mới được hệ thống tự duyệt; còn lại chờ duyệt thủ công.
+        CourseParticipation first = participations.get(0);
+        if (first.getCourse() == null || !Boolean.TRUE.equals(first.getCourse().getAutoApproveEligible())) {
+            return;
+        }
+
+        List<CourseParticipation> approvedParticipations = new java.util.ArrayList<>();
         for (CourseParticipation participation : participations) {
             if (!Boolean.TRUE.equals(participation.getEligible())) {
                 continue;
@@ -65,7 +75,12 @@ public class TrainingRegistrationAutoApprovalConsumer {
             participation.setParticipationStatus(ParticipationStatus.ATTENDED);
             participation.setApprovedBy(CourseParticipationService.autoApprovalActor());
             participation.setUpdatedBy(CourseParticipationService.autoApprovalActor());
-            approvedCount++;
+            approvedParticipations.add(participation);
+        }
+        int approvedCount = approvedParticipations.size();
+        // Chỉ hồ sơ đủ điều kiện mới được tự duyệt; hồ sơ ngoại lệ vẫn chờ duyệt thủ công nên không có thông báo "đã duyệt".
+        if (approvedCount == 0) {
+            return;
         }
 
         int pendingCount = (int) participations.stream()
@@ -76,20 +91,33 @@ public class TrainingRegistrationAutoApprovalConsumer {
         UUID recipientScopeId = UUID.fromString(String.valueOf(message.getPayload().get("recipientScopeId")));
         String recipientPermission = String.valueOf(message.getPayload().get("recipientPermission"));
         List<String> recipients = notificationRecipientResolver.resolveRecipients(null, recipientPermission, recipientScopeType, recipientScopeId);
+        String courseName = approvedParticipations.get(0).getCourse() == null ? null : approvedParticipations.get(0).getCourse().getCourseName();
+        String courseCode = String.valueOf(message.getPayload().get("courseCode"));
+        String courseLabel = courseName == null || courseName.isBlank() ? courseCode : courseName;
+        int totalCount = readInteger(message.getPayload(), "totalCount");
+        String summary = String.valueOf(message.getPayload().get("senderUnitName"))
+                + " có " + approvedCount + "/" + totalCount + " hồ sơ đăng ký khóa " + courseLabel + " được hệ thống tự động duyệt";
+        if (pendingCount > 0) {
+            summary += "; còn " + pendingCount + " hồ sơ ngoại lệ chờ duyệt thủ công";
+        }
         trainingNotificationService.notifyUsers(recipients, TrainingNotificationCommand.builder()
                 .eventType("training.registration.auto_approved")
-                .title("Tu dong duyet danh sach dang ky")
-                .message(String.valueOf(message.getPayload().get("senderUnitName"))
-                        + " da duoc he thong xu ly " + String.valueOf(message.getPayload().get("totalCount"))
-                        + " dang ky cho khoa " + String.valueOf(message.getPayload().get("courseCode")))
+                .title("Tự động duyệt danh sách đăng ký")
+                .message(summary + ".")
                 .senderUnitType(UnitType.valueOf(String.valueOf(message.getPayload().get("senderUnitType"))))
                 .senderUnitId(UUID.fromString(String.valueOf(message.getPayload().get("senderUnitId"))))
-                .courseCode(String.valueOf(message.getPayload().get("courseCode")))
-                .totalCount(readInteger(message.getPayload(), "totalCount"))
+                .courseCode(courseCode)
+                .totalCount(totalCount)
                 .approvedCount(approvedCount)
                 .pendingCount(pendingCount)
                 .actor(CourseParticipationService.autoApprovalActor())
                 .build());
+
+        // Người gửi đăng ký và admin giáo xứ của hồ sơ nhận kết quả duyệt (từ 3 hồ sơ cùng khóa thì gom thành một thông báo).
+        if (trainingDecisionNotifier != null) {
+            trainingDecisionNotifier.notifyRegistrations(Decision.REGISTRATION_AUTO_APPROVED, approvedParticipations, null,
+                    CourseParticipationService.autoApprovalActor());
+        }
     }
 
     @SuppressWarnings("unchecked")

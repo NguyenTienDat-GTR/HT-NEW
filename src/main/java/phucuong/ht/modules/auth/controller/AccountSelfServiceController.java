@@ -22,7 +22,11 @@ import phucuong.ht.modules.auth.model.response.PasswordOtpSendResponse;
 import phucuong.ht.modules.auth.model.response.PasswordOtpVerifyResponse;
 import phucuong.ht.modules.auth.service.AuthCookieService;
 import phucuong.ht.modules.auth.service.MyProfileService;
+import phucuong.ht.modules.auth.service.MyPermissionService;
+import phucuong.ht.modules.auth.model.response.MyPermissionResponse;
 import phucuong.ht.modules.auth.service.PasswordChangeService;
+import org.springframework.data.domain.Page;
+import phucuong.ht.common.repository.BaseSearchRequest;
 
 /** Chức năng tự phục vụ của tài khoản đang đăng nhập: hồ sơ cá nhân và đổi mật khẩu bằng OTP. */
 @RestController
@@ -31,6 +35,7 @@ import phucuong.ht.modules.auth.service.PasswordChangeService;
 public class AccountSelfServiceController {
 
     private final MyProfileService myProfileService;
+    private final MyPermissionService myPermissionService;
     private final PasswordChangeService passwordChangeService;
     private final AuthCookieService authCookieService;
     private final jwtUtils jwtUtils;
@@ -38,6 +43,16 @@ public class AccountSelfServiceController {
     @GetMapping("/me/profile")
     public apiResponse<MyProfileResponse> profile(Authentication authentication) {
         return apiResponse.success("Lấy hồ sơ cá nhân thành công", myProfileService.currentProfile(authentication));
+    }
+
+    @GetMapping("/me/permissions")
+    public apiResponse<Page<MyPermissionResponse>> myPermissions(BaseSearchRequest request, Authentication authentication) {
+        return apiResponse.success("Lấy danh sách quyền hiện có thành công", myPermissionService.search(request, authentication));
+    }
+
+    @GetMapping("/me/permissions/filter-options")
+    public apiResponse<MyPermissionService.MyPermissionFilterOptions> myPermissionFilterOptions(Authentication authentication) {
+        return apiResponse.success("Lấy giá trị lọc quyền thành công", myPermissionService.filterOptions(authentication));
     }
 
     @GetMapping("/me/certificates/{certificateCode}")

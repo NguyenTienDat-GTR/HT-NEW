@@ -58,6 +58,8 @@ public class AccountPermissionOverrideManagementService {
     private UnitOperationalStatusService unitOperationalStatusService;
     @Autowired(required = false)
     private RbacAuthRefreshNotifier authRefreshNotifier;
+    @Autowired(required = false)
+    private phucuong.ht.modules.notification.service.PermissionGrantNotifier permissionGrantNotifier;
 
     @Transactional
     public AccountPermissionOverrideResponse create(AccountPermissionOverrideCreateRequest request, Authentication authentication) {
@@ -84,11 +86,13 @@ public class AccountPermissionOverrideManagementService {
             existing.setExpiresAt(request.getExpiresAt());
             reissue(existing, actor);
             notifyAccountPermissionChanged(request.getUsername(), "ACCOUNT_PERMISSION_CREATED");
+            notifyAccountGranted(request.getUsername(), List.of(permission), actor);
             return toResponse(existing);
         }
         AccountPermissionOverride override = accountPermissionOverrideRepository.create(request, actor);
         override.setStatus(true);
         notifyAccountPermissionChanged(request.getUsername(), "ACCOUNT_PERMISSION_CREATED");
+        notifyAccountGranted(request.getUsername(), List.of(permission), actor);
         return toResponse(override);
     }
 
@@ -101,6 +105,7 @@ public class AccountPermissionOverrideManagementService {
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tạo phân quyền cho tài khoản");
         OffsetDateTime now = OffsetDateTime.now();
         List<AccountPermissionOverrideResponse> responses = new ArrayList<>();
+        List<Permission> grantedPermissions = new ArrayList<>();
 
         for (String permissionCode : new LinkedHashSet<>(request.getPermissionCodes())) {
             Permission permission = systemPermissionRepository.findById(permissionCode)
@@ -121,9 +126,11 @@ public class AccountPermissionOverrideManagementService {
             override.setUpdatedAt(now);
             override.setUpdatedBy(actor);
             responses.add(toResponse(override));
+            grantedPermissions.add(permission);
         }
 
         notifyAccountPermissionChanged(request.getUsername(), "ACCOUNT_PERMISSION_BULK_ASSIGNED");
+        notifyAccountGranted(request.getUsername(), grantedPermissions, actor);
         return responses;
     }
 
@@ -240,6 +247,13 @@ public class AccountPermissionOverrideManagementService {
         override.setStatus(true);
         override.setUpdatedAt(OffsetDateTime.now());
         override.setUpdatedBy(actor);
+    }
+
+    // Một request phân quyền gửi đúng một thông báo, chỉ tới tài khoản được phân quyền riêng.
+    private void notifyAccountGranted(String username, List<Permission> permissions, String actor) {
+        if (permissionGrantNotifier != null) {
+            permissionGrantNotifier.notifyAccountGranted(username, permissions, actor);
+        }
     }
 
     private void notifyAccountPermissionChanged(String username, String reason) {

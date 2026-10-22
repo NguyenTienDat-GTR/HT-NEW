@@ -84,6 +84,14 @@ public class TrainingCourse extends BaseModel {
     @Column(name = "score_locked", nullable = false)
     private Boolean scoreLocked = Boolean.FALSE;
 
+    // Bật thì hệ thống tự duyệt các hồ sơ hợp lệ (không phải ngoại lệ) ngay sau khi giáo xứ gửi danh sách.
+    @Column(name = "auto_approve_eligible", nullable = false)
+    private Boolean autoApproveEligible = Boolean.FALSE;
+
+    // Bật thì cấp thấp hơn cấp sở hữu khóa (giáo xứ, chính huynh trưởng) mới thấy điểm trong chứng nhận và kết quả khóa.
+    @Column(name = "score_visible", nullable = false)
+    private Boolean scoreVisible = Boolean.FALSE;
+
     // Kết thúc khóa: thời điểm và người kết thúc; có giá trị thì khóa luôn ở trạng thái đã kết thúc.
     @Column(name = "finished_at")
     private OffsetDateTime finishedAt;

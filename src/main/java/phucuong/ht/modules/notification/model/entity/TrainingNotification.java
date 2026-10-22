@@ -64,6 +64,9 @@ public class TrainingNotification extends BaseModel {
     @Column(name = "pending_count")
     private Integer pendingCount;
 
+    @Column(name = "payload", columnDefinition = "TEXT")
+    private String payload;
+
     @Column(name = "read_at")
     private OffsetDateTime readAt;
 }

@@ -149,8 +149,8 @@ public class PermissionManagementService {
         }
         String name = commonValidationHelper.normalizeOptionalText(permission.getPermissionName());
         String code = commonValidationHelper.normalizeOptionalText(permission.getPermissionCode());
-        if (name != null && code != null) {
-            return name + " (" + code + ")";
+        if (name != null) {
+            return name;
         }
         return name != null ? name : code != null ? code : "quyền chưa xác định";
     }

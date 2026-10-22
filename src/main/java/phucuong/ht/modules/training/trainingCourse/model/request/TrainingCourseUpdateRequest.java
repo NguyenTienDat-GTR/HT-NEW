@@ -39,5 +39,10 @@ public class TrainingCourseUpdateRequest {
     // null = giữ nguyên; danh sách (kể cả rỗng) = thay thế.
     private List<String> recipientUsernames;
 
+    // null = giữ nguyên (khi sửa) hoặc tắt (khi tạo).
+    private Boolean autoApproveEligible;
+
+    private Boolean scoreVisible;
+
     private String additionalNotes;
 }

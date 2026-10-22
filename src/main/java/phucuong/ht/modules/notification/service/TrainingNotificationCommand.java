@@ -16,6 +16,7 @@ public record TrainingNotificationCommand(
         Integer totalCount,
         Integer approvedCount,
         Integer pendingCount,
+        String payload,
         String actor
 ) {
 }
