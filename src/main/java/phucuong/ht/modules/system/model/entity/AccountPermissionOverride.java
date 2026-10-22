@@ -3,7 +3,7 @@ package phucuong.ht.modules.system.model.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import phucuong.ht.common.model.BaseModel;
-import phucuong.ht.modules.system.model.enums.PermissionEffect;
+import phucuong.ht.modules.system.model.enums.PermissionRevocationReason;
 
 import java.time.OffsetDateTime;
 
@@ -41,13 +41,20 @@ public class AccountPermissionOverride extends BaseModel {
     @JoinColumn(name = "permission_code", nullable = false)
     private Permission permission;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "effect", nullable = false)
-    private PermissionEffect effect;
 
     @Column(name = "reason")
     private String reason;
 
     @Column(name = "expires_at")
     private OffsetDateTime expiresAt;
+
+    @Column(name = "revoked_at")
+    private OffsetDateTime revokedAt;
+
+    @Column(name = "revoked_by", length = 100)
+    private String revokedBy;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "revocation_reason", length = 20)
+    private PermissionRevocationReason revocationReason;
 }

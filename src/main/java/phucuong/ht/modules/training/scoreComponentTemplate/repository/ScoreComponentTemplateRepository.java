@@ -22,6 +22,25 @@ public class ScoreComponentTemplateRepository extends BaseRepo<ScoreComponentTem
         return component;
     }
 
+    /** Id các thành phần điểm đã có ít nhất một điểm được nhập trong bất kỳ khóa huấn luyện nào. */
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public java.util.Set<String> findIdsWithEnteredScores(java.util.Collection<String> componentIds) {
+        if (componentIds == null || componentIds.isEmpty()) {
+            return java.util.Set.of();
+        }
+        return new java.util.HashSet<>(entityManager.createQuery(
+                        """
+                                select distinct score.component.id
+                                from CourseParticipationComponentScore score
+                                where score.component.id in :ids
+                                  and score.score is not null
+                                """,
+                        String.class
+                )
+                .setParameter("ids", componentIds)
+                .getResultList());
+    }
+
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public Optional<ScoreComponentTemplate> findByIdWithScope(String id) {
         List<ScoreComponentTemplate> results = entityManager.createQuery(

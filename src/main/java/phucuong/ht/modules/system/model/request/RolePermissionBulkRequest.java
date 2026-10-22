@@ -5,7 +5,6 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
-import phucuong.ht.modules.system.model.enums.PermissionEffect;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -20,8 +19,6 @@ public class RolePermissionBulkRequest {
     @NotEmpty
     private List<@NotBlank String> permissionCodes;
 
-    @NotNull
-    private PermissionEffect effect;
 
     private String conditions;
 

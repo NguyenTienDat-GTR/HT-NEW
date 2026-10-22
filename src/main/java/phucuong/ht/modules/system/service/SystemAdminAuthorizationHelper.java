@@ -154,18 +154,61 @@ public class SystemAdminAuthorizationHelper {
     }
 
     public void requireRolePermissionWriteAccess(Authentication authentication, Role role, Permission permission, String authority) {
+        requireRolePermissionRoleAccess(authentication, role, authority);
+        if (isSuperAdmin(authentication)) {
+            return;
+        }
+        requireActorOwnsPermission(authentication, permission);
+        requirePermissionAtOrBelowScope(permission, rolePermissionAuthorityScopeOrder(authentication, authority));
+    }
+
+    /**
+     * Phần kiểm tra theo vai trò đích (không xét quyền cụ thể) của phân quyền / thu hồi quyền cho vai trò:
+     * - SUPER_ADMIN: vai trò hệ thống hoặc do super-admin tạo;
+     * - cấp giáo phận được phân quyền cho admin-deanery và admin-parish, cấp giáo hạt cho admin-parish (vai trò hệ thống cấp thấp hơn);
+     * - ngoài ra chỉ vai trò tùy biến do chính cấp mình tạo, và không được cao hơn vai trò cao nhất của người thao tác.
+     * Vai trò do admin cấp thấp hơn tạo thuộc cấp của họ nên cấp trên không phân quyền được.
+     */
+    public void requireRolePermissionRoleAccess(Authentication authentication, Role role, String authority) {
         if (isSuperAdmin(authentication)) {
             requireManageableBySuperAdmin(role);
             return;
         }
+        requireRolePermissionOperationAuthority(authentication, authority);
+        if (isLowerAdminSystemRole(authentication, role, authority)) {
+            requireTargetRoleBelowActor(authentication, role);
+            return;
+        }
         if (Boolean.TRUE.equals(role.getIsSystem())) {
-            throw commonValidationHelper.forbidden("Chỉ SUPER_ADMIN được thay đổi phân quyền của vai trò hệ thống");
+            throw commonValidationHelper.forbidden("Chỉ SUPER_ADMIN được thay đổi phân quyền của vai trò hệ thống cùng hoặc cao hơn cấp của mình");
         }
         requireRoleOwnedByActorScope(authentication, role);
-        requireRolePermissionOperationAuthority(authentication, authority);
-        requireActorOwnsPermission(authentication, permission);
         requireTargetRoleBelowActor(authentication, role);
-        requirePermissionAtOrBelowScope(permission, rolePermissionAuthorityScopeOrder(authentication, authority));
+    }
+
+    public boolean canManageRolePermissionRole(Authentication authentication, Role role, String authority) {
+        try {
+            requireRolePermissionRoleAccess(authentication, role, authority);
+            return true;
+        } catch (RuntimeException ignored) {
+            return false;
+        }
+    }
+
+    private static final java.util.Map<String, Integer> ADMIN_SYSTEM_ROLE_TIER = java.util.Map.of(
+            "ADMIN_DIOCESE", 1,
+            "ADMIN_DEANERY", 2,
+            "ADMIN_PARISH", 3
+    );
+
+    // Vai trò admin hệ thống thuộc cấp thấp hơn cấp thao tác của người dùng (giáo phận > giáo hạt > giáo xứ).
+    private boolean isLowerAdminSystemRole(Authentication authentication, Role role, String authority) {
+        if (role == null || !Boolean.TRUE.equals(role.getIsSystem())) {
+            return false;
+        }
+        Integer targetTier = ADMIN_SYSTEM_ROLE_TIER.get(role.getRoleCode());
+        int actorTier = rolePermissionAuthorityScopeOrder(authentication, authority);
+        return targetTier != null && actorTier >= 1 && actorTier != Integer.MAX_VALUE && targetTier > actorTier;
     }
 
     public boolean canReadRole(Authentication authentication, Role role) {
@@ -378,6 +421,45 @@ public class SystemAdminAuthorizationHelper {
     public boolean canManageAccountPermission(Authentication authentication, String username, Permission permission) {
         try {
             requireAccountPermissionWriteAccess(authentication, username, permission);
+            return true;
+        } catch (RuntimeException ignored) {
+            return false;
+        }
+    }
+
+    /**
+     * Role nào cấp quyền thì chỉ role đó được gỡ, mở rộng theo thứ tự role: người gỡ (không phải SUPER_ADMIN) phải có role
+     * cùng cấp hoặc cao hơn role cao nhất của người cấp (displayOrder nhỏ hơn là cấp cao hơn). Ví dụ role A do ADMIN_DIOCESE tạo
+     * và cấp quyền cho các role khác thì ADMIN_DIOCESE và các role cùng cấp với A đều gỡ được, role thấp hơn A thì không.
+     * Quyền do SUPER_ADMIN cấp có thứ tự cao nhất nên chỉ SUPER_ADMIN gỡ được; quyền do hệ thống cấp hoặc người cấp không còn
+     * role hoạt động cũng chỉ SUPER_ADMIN gỡ được.
+     */
+    public void requireRevocableOrigin(Authentication authentication, String assignedBy, String createdBy) {
+        if (isSuperAdmin(authentication)) {
+            return;
+        }
+        String granter = assignedBy != null && !assignedBy.isBlank() ? assignedBy.trim() : createdBy == null ? null : createdBy.trim();
+        Integer granterOrder = granter == null || granter.isBlank() || "system".equalsIgnoreCase(granter)
+                ? null
+                : accountRepository.findHighestActiveRoleOrder(granter);
+        Integer actorOrder = actorRoleOrder(authentication);
+        if (granterOrder == null || actorOrder == null || actorOrder > granterOrder) {
+            throw commonValidationHelper.forbidden("Quyền chỉ được thu hồi bởi role đã cấp quyền, role cùng cấp hoặc cao hơn (hoặc SUPER_ADMIN)");
+        }
+    }
+
+    /** Admin không thu hồi quyền của chính vai trò mình đang giữ. */
+    public void requireNotOwnRole(Authentication authentication, Role role) {
+        if (!isSuperAdmin(authentication) && role != null && hasRole(authentication, role.getRoleCode())) {
+            throw commonValidationHelper.forbidden("Không được thu hồi quyền của vai trò mà tài khoản hiện tại đang giữ");
+        }
+    }
+
+    public boolean canRevokeRolePermission(Authentication authentication, Role role, Permission permission, String assignedBy, String createdBy) {
+        try {
+            requireRolePermissionWriteAccess(authentication, role, permission, ROLE_PERMISSION_REVOKE_DIOCESE);
+            requireRevocableOrigin(authentication, assignedBy, createdBy);
+            requireNotOwnRole(authentication, role);
             return true;
         } catch (RuntimeException ignored) {
             return false;

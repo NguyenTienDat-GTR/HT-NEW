@@ -476,13 +476,11 @@ System administration endpoints:
 - `GET /api/system/role-permissions/{id}`
 - `PUT /api/system/role-permissions/{id}`
 - `DELETE /api/system/role-permissions/{id}`
-- `PATCH /api/system/role-permissions/{id}/toggle-status`
 - `POST /api/system/account-permissions`
 - `GET /api/system/account-permissions`
 - `GET /api/system/account-permissions/{id}`
 - `PUT /api/system/account-permissions/{id}`
 - `DELETE /api/system/account-permissions/{id}`
-- `PATCH /api/system/account-permissions/{id}/toggle-status`
 
 Administration behavior:
 
@@ -498,8 +496,43 @@ Administration behavior:
 - `SUPER_ADMIN` retains global list/detail reads for roles, permissions, accounts, role-permissions, and account-permission overrides
 - role and permission create or update requests do not write `status`; active or inactive state changes only through toggle-status
 - new business roles may be created through the role API and stay permission-empty until role-permission APIs assign explicit permissions
-- direct account overrides continue to use `ALLOW` and `DENY`, with optional `expiresAt`
+- direct account overrides and role-permission rows no longer have an `effect` (`ALLOW`/`DENY`) or a toggle: every row grants the permission; see "Permission Assignment Lifecycle" below
 - API access is enforced directly by controller `@PreAuthorize` rules and each module's scoped `AccessEvaluator`; the legacy `api_permission_policy` registry is removed
+
+### Permission Assignment Lifecycle (phân quyền vai trò / tài khoản)
+
+Áp dụng cho `role_permission` (phân quyền vai trò) và `account_permission_override` (phân quyền tài khoản). Hai màn hình này chỉ có **phân quyền** và **thu hồi quyền**; không có bật/tắt (toggle) và không còn trường `effect` (migration V091 xóa cột, xóa các bản ghi DENY cũ).
+
+**Cấp quyền (phân quyền)**
+
+- `SUPER_ADMIN` cấp được cho mọi vai trò / tài khoản trong phạm vi quản lý của mình.
+- Phân quyền / thu hồi quyền cho vai trò theo cấp: cấp giáo phận (authority `*.diocese`) được phân quyền và thu hồi cho vai trò hệ thống `ADMIN_DEANERY` và `ADMIN_PARISH`; cấp giáo hạt (`*.deanery`) cho `ADMIN_PARISH`; cấp giáo xứ không phân quyền cho vai trò hệ thống nào. Vai trò tùy biến chỉ quản lý được khi do chính cấp mình tạo (cùng đơn vị), nên vai trò do admin giáo hạt / giáo xứ tạo thì cấp giáo phận không phân quyền được. Mọi trường hợp vai trò đích không được cao hơn vai trò cao nhất của người thao tác.
+- Dropdown vai trò ở form phân quyền / thu hồi quyền vai trò dùng `GET /api/system/role-permissions/manageable-roles?action=assign|revoke`, chỉ trả vai trò mà người dùng được phép thao tác (đã loại vai trò cấp cao hơn).
+- Admin cấp cao hơn chỉ cấp được cho role / tài khoản của admin cấp thấp hơn, và chỉ trong bộ quyền mình đang có: vai trò đích phải thấp hơn vai trò cao nhất của người cấp, phạm vi quyền không cao hơn phạm vi người cấp được phép, và người cấp phải đang sở hữu đúng quyền đó.
+- Bản ghi lưu `assignedBy` / `createdBy` (người cấp) và `assignedAt`.
+- `expiresAt` tùy chọn: để trống thì quyền có hiệu lực vĩnh viễn.
+
+**Hiệu lực** (trường `validity` trả về ở hai danh sách, cột "Tình trạng quyền")
+
+| `validity` | Điều kiện | Hồi phục được |
+| --- | --- | --- |
+| `ACTIVE` | chưa thu hồi, chưa quá hạn, quyền gốc đang bật | - |
+| `EXPIRED` | quá `expiresAt` (job đánh dấu `revoked_at`, lý do `EXPIRED`) | Không |
+| `REVOKED` | thu hồi thủ công (`revoked_at`, lý do `MANUAL`) | Không |
+| `PERMISSION_DISABLED` | quyền gốc (bảng `permission`) bị toggle disable | Có, bật lại quyền gốc là hiệu lực lại |
+
+- Quyền gốc bị toggle disable cũng đồng nghĩa phân quyền đó không còn hiệu lực. Dòng phân quyền không bị đụng tới nên bật lại quyền gốc thì tự có hiệu lực.
+- `EXPIRED` và `REVOKED` là vĩnh viễn: bản ghi được giữ lại để hiển thị lịch sử, không sửa, không bật lại. Muốn cấp lại phải phân quyền mới; bản ghi cũ bị thay bằng bản ghi mới (ràng buộc duy nhất theo vai trò/tài khoản + quyền).
+- Job `PermissionExpiryRevocationScheduler` chạy mỗi 60 giây để đánh dấu `EXPIRED`. Tính quyền hiệu lực (view `v_account_effective_permission`) luôn kiểm tra `expires_at` và `revoked_at IS NULL`, nên không phụ thuộc độ trễ của job.
+
+**Thu hồi quyền** (`POST /api/system/role-permissions/revoke`, `POST /api/system/account-permissions/revoke`; nút thu hồi ở từng dòng cũng gọi API này)
+
+- Người thu hồi phải có quyền thu hồi tương ứng và có quyền quản lý đích như khi cấp.
+- Admin không thu hồi quyền của chính vai trò mình đang giữ, và không thu hồi quyền của chính tài khoản mình.
+- Role nào cấp quyền thì chỉ role đó được gỡ, mở rộng theo thứ tự role (`role.displayOrder`, số nhỏ hơn là cấp cao hơn): người gỡ phải có role cùng cấp hoặc cao hơn role cao nhất đang hoạt động của người cấp (`assignedBy`, hoặc `createdBy` khi không có). Ví dụ role A do `ADMIN_DIOCESE` tạo và có quyền phân quyền cho `ADMIN_DEANERY` / `ADMIN_PARISH`: các quyền do tài khoản mang role A cấp được `ADMIN_DIOCESE` và các role cùng cấp với A gỡ, role thấp hơn A không gỡ được; tương tự cho các cấp role khác.
+- Quyền do `SUPER_ADMIN` cấp có thứ tự cao nhất nên chỉ `SUPER_ADMIN` gỡ được. Quyền do hệ thống (`system`) cấp, hoặc người cấp không còn role hoạt động, cũng chỉ `SUPER_ADMIN` gỡ được.
+- Mỗi dòng danh sách trả `revocable` (tính theo người đang đăng nhập); FE chỉ hiện nút thu hồi khi `revocable = true`. Danh sách "quyền có thể thu hồi" cho thu hồi hàng loạt lọc theo cùng điều kiện.
+- Thu hồi dòng đã `EXPIRED` / `REVOKED` trả `409`.
 
 ### Diocese CRUD And Scope Rules
 

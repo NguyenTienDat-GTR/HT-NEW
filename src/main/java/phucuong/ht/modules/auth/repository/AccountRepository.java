@@ -132,4 +132,14 @@ public interface AccountRepository extends JpaRepository<Account, String> {
             @Param("dioceseId") UUID dioceseId,
             @Param("username") String username
     );
+
+    @Query("""
+            select min(ar.role.displayOrder)
+            from AccountRole ar
+            where lower(ar.account.username) = lower(:username)
+              and ar.status = true
+              and ar.role.status = true
+              and (ar.expiresAt is null or ar.expiresAt > CURRENT_TIMESTAMP)
+            """)
+    Integer findHighestActiveRoleOrder(@Param("username") String username);
 }

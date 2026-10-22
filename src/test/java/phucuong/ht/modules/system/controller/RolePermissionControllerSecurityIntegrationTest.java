@@ -16,7 +16,6 @@ import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.utils.jwtUtils;
 import phucuong.ht.modules.auth.model.AuthUserDetails;
 import phucuong.ht.modules.auth.service.RedisTokenSessionService;
-import phucuong.ht.modules.system.model.enums.PermissionEffect;
 import phucuong.ht.modules.system.model.request.RolePermissionBulkRequest;
 import phucuong.ht.modules.system.model.request.RolePermissionCreateRequest;
 import phucuong.ht.modules.system.model.response.RolePermissionResponse;
@@ -64,13 +63,11 @@ class RolePermissionControllerSecurityIntegrationTest {
         RolePermissionCreateRequest request = new RolePermissionCreateRequest();
         request.setRoleCode("ADMIN_PARISH");
         request.setPermissionCode("organization.position.read.parish");
-        request.setEffect(PermissionEffect.ALLOW);
 
         when(rolePermissionManagementService.create(any(RolePermissionCreateRequest.class), any())).thenReturn(RolePermissionResponse.builder()
                 .id("rp-1")
                 .roleCode("ADMIN_PARISH")
                 .permissionCode("organization.position.read.parish")
-                .effect(PermissionEffect.ALLOW)
                 .status(true)
                 .build());
 
@@ -88,7 +85,6 @@ class RolePermissionControllerSecurityIntegrationTest {
         RolePermissionCreateRequest request = new RolePermissionCreateRequest();
         request.setRoleCode("ADMIN_PARISH");
         request.setPermissionCode("organization.position.read.parish");
-        request.setEffect(PermissionEffect.ALLOW);
 
         mockMvc.perform(post("/api/system/role-permissions")
                         .header("Authorization", bearer(token(List.of("ADMIN_DIOCESE"), List.of())))
@@ -102,21 +98,18 @@ class RolePermissionControllerSecurityIntegrationTest {
         RolePermissionBulkRequest request = new RolePermissionBulkRequest();
         request.setRoleCode("ADMIN_PARISH");
         request.setPermissionCodes(List.of("organization.position.read.parish", "organization.position.update.parish"));
-        request.setEffect(PermissionEffect.ALLOW);
 
         when(rolePermissionManagementService.bulkAssign(any(RolePermissionBulkRequest.class), any())).thenReturn(List.of(
                 RolePermissionResponse.builder()
                         .id("rp-1")
                         .roleCode("ADMIN_PARISH")
                         .permissionCode("organization.position.read.parish")
-                        .effect(PermissionEffect.ALLOW)
                         .status(true)
                         .build(),
                 RolePermissionResponse.builder()
                         .id("rp-2")
                         .roleCode("ADMIN_PARISH")
                         .permissionCode("organization.position.update.parish")
-                        .effect(PermissionEffect.ALLOW)
                         .status(true)
                         .build()
         ));

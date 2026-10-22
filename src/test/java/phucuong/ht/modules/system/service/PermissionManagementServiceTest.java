@@ -13,7 +13,6 @@ import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.modules.auth.model.AuthUserDetails;
 import phucuong.ht.modules.system.model.entity.Permission;
-import phucuong.ht.modules.system.model.enums.PermissionEffect;
 import phucuong.ht.modules.system.model.request.PermissionUpdateRequest;
 import phucuong.ht.modules.system.model.response.PermissionResponse;
 import phucuong.ht.modules.system.repository.SystemPermissionRepository;
@@ -60,34 +59,6 @@ class PermissionManagementServiceTest {
         assertEquals("New description", permission.getDescription());
         assertEquals(20, permission.getDisplayOrder());
         verify(systemPermissionRepository).save(permission);
-    }
-
-    @Test
-    void findAllShouldApplyEffectFilterOutsidePermissionEntityFilters() {
-        CommonValidationHelper helper = new CommonValidationHelper(new securityUtils());
-        PermissionManagementService service = new PermissionManagementService(systemPermissionRepository, helper, authorizationHelper);
-
-        Permission allowed = permission("system.role.read.all");
-        Permission denied = permission("system.permission.read.all");
-        BaseSearchRequest request = new BaseSearchRequest();
-        request.setFilters(new LinkedHashMap<>(java.util.Map.of(
-                "module.moduleCode", "system",
-                "effect", "ALLOW"
-        )));
-        when(systemPermissionRepository.findAll(any(BaseSearchRequest.class))).thenReturn(new PageImpl<>(List.of(allowed, denied)));
-        when(authorizationHelper.canReadPermission(any(), any(Permission.class))).thenReturn(true);
-        when(systemPermissionRepository.hasAssignmentEffect("system.role.read.all", PermissionEffect.ALLOW)).thenReturn(true);
-        when(systemPermissionRepository.hasAssignmentEffect("system.permission.read.all", PermissionEffect.ALLOW)).thenReturn(false);
-
-        Page<PermissionResponse> result = service.findAll(request, authentication(List.of("SUPER_ADMIN")));
-
-        assertEquals(1, result.getContent().size());
-        assertEquals("system.role.read.all", result.getContent().get(0).getPermissionCode());
-        ArgumentCaptor<BaseSearchRequest> captor = ArgumentCaptor.forClass(BaseSearchRequest.class);
-        verify(systemPermissionRepository).findAll(captor.capture());
-        org.assertj.core.api.Assertions.assertThat(captor.getValue().getFilters())
-                .containsEntry("module.moduleCode", "system")
-                .doesNotContainKey("effect");
     }
 
     private UsernamePasswordAuthenticationToken authentication(List<String> roles) {

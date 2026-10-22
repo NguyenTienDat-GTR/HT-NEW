@@ -2,7 +2,8 @@ package phucuong.ht.modules.system.model.response;
 
 import lombok.Builder;
 import lombok.Getter;
-import phucuong.ht.modules.system.model.enums.PermissionEffect;
+import phucuong.ht.modules.system.model.enums.PermissionRevocationReason;
+import phucuong.ht.modules.system.model.enums.PermissionValidity;
 
 import java.time.OffsetDateTime;
 
@@ -14,10 +15,15 @@ public class RolePermissionResponse {
     private String roleName;
     private String permissionCode;
     private String permissionName;
-    private PermissionEffect effect;
     private String conditions;
     private String assignedBy;
     private OffsetDateTime assignedAt;
     private OffsetDateTime expiresAt;
     private Boolean status;
+    private PermissionValidity validity;
+    // Người dùng hiện tại có được thu hồi dòng này không (theo phân cấp); null khi không tính theo người dùng.
+    private Boolean revocable;
+    private PermissionRevocationReason revocationReason;
+    private OffsetDateTime revokedAt;
+    private String revokedBy;
 }

@@ -15,13 +15,13 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import phucuong.ht.common.dto.apiResponse;
-import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.modules.system.model.request.RolePermissionBulkRequest;
 import phucuong.ht.modules.system.model.request.RolePermissionRevokeRequest;
 import phucuong.ht.modules.system.model.request.RolePermissionCreateRequest;
 import phucuong.ht.modules.system.model.request.RolePermissionUpdateRequest;
 import phucuong.ht.modules.system.model.response.PermissionResponse;
+import phucuong.ht.modules.system.model.response.RoleResponse;
 import phucuong.ht.modules.system.model.response.RolePermissionResponse;
 import phucuong.ht.modules.system.service.RolePermissionManagementService;
 
@@ -76,6 +76,23 @@ public class RolePermissionController {
     )
     public apiResponse<Page<RolePermissionResponse>> findAll(BaseSearchRequest request, Authentication authentication) {
         return apiResponse.success("Lấy danh sách quyền của vai trò thành công", rolePermissionManagementService.findAll(request, authentication));
+    }
+
+    @GetMapping("/manageable-roles")
+    @PreAuthorize(
+            "@systemAdminAuthorizationHelper.isSuperAdmin(authentication)"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.diocese')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.deanery')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.parish')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.diocese')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.deanery')"
+                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.parish')"
+    )
+    public apiResponse<List<RoleResponse>> findManageableRoles(
+            @RequestParam(defaultValue = "assign") String action,
+            Authentication authentication
+    ) {
+        return apiResponse.success("Lấy danh sách vai trò được phân quyền thành công", rolePermissionManagementService.findManageableRoles(action, authentication));
     }
 
     @GetMapping("/assignable-permissions")
@@ -151,24 +168,5 @@ public class RolePermissionController {
             Authentication authentication
     ) {
         return apiResponse.success("Cập nhật quyền của vai trò thành công", rolePermissionManagementService.update(id, request, authentication));
-    }
-    @PatchMapping("/{id}/toggle-status")
-    @PreAuthorize(
-            "@systemAdminAuthorizationHelper.isSuperAdmin(authentication)"
-                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.all')"
-                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.diocese')"
-                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.deanery')"
-                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.assign.parish')"
-                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.all')"
-                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.diocese')"
-                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.deanery')"
-                    + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.parish')"
-    )
-    public apiResponse<RolePermissionResponse> toggleStatus(
-            @PathVariable String id,
-            @Valid @RequestBody StatusToggleRequest request,
-            Authentication authentication
-    ) {
-        return apiResponse.success("Đổi trạng thái quyền của vai trò thành công", rolePermissionManagementService.toggleStatus(id, request, authentication));
     }
 }

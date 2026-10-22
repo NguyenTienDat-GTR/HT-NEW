@@ -19,7 +19,6 @@ import phucuong.ht.modules.system.model.entity.AccountRole;
 import phucuong.ht.modules.system.model.entity.Permission;
 import phucuong.ht.modules.system.model.entity.PermissionScope;
 import phucuong.ht.modules.system.model.entity.Role;
-import phucuong.ht.modules.system.model.enums.PermissionEffect;
 import phucuong.ht.modules.system.model.request.AccountPermissionOverrideCreateRequest;
 import phucuong.ht.modules.system.repository.AccountPermissionOverrideRepository;
 import phucuong.ht.modules.system.repository.RolePermissionRepository;
@@ -90,7 +89,6 @@ class AccountPermissionOverrideManagementServiceTest {
         AccountPermissionOverrideCreateRequest request = new AccountPermissionOverrideCreateRequest();
         request.setUsername("target");
         request.setPermissionCode("system.permission.read.all");
-        request.setEffect(PermissionEffect.DENY);
 
         when(accountRepository.findActiveByUsername("target")).thenReturn(Optional.of(account));
         when(systemPermissionRepository.findById("system.permission.read.all")).thenReturn(Optional.of(permission));
@@ -139,7 +137,6 @@ class AccountPermissionOverrideManagementServiceTest {
         AccountPermissionOverrideCreateRequest request = new AccountPermissionOverrideCreateRequest();
         request.setUsername("target");
         request.setPermissionCode("organization.position.read.diocese");
-        request.setEffect(PermissionEffect.DENY);
 
         when(accountRepository.findActiveByUsername("target")).thenReturn(Optional.of(account));
         when(systemPermissionRepository.findById("organization.position.read.diocese")).thenReturn(Optional.of(permission));
@@ -184,70 +181,11 @@ class AccountPermissionOverrideManagementServiceTest {
         AccountPermissionOverrideCreateRequest request = new AccountPermissionOverrideCreateRequest();
         request.setUsername("target");
         request.setPermissionCode("system.role_permission.assign.diocese");
-        request.setEffect(PermissionEffect.ALLOW);
 
         when(accountRepository.findActiveByUsername("target")).thenReturn(Optional.of(account));
         when(systemPermissionRepository.findById("system.role_permission.assign.diocese")).thenReturn(Optional.of(permission));
 
         assertThrows(RuntimeException.class, () -> service.create(request, authentication()));
-    }
-
-    @Test
-    void createShouldRejectDenyingRequiredAccountRoleAssignmentPermissionForAdminUnitAccount() {
-        CommonValidationHelper helper = new CommonValidationHelper(new securityUtils());
-        SystemAdminAuthorizationHelper authorizationHelper = new SystemAdminAuthorizationHelper(
-                new securityUtils(),
-                accountScopeValidationHelper,
-                accountRepository,
-                roleRepository,
-                helper
-        );
-        AccountPermissionOverrideManagementService service = new AccountPermissionOverrideManagementService(
-                accountPermissionOverrideRepository,
-                accountRepository,
-                accountRoleRepository,
-                systemPermissionRepository,
-                rolePermissionRepository,
-                helper,
-                authorizationHelper
-        );
-
-        Account account = new Account();
-        account.setUsername("phucuongadmin");
-        account.setStatus(true);
-
-        Role role = new Role();
-        role.setRoleCode("ADMIN_DIOCESE");
-        role.setIsSystem(true);
-        AccountRole accountRole = new AccountRole();
-        accountRole.setAccount(account);
-        accountRole.setRole(role);
-
-        PermissionScope scope = new PermissionScope();
-        scope.setScopeCode("diocese");
-        Permission permission = new Permission();
-        permission.setPermissionCode("system.account_role.assign.diocese");
-        permission.setScope(scope);
-        permission.setStatus(true);
-
-        AccountPermissionOverrideCreateRequest request = new AccountPermissionOverrideCreateRequest();
-        request.setUsername("phucuongadmin");
-        request.setPermissionCode("system.account_role.assign.diocese");
-        request.setEffect(PermissionEffect.DENY);
-
-        AuthUserDetails principal = AuthUserDetails.tokenPrincipal(
-                "superadminpc",
-                null,
-                List.of("SUPER_ADMIN"),
-                List.of("system.account_permission.manage.all")
-        );
-        var authentication = new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
-
-        when(accountRepository.findActiveByUsername("phucuongadmin")).thenReturn(Optional.of(account));
-        when(systemPermissionRepository.findById("system.account_role.assign.diocese")).thenReturn(Optional.of(permission));
-        when(accountRoleRepository.findActiveByUsername("phucuongadmin")).thenReturn(List.of(accountRole));
-
-        assertThrows(RuntimeException.class, () -> service.create(request, authentication));
     }
 
     private UsernamePasswordAuthenticationToken authentication() {
