@@ -34,6 +34,9 @@ import static org.mockito.Mockito.when;
 class RolePermissionManagementServiceTest {
 
     @Mock
+    private phucuong.ht.modules.auth.repository.AccountRepository accountRepository;
+
+    @Mock
     private RolePermissionRepository rolePermissionRepository;
 
     @Mock
@@ -197,6 +200,9 @@ class RolePermissionManagementServiceTest {
         RolePermission assignment = new RolePermission();
         assignment.setRole(targetRole);
         assignment.setPermission(permission);
+        assignment.setAssignedBy("granter");
+        // Người cấp có role thứ tự 100, cùng cấp với ADMIN_DIOCESE (100): được thu hồi.
+        when(accountRepository.findHighestActiveRoleOrder("granter")).thenReturn(100);
         when(roleRepository.findById("CUSTOM_DIOCESE")).thenReturn(Optional.of(targetRole));
         when(roleRepository.findByRoleCodeAndStatusTrue("ADMIN_DIOCESE")).thenReturn(Optional.of(role("ADMIN_DIOCESE", 100)));
         when(rolePermissionRepository.findByRoleCodeAndPermissionCode("CUSTOM_DIOCESE", "organization.position.read.diocese")).thenReturn(Optional.of(assignment));
@@ -213,6 +219,30 @@ class RolePermissionManagementServiceTest {
         org.junit.jupiter.api.Assertions.assertNotNull(assignment.getRevokedAt());
     }
 
+    @Test
+    void bulkRevokeShouldRejectActorLowerThanGranterRole() {
+        Role targetRole = role("CUSTOM_DIOCESE", 100);
+        targetRole.setIsSystem(false);
+        Permission permission = permission("organization.position.read.diocese", "diocese");
+        RolePermission assignment = new RolePermission();
+        assignment.setRole(targetRole);
+        assignment.setPermission(permission);
+        assignment.setAssignedBy("granter");
+        // Người cấp có role thứ tự 50 (cao hơn ADMIN_DIOCESE 100): ADMIN_DIOCESE không được thu hồi.
+        when(accountRepository.findHighestActiveRoleOrder("granter")).thenReturn(50);
+        when(roleRepository.findById("CUSTOM_DIOCESE")).thenReturn(Optional.of(targetRole));
+        when(roleRepository.findByRoleCodeAndStatusTrue("ADMIN_DIOCESE")).thenReturn(Optional.of(role("ADMIN_DIOCESE", 100)));
+        when(rolePermissionRepository.findByRoleCodeAndPermissionCode("CUSTOM_DIOCESE", "organization.position.read.diocese")).thenReturn(Optional.of(assignment));
+        var revokeRequest = new phucuong.ht.modules.system.model.request.RolePermissionRevokeRequest();
+        revokeRequest.setRoleCode("CUSTOM_DIOCESE");
+        revokeRequest.setPermissionCodes(List.of("organization.position.read.diocese"));
+        AuthUserDetails principal = AuthUserDetails.tokenPrincipal("admin-dio", "LEADER1", List.of("ADMIN_DIOCESE"),
+                List.of("system.role_permission.revoke.diocese", "organization.position.read.diocese"));
+
+        assertThrows(RuntimeException.class, () -> service().bulkRevoke(revokeRequest, new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities())));
+        org.junit.jupiter.api.Assertions.assertNull(assignment.getRevokedAt());
+    }
+
     private RolePermissionManagementService service() {
         return service(null);
     }
@@ -222,7 +252,7 @@ class RolePermissionManagementServiceTest {
         SystemAdminAuthorizationHelper authorizationHelper = new SystemAdminAuthorizationHelper(
                 new securityUtils(),
                 accountScopeValidationHelper,
-                null,
+                accountRepository,
                 roleRepository,
                 helper,
                 accountManagementAuthorizationHelper

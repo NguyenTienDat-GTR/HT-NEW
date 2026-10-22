@@ -385,24 +385,24 @@ public class SystemAdminAuthorizationHelper {
     }
 
     /**
-     * Quyền do super-admin / hệ thống cấp (assignedBy hoặc createdBy) chỉ super-admin được thu hồi;
-     * các cấp admin khác không thu hồi được kể cả khi có quyền thu hồi.
+     * Role nào cấp quyền thì chỉ role đó được gỡ, mở rộng theo thứ tự role: người gỡ (không phải SUPER_ADMIN) phải có role
+     * cùng cấp hoặc cao hơn role cao nhất của người cấp (displayOrder nhỏ hơn là cấp cao hơn). Ví dụ role A do ADMIN_DIOCESE tạo
+     * và cấp quyền cho các role khác thì ADMIN_DIOCESE và các role cùng cấp với A đều gỡ được, role thấp hơn A thì không.
+     * Quyền do SUPER_ADMIN cấp có thứ tự cao nhất nên chỉ SUPER_ADMIN gỡ được; quyền do hệ thống cấp hoặc người cấp không còn
+     * role hoạt động cũng chỉ SUPER_ADMIN gỡ được.
      */
     public void requireRevocableOrigin(Authentication authentication, String assignedBy, String createdBy) {
         if (isSuperAdmin(authentication)) {
             return;
         }
-        if (isGrantedBySuperAdmin(assignedBy) || isGrantedBySuperAdmin(createdBy)) {
-            throw commonValidationHelper.forbidden("Quyền do super-admin hoặc hệ thống cấp, chỉ super-admin được thu hồi");
+        String granter = assignedBy != null && !assignedBy.isBlank() ? assignedBy.trim() : createdBy == null ? null : createdBy.trim();
+        Integer granterOrder = granter == null || granter.isBlank() || "system".equalsIgnoreCase(granter)
+                ? null
+                : accountRepository.findHighestActiveRoleOrder(granter);
+        Integer actorOrder = actorRoleOrder(authentication);
+        if (granterOrder == null || actorOrder == null || actorOrder > granterOrder) {
+            throw commonValidationHelper.forbidden("Quyền chỉ được thu hồi bởi role đã cấp quyền, role cùng cấp hoặc cao hơn (hoặc SUPER_ADMIN)");
         }
-    }
-
-    // Người cấp là hệ thống hoặc tài khoản mang vai trò SUPER_ADMIN.
-    private boolean isGrantedBySuperAdmin(String actor) {
-        if (actor == null || actor.isBlank()) {
-            return false;
-        }
-        return "system".equalsIgnoreCase(actor.trim()) || accountRepository.existsAccountRole(actor.trim(), "SUPER_ADMIN");
     }
 
     /** Admin không thu hồi quyền của chính vai trò mình đang giữ. */

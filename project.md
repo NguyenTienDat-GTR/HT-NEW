@@ -526,9 +526,9 @@ Administration behavior:
 **Thu hồi quyền** (`POST /api/system/role-permissions/revoke`, `POST /api/system/account-permissions/revoke`; nút thu hồi ở từng dòng cũng gọi API này)
 
 - Người thu hồi phải có quyền thu hồi tương ứng và có quyền quản lý đích như khi cấp.
-- Quyền do `SUPER_ADMIN` hoặc hệ thống (`system`) cấp chỉ `SUPER_ADMIN` được thu hồi. Người cấp được xác định theo vai trò `SUPER_ADMIN` của tài khoản trong `assignedBy` / `createdBy`.
 - Admin không thu hồi quyền của chính vai trò mình đang giữ, và không thu hồi quyền của chính tài khoản mình.
-- Quy tắc nghiệp vụ: role nào cấp quyền thì chỉ role đó được gỡ. Admin cấp cao hơn cấp cho role admin cấp thấp hơn thì chỉ role của admin cấp quyền (và `SUPER_ADMIN`) gỡ được; admin cấp thấp hơn, và admin ngang cấp thuộc role khác, không gỡ được. Trạng thái triển khai: BE hiện mới chặn theo quy tắc `SUPER_ADMIN` / `system` ở trên; việc so sánh role của người cấp với role của người gỡ chưa được cài đặt.
+- Role nào cấp quyền thì chỉ role đó được gỡ, mở rộng theo thứ tự role (`role.displayOrder`, số nhỏ hơn là cấp cao hơn): người gỡ phải có role cùng cấp hoặc cao hơn role cao nhất đang hoạt động của người cấp (`assignedBy`, hoặc `createdBy` khi không có). Ví dụ role A do `ADMIN_DIOCESE` tạo và có quyền phân quyền cho `ADMIN_DEANERY` / `ADMIN_PARISH`: các quyền do tài khoản mang role A cấp được `ADMIN_DIOCESE` và các role cùng cấp với A gỡ, role thấp hơn A không gỡ được; tương tự cho các cấp role khác.
+- Quyền do `SUPER_ADMIN` cấp có thứ tự cao nhất nên chỉ `SUPER_ADMIN` gỡ được. Quyền do hệ thống (`system`) cấp, hoặc người cấp không còn role hoạt động, cũng chỉ `SUPER_ADMIN` gỡ được.
 - Mỗi dòng danh sách trả `revocable` (tính theo người đang đăng nhập); FE chỉ hiện nút thu hồi khi `revocable = true`. Danh sách "quyền có thể thu hồi" cho thu hồi hàng loạt lọc theo cùng điều kiện.
 - Thu hồi dòng đã `EXPIRED` / `REVOKED` trả `409`.
 

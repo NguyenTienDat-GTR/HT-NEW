@@ -134,10 +134,12 @@ public interface AccountRepository extends JpaRepository<Account, String> {
     );
 
     @Query("""
-            select count(ar) > 0
+            select min(ar.role.displayOrder)
             from AccountRole ar
             where lower(ar.account.username) = lower(:username)
-              and ar.role.roleCode = :roleCode
+              and ar.status = true
+              and ar.role.status = true
+              and (ar.expiresAt is null or ar.expiresAt > CURRENT_TIMESTAMP)
             """)
-    boolean existsAccountRole(@Param("username") String username, @Param("roleCode") String roleCode);
+    Integer findHighestActiveRoleOrder(@Param("username") String username);
 }
