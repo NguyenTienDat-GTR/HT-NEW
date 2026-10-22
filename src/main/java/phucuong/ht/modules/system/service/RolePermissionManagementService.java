@@ -157,6 +157,8 @@ public class RolePermissionManagementService {
             RolePermission rolePermission = rolePermissionRepository.findByRoleCodeAndPermissionCode(request.getRoleCode(), permissionCode)
                     .orElseThrow(() -> commonValidationHelper.notFound("Vai trò chưa được gán quyền: " + permissionCode));
             authorizationHelper.requireRolePermissionWriteAccess(authentication, role, rolePermission.getPermission(), SystemAdminAuthorizationHelper.ROLE_PERMISSION_REVOKE_DIOCESE);
+            authorizationHelper.requireRevocableOrigin(authentication, rolePermission.getAssignedBy(), rolePermission.getCreatedBy());
+            authorizationHelper.requireNotOwnRole(authentication, role);
             OffsetDateTime now = OffsetDateTime.now();
             if (PermissionValiditySupport.isPermanentlyRevoked(rolePermission.getRevokedAt(), rolePermission.getExpiresAt(), now)) {
                 throw commonValidationHelper.conflict("Quyền đã bị thu hồi hoặc hết hạn: " + permissionCode);
@@ -181,6 +183,9 @@ public class RolePermissionManagementService {
                 .map(systemPermissionRepository::findById)
                 .flatMap(java.util.Optional::stream)
                 .filter(permission -> canRevokePermission(authentication, role, permission))
+                .filter(permission -> rolePermissionRepository.findByRoleCodeAndPermissionCode(roleCode, permission.getPermissionCode())
+                        .map(assignment -> authorizationHelper.canRevokeRolePermission(authentication, role, permission, assignment.getAssignedBy(), assignment.getCreatedBy()))
+                        .orElse(false))
                 .map(this::toPermissionResponse)
                 .toList();
     }
@@ -200,7 +205,7 @@ public class RolePermissionManagementService {
                 .filter(rolePermission -> authorizationHelper.canReadRolePermission(
                         authentication, rolePermission.getRole(), rolePermission.getPermission()))
                 .toList();
-        return page(request, manageable);
+        return page(request, manageable, authentication);
     }
 
     @Transactional(readOnly = true)
@@ -223,7 +228,7 @@ public class RolePermissionManagementService {
         RolePermission rolePermission = rolePermissionRepository.findById(id)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy phân quyền cho vai trò: " + id));
         authorizationHelper.requireRolePermissionReadAccess(authentication, rolePermission.getRole(), rolePermission.getPermission());
-        return toResponse(rolePermission);
+        return toResponse(rolePermission, authentication);
     }
 
     @Transactional
@@ -341,15 +346,26 @@ public class RolePermissionManagementService {
         }
     }
 
-    private Page<RolePermissionResponse> page(BaseSearchRequest request, List<RolePermission> rolePermissions) {
+    private Page<RolePermissionResponse> page(BaseSearchRequest request, List<RolePermission> rolePermissions, Authentication authentication) {
         int page = request == null ? 0 : request.getPage();
         int size = request == null ? 10 : request.getSize();
         int start = Math.min(page * size, rolePermissions.size());
         int end = Math.min(start + size, rolePermissions.size());
-        return new PageImpl<>(rolePermissions.subList(start, end).stream().map(this::toResponse).toList(), PageRequest.of(page, size), rolePermissions.size());
+        return new PageImpl<>(rolePermissions.subList(start, end).stream().map(item -> toResponse(item, authentication)).toList(), PageRequest.of(page, size), rolePermissions.size());
     }
 
     private RolePermissionResponse toResponse(RolePermission rolePermission) {
+        return responseBuilder(rolePermission).build();
+    }
+
+    private RolePermissionResponse toResponse(RolePermission rolePermission, Authentication authentication) {
+        boolean revocable = !PermissionValiditySupport.isPermanentlyRevoked(rolePermission.getRevokedAt(), rolePermission.getExpiresAt(), OffsetDateTime.now())
+                && authorizationHelper.canRevokeRolePermission(authentication, rolePermission.getRole(), rolePermission.getPermission(),
+                rolePermission.getAssignedBy(), rolePermission.getCreatedBy());
+        return responseBuilder(rolePermission).revocable(revocable).build();
+    }
+
+    private RolePermissionResponse.RolePermissionResponseBuilder responseBuilder(RolePermission rolePermission) {
         return RolePermissionResponse.builder()
                 .id(rolePermission.getId())
                 .roleCode(rolePermission.getRole() == null ? null : rolePermission.getRole().getRoleCode())
@@ -365,8 +381,7 @@ public class RolePermissionManagementService {
                         rolePermission.getExpiresAt(), rolePermission.getPermission(), OffsetDateTime.now()))
                 .revocationReason(rolePermission.getRevocationReason())
                 .revokedAt(rolePermission.getRevokedAt())
-                .revokedBy(rolePermission.getRevokedBy())
-                .build();
+                .revokedBy(rolePermission.getRevokedBy());
     }
 
     private boolean canAssignPermission(Authentication authentication, Role role, Permission permission) {

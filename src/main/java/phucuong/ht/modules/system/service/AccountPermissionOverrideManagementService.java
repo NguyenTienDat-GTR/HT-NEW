@@ -139,6 +139,7 @@ public class AccountPermissionOverrideManagementService {
             AccountPermissionOverride override = accountPermissionOverrideRepository.findByUsernameAndPermissionCode(request.getUsername(), permissionCode)
                     .orElseThrow(() -> commonValidationHelper.notFound("Tài khoản chưa được gán quyền riêng: " + permissionCode));
             authorizationHelper.requireAccountPermissionWriteAccess(authentication, request.getUsername(), override.getPermission());
+            requireRevocable(authentication, override);
             OffsetDateTime now = OffsetDateTime.now();
             if (PermissionValiditySupport.isPermanentlyRevoked(override.getRevokedAt(), override.getExpiresAt(), now)) {
                 throw commonValidationHelper.conflict("Quyền đã bị thu hồi hoặc hết hạn: " + permissionCode);
@@ -164,6 +165,9 @@ public class AccountPermissionOverrideManagementService {
                 .map(systemPermissionRepository::findById)
                 .flatMap(java.util.Optional::stream)
                 .filter(permission -> authorizationHelper.canManageAccountPermission(authentication, username, permission))
+                .filter(permission -> accountPermissionOverrideRepository.findByUsernameAndPermissionCode(username, permission.getPermissionCode())
+                        .map(override -> isRevocableByActor(authentication, override))
+                        .orElse(false))
                 .map(this::toPermissionResponse)
                 .toList();
     }
@@ -173,7 +177,7 @@ public class AccountPermissionOverrideManagementService {
         List<AccountPermissionOverride> manageable = loadAllMatching(request).stream()
                 .filter(override -> canReadOverride(authentication, override))
                 .toList();
-        return page(request, manageable);
+        return page(request, manageable, authentication);
     }
 
     @Transactional(readOnly = true)
@@ -196,7 +200,7 @@ public class AccountPermissionOverrideManagementService {
         if (!canReadOverride(authentication, override)) {
             throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền đọc phân quyền riêng này");
         }
-        return toResponse(override);
+        return toResponse(override, authentication);
     }
 
     @Transactional
@@ -297,15 +301,48 @@ public class AccountPermissionOverrideManagementService {
         }
     }
 
-    private Page<AccountPermissionOverrideResponse> page(BaseSearchRequest request, List<AccountPermissionOverride> overrides) {
+    private Page<AccountPermissionOverrideResponse> page(BaseSearchRequest request, List<AccountPermissionOverride> overrides, Authentication authentication) {
         int page = request == null ? 0 : request.getPage();
         int size = request == null ? 10 : request.getSize();
         int start = Math.min(page * size, overrides.size());
         int end = Math.min(start + size, overrides.size());
-        return new PageImpl<>(overrides.subList(start, end).stream().map(this::toResponse).toList(), PageRequest.of(page, size), overrides.size());
+        return new PageImpl<>(overrides.subList(start, end).stream().map(item -> toResponse(item, authentication)).toList(), PageRequest.of(page, size), overrides.size());
     }
 
     private AccountPermissionOverrideResponse toResponse(AccountPermissionOverride override) {
+        return responseBuilder(override).build();
+    }
+
+    private AccountPermissionOverrideResponse toResponse(AccountPermissionOverride override, Authentication authentication) {
+        boolean revocable = !PermissionValiditySupport.isPermanentlyRevoked(override.getRevokedAt(), override.getExpiresAt(), OffsetDateTime.now())
+                && authorizationHelper.canManageAccountPermission(authentication, override.getAccount().getUsername(), override.getPermission())
+                && isRevocableByActor(authentication, override);
+        return responseBuilder(override).revocable(revocable).build();
+    }
+
+    private void requireRevocable(Authentication authentication, AccountPermissionOverride override) {
+        authorizationHelper.requireRevocableOrigin(authentication, null, override.getCreatedBy());
+        requireNotSelf(authentication, override.getAccount().getUsername());
+    }
+
+    private boolean isRevocableByActor(Authentication authentication, AccountPermissionOverride override) {
+        try {
+            requireRevocable(authentication, override);
+            return true;
+        } catch (RuntimeException ignored) {
+            return false;
+        }
+    }
+
+    // Admin không tự thu hồi quyền của chính tài khoản mình.
+    private void requireNotSelf(Authentication authentication, String username) {
+        if (!authorizationHelper.isSuperAdmin(authentication) && authentication != null && username != null
+                && username.equalsIgnoreCase(authentication.getName())) {
+            throw commonValidationHelper.forbidden("Không được thu hồi quyền của chính tài khoản mình");
+        }
+    }
+
+    private AccountPermissionOverrideResponse.AccountPermissionOverrideResponseBuilder responseBuilder(AccountPermissionOverride override) {
         return AccountPermissionOverrideResponse.builder()
                 .id(override.getId())
                 .username(override.getAccount() == null ? null : override.getAccount().getUsername())
@@ -318,8 +355,7 @@ public class AccountPermissionOverrideManagementService {
                         override.getExpiresAt(), override.getPermission(), OffsetDateTime.now()))
                 .revocationReason(override.getRevocationReason())
                 .revokedAt(override.getRevokedAt())
-                .revokedBy(override.getRevokedBy())
-                .build();
+                .revokedBy(override.getRevokedBy());
     }
 
     private PermissionResponse toPermissionResponse(Permission permission) {

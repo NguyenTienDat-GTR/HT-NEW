@@ -384,6 +384,37 @@ public class SystemAdminAuthorizationHelper {
         }
     }
 
+    /**
+     * Quyền do super-admin / hệ thống cấp (assignedBy hoặc createdBy) chỉ super-admin được thu hồi;
+     * các cấp admin khác không thu hồi được kể cả khi có quyền thu hồi.
+     */
+    public void requireRevocableOrigin(Authentication authentication, String assignedBy, String createdBy) {
+        if (isSuperAdmin(authentication)) {
+            return;
+        }
+        if (ManagementOwnership.isSuperAdminOwned(assignedBy) || ManagementOwnership.isSuperAdminOwned(createdBy)) {
+            throw commonValidationHelper.forbidden("Quyền do super-admin hoặc hệ thống cấp, chỉ super-admin được thu hồi");
+        }
+    }
+
+    /** Admin không thu hồi quyền của chính vai trò mình đang giữ. */
+    public void requireNotOwnRole(Authentication authentication, Role role) {
+        if (!isSuperAdmin(authentication) && role != null && hasRole(authentication, role.getRoleCode())) {
+            throw commonValidationHelper.forbidden("Không được thu hồi quyền của vai trò mà tài khoản hiện tại đang giữ");
+        }
+    }
+
+    public boolean canRevokeRolePermission(Authentication authentication, Role role, Permission permission, String assignedBy, String createdBy) {
+        try {
+            requireRolePermissionWriteAccess(authentication, role, permission, ROLE_PERMISSION_REVOKE_DIOCESE);
+            requireRevocableOrigin(authentication, assignedBy, createdBy);
+            requireNotOwnRole(authentication, role);
+            return true;
+        } catch (RuntimeException ignored) {
+            return false;
+        }
+    }
+
     private boolean hasRole(Authentication authentication, String roleCode) {
         return authentication != null && authentication.getAuthorities().stream()
                 .anyMatch(authority -> ("ROLE_" + roleCode).equals(authority.getAuthority()));

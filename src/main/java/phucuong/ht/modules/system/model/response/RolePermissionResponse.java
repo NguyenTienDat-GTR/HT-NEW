@@ -21,6 +21,8 @@ public class RolePermissionResponse {
     private OffsetDateTime expiresAt;
     private Boolean status;
     private PermissionValidity validity;
+    // Người dùng hiện tại có được thu hồi dòng này không (theo phân cấp); null khi không tính theo người dùng.
+    private Boolean revocable;
     private PermissionRevocationReason revocationReason;
     private OffsetDateTime revokedAt;
     private String revokedBy;
