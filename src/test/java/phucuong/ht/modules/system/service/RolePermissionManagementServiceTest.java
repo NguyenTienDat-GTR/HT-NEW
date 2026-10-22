@@ -212,7 +212,8 @@ class RolePermissionManagementServiceTest {
         int revoked = service().bulkRevoke(revokeRequest, new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities()));
 
         assertEquals(1, revoked);
-        org.mockito.Mockito.verify(rolePermissionRepository).deleteAssignment(assignment);
+        assertEquals(phucuong.ht.modules.system.model.enums.PermissionRevocationReason.MANUAL, assignment.getRevocationReason());
+        org.junit.jupiter.api.Assertions.assertNotNull(assignment.getRevokedAt());
     }
 
     private RolePermissionManagementService service() {

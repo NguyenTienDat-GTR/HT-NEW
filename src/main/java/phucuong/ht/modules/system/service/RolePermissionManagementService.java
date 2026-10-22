@@ -18,6 +18,7 @@ import phucuong.ht.modules.system.model.entity.Permission;
 import phucuong.ht.modules.system.model.entity.Role;
 import phucuong.ht.modules.system.model.entity.RolePermission;
 import phucuong.ht.modules.system.model.enums.PermissionEffect;
+import phucuong.ht.modules.system.model.enums.PermissionRevocationReason;
 import phucuong.ht.modules.system.model.request.RolePermissionBulkRequest;
 import phucuong.ht.modules.system.model.request.RolePermissionRevokeRequest;
 import phucuong.ht.modules.system.model.request.RolePermissionCreateRequest;
@@ -94,11 +95,22 @@ public class RolePermissionManagementService {
 
         authorizationHelper.requireRolePermissionWriteAccess(authentication, role, permission, SystemAdminAuthorizationHelper.ROLE_PERMISSION_ASSIGN_DIOCESE);
 
-        if (rolePermissionRepository.findByRoleCodeAndPermissionCode(request.getRoleCode(), request.getPermissionCode()).isPresent()) {
-            throw commonValidationHelper.conflict("Phân quyền cho vai trò đã tồn tại");
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tạo phân quyền cho vai trò");
+        RolePermission existing = rolePermissionRepository.findByRoleCodeAndPermissionCode(request.getRoleCode(), request.getPermissionCode()).orElse(null);
+        if (existing != null) {
+            if (!PermissionValiditySupport.isPermanentlyRevoked(existing.getRevokedAt(), existing.getExpiresAt(), OffsetDateTime.now())) {
+                throw commonValidationHelper.conflict("Phân quyền cho vai trò đã tồn tại");
+            }
+            // Quyền đã thu hồi/hết hạn không bật lại được: phân quyền mới thay thế bản ghi cũ.
+            OffsetDateTime assignedAt = request.getAssignedAt() == null ? OffsetDateTime.now() : request.getAssignedAt();
+            existing.setEffect(request.getEffect());
+            existing.setConditions(commonValidationHelper.normalizeOptionalText(request.getConditions()));
+            existing.setExpiresAt(request.getExpiresAt());
+            reissue(existing, actor, assignedAt);
+            notifyRolePermissionChanged(request.getRoleCode(), "ROLE_PERMISSION_CREATED");
+            return toResponse(existing);
         }
 
-        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tạo phân quyền cho vai trò");
         RolePermission rolePermission = rolePermissionRepository.create(request, actor);
         rolePermission.setAssignedBy(actor);
         rolePermission.setAssignedAt(request.getAssignedAt() == null ? OffsetDateTime.now() : request.getAssignedAt());
@@ -129,6 +141,9 @@ public class RolePermissionManagementService {
 
             RolePermission rolePermission = rolePermissionRepository.findByRoleCodeAndPermissionCode(request.getRoleCode(), permissionCode)
                     .orElseGet(() -> createRolePermission(role, permission, actor, assignedAt));
+            if (PermissionValiditySupport.isPermanentlyRevoked(rolePermission.getRevokedAt(), rolePermission.getExpiresAt(), now)) {
+                reissue(rolePermission, actor, assignedAt);
+            }
             rolePermission.setEffect(request.getEffect());
             rolePermission.setConditions(commonValidationHelper.normalizeOptionalText(request.getConditions()));
             rolePermission.setExpiresAt(request.getExpiresAt());
@@ -142,17 +157,26 @@ public class RolePermissionManagementService {
         return responses;
     }
 
-    /** Thu hồi nhiều quyền đã gán cho vai trò: xóa hẳn các bản ghi phân quyền. */
+    /** Thu hồi nhiều quyền đã gán cho vai trò: đánh dấu thu hồi vĩnh viễn, giữ lại bản ghi (muốn cấp lại phải phân quyền mới). */
     @Transactional
     public int bulkRevoke(RolePermissionRevokeRequest request, Authentication authentication) {
         Role role = roleRepository.findById(request.getRoleCode())
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy vai trò: " + request.getRoleCode()));
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người thu hồi phân quyền của vai trò");
         int revoked = 0;
         for (String permissionCode : new LinkedHashSet<>(request.getPermissionCodes())) {
             RolePermission rolePermission = rolePermissionRepository.findByRoleCodeAndPermissionCode(request.getRoleCode(), permissionCode)
                     .orElseThrow(() -> commonValidationHelper.notFound("Vai trò chưa được gán quyền: " + permissionCode));
             authorizationHelper.requireRolePermissionWriteAccess(authentication, role, rolePermission.getPermission(), SystemAdminAuthorizationHelper.ROLE_PERMISSION_REVOKE_DIOCESE);
-            rolePermissionRepository.deleteAssignment(rolePermission);
+            OffsetDateTime now = OffsetDateTime.now();
+            if (PermissionValiditySupport.isPermanentlyRevoked(rolePermission.getRevokedAt(), rolePermission.getExpiresAt(), now)) {
+                throw commonValidationHelper.conflict("Quyền đã bị thu hồi hoặc hết hạn: " + permissionCode);
+            }
+            rolePermission.setRevokedAt(now);
+            rolePermission.setRevokedBy(actor);
+            rolePermission.setRevocationReason(PermissionRevocationReason.MANUAL);
+            rolePermission.setUpdatedAt(now);
+            rolePermission.setUpdatedBy(actor);
             revoked++;
         }
         notifyRolePermissionChanged(request.getRoleCode(), "ROLE_PERMISSION_BULK_REVOKED");
@@ -223,6 +247,7 @@ public class RolePermissionManagementService {
                 rolePermission.getPermission(),
                 SystemAdminAuthorizationHelper.ROLE_PERMISSION_ASSIGN_DIOCESE
         );
+        requireNotRevoked(rolePermission);
 
         if (request.getEffect() != null) {
             rolePermission.setEffect(request.getEffect());
@@ -243,6 +268,7 @@ public class RolePermissionManagementService {
     public RolePermissionResponse toggleStatus(String id, StatusToggleRequest request, Authentication authentication) {
         RolePermission rolePermission = rolePermissionRepository.findById(id)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy phân quyền cho vai trò: " + id));
+        requireNotRevoked(rolePermission);
         PermissionEffect nextEffect = rolePermission.getEffect() == PermissionEffect.DENY ? PermissionEffect.ALLOW : PermissionEffect.DENY;
         authorizationHelper.requireRolePermissionWriteAccess(
                 authentication,
@@ -265,6 +291,23 @@ public class RolePermissionManagementService {
             toggleNotificationDispatcher.dispatch(recipients, "ROLE_PERMISSION_TOGGLED", rolePermissionLabel(rolePermission), nextEffect == PermissionEffect.ALLOW, actor);
         }
         return toResponse(rolePermission);
+    }
+
+    private void requireNotRevoked(RolePermission rolePermission) {
+        if (PermissionValiditySupport.isPermanentlyRevoked(rolePermission.getRevokedAt(), rolePermission.getExpiresAt(), OffsetDateTime.now())) {
+            throw commonValidationHelper.conflict("Phân quyền đã bị thu hồi hoặc hết hạn, không thể thay đổi; hãy tạo phân quyền mới");
+        }
+    }
+
+    private void reissue(RolePermission rolePermission, String actor, OffsetDateTime assignedAt) {
+        rolePermission.setRevokedAt(null);
+        rolePermission.setRevokedBy(null);
+        rolePermission.setRevocationReason(null);
+        rolePermission.setAssignedBy(actor);
+        rolePermission.setAssignedAt(assignedAt);
+        rolePermission.setStatus(true);
+        rolePermission.setUpdatedAt(OffsetDateTime.now());
+        rolePermission.setUpdatedBy(actor);
     }
 
     private void notifyRolePermissionChanged(String roleCode, String reason) {
@@ -393,6 +436,11 @@ public class RolePermissionManagementService {
                 .assignedAt(rolePermission.getAssignedAt())
                 .expiresAt(rolePermission.getExpiresAt())
                 .status(rolePermission.getStatus())
+                .validity(PermissionValiditySupport.validity(rolePermission.getRevokedAt(), rolePermission.getRevocationReason(),
+                        rolePermission.getExpiresAt(), rolePermission.getPermission(), OffsetDateTime.now()))
+                .revocationReason(rolePermission.getRevocationReason())
+                .revokedAt(rolePermission.getRevokedAt())
+                .revokedBy(rolePermission.getRevokedBy())
                 .build();
     }
 

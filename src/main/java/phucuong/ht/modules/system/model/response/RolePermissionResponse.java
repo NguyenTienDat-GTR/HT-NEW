@@ -3,6 +3,8 @@ package phucuong.ht.modules.system.model.response;
 import lombok.Builder;
 import lombok.Getter;
 import phucuong.ht.modules.system.model.enums.PermissionEffect;
+import phucuong.ht.modules.system.model.enums.PermissionRevocationReason;
+import phucuong.ht.modules.system.model.enums.PermissionValidity;
 
 import java.time.OffsetDateTime;
 
@@ -20,4 +22,8 @@ public class RolePermissionResponse {
     private OffsetDateTime assignedAt;
     private OffsetDateTime expiresAt;
     private Boolean status;
+    private PermissionValidity validity;
+    private PermissionRevocationReason revocationReason;
+    private OffsetDateTime revokedAt;
+    private String revokedBy;
 }

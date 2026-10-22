@@ -37,18 +37,14 @@ public class RolePermissionRepository extends BaseRepo<RolePermission, String> {
         return results.stream().findFirst();
     }
 
-    /** Thu hồi quyền: xóa hẳn bản ghi phân quyền của vai trò. */
-    @Transactional
-    public void deleteAssignment(RolePermission rolePermission) {
-        entityManager.remove(entityManager.contains(rolePermission) ? rolePermission : entityManager.merge(rolePermission));
-    }
-
     public List<String> findPermissionCodesByRoleCode(String roleCode) {
         TypedQuery<String> query = entityManager.createQuery(
                 """
                 select rp.permission.permissionCode
                 from RolePermission rp
                 where rp.role.roleCode = :roleCode
+                  and rp.revokedAt is null
+                  and (rp.expiresAt is null or rp.expiresAt > CURRENT_TIMESTAMP)
                 """,
                 String.class
         );
@@ -68,6 +64,7 @@ public class RolePermissionRepository extends BaseRepo<RolePermission, String> {
                   and ar.status = true
                   and role.status = true
                   and rp.status = true
+                  and rp.revokedAt is null
                   and permission.status = true
                   and (ar.expiresAt is null or ar.expiresAt > CURRENT_TIMESTAMP)
                   and (rp.expiresAt is null or rp.expiresAt > CURRENT_TIMESTAMP)
@@ -78,8 +75,26 @@ public class RolePermissionRepository extends BaseRepo<RolePermission, String> {
         return query.getResultList();
     }
 
+    /** Thu hồi vĩnh viễn (lý do EXPIRED) các phân quyền đã quá hạn, giữ lại bản ghi để hiển thị. */
+    @Transactional
     public int deactivateExpiredAssignments(OffsetDateTime expiresAtThreshold, OffsetDateTime updatedAt, String actor) {
-        return 0;
+        return entityManager.createQuery(
+                        """
+                        update RolePermission rp
+                        set rp.revokedAt = rp.expiresAt,
+                            rp.revokedBy = :actor,
+                            rp.revocationReason = phucuong.ht.modules.system.model.enums.PermissionRevocationReason.EXPIRED,
+                            rp.updatedAt = :updatedAt,
+                            rp.updatedBy = :actor
+                        where rp.revokedAt is null
+                          and rp.expiresAt is not null
+                          and rp.expiresAt <= :threshold
+                        """
+                )
+                .setParameter("actor", actor)
+                .setParameter("updatedAt", updatedAt)
+                .setParameter("threshold", expiresAtThreshold)
+                .executeUpdate();
     }
 
     @Transactional

@@ -36,18 +36,14 @@ public class AccountPermissionOverrideRepository extends BaseRepo<AccountPermiss
         return results.stream().findFirst();
     }
 
-    /** Thu hồi quyền: xóa hẳn bản ghi quyền riêng của tài khoản. */
-    @org.springframework.transaction.annotation.Transactional
-    public void deleteOverride(AccountPermissionOverride override) {
-        entityManager.remove(entityManager.contains(override) ? override : entityManager.merge(override));
-    }
-
     public List<String> findPermissionCodesByUsername(String username) {
         TypedQuery<String> query = entityManager.createQuery(
                 """
                 select apo.permission.permissionCode
                 from AccountPermissionOverride apo
                 where apo.account.username = :username
+                  and apo.revokedAt is null
+                  and (apo.expiresAt is null or apo.expiresAt > CURRENT_TIMESTAMP)
                 """,
                 String.class
         );
@@ -55,7 +51,25 @@ public class AccountPermissionOverrideRepository extends BaseRepo<AccountPermiss
         return query.getResultList();
     }
 
+    /** Thu hồi vĩnh viễn (lý do EXPIRED) các quyền riêng đã quá hạn, giữ lại bản ghi để hiển thị. */
+    @org.springframework.transaction.annotation.Transactional
     public int deactivateExpiredOverrides(OffsetDateTime expiresAtThreshold, OffsetDateTime updatedAt, String actor) {
-        return 0;
+        return entityManager.createQuery(
+                        """
+                        update AccountPermissionOverride apo
+                        set apo.revokedAt = apo.expiresAt,
+                            apo.revokedBy = :actor,
+                            apo.revocationReason = phucuong.ht.modules.system.model.enums.PermissionRevocationReason.EXPIRED,
+                            apo.updatedAt = :updatedAt,
+                            apo.updatedBy = :actor
+                        where apo.revokedAt is null
+                          and apo.expiresAt is not null
+                          and apo.expiresAt <= :threshold
+                        """
+                )
+                .setParameter("actor", actor)
+                .setParameter("updatedAt", updatedAt)
+                .setParameter("threshold", expiresAtThreshold)
+                .executeUpdate();
     }
 }

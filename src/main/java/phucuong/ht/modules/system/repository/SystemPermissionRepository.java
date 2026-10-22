@@ -103,6 +103,8 @@ public class SystemPermissionRepository extends BaseRepo<Permission, String> {
                 where rp.permission.permissionCode = :permissionCode
                   and rp.effect = :effect
                   and rp.status = true
+                  and rp.revokedAt is null
+                  and (rp.expiresAt is null or rp.expiresAt > CURRENT_TIMESTAMP)
                 """,
                 Long.class
         )
@@ -120,6 +122,8 @@ public class SystemPermissionRepository extends BaseRepo<Permission, String> {
                 where apo.permission.permissionCode = :permissionCode
                   and apo.effect = :effect
                   and apo.status = true
+                  and apo.revokedAt is null
+                  and (apo.expiresAt is null or apo.expiresAt > CURRENT_TIMESTAMP)
                 """,
                 Long.class
         )

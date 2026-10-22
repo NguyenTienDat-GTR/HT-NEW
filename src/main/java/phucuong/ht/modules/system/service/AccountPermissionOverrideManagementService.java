@@ -21,6 +21,7 @@ import phucuong.ht.modules.system.model.entity.AccountPermissionOverride;
 import phucuong.ht.modules.system.model.entity.Permission;
 import phucuong.ht.modules.system.model.entity.Role;
 import phucuong.ht.modules.system.model.enums.PermissionEffect;
+import phucuong.ht.modules.system.model.enums.PermissionRevocationReason;
 import phucuong.ht.modules.system.model.request.AccountPermissionOverrideBulkRequest;
 import phucuong.ht.modules.system.model.request.AccountPermissionOverrideRevokeRequest;
 import phucuong.ht.modules.system.model.request.AccountPermissionOverrideCreateRequest;
@@ -80,11 +81,20 @@ public class AccountPermissionOverrideManagementService {
         authorizationHelper.requireAccountPermissionWriteAccess(authentication, request.getUsername(), permission);
         rejectDenyOfRequiredAccountRoleAssignment(account, request.getPermissionCode(), request.getEffect());
 
-        if (accountPermissionOverrideRepository.findByUsernameAndPermissionCode(request.getUsername(), request.getPermissionCode()).isPresent()) {
-            throw commonValidationHelper.conflict("Phân quyền riêng cho tài khoản đã ngừng hoạt động");
-        }
-
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tạo phân quyền cho tài khoản");
+        AccountPermissionOverride existing = accountPermissionOverrideRepository.findByUsernameAndPermissionCode(request.getUsername(), request.getPermissionCode()).orElse(null);
+        if (existing != null) {
+            if (!PermissionValiditySupport.isPermanentlyRevoked(existing.getRevokedAt(), existing.getExpiresAt(), OffsetDateTime.now())) {
+                throw commonValidationHelper.conflict("Phân quyền riêng cho tài khoản đã tồn tại");
+            }
+            // Quyền đã thu hồi/hết hạn không bật lại được: phân quyền mới thay thế bản ghi cũ.
+            existing.setEffect(request.getEffect());
+            existing.setReason(commonValidationHelper.normalizeOptionalText(request.getReason()));
+            existing.setExpiresAt(request.getExpiresAt());
+            reissue(existing, actor);
+            notifyAccountPermissionChanged(request.getUsername(), "ACCOUNT_PERMISSION_CREATED");
+            return toResponse(existing);
+        }
         AccountPermissionOverride override = accountPermissionOverrideRepository.create(request, actor);
         override.setStatus(true);
         notifyAccountPermissionChanged(request.getUsername(), "ACCOUNT_PERMISSION_CREATED");
@@ -112,6 +122,9 @@ public class AccountPermissionOverrideManagementService {
 
             AccountPermissionOverride override = accountPermissionOverrideRepository.findByUsernameAndPermissionCode(request.getUsername(), permissionCode)
                     .orElseGet(() -> createOverride(account, permission, actor));
+            if (PermissionValiditySupport.isPermanentlyRevoked(override.getRevokedAt(), override.getExpiresAt(), now)) {
+                reissue(override, actor);
+            }
             override.setEffect(request.getEffect());
             override.setReason(commonValidationHelper.normalizeRequiredText(request.getReason()));
             override.setExpiresAt(request.getExpiresAt());
@@ -125,19 +138,28 @@ public class AccountPermissionOverrideManagementService {
         return responses;
     }
 
-    /** Thu hồi nhiều quyền riêng của tài khoản: xóa hẳn các bản ghi. */
+    /** Thu hồi nhiều quyền riêng của tài khoản: đánh dấu thu hồi vĩnh viễn, giữ lại bản ghi (muốn cấp lại phải phân quyền mới). */
     @Transactional
     public int bulkRevoke(AccountPermissionOverrideRevokeRequest request, Authentication authentication) {
         Account account = accountRepository.findActiveByUsername(request.getUsername())
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy tài khoản: " + request.getUsername()));
         requireAccountWritable(account.getUsername());
         requireValidSuperAdminTarget(authentication, account);
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người thu hồi phân quyền của tài khoản");
         int revoked = 0;
         for (String permissionCode : new LinkedHashSet<>(request.getPermissionCodes())) {
             AccountPermissionOverride override = accountPermissionOverrideRepository.findByUsernameAndPermissionCode(request.getUsername(), permissionCode)
                     .orElseThrow(() -> commonValidationHelper.notFound("Tài khoản chưa được gán quyền riêng: " + permissionCode));
             authorizationHelper.requireAccountPermissionWriteAccess(authentication, request.getUsername(), override.getPermission());
-            accountPermissionOverrideRepository.deleteOverride(override);
+            OffsetDateTime now = OffsetDateTime.now();
+            if (PermissionValiditySupport.isPermanentlyRevoked(override.getRevokedAt(), override.getExpiresAt(), now)) {
+                throw commonValidationHelper.conflict("Quyền đã bị thu hồi hoặc hết hạn: " + permissionCode);
+            }
+            override.setRevokedAt(now);
+            override.setRevokedBy(actor);
+            override.setRevocationReason(PermissionRevocationReason.MANUAL);
+            override.setUpdatedAt(now);
+            override.setUpdatedBy(actor);
             revoked++;
         }
         notifyAccountPermissionChanged(request.getUsername(), "ACCOUNT_PERMISSION_BULK_REVOKED");
@@ -196,6 +218,7 @@ public class AccountPermissionOverrideManagementService {
         requireAccountWritable(override.getAccount().getUsername());
         requireValidSuperAdminTarget(authentication, override.getAccount());
         authorizationHelper.requireAccountPermissionWriteAccess(authentication, override.getAccount().getUsername(), override.getPermission());
+        requireNotRevoked(override);
 
         if (request.getEffect() != null) {
             rejectDenyOfRequiredAccountRoleAssignment(override.getAccount(), override.getPermission().getPermissionCode(), request.getEffect());
@@ -221,6 +244,7 @@ public class AccountPermissionOverrideManagementService {
         requireAccountWritable(override.getAccount().getUsername());
         requireValidSuperAdminTarget(authentication, override.getAccount());
         authorizationHelper.requireAccountPermissionWriteAccess(authentication, override.getAccount().getUsername(), override.getPermission());
+        requireNotRevoked(override);
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
         PermissionEffect nextEffect = override.getEffect() == PermissionEffect.DENY ? PermissionEffect.ALLOW : PermissionEffect.DENY;
         rejectDenyOfRequiredAccountRoleAssignment(override.getAccount(), override.getPermission().getPermissionCode(), nextEffect);
@@ -235,6 +259,21 @@ public class AccountPermissionOverrideManagementService {
             toggleNotificationDispatcher.dispatch(recipients, "ACCOUNT_PERMISSION_TOGGLED", permissionLabel(override.getPermission()), nextEffect == PermissionEffect.ALLOW, actor);
         }
         return toResponse(override);
+    }
+
+    private void requireNotRevoked(AccountPermissionOverride override) {
+        if (PermissionValiditySupport.isPermanentlyRevoked(override.getRevokedAt(), override.getExpiresAt(), OffsetDateTime.now())) {
+            throw commonValidationHelper.conflict("Phân quyền đã bị thu hồi hoặc hết hạn, không thể thay đổi; hãy tạo phân quyền mới");
+        }
+    }
+
+    private void reissue(AccountPermissionOverride override, String actor) {
+        override.setRevokedAt(null);
+        override.setRevokedBy(null);
+        override.setRevocationReason(null);
+        override.setStatus(true);
+        override.setUpdatedAt(OffsetDateTime.now());
+        override.setUpdatedBy(actor);
     }
 
     private void notifyAccountPermissionChanged(String username, String reason) {
@@ -331,6 +370,11 @@ public class AccountPermissionOverrideManagementService {
                 .reason(override.getReason())
                 .expiresAt(override.getExpiresAt())
                 .status(override.getStatus())
+                .validity(PermissionValiditySupport.validity(override.getRevokedAt(), override.getRevocationReason(),
+                        override.getExpiresAt(), override.getPermission(), OffsetDateTime.now()))
+                .revocationReason(override.getRevocationReason())
+                .revokedAt(override.getRevokedAt())
+                .revokedBy(override.getRevokedBy())
                 .build();
     }
 

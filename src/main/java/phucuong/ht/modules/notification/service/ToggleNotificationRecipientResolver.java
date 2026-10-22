@@ -43,11 +43,13 @@ public class ToggleNotificationRecipientResolver {
                     where rp.permission_code = :code
                       and ar.status = true
                       and rp.status = true
+                      and rp.revoked_at is null
                     union
                     select apo.username
                     from account_permission_override apo
                     where apo.permission_code = :code
                       and apo.status = true
+                      and apo.revoked_at is null
                 ) affected
                 join account a on a.username = affected.username
                 where a.status = true
