@@ -69,6 +69,7 @@ public class RolePermissionManagementService {
     private final SystemPermissionRepository systemPermissionRepository;
     private final CommonValidationHelper commonValidationHelper;
     private final SystemAdminAuthorizationHelper authorizationHelper;
+    private final phucuong.ht.common.utils.AuditActorNameResolver auditActorNameResolver;
     @Autowired(required = false)
     private RbacAuthRefreshNotifier authRefreshNotifier;
 
@@ -228,6 +229,12 @@ public class RolePermissionManagementService {
                         .isSystem(role.getIsSystem())
                         .displayOrder(role.getDisplayOrder())
                         .status(role.getStatus())
+                        .createdAt(role.getCreatedAt())
+                        .createdBy(role.getCreatedBy())
+                        .createdByName(auditActorNameResolver.resolve(role.getCreatedBy()))
+                        .updatedAt(role.getUpdatedAt())
+                        .updatedBy(role.getUpdatedBy())
+                        .updatedByName(auditActorNameResolver.resolve(role.getUpdatedBy()))
                         .build())
                 .toList();
     }
@@ -398,6 +405,7 @@ public class RolePermissionManagementService {
                 .permissionName(rolePermission.getPermission() == null ? null : rolePermission.getPermission().getPermissionName())
                 .conditions(rolePermission.getConditions())
                 .assignedBy(rolePermission.getAssignedBy())
+                .assignedByName(auditActorNameResolver.resolve(rolePermission.getAssignedBy()))
                 .assignedAt(rolePermission.getAssignedAt())
                 .expiresAt(rolePermission.getExpiresAt())
                 .status(rolePermission.getStatus())
@@ -405,7 +413,14 @@ public class RolePermissionManagementService {
                         rolePermission.getExpiresAt(), rolePermission.getPermission(), OffsetDateTime.now()))
                 .revocationReason(rolePermission.getRevocationReason())
                 .revokedAt(rolePermission.getRevokedAt())
-                .revokedBy(rolePermission.getRevokedBy());
+                .revokedBy(rolePermission.getRevokedBy())
+                .revokedByName(auditActorNameResolver.resolve(rolePermission.getRevokedBy()))
+                .createdAt(rolePermission.getCreatedAt())
+                .createdBy(rolePermission.getCreatedBy())
+                .createdByName(auditActorNameResolver.resolve(rolePermission.getCreatedBy()))
+                .updatedAt(rolePermission.getUpdatedAt())
+                .updatedBy(rolePermission.getUpdatedBy())
+                .updatedByName(auditActorNameResolver.resolve(rolePermission.getUpdatedBy()));
     }
 
     private boolean canAssignPermission(Authentication authentication, Role role, Permission permission) {
@@ -430,7 +445,11 @@ public class RolePermissionManagementService {
                 .displayOrder(permission.getDisplayOrder())
                 .status(permission.getStatus())
                 .createdAt(permission.getCreatedAt())
+                .createdBy(permission.getCreatedBy())
+                .createdByName(auditActorNameResolver.resolve(permission.getCreatedBy()))
                 .updatedAt(permission.getUpdatedAt())
+                .updatedBy(permission.getUpdatedBy())
+                .updatedByName(auditActorNameResolver.resolve(permission.getUpdatedBy()))
                 .build();
     }
 

@@ -38,6 +38,7 @@ public class PermissionManagementService {
     private final SystemPermissionRepository systemPermissionRepository;
     private final CommonValidationHelper commonValidationHelper;
     private final SystemAdminAuthorizationHelper authorizationHelper;
+    private final phucuong.ht.common.utils.AuditActorNameResolver auditActorNameResolver;
     @Autowired(required = false)
     private ToggleNotificationRecipientResolver toggleNotificationRecipientResolver;
     @Autowired(required = false)
@@ -230,7 +231,11 @@ public class PermissionManagementService {
                 .displayOrder(permission.getDisplayOrder())
                 .status(permission.getStatus())
                 .createdAt(permission.getCreatedAt())
+                .createdBy(permission.getCreatedBy())
+                .createdByName(auditActorNameResolver.resolve(permission.getCreatedBy()))
                 .updatedAt(permission.getUpdatedAt())
+                .updatedBy(permission.getUpdatedBy())
+                .updatedByName(auditActorNameResolver.resolve(permission.getUpdatedBy()))
                 .build();
     }
 

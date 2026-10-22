@@ -53,6 +53,7 @@ public class AccountPermissionOverrideManagementService {
     private final RolePermissionRepository rolePermissionRepository;
     private final CommonValidationHelper commonValidationHelper;
     private final SystemAdminAuthorizationHelper authorizationHelper;
+    private final phucuong.ht.common.utils.AuditActorNameResolver auditActorNameResolver;
     @Autowired(required = false)
     private UnitOperationalStatusService unitOperationalStatusService;
     @Autowired(required = false)
@@ -346,6 +347,9 @@ public class AccountPermissionOverrideManagementService {
         return AccountPermissionOverrideResponse.builder()
                 .id(override.getId())
                 .username(override.getAccount() == null ? null : override.getAccount().getUsername())
+                .leaderFullName(override.getAccount() == null || override.getAccount().getLeader() == null
+                        ? null
+                        : phucuong.ht.common.utils.AuditActorNameResolver.displayName(override.getAccount().getLeader()))
                 .permissionCode(override.getPermission() == null ? null : override.getPermission().getPermissionCode())
                 .permissionName(override.getPermission() == null ? null : override.getPermission().getPermissionName())
                 .reason(override.getReason())
@@ -355,7 +359,14 @@ public class AccountPermissionOverrideManagementService {
                         override.getExpiresAt(), override.getPermission(), OffsetDateTime.now()))
                 .revocationReason(override.getRevocationReason())
                 .revokedAt(override.getRevokedAt())
-                .revokedBy(override.getRevokedBy());
+                .revokedBy(override.getRevokedBy())
+                .revokedByName(auditActorNameResolver.resolve(override.getRevokedBy()))
+                .createdAt(override.getCreatedAt())
+                .createdBy(override.getCreatedBy())
+                .createdByName(auditActorNameResolver.resolve(override.getCreatedBy()))
+                .updatedAt(override.getUpdatedAt())
+                .updatedBy(override.getUpdatedBy())
+                .updatedByName(auditActorNameResolver.resolve(override.getUpdatedBy()));
     }
 
     private PermissionResponse toPermissionResponse(Permission permission) {
@@ -371,7 +382,11 @@ public class AccountPermissionOverrideManagementService {
                 .displayOrder(permission.getDisplayOrder())
                 .status(permission.getStatus())
                 .createdAt(permission.getCreatedAt())
+                .createdBy(permission.getCreatedBy())
+                .createdByName(auditActorNameResolver.resolve(permission.getCreatedBy()))
                 .updatedAt(permission.getUpdatedAt())
+                .updatedBy(permission.getUpdatedBy())
+                .updatedByName(auditActorNameResolver.resolve(permission.getUpdatedBy()))
                 .build();
     }
 

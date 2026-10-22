@@ -85,6 +85,7 @@ public class TrainingCourseService {
     private final CertificateRepository certificateRepository;
     private final CourseActivityGuard courseActivityGuard;
     private final phucuong.ht.modules.certificate.service.CertificateRealtimeNotifier certificateRealtimeNotifier;
+    private final phucuong.ht.common.utils.AuditActorNameResolver auditActorNameResolver;
 
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_LIST, allEntries = true),
@@ -501,6 +502,7 @@ public class TrainingCourseService {
             }
             changedCourses++;
             course.setUpdatedAt(now);
+            course.setUpdatedBy(AUTO_ACTOR);
             CourseRegistrationStatus after = course.getRegistrationStatus();
             if (before == CourseRegistrationStatus.NOT_STARTED && after == CourseRegistrationStatus.OPEN) {
                 publishRegistrationEvent(course, true, "AUTO", AUTO_ACTOR);
@@ -761,6 +763,7 @@ public class TrainingCourseService {
                 .certificateRequired(trainingWorkflowSupport.requiresCertificate(courseType))
                 .finishedAt(course.getFinishedAt())
                 .finishedBy(course.getFinishedBy())
+                .finishedByName(auditActorNameResolver.resolve(course.getFinishedBy()))
                 .location(course.getLocation())
                 .startDate(course.getStartDate())
                 .endDate(course.getEndDate())
@@ -775,7 +778,9 @@ public class TrainingCourseService {
                 .organizingStatus(course.getOrganizingStatus())
                 .recipientUsernames(List.copyOf(course.getRecipientUsernames()))
                 .createdBy(course.getCreatedBy())
+                .createdByName(auditActorNameResolver.resolve(course.getCreatedBy()))
                 .updatedBy(course.getUpdatedBy())
+                .updatedByName(auditActorNameResolver.resolve(course.getUpdatedBy()))
                 .passingScore(course.getPassingScore())
                 .additionalNotes(course.getAdditionalNotes())
                 .status(course.getStatus())

@@ -94,6 +94,9 @@ class CourseParticipationServiceTest {
     private ScoreComponentTemplateRepository scoreComponentTemplateRepository;
     private final CommonValidationHelper commonValidationHelper = new CommonValidationHelper(new securityUtils());
 
+    @org.mockito.Mock
+    private phucuong.ht.common.utils.AuditActorNameResolver auditActorNameResolver;
+
     @InjectMocks
     private CourseParticipationService courseParticipationService;
 
@@ -727,7 +730,7 @@ class CourseParticipationServiceTest {
                 trainingNotificationService,
                 org.mockito.Mockito.mock(phucuong.ht.modules.leaderLevel.service.LeaderLevelService.class),
                 org.mockito.Mockito.mock(phucuong.ht.modules.training.CourseActivityGuard.class)
-        );
+        , org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class));
     }
 
     private UsernamePasswordAuthenticationToken authentication(String username, String permission) {

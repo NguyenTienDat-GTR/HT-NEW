@@ -1,5 +1,6 @@
 package phucuong.ht.modules.rankHistory.model.response;
 
+import java.time.OffsetDateTime;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -13,4 +14,10 @@ public class RankHistoryResponse {
     private String newLevel;
     private LocalDate promotionDate;
     private String note;
+    private OffsetDateTime createdAt;
+    private String createdBy;
+    private String createdByName;
+    private OffsetDateTime updatedAt;
+    private String updatedBy;
+    private String updatedByName;
 }

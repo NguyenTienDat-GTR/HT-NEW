@@ -74,7 +74,7 @@ class AccountPermissionOverrideManagementServiceTest {
                 rolePermissionRepository,
                 helper,
                 authorizationHelper
-        );
+        , org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class));
 
         Account account = new Account();
         account.setUsername("target");
@@ -122,7 +122,7 @@ class AccountPermissionOverrideManagementServiceTest {
                 rolePermissionRepository,
                 helper,
                 authorizationHelper
-        );
+        , org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class));
 
         Account account = new Account();
         account.setUsername("target");
@@ -165,7 +165,7 @@ class AccountPermissionOverrideManagementServiceTest {
                 rolePermissionRepository,
                 helper,
                 authorizationHelper
-        );
+        , org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class));
 
         Account account = new Account();
         account.setUsername("target");

@@ -113,6 +113,44 @@ class BaseAuditEntityListenerTest {
     }
 
     @Test
+    void beforeUpdateShouldOverrideStaleActorWhenAuthenticated() {
+        authenticate(AuthUserDetails.tokenPrincipal(
+                "admin-parish",
+                "leader-2",
+                List.of("ADMIN_PARISH"),
+                List.of()
+        ));
+        TestEntity entity = new TestEntity();
+        entity.setCreatedBy("leader-1");
+        entity.setUpdatedBy("leader-1");
+
+        listener.beforeUpdate(entity);
+
+        assertEquals("leader-2", entity.getUpdatedBy());
+        assertEquals("leader-1", entity.getCreatedBy());
+    }
+
+    @Test
+    void beforeUpdateShouldPreserveExplicitActorWithoutAuthentication() {
+        TestEntity entity = new TestEntity();
+        entity.setUpdatedBy("SYSTEM_AUTO_APPROVAL");
+
+        listener.beforeUpdate(entity);
+
+        assertNotNull(entity.getUpdatedAt());
+        assertEquals("SYSTEM_AUTO_APPROVAL", entity.getUpdatedBy());
+    }
+
+    @Test
+    void beforeUpdateShouldFallBackToSystemWhenBlankWithoutAuthentication() {
+        TestEntity entity = new TestEntity();
+
+        listener.beforeUpdate(entity);
+
+        assertEquals("SYSTEM", entity.getUpdatedBy());
+    }
+
+    @Test
     void beforeCreateShouldUseSystemActorWithoutAuthentication() {
         TestEntity entity = new TestEntity();
 

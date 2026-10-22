@@ -18,4 +18,6 @@ public class RoleResponse {
     private String createdBy;
     private OffsetDateTime updatedAt;
     private String updatedBy;
+    private String createdByName;
+    private String updatedByName;
 }

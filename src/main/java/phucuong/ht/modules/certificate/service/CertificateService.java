@@ -68,6 +68,7 @@ public class CertificateService {
     private final CertificateRealtimeNotifier certificateRealtimeNotifier;
     private final CertificateAccessEvaluator certificateAccessEvaluator;
     private final phucuong.ht.modules.training.trainingCourse.service.CourseFinishService courseFinishService;
+    private final phucuong.ht.common.utils.AuditActorNameResolver auditActorNameResolver;
 
     @Cacheable(cacheNames = CacheNames.CERTIFICATE_LIST, key = "@cacheScopeKeyHelper.listKey(#authentication, #request)")
     public Page<CertificateResponse> findAll(BaseSearchRequest request, Authentication authentication) {
@@ -464,14 +465,23 @@ public class CertificateService {
                 .rejectionReason(certificate.getRejectionReason())
                 .approvedAt(certificate.getApprovedAt())
                 .approvedBy(certificate.getApprovedBy())
+                .approvedByName(auditActorNameResolver.resolve(certificate.getApprovedBy()))
                 .revokedAt(certificate.getRevokedAt())
                 .revokedBy(certificate.getRevokedBy())
+                .revokedByName(auditActorNameResolver.resolve(certificate.getRevokedBy()))
                 .revocationReason(certificate.getRevocationReason())
                 .revocationSource(certificate.getRevocationSource() == null ? null : certificate.getRevocationSource().name())
                 .reissuedAt(certificate.getReissuedAt())
                 .reissuedBy(certificate.getReissuedBy())
+                .reissuedByName(auditActorNameResolver.resolve(certificate.getReissuedBy()))
                 .reissueReason(certificate.getReissueReason())
-                .status(certificate.getStatus());
+                .status(certificate.getStatus())
+                .createdAt(certificate.getCreatedAt())
+                .createdBy(certificate.getCreatedBy())
+                .createdByName(auditActorNameResolver.resolve(certificate.getCreatedBy()))
+                .updatedAt(certificate.getUpdatedAt())
+                .updatedBy(certificate.getUpdatedBy())
+                .updatedByName(auditActorNameResolver.resolve(certificate.getUpdatedBy()));
     }
 
     private String buildFullName(Leader leader) {

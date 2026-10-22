@@ -42,8 +42,15 @@ public class BaseAuditEntityListener {
     @PreUpdate
     public void beforeUpdate(BaseModel entity) {
         entity.setUpdatedAt(OffsetDateTime.now());
-        if (!StringUtils.hasText(entity.getUpdatedBy())) {
-            entity.setUpdatedBy(currentAuditActor());
+        String actor = currentAuditActor();
+        if (!SYSTEM_ACTOR.equals(actor)) {
+            // Có người dùng đăng nhập thật: luôn ghi nhận người cập nhật hiện tại, kể cả khi service quên set
+            // (tránh trường hợp updatedBy vẫn giữ giá trị cũ/createdBy trong khi updatedAt đã đổi).
+            entity.setUpdatedBy(actor);
+        } else if (!StringUtils.hasText(entity.getUpdatedBy())) {
+            // Không có người dùng (consumer bất đồng bộ, scheduler): giữ giá trị service đã set tường minh
+            // (vd. SYSTEM_AUTO_APPROVAL), chỉ fallback về SYSTEM khi trống.
+            entity.setUpdatedBy(actor);
         }
     }
 

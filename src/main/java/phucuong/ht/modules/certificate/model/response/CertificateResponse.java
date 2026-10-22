@@ -65,4 +65,13 @@ public class CertificateResponse {
     private String resultingLevel;
     // Kết quả chung của hồ sơ sau khi kết thúc khóa / bị thu hồi chứng nhận: PASSED | FAILED.
     private String finalResult;
+    private String approvedByName;
+    private String revokedByName;
+    private String reissuedByName;
+    private OffsetDateTime createdAt;
+    private String createdBy;
+    private String createdByName;
+    private OffsetDateTime updatedAt;
+    private String updatedBy;
+    private String updatedByName;
 }

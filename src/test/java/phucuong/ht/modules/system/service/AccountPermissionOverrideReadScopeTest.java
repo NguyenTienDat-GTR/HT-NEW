@@ -109,7 +109,7 @@ class AccountPermissionOverrideReadScopeTest {
                 rolePermissionRepository,
                 new CommonValidationHelper(new securityUtils()),
                 authorizationHelper
-        );
+        , org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class));
     }
 
     private AccountPermissionOverride override(String username, String permissionCode) {

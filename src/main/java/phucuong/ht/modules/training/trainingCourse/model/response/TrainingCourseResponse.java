@@ -52,4 +52,7 @@ public class TrainingCourseResponse {
     private Boolean status;
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;
+    private String finishedByName;
+    private String createdByName;
+    private String updatedByName;
 }

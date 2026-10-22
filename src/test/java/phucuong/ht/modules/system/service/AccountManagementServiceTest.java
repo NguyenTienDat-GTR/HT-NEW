@@ -58,6 +58,9 @@ class AccountManagementServiceTest {
     @Mock RedisTokenSessionService redisTokenSessionService;
     @Mock Authentication authentication;
 
+    @org.mockito.Mock
+    private phucuong.ht.common.utils.AuditActorNameResolver auditActorNameResolver;
+
     @InjectMocks AccountManagementService service;
 
     @Test

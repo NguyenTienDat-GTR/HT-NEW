@@ -1,5 +1,6 @@
 package phucuong.ht.modules.system.model.response;
 
+import java.time.OffsetDateTime;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -26,4 +27,10 @@ public class AccountResponse {
     private String authProvider;
     private String providerId;
     private Boolean status;
+    private OffsetDateTime createdAt;
+    private String createdBy;
+    private String createdByName;
+    private OffsetDateTime updatedAt;
+    private String updatedBy;
+    private String updatedByName;
 }

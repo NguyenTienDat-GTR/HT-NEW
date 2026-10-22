@@ -1358,3 +1358,11 @@ Ma trận endpoint (`endpoint-contract-matrix.psv`) hiện có 124 route.
   - xác thực OTP: lưu change token trước rồi mới hủy OTP; lỗi thì gỡ token, OTP vẫn dùng lại được.
   - đổi mật khẩu (`@Transactional(rollbackFor = Exception.class)`): `saveAndFlush`, hủy change token, thu hồi phiên khác; lỗi thì DB rollback và trả lại change token để thử lại không cần OTP mới. Phiên khác đã bị thu hồi trước khi lỗi thì không khôi phục (an toàn hơn giữ lại).
 - Test: `AccountCreateMailRollbackIntegrationTest` (DB thật, email lỗi thì không còn tài khoản/vai trò), thêm ca rollback trong `AccountManagementServiceTest`, `AccountCredentialMailServiceTest`, `PasswordChangeServiceTest`.
+
+## Audit 4 trường người tạo/cập nhật/thời gian và tên người thực hiện (nhánh `feature/audit-fields-filters-drawer-vi`)
+
+- `BaseAuditEntityListener.beforeUpdate`: có người dùng đăng nhập thì luôn ghi `updatedBy` = người đó (không còn giữ giá trị cũ khi service quên set); không có người dùng (consumer, scheduler) giữ giá trị service đã set, trống thì `SYSTEM`.
+- `AuditActorNameResolver`: giải mã actor thành tên (leaderId, `super-admin`, tác nhân hệ thống, username qua huynh trưởng liên kết), có cache 60s.
+- Response bổ sung `createdAt/createdByName/updatedAt/updatedByName` (và `assignedByName`, `revokedByName`, `approvedByName`, `roleName`, `leaderFullName` tùy loại) cho tài khoản, vai trò, quyền, vai trò tài khoản, quyền vai trò/tài khoản, thành phần điểm, huynh trưởng, khóa, cấp độ, chứng nhận, hồ sơ tham dự, lịch sử cấp bậc.
+- `TrainingCourseService.refreshCourseStatuses` (scheduler) nay ghi `updatedBy`.
+- Test: `BaseAuditEntityListenerTest`, `AuditActorNameResolverTest`.

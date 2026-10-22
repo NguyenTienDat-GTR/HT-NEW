@@ -51,6 +51,7 @@ public class LeaderLevelService {
     private final CommonValidationHelper validationHelper;
     private final securityUtils securityUtils;
     private final AccountRepository accountRepository;
+    private final phucuong.ht.common.utils.AuditActorNameResolver auditActorNameResolver;
 
     // Thứ tự các cấp của một giáo phận tại một thời điểm, dùng để so sánh lớn/nhỏ mà không phải truy vấn lặp lại.
     public record LevelOrder(Map<String, Integer> orders, Map<String, String> names) {
@@ -350,6 +351,12 @@ public class LeaderLevelService {
                     .previousNames(previous.stream().map(LeaderLevel::getLevelName).toList())
                     .courseTypeCount(used == null ? null : used.courseTypes())
                     .deletable(used == null ? null : !Boolean.TRUE.equals(level.getIsSystem()) && !used.inUse())
+                    .createdAt(level.getCreatedAt())
+                    .createdBy(level.getCreatedBy())
+                    .createdByName(auditActorNameResolver.resolve(level.getCreatedBy()))
+                    .updatedAt(level.getUpdatedAt())
+                    .updatedBy(level.getUpdatedBy())
+                    .updatedByName(auditActorNameResolver.resolve(level.getUpdatedBy()))
                     .build());
         }
         return result;

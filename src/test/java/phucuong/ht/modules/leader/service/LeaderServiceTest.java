@@ -47,6 +47,9 @@ class LeaderServiceTest {
     @Mock
     private phucuong.ht.modules.leaderLevel.service.LeaderLevelService leaderLevelService;
 
+    @org.mockito.Mock
+    private phucuong.ht.common.utils.AuditActorNameResolver auditActorNameResolver;
+
     @InjectMocks
     private LeaderService leaderService;
 

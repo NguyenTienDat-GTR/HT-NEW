@@ -26,4 +26,12 @@ public class RolePermissionResponse {
     private PermissionRevocationReason revocationReason;
     private OffsetDateTime revokedAt;
     private String revokedBy;
+    private String assignedByName;
+    private String revokedByName;
+    private OffsetDateTime createdAt;
+    private String createdBy;
+    private String createdByName;
+    private OffsetDateTime updatedAt;
+    private String updatedBy;
+    private String updatedByName;
 }
