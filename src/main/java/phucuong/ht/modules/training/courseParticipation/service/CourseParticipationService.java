@@ -946,7 +946,9 @@ public class CourseParticipationService {
                 .certificateApprovedAt(participation.getCertificateApprovedAt())
                 .finalResult(participation.getFinalResult())
                 .approvedBy(participation.getApprovedBy())
+                // Thành phần điểm đã bị vô hiệu hóa không hiển thị (khớp với danh sách cột ở /score-components).
                 .componentScores(participation.getComponentScores().stream()
+                        .filter(score -> score.getComponent() != null && Boolean.TRUE.equals(score.getComponent().getStatus()))
                         .sorted(Comparator.comparing(score -> score.getComponent().getDisplayOrder(), Comparator.nullsLast(Integer::compareTo)))
                         .map(score -> ComponentScoreResponse.builder()
                                 .id(score.getId())
