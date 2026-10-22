@@ -70,6 +70,11 @@ public class CacheScopeKeyHelper {
                 + "|includeInactiveUnits=" + Objects.toString(includeInactiveUnits, "false");
     }
 
+    /** Khóa cache analytics với toàn bộ bộ lọc đã được chuẩn hóa thành một chuỗi. */
+    public String analyticsKey(Authentication authentication, String endpoint, String filterKey) {
+        return authSignature(authentication) + "|endpoint=" + Objects.toString(endpoint, "") + "|" + Objects.toString(filterKey, "");
+    }
+
     private String authSignature(Authentication authentication) {
         String username = securityUtils.currentUsername(authentication);
         String authorities = authentication == null ? "" : authentication.getAuthorities().stream()

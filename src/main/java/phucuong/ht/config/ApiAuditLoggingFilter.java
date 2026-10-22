@@ -17,23 +17,38 @@ import phucuong.ht.modules.system.repository.SystemLogRepository;
 
 import java.io.IOException;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import java.util.regex.Pattern;
+
 @Component
 public class ApiAuditLoggingFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(ApiAuditLoggingFilter.class);
     private static final int REQUEST_PATH_MAX_LENGTH = 500;
     private static final int USER_AGENT_MAX_LENGTH = 500;
+    private static final int QUERY_STRING_MAX_LENGTH = 1000;
+    private static final int RESOURCE_ID_MAX_LENGTH = 255;
+    private static final Pattern UUID_PATTERN = Pattern.compile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
+    // Tham số có thể chứa bí mật: không bao giờ ghi vào nhật ký.
+    private static final Set<String> SENSITIVE_PARAMS = Set.of("password", "token", "otp", "secret", "accesstoken", "refreshtoken", "code");
+    // Tài nguyên mà định danh là tên chữ (tên đăng nhập, mã vai trò...) chứ không chứa chữ số.
+    private static final Set<String> NAMED_ID_RESOURCES = Set.of("account", "role", "permission");
 
     private final SystemLogRepository systemLogRepository;
     private final AuditScopeResolver auditScopeResolver;
     private final securityUtils securityUtils;
     private final AccountRepository accountRepository;
+    private final AuditResourceNamer auditResourceNamer;
 
-    public ApiAuditLoggingFilter(SystemLogRepository systemLogRepository, AuditScopeResolver auditScopeResolver, securityUtils securityUtils, AccountRepository accountRepository) {
+    public ApiAuditLoggingFilter(SystemLogRepository systemLogRepository, AuditScopeResolver auditScopeResolver, securityUtils securityUtils, AccountRepository accountRepository, AuditResourceNamer auditResourceNamer) {
         this.systemLogRepository = systemLogRepository;
         this.auditScopeResolver = auditScopeResolver;
         this.securityUtils = securityUtils;
         this.accountRepository = accountRepository;
+        this.auditResourceNamer = auditResourceNamer;
     }
 
     @Override
@@ -44,31 +59,47 @@ public class ApiAuditLoggingFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
+        long started = System.nanoTime();
+        String resource = resolveResource(request.getRequestURI());
+        String resourceId = extractResourceId(request.getRequestURI(), resource);
+        // Tra tên trước khi xử lý yêu cầu: với sửa/xóa, nhật ký giữ tên của đối tượng như lúc bị tác động.
+        String resourceName = safeName(resource, resourceId);
+
         filterChain.doFilter(request, response);
 
         try {
-            persistAuditLog(request, response);
+            persistAuditLog(request, response, resource, resourceId, resourceName, (System.nanoTime() - started) / 1_000_000);
         } catch (RuntimeException exception) {
             log.warn("Không thể lưu audit log cho {} {}", request.getMethod(), request.getRequestURI(), exception);
         }
     }
 
-    private void persistAuditLog(HttpServletRequest request, HttpServletResponse response) {
+    private String safeName(String resource, String resourceId) {
+        try {
+            return auditResourceNamer.nameOf(resource, resourceId);
+        } catch (RuntimeException exception) {
+            return null;
+        }
+    }
+
+    private void persistAuditLog(HttpServletRequest request, HttpServletResponse response, String resource, String resourceId, String resourceName, long durationMs) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         String currentUsername = securityUtils.currentUsername(authentication);
         String persistedUsername = currentUsername != null && accountRepository.existsByUsername(currentUsername) ? currentUsername : null;
-        String resourceId = extractResourceId(request.getRequestURI());
-        String resource = resolveResource(request.getRequestURI());
         AuditScopeContext scope = auditScopeResolver.resolve(authentication, request.getRequestURI(), resource, resourceId);
 
         SystemLog log = new SystemLog();
         log.setAction(request.getMethod());
         log.setHttpMethod(request.getMethod());
+        log.setOperation(resolveOperation(request.getMethod(), request.getRequestURI(), resource, resourceId));
         log.setRequestPath(truncate(request.getRequestURI(), REQUEST_PATH_MAX_LENGTH));
+        log.setQueryString(truncate(sanitizeQuery(request), QUERY_STRING_MAX_LENGTH));
         log.setStatusCode(response.getStatus());
+        log.setDurationMs((int) Math.min(durationMs, Integer.MAX_VALUE));
         log.setModule(resolveModule(request.getRequestURI()));
         log.setResource(resource);
         log.setResourceId(resourceId);
+        log.setResourceName(resourceName);
         log.setIpAddress(request.getRemoteAddr());
         log.setUserAgent(truncate(request.getHeader("User-Agent"), USER_AGENT_MAX_LENGTH));
         log.setMessage(request.getMethod() + " " + truncate(request.getRequestURI(), REQUEST_PATH_MAX_LENGTH));
@@ -94,6 +125,18 @@ public class ApiAuditLoggingFilter extends OncePerRequestFilter {
         return value.substring(0, maximumLength);
     }
 
+    /** Bộ lọc của yêu cầu (vd. "status=true&size=20") bỏ các tham số có thể chứa bí mật; rỗng thì null. */
+    static String sanitizeQuery(HttpServletRequest request) {
+        String query = request.getQueryString();
+        if (query == null || query.isBlank()) return null;
+        List<String> kept = new ArrayList<>();
+        for (String pair : query.split("&")) {
+            String name = pair.contains("=") ? pair.substring(0, pair.indexOf('=')) : pair;
+            if (!SENSITIVE_PARAMS.contains(name.toLowerCase(Locale.ROOT))) kept.add(pair);
+        }
+        return kept.isEmpty() ? null : String.join("&", kept);
+    }
+
     private String resolveModule(String path) {
         if (path.startsWith("/api/system")) {
             return "system";
@@ -104,55 +147,81 @@ public class ApiAuditLoggingFilter extends OncePerRequestFilter {
         if (path.startsWith("/api/certificates")) {
             return "training";
         }
+        if (path.startsWith("/api/analytics")) {
+            return "analytics";
+        }
+        if (path.startsWith("/api/auth")) {
+            return "auth";
+        }
         return "organization";
     }
 
-    private String resolveResource(String path) {
-        if (path.startsWith("/api/dioceses")) {
-            return "diocese";
-        }
-        if (path.startsWith("/api/deaneries")) {
-            return "deanery";
-        }
-        if (path.startsWith("/api/parishes")) {
-            return "parish";
-        }
-        if (path.startsWith("/api/leaders")) {
-            return "leader";
-        }
-        if (path.startsWith("/api/positions")) {
-            return "position";
-        }
-        if (path.startsWith("/api/training/courses")) {
-            return "course";
-        }
-        if (path.startsWith("/api/training/requirements")) {
-            return "requirement";
-        }
-        if (path.startsWith("/api/certificates")) {
-            return "certificate";
-        }
-        if (path.startsWith("/api/system/audit-logs")) {
-            return "audit_log";
-        }
-        if (path.startsWith("/api/executive-board/assignments")) {
-            return "executive_board_assignment";
-        }
-        return null;
+    /** Khóa đối tượng của đường dẫn; đường dẫn lạ thì lấy đoạn tài nguyên đầu tiên thay vì để trống. */
+    static String resolveResource(String path) {
+        if (path.startsWith("/api/dioceses")) return "diocese";
+        if (path.startsWith("/api/deaneries")) return "deanery";
+        if (path.startsWith("/api/parishes")) return "parish";
+        if (path.startsWith("/api/leaders")) return "leader";
+        if (path.startsWith("/api/positions")) return "position";
+        if (path.startsWith("/api/leader-levels")) return "leader_level";
+        if (path.startsWith("/api/training/courses")) return "course";
+        if (path.startsWith("/api/training/course-types")) return "course_type";
+        if (path.startsWith("/api/training/score-components")) return "score_component";
+        if (path.startsWith("/api/training/requirements")) return "requirement";
+        if (path.startsWith("/api/training/participations") || path.startsWith("/api/training/registrations")) return "participation";
+        if (path.startsWith("/api/certificates/config")) return "certificate_config";
+        if (path.startsWith("/api/certificates")) return "certificate";
+        if (path.startsWith("/api/system/audit-logs")) return "audit_log";
+        if (path.startsWith("/api/system/accounts")) return "account";
+        if (path.startsWith("/api/system/roles")) return "role";
+        if (path.startsWith("/api/system/permissions")) return "permission";
+        if (path.startsWith("/api/system/notifications")) return "notification";
+        if (path.startsWith("/api/executive-board/assignments")) return "executive_board_assignment";
+        if (path.startsWith("/api/analytics")) return "analytics";
+        if (path.startsWith("/api/auth")) return "auth";
+        String[] segments = path.split("/");
+        // /api/{module}/{resource}/...: "system" và "training" là phân hệ nên lấy đoạn kế tiếp.
+        int index = segments.length > 3 && ("system".equals(segments[2]) || "training".equals(segments[2])) ? 3 : 2;
+        return segments.length > index && !segments[index].isBlank() ? segments[index].replace('-', '_').toLowerCase(Locale.ROOT) : null;
     }
 
-    private String extractResourceId(String path) {
+    /**
+     * Mã đối tượng nằm ngay sau tên tài nguyên trong đường dẫn. Chỉ nhận chuỗi giống mã (UUID, số, hoặc có chữ số) để các đoạn như
+     * "me", "options", "filter-options" không bị ghi nhầm thành mã đối tượng.
+     */
+    static String extractResourceId(String path, String resource) {
         String[] segments = path.split("/");
-        if (segments.length < 4) {
-            return null;
+        int index = segments.length > 3 && path.matches("^/api/(system|training)/.*") ? 4 : 3;
+        if (segments.length <= index) return null;
+        String candidate = segments[index];
+        if (candidate.isBlank() || candidate.length() > RESOURCE_ID_MAX_LENGTH) return null;
+        if (UUID_PATTERN.matcher(candidate).matches() || candidate.chars().anyMatch(Character::isDigit)) return candidate;
+        return NAMED_ID_RESOURCES.contains(resource) ? candidate : null;
+    }
+
+    /** Thao tác nghiệp vụ: LIST, VIEW, CREATE, UPDATE, DELETE hoặc hành động riêng ở cuối đường dẫn (APPROVE, SUBMIT, TOGGLE_STATUS, LOGIN...). */
+    static String resolveOperation(String method, String path, String resource, String resourceId) {
+        String upperMethod = method == null ? "" : method.toUpperCase(Locale.ROOT);
+        String[] segments = path.split("/");
+        int base = path.matches("^/api/(system|training)/.*") ? 4 : 3;
+        int extra = Math.max(0, segments.length - base);
+        boolean read = "GET".equals(upperMethod) || "HEAD".equals(upperMethod);
+        if (extra == 0) return read ? "LIST" : defaultOperation(upperMethod);
+        if (read) return "VIEW";
+        // Có mã đối tượng thì hành động nằm ở đoạn sau mã; không có mã thì đoạn cuối là tên chức năng (login, logout...).
+        boolean hasVerb = resourceId == null || extra >= 2;
+        if (hasVerb && ("POST".equals(upperMethod) || "PUT".equals(upperMethod) || "PATCH".equals(upperMethod))) {
+            return segments[segments.length - 1].replace('-', '_').toUpperCase(Locale.ROOT);
         }
-        String candidate = segments[segments.length - 1];
-        if ("toggle-status".equals(candidate) && segments.length >= 5) {
-            return segments[segments.length - 2];
-        }
-        if ("submit".equals(candidate) || "approve".equals(candidate) || "score".equals(candidate)) {
-            return segments.length >= 5 ? segments[segments.length - 2] : null;
-        }
-        return candidate;
+        return defaultOperation(upperMethod);
+    }
+
+    private static String defaultOperation(String method) {
+        return switch (method) {
+            case "POST" -> "CREATE";
+            case "PUT", "PATCH" -> "UPDATE";
+            case "DELETE" -> "DELETE";
+            default -> method;
+        };
     }
 }

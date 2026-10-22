@@ -2,17 +2,25 @@
 
 ## Dashboard phân tích theo scope
 
-- API: `GET /api/analytics/overview`, `/organization`, `/leaders`, `/courses`, `/certificates`.
-- Filter dùng chung: `fromDate`, `toDate` (ISO `yyyy-MM-dd`), `timeBucket` (`month`, `quarter`, `year`, mặc định `month`) và `groupBy` (`deanery`, `parish`, `courseType`, `leaderLevel`, `gender`, `status`, `approvalStatus`, `year`). Backend tự resolve scope từ account, không nhận ID scope từ client.
-- Quyền: `analytics.dashboard.read.all`, `.diocese`, `.deanery`, `.parish`.
-- `SUPER_ADMIN` chỉ có thể gọi overview với đúng bốn KPI toàn hệ thống: `totalDioceses`, `totalDeaneries`, `totalParishes`, `totalLeaders`; các endpoint chi tiết trả 403.
-- Diocese chỉ xem dữ liệu thuộc giáo phận và các giáo hạt/giáo xứ con; deanery chỉ xem giáo hạt và giáo xứ con; parish chỉ xem dữ liệu giáo xứ hiện tại. Response chuẩn gồm `scope`, `filters`, `kpis`, `breakdowns`, `trends`, `comparisons`.
-- Response còn có `comparisons`: chuỗi so sánh theo năm trong khoảng lọc, mỗi chỉ số có `GrowthRate` so với năm trước để FE dựng biểu đồ cột/đường tăng trưởng.
-- `courses` phân tích số khóa mở trong scope (trừ parish), đăng ký, tham dự, hoàn thành, đạt, hủy, tồn đọng duyệt, điểm trung bình, tỷ lệ tham dự/hoàn thành/đạt/hủy và funnel yêu cầu-duyệt chứng nhận; breakdown luôn có theo từng khóa và có thể nhóm thêm theo loại khóa, giáo hạt, giáo xứ hoặc năm.
-- `certificates` phân tích số chứng nhận, trạng thái duyệt/chờ/từ chối, hệ thống gợi ý, duyệt ngoại lệ, tỷ lệ duyệt, tỷ lệ chuyển đổi từ lượt đạt khóa học và số giờ duyệt trung bình; breakdown theo trạng thái duyệt, theo từng khóa học và các nhóm được yêu cầu.
-- `leaders` luôn trả cơ cấu theo giới tính, nhóm tuổi, cấp bậc, trạng thái và thâm niên; KPI gồm quy mô, tỷ lệ hoạt động, nam/nữ, nhóm dưới 25 tuổi, nhóm từ 45 tuổi và tuổi trung bình. Insight giải thích trực tiếp sức khỏe nhân sự, cân bằng giới tính và nhu cầu kế thừa.
-- Response analytics chỉ trả dữ liệu cấu trúc: `scope`, `filters`, `kpis`, `breakdowns`, `trends`, `comparisons`. Không trả `insights`, message, label, định nghĩa KPI hoặc ghi chú diễn giải; FE ánh xạ các `type`/`key` và hiển thị biểu đồ theo nhu cầu.
-- Phân biệt thời gian: snapshot tổ chức/leader phản ánh hiện tại; biểu đồ leader dùng ngày tạo để thể hiện nhân sự mới; course dùng ngày đăng ký hoặc ngày bắt đầu khóa; certificate dùng ngày cấp, hoặc ngày tạo khi hồ sơ chưa được cấp để không bỏ sót trạng thái chờ duyệt.
+- API (quyền `analytics.dashboard.read.all|diocese|deanery|parish`; backend tự resolve scope từ account, không nhận ID scope từ client):
+  - `GET /api/analytics/overview` (trang Tổng quan), `/work-queue` (số việc cần xử lý theo key, FE gắn nhãn).
+  - `GET /api/analytics/organization|leaders|courses|certificates` (trang Phân tích, 4 tab).
+  - `GET /api/analytics/filter-options` (giáo hạt, giáo xứ, loại khóa, khóa, cấp bậc trong scope).
+  - `GET /api/analytics/records?dataset=leaders|participations|certificates&dimension=&value=&page=&size=` (drill-down khi bấm biểu đồ) và `/records/export` (tối đa 20.000 dòng, FE xuất CSV).
+- Bộ lọc chung: `fromDate`, `toDate` (mặc định 12 tháng gần nhất, tối đa 10 năm), `timeBucket` (`month|quarter|year`), `compare` (mặc định `true`, so sánh kỳ liền trước cùng độ dài), `groupBy`, `deaneryId`, `parishId`, `courseType`, `courseCode`, `leaderLevel`, `gender`, `includeInactiveUnits`. Bộ lọc luôn được AND sau phạm vi quyền nên không bao giờ mở rộng dữ liệu được xem. Mọi giá trị đi qua tham số có tên (không nối chuỗi SQL).
+- Response: `scope`, `filters` (kỳ thực tế đã tính + kỳ so sánh), `kpis[]` (`key`, `unit` COUNT|PERCENT|SCORE|HOURS, `value`, `previous`, `delta`, `deltaPct`, `numerator`, `denominator`, `sparkline`), `breakdowns[]` (`type`, `key`, `label` là tên thực thể từ dữ liệu, `metrics`), `trends[]` (liên tục, kỳ không phát sinh = 0), `previousTrends[]` (cùng độ dài để chồng lên), `funnel[]`, `alerts[]` (`key`, `severity`, `count`, `items[]`). Không trả văn bản diễn giải; FE ánh xạ `key`.
+- Quy ước tính để số liệu không lệch:
+  - Tỷ lệ luôn là tử/mẫu trên cùng một tập; mẫu số 0 trả `null` (không giả 0%). `delta` của tỷ lệ tính bằng điểm phần trăm, `deltaPct` chỉ có với số đếm/điểm/giờ khi kỳ trước khác 0.
+  - Khóa huấn luyện: cohort là các khóa có `start_date` trong kỳ. Phễu `registered ⊇ valid (không hủy/từ chối) ⊇ attended (ATTENDED|COMPLETED) ⊇ passed (result=COMPLETED) ⊇ certificate (đã duyệt)` đếm trên cùng tập hồ sơ nên mọi bước ≤ bước trước. Hồ sơ tính theo huynh trưởng thuộc scope (kể cả khóa do cấp khác tổ chức); bảng theo khóa gồm cả khóa chưa có hồ sơ khi không lọc theo đối tượng.
+  - Chứng nhận: mốc ngày là ngày cấp, hoặc ngày tạo khi chưa cấp. `approvalRate = approved / (approved + rejected)`; `REVOKED` tính riêng. `conversionRate` = hồ sơ đạt (cohort khóa trong kỳ) đã có chứng nhận `APPROVED` / hồ sơ đạt. Trạng thái dựa vào `approval_status`, không dựa vào `revoked_at` (giữ lại làm lịch sử khi cấp lại).
+  - Huynh trưởng: cơ cấu là ảnh chụp hiện tại; "huynh trưởng mới" dựa vào `created_at` (ngày nhập hồ sơ vào hệ thống, không phải ngày gia nhập phong trào) và "thăng cấp" lấy từ `rank_history` chưa bị hoàn tác. Số liệu theo kỳ dùng múi giờ `Asia/Ho_Chi_Minh`.
+  - Cảnh báo dùng ngưỡng cố định và mẫu tối thiểu 5 để không báo động từ mẫu nhỏ (tỷ lệ đạt < 50%, hủy > 20%, từ chối > 20%, chứng nhận chờ > 7 ngày, hồ sơ chờ duyệt > 3 ngày, khóa sắp đóng đăng ký 7 ngày, tỷ lệ hoạt động < 80%, dưới 25 tuổi < 10%, lệch giới tính < 30%).
+- `SUPER_ADMIN` chỉ gọi được overview với đúng bốn KPI toàn hệ thống: `totalDioceses`, `totalDeaneries`, `totalParishes`, `totalLeaders`; các endpoint chi tiết trả 403.
+- Tài khoản có nhiều quyền phạm vi (giáo phận, giáo hạt, giáo xứ) chọn phạm vi xem bằng tham số `scope` (`diocese|deanery|parish`, mặc định phạm vi rộng nhất); chỉ được chọn phạm vi mình có quyền, ngược lại trả 403. `GET /api/analytics/scopes` liệt kê các phạm vi được xem.
+- Giáo xứ không tổ chức khóa: tổng quan chỉ có nhân sự và chứng nhận của giáo xứ, `/courses` và danh sách hồ sơ đăng ký trả 403; `GET /api/analytics/open-courses` trả các khóa đang mở đăng ký (của giáo hạt và giáo phận trực thuộc), khóa còn tối đa 72 giờ có `urgency=closing`, để FE dẫn tới `/training/courses/{mã}?tab=registrations`.
+- Diocese chỉ xem dữ liệu thuộc giáo phận và đơn vị con; deanery chỉ xem giáo hạt và giáo xứ con; parish chỉ xem giáo xứ hiện tại.
+- Breakdown bổ sung: `scoreBucket` (phân bố điểm thang 10), `participationStatus`, `heat` (đơn vị × kỳ, khóa `p:<kỳ>`), `approvalTime` (ngưỡng thời gian duyệt), `agePyramid` (nhóm tuổi × giới tính), `promotionLevel`; trend của leaders/organization có thêm `cumulative` (hồ sơ tích lũy, chưa trừ người đã nghỉ).
+- Cache theo tài khoản + toàn bộ bộ lọc + ngày hiện tại (`AnalyticsFilterRequest.cacheKey()`); các nghiệp vụ ghi dữ liệu xóa cache qua `@EvictCaches.Analytics`.
 
 ## Tắt đơn vị tổ chức (giáo phận / giáo hạt / giáo xứ)
 
@@ -24,6 +32,11 @@
 - Chứng nhận đã cấp vẫn hợp lệ khi đơn vị bị tắt; chỉ thu hồi bằng chức năng thu hồi có lý do.
 - `DeaneryResponse` / `ParishResponse` có `effectiveStatus`; danh sách huynh trưởng chọn được chỉ gồm giáo xứ hiệu lực.
 - Analytics có `includeInactiveUnits` (mặc định `false`, nằm trong cache key): số liệu snapshot (số đơn vị, huynh trưởng hiện tại, cơ cấu) loại đơn vị bị khóa; số liệu sự kiện lịch sử (đăng ký, chứng nhận, huynh trưởng mới theo thời gian) luôn đầy đủ. Thêm KPI `inactiveDeaneries`, `inactiveParishes`, `leadersInInactiveUnits`.
+
+## Nhật ký hệ thống (audit log)
+
+- Mỗi yêu cầu `/api/**` ghi một dòng `system_log` (`ApiAuditLoggingFilter`). Để truy vết: `resource` (loại đối tượng, luôn có cho mọi đường dẫn đã biết, đường dẫn lạ lấy đoạn tài nguyên đầu), `resource_id` (chỉ mã thật: UUID, số hoặc mã có chữ số; các đoạn như `me`, `options` không còn bị ghi nhầm thành mã), `resource_name` (tên dễ đọc, tra trước khi xử lý để sửa/xóa vẫn giữ tên lúc bị tác động; huynh trưởng luôn kèm tên thánh), `operation` (LIST, VIEW, CREATE, UPDATE, DELETE hoặc hành động như APPROVE, TOGGLE_STATUS), `query_string` (bộ lọc yêu cầu, bỏ `password`, `token`, `otp`, `secret`, `code`), `duration_ms`.
+- Tra `resource_name` qua `AuditResourceNamer` (danh sách trắng, chỉ tra khóa chính, lỗi không ảnh hưởng nghiệp vụ). Migration `V094`/`V095` điền ngược `resource`, `operation` cho dòng cũ.
 
 ## Session Rules
 

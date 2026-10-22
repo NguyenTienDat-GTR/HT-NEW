@@ -41,6 +41,21 @@ public class SystemLog extends BaseModel {
     @Column(name = "http_method", length = 20)
     private String httpMethod;
 
+    // Thao tác nghiệp vụ: LIST, VIEW, CREATE, UPDATE, DELETE hoặc hành động riêng (APPROVE, SUBMIT...).
+    @Column(name = "operation", length = 50)
+    private String operation;
+
+    // Tên dễ đọc của đối tượng (tên huynh trưởng kèm tên thánh, tên khóa...), tra lúc ghi nhật ký.
+    @Column(name = "resource_name")
+    private String resourceName;
+
+    // Bộ lọc của yêu cầu, đã bỏ tham số nhạy cảm.
+    @Column(name = "query_string", length = 1000)
+    private String queryString;
+
+    @Column(name = "duration_ms")
+    private Integer durationMs;
+
     @Column(name = "request_path", length = 500)
     private String requestPath;
 

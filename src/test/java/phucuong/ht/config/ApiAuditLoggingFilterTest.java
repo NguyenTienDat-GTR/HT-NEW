@@ -70,7 +70,8 @@ class ApiAuditLoggingFilterTest {
                 systemLogRepository,
                 auditScopeResolver,
                 new securityUtils(),
-                accountRepository
+                accountRepository,
+                new AuditResourceNamer()
         );
     }
 
