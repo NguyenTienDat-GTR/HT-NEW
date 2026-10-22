@@ -174,7 +174,7 @@ public class AccountManagementService {
         String normalizedSearch = validation.normalizeOptionalText(search);
         return accountRepository.findAll().stream()
                 .filter(account -> Boolean.TRUE.equals(account.getStatus()))
-                .filter(account -> isSuperAdmin(authentication) ? isValidAccountPermissionTarget(account) : authorizationHelper.canRead(authentication, account))
+                .filter(account -> isSuperAdmin(authentication) ? isValidAccountPermissionTarget(account) : authorizationHelper.canManageForPermissions(authentication, account))
                 .map(this::response)
                 .filter(response -> matchesUsernameSearch(response, normalizedSearch))
                 .toList();

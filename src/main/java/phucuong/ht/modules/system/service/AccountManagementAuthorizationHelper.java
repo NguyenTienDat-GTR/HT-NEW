@@ -120,6 +120,18 @@ public class AccountManagementAuthorizationHelper {
         }
     }
 
+    /** Tài khoản đích được phân quyền riêng: quản lý được (không cao hơn người thao tác, không phải chính mình) và do cấp của mình tạo. */
+    public boolean canManageForPermissions(Authentication authentication, Account target) {
+        if (hasRole(authentication, SUPER_ADMIN)) return true;
+        try {
+            requireCanManage(authentication, target);
+            requireOwnedByActorScope(authentication, target);
+            return true;
+        } catch (RuntimeException ignored) {
+            return false;
+        }
+    }
+
     public void requireCanRead(Authentication authentication, Account target) {
         if (!canRead(authentication, target)) {
             throw validation.forbidden("Tài khoản hienj tại không có quyền đọc tài khoản này");

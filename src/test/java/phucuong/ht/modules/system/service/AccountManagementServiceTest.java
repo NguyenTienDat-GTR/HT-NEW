@@ -244,9 +244,9 @@ class AccountManagementServiceTest {
 
         when(validation.normalizeOptionalText("target")).thenReturn("target");
         when(accountRepository.findAll()).thenReturn(List.of(target, outside, current));
-        when(authorizationHelper.canRead(auth, target)).thenReturn(true);
-        when(authorizationHelper.canRead(auth, outside)).thenReturn(false);
-        when(authorizationHelper.canRead(auth, current)).thenReturn(false);
+        when(authorizationHelper.canManageForPermissions(auth, target)).thenReturn(true);
+        when(authorizationHelper.canManageForPermissions(auth, outside)).thenReturn(false);
+        when(authorizationHelper.canManageForPermissions(auth, current)).thenReturn(false);
         when(accountRoleRepository.findActiveByUsername("target-user")).thenReturn(List.of(accountRole(target, adminDeanery, true, true)));
 
         var response = service.findAccountPermissionTargets(auth, "target");
