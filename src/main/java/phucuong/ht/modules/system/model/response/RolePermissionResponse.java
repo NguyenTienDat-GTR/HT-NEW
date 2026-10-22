@@ -2,7 +2,6 @@ package phucuong.ht.modules.system.model.response;
 
 import lombok.Builder;
 import lombok.Getter;
-import phucuong.ht.modules.system.model.enums.PermissionEffect;
 import phucuong.ht.modules.system.model.enums.PermissionRevocationReason;
 import phucuong.ht.modules.system.model.enums.PermissionValidity;
 
@@ -16,7 +15,6 @@ public class RolePermissionResponse {
     private String roleName;
     private String permissionCode;
     private String permissionName;
-    private PermissionEffect effect;
     private String conditions;
     private String assignedBy;
     private OffsetDateTime assignedAt;

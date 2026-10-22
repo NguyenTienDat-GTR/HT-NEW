@@ -3,7 +3,6 @@ package phucuong.ht.modules.system.model.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import phucuong.ht.common.model.BaseModel;
-import phucuong.ht.modules.system.model.enums.PermissionEffect;
 import phucuong.ht.modules.system.model.enums.PermissionRevocationReason;
 
 import java.time.OffsetDateTime;
@@ -39,9 +38,6 @@ public class RolePermission extends BaseModel {
     @JoinColumn(name = "permission_code", nullable = false)
     private Permission permission;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "effect", nullable = false)
-    private PermissionEffect effect;
 
     @Column(name = "conditions", columnDefinition = "TEXT")
     private String conditions;

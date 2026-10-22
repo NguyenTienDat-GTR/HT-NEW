@@ -79,7 +79,8 @@ public class ScoreComponentTemplateService {
             throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền xem thành phần điểm");
         }
         Page<ScoreComponentTemplate> page = repository.findAll(scopedRequest);
-        return new PageImpl<>(page.getContent().stream().map(this::toResponse).toList(), page.getPageable(), page.getTotalElements());
+        java.util.Set<String> scored = repository.findIdsWithEnteredScores(page.getContent().stream().map(ScoreComponentTemplate::getId).toList());
+        return new PageImpl<>(page.getContent().stream().map(component -> toResponse(component, scored.contains(component.getId()))).toList(), page.getPageable(), page.getTotalElements());
     }
 
     @Transactional(readOnly = true)
@@ -116,6 +117,12 @@ public class ScoreComponentTemplateService {
     }
 
     public ScoreComponentTemplateResponse toggleStatus(String id, StatusToggleRequest request, Authentication authentication) {
+        ScoreComponentTemplate current = repository.findByIdWithScope(id)
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy thành phần điểm: " + id));
+        // Thành phần đã có điểm nhập vào thì không được tắt, để không làm lệch điểm tổng kết của các khóa đã chấm.
+        if (Boolean.TRUE.equals(current.getStatus()) && !repository.findIdsWithEnteredScores(List.of(id)).isEmpty()) {
+            throw commonValidationHelper.conflict("Thành phần điểm đã có điểm được nhập, không thể vô hiệu hóa");
+        }
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
         repository.toggleStatus(id, commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái thành phần điểm"));
         return findById(id);
@@ -154,6 +161,10 @@ public class ScoreComponentTemplateService {
     }
 
     private ScoreComponentTemplateResponse toResponse(ScoreComponentTemplate component) {
+        return toResponse(component, !repository.findIdsWithEnteredScores(List.of(component.getId())).isEmpty());
+    }
+
+    private ScoreComponentTemplateResponse toResponse(ScoreComponentTemplate component, boolean hasScores) {
         return ScoreComponentTemplateResponse.builder()
                 .id(component.getId())
                 .code(component.getCode())
@@ -169,6 +180,7 @@ public class ScoreComponentTemplateService {
                 .dioceseId(component.getDiocese() == null ? null : component.getDiocese().getId())
                 .deaneryId(component.getDeanery() == null ? null : component.getDeanery().getId())
                 .status(component.getStatus())
+                .hasScores(hasScores)
                 .createdAt(component.getCreatedAt())
                 .updatedAt(component.getUpdatedAt())
                 .build();

@@ -101,7 +101,6 @@ GET /api/system/account-permissions/revocable-permissions|200|401|403|400|404|N/
 GET /api/system/account-permissions/assignable-permissions|200|401|403|400|404|N/A: read-only endpoint does not mutate state
 GET /api/system/account-permissions/{id}|200|401|403|N/A: identifier is an opaque string|404|N/A: read-only endpoint does not mutate state
 PUT /api/system/account-permissions/{id}|200|401|403|400|404|409
-PATCH /api/system/account-permissions/{id}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict
 
 # Account role assignments
 POST /api/system/account-roles|200|401|403|400|404|409
@@ -135,7 +134,6 @@ GET /api/system/role-permissions/revocable-permissions|200|401|403|400|404|N/A: 
 GET /api/system/role-permissions/assignable-permissions|200|401|403|400|404|N/A: read-only endpoint does not mutate state
 GET /api/system/role-permissions/{id}|200|401|403|N/A: identifier is an opaque string|404|N/A: read-only endpoint does not mutate state
 PUT /api/system/role-permissions/{id}|200|401|403|400|404|409
-PATCH /api/system/role-permissions/{id}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict
 
 # Audit log
 GET /api/system/audit-logs|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state

@@ -15,7 +15,7 @@ public class AuthPermissionQueryRepository {
     public List<EffectivePermissionRow> findEffectivePermissionsByUsername(String username) {
         @SuppressWarnings("unchecked")
         List<Object[]> rows = entityManager.createNativeQuery("""
-                select permission_code, effect, source_type, role_code
+                select permission_code, source_type, role_code
                 from v_account_effective_permission
                 where username = :username
                 """)
@@ -26,8 +26,7 @@ public class AuthPermissionQueryRepository {
                 .map(row -> new EffectivePermissionRow(
                         stringValue(row[0]),
                         stringValue(row[1]),
-                        stringValue(row[2]),
-                        stringValue(row[3])
+                        stringValue(row[2])
                 ))
                 .toList();
     }
@@ -64,6 +63,6 @@ public class AuthPermissionQueryRepository {
         return value == null ? null : String.valueOf(value);
     }
 
-    public record EffectivePermissionRow(String permissionCode, String effect, String sourceType, String roleCode) {
+    public record EffectivePermissionRow(String permissionCode, String sourceType, String roleCode) {
     }
 }

@@ -14,7 +14,6 @@ import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.modules.notification.service.ToggleNotificationDispatcher;
 import phucuong.ht.modules.notification.service.ToggleNotificationRecipientResolver;
 import phucuong.ht.modules.system.model.entity.Permission;
-import phucuong.ht.modules.system.model.enums.PermissionEffect;
 import phucuong.ht.modules.system.model.request.PermissionUpdateRequest;
 import phucuong.ht.modules.system.model.response.PermissionResponse;
 import phucuong.ht.modules.system.model.response.PermissionTaxonomyResponse;
@@ -48,10 +47,8 @@ public class PermissionManagementService {
 
     public Page<PermissionResponse> findAll(BaseSearchRequest request, Authentication authentication) {
         BaseSearchRequest repositoryRequest = copyRequest(request);
-        PermissionEffect effect = extractEffectFilter(repositoryRequest);
         List<Permission> manageable = loadAllMatching(repositoryRequest).stream()
                 .filter(permission -> authorizationHelper.canReadPermission(authentication, permission))
-                .filter(permission -> effect == null || systemPermissionRepository.hasAssignmentEffect(permission.getPermissionCode(), effect))
                 .toList();
         return page(request, manageable);
     }
@@ -195,17 +192,6 @@ public class PermissionManagementService {
         return REPOSITORY_FIELD_ALIASES.getOrDefault(field.trim(), field.trim());
     }
 
-    private PermissionEffect extractEffectFilter(BaseSearchRequest request) {
-        Object rawEffect = request.getFilters().remove("effect");
-        if (rawEffect == null || String.valueOf(rawEffect).isBlank()) {
-            return null;
-        }
-        try {
-            return PermissionEffect.valueOf(String.valueOf(rawEffect).trim().toUpperCase());
-        } catch (IllegalArgumentException exception) {
-            throw commonValidationHelper.validationError("Hiệu lực quyền không hợp lệ");
-        }
-    }
 
     private List<Permission> loadAllMatching(BaseSearchRequest request) {
         List<Permission> matches = new java.util.ArrayList<>();

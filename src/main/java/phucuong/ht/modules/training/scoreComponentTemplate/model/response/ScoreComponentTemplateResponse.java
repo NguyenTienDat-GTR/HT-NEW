@@ -25,6 +25,8 @@ public class ScoreComponentTemplateResponse {
     private UUID dioceseId;
     private UUID deaneryId;
     private Boolean status;
+    // Đã có điểm nhập vào thành phần này (ở bất kỳ khóa nào): không cho vô hiệu hóa.
+    private Boolean hasScores;
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;
 }

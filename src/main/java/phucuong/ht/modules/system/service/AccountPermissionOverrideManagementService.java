@@ -8,19 +8,15 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.security.UnitOperationalStatusService;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.modules.auth.repository.AccountRepository;
 import phucuong.ht.modules.auth.repository.AccountRoleRepository;
-import phucuong.ht.modules.notification.service.ToggleNotificationDispatcher;
-import phucuong.ht.modules.notification.service.ToggleNotificationRecipientResolver;
 import phucuong.ht.modules.system.model.entity.Account;
 import phucuong.ht.modules.system.model.entity.AccountPermissionOverride;
 import phucuong.ht.modules.system.model.entity.Permission;
 import phucuong.ht.modules.system.model.entity.Role;
-import phucuong.ht.modules.system.model.enums.PermissionEffect;
 import phucuong.ht.modules.system.model.enums.PermissionRevocationReason;
 import phucuong.ht.modules.system.model.request.AccountPermissionOverrideBulkRequest;
 import phucuong.ht.modules.system.model.request.AccountPermissionOverrideRevokeRequest;
@@ -60,10 +56,6 @@ public class AccountPermissionOverrideManagementService {
     @Autowired(required = false)
     private UnitOperationalStatusService unitOperationalStatusService;
     @Autowired(required = false)
-    private ToggleNotificationRecipientResolver toggleNotificationRecipientResolver;
-    @Autowired(required = false)
-    private ToggleNotificationDispatcher toggleNotificationDispatcher;
-    @Autowired(required = false)
     private RbacAuthRefreshNotifier authRefreshNotifier;
 
     @Transactional
@@ -79,7 +71,6 @@ public class AccountPermissionOverrideManagementService {
         }
 
         authorizationHelper.requireAccountPermissionWriteAccess(authentication, request.getUsername(), permission);
-        rejectDenyOfRequiredAccountRoleAssignment(account, request.getPermissionCode(), request.getEffect());
 
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tạo phân quyền cho tài khoản");
         AccountPermissionOverride existing = accountPermissionOverrideRepository.findByUsernameAndPermissionCode(request.getUsername(), request.getPermissionCode()).orElse(null);
@@ -88,7 +79,6 @@ public class AccountPermissionOverrideManagementService {
                 throw commonValidationHelper.conflict("Phân quyền riêng cho tài khoản đã tồn tại");
             }
             // Quyền đã thu hồi/hết hạn không bật lại được: phân quyền mới thay thế bản ghi cũ.
-            existing.setEffect(request.getEffect());
             existing.setReason(commonValidationHelper.normalizeOptionalText(request.getReason()));
             existing.setExpiresAt(request.getExpiresAt());
             reissue(existing, actor);
@@ -118,14 +108,12 @@ public class AccountPermissionOverrideManagementService {
                 throw commonValidationHelper.conflict("Không thể gán quyền đang ngừng hoạt động: " + permissionCode);
             }
             authorizationHelper.requireAccountPermissionWriteAccess(authentication, request.getUsername(), permission);
-            rejectDenyOfRequiredAccountRoleAssignment(account, permissionCode, request.getEffect());
 
             AccountPermissionOverride override = accountPermissionOverrideRepository.findByUsernameAndPermissionCode(request.getUsername(), permissionCode)
                     .orElseGet(() -> createOverride(account, permission, actor));
             if (PermissionValiditySupport.isPermanentlyRevoked(override.getRevokedAt(), override.getExpiresAt(), now)) {
                 reissue(override, actor);
             }
-            override.setEffect(request.getEffect());
             override.setReason(commonValidationHelper.normalizeRequiredText(request.getReason()));
             override.setExpiresAt(request.getExpiresAt());
             override.setStatus(true);
@@ -220,10 +208,6 @@ public class AccountPermissionOverrideManagementService {
         authorizationHelper.requireAccountPermissionWriteAccess(authentication, override.getAccount().getUsername(), override.getPermission());
         requireNotRevoked(override);
 
-        if (request.getEffect() != null) {
-            rejectDenyOfRequiredAccountRoleAssignment(override.getAccount(), override.getPermission().getPermissionCode(), request.getEffect());
-            override.setEffect(request.getEffect());
-        }
         if (request.getReason() != null) {
             override.setReason(commonValidationHelper.normalizeOptionalText(request.getReason()));
         }
@@ -237,29 +221,6 @@ public class AccountPermissionOverrideManagementService {
         return toResponse(override);
     }
 
-    @Transactional
-    public AccountPermissionOverrideResponse toggleStatus(String id, StatusToggleRequest request, Authentication authentication) {
-        AccountPermissionOverride override = accountPermissionOverrideRepository.findById(id)
-                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy quyền riêng của tài khoản: " + id));
-        requireAccountWritable(override.getAccount().getUsername());
-        requireValidSuperAdminTarget(authentication, override.getAccount());
-        authorizationHelper.requireAccountPermissionWriteAccess(authentication, override.getAccount().getUsername(), override.getPermission());
-        requireNotRevoked(override);
-        commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
-        PermissionEffect nextEffect = override.getEffect() == PermissionEffect.DENY ? PermissionEffect.ALLOW : PermissionEffect.DENY;
-        rejectDenyOfRequiredAccountRoleAssignment(override.getAccount(), override.getPermission().getPermissionCode(), nextEffect);
-        Set<String> recipients = toggleNotificationRecipientResolver == null ? Set.of() : toggleNotificationRecipientResolver.byAccount(override.getAccount().getUsername());
-        override.setEffect(nextEffect);
-        override.setStatus(true);
-        override.setUpdatedAt(OffsetDateTime.now());
-        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái phân quyền cho tài khoản");
-        override.setUpdatedBy(actor);
-        notifyUsers(recipients, "ACCOUNT_PERMISSION_TOGGLED");
-        if (toggleNotificationDispatcher != null) {
-            toggleNotificationDispatcher.dispatch(recipients, "ACCOUNT_PERMISSION_TOGGLED", permissionLabel(override.getPermission()), nextEffect == PermissionEffect.ALLOW, actor);
-        }
-        return toResponse(override);
-    }
 
     private void requireNotRevoked(AccountPermissionOverride override) {
         if (PermissionValiditySupport.isPermanentlyRevoked(override.getRevokedAt(), override.getExpiresAt(), OffsetDateTime.now())) {
@@ -282,23 +243,7 @@ public class AccountPermissionOverrideManagementService {
         }
     }
 
-    private void notifyUsers(Set<String> recipients, String reason) {
-        if (authRefreshNotifier != null) {
-            authRefreshNotifier.notifyUsers(recipients, reason);
-        }
-    }
 
-    private String permissionLabel(Permission permission) {
-        if (permission == null) {
-            return "quyền chưa xác định";
-        }
-        String name = commonValidationHelper.normalizeOptionalText(permission.getPermissionName());
-        String code = commonValidationHelper.normalizeOptionalText(permission.getPermissionCode());
-        if (name != null && code != null) {
-            return name + " (" + code + ")";
-        }
-        return name != null ? name : code != null ? code : "quyền chưa xác định";
-    }
 
     private void requireAccountWritable(String username) {
         if (unitOperationalStatusService != null) {
@@ -366,7 +311,6 @@ public class AccountPermissionOverrideManagementService {
                 .username(override.getAccount() == null ? null : override.getAccount().getUsername())
                 .permissionCode(override.getPermission() == null ? null : override.getPermission().getPermissionCode())
                 .permissionName(override.getPermission() == null ? null : override.getPermission().getPermissionName())
-                .effect(override.getEffect())
                 .reason(override.getReason())
                 .expiresAt(override.getExpiresAt())
                 .status(override.getStatus())
@@ -417,7 +361,6 @@ public class AccountPermissionOverrideManagementService {
         AccountPermissionOverrideCreateRequest createRequest = new AccountPermissionOverrideCreateRequest();
         createRequest.setUsername(account.getUsername());
         createRequest.setPermissionCode(permission.getPermissionCode());
-        createRequest.setEffect(PermissionEffect.ALLOW);
         AccountPermissionOverride override = accountPermissionOverrideRepository.create(createRequest, actor);
         override.setAccount(account);
         override.setPermission(permission);
@@ -433,27 +376,5 @@ public class AccountPermissionOverrideManagementService {
         return assignedPermissionCodes;
     }
 
-    private void rejectDenyOfRequiredAccountRoleAssignment(Account account, String permissionCode, PermissionEffect effect) {
-        if (effect != PermissionEffect.DENY) {
-            return;
-        }
-        String requiredRoleCode = requiredAdminRoleForAccountRolePermission(permissionCode);
-        if (requiredRoleCode == null) {
-            return;
-        }
-        boolean hasRequiredRole = accountRoleRepository.findActiveByUsername(account.getUsername()).stream()
-                .anyMatch(accountRole -> accountRole.getRole() != null && requiredRoleCode.equals(accountRole.getRole().getRoleCode()));
-        if (hasRequiredRole) {
-            throw commonValidationHelper.conflict("Không thể DENY quyền gán vai trò nền tảng của tài khoản admin unit");
-        }
-    }
 
-    private String requiredAdminRoleForAccountRolePermission(String permissionCode) {
-        return switch (permissionCode == null ? "" : permissionCode) {
-            case "system.account_role.assign.diocese" -> "ADMIN_DIOCESE";
-            case "system.account_role.assign.deanery" -> "ADMIN_DEANERY";
-            case "system.account_role.assign.parish" -> "ADMIN_PARISH";
-            default -> null;
-        };
-    }
 }

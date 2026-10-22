@@ -13,7 +13,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import phucuong.ht.common.utils.jwtUtils;
 import phucuong.ht.modules.auth.model.AuthUserDetails;
 import phucuong.ht.modules.auth.service.RedisTokenSessionService;
-import phucuong.ht.modules.system.model.enums.PermissionEffect;
 import phucuong.ht.modules.system.model.request.AccountPermissionOverrideBulkRequest;
 import phucuong.ht.modules.system.model.request.AccountPermissionOverrideCreateRequest;
 import phucuong.ht.modules.system.model.response.AccountPermissionOverrideResponse;
@@ -58,14 +57,12 @@ class AccountPermissionOverrideControllerSecurityIntegrationTest {
         AccountPermissionOverrideCreateRequest request = new AccountPermissionOverrideCreateRequest();
         request.setUsername("target");
         request.setPermissionCode("organization.position.read.diocese");
-        request.setEffect(PermissionEffect.DENY);
 
         when(accountPermissionOverrideManagementService.create(any(AccountPermissionOverrideCreateRequest.class), any()))
                 .thenReturn(AccountPermissionOverrideResponse.builder()
                         .id("apo-1")
                         .username("target")
                         .permissionCode("organization.position.read.diocese")
-                        .effect(PermissionEffect.DENY)
                         .status(true)
                         .build());
 
@@ -82,7 +79,6 @@ class AccountPermissionOverrideControllerSecurityIntegrationTest {
         AccountPermissionOverrideCreateRequest request = new AccountPermissionOverrideCreateRequest();
         request.setUsername("target");
         request.setPermissionCode("organization.position.read.diocese");
-        request.setEffect(PermissionEffect.DENY);
 
         mockMvc.perform(post("/api/system/account-permissions")
                         .header("Authorization", bearer(token(List.of("ADMIN_DIOCESE"), List.of())))
@@ -96,7 +92,6 @@ class AccountPermissionOverrideControllerSecurityIntegrationTest {
         AccountPermissionOverrideBulkRequest request = new AccountPermissionOverrideBulkRequest();
         request.setUsername("target");
         request.setPermissionCodes(List.of("organization.position.read.diocese", "organization.position.update.diocese"));
-        request.setEffect(PermissionEffect.DENY);
         request.setReason("temporary restriction");
 
         when(accountPermissionOverrideManagementService.bulkAssign(any(AccountPermissionOverrideBulkRequest.class), any()))
@@ -105,14 +100,12 @@ class AccountPermissionOverrideControllerSecurityIntegrationTest {
                                 .id("apo-1")
                                 .username("target")
                                 .permissionCode("organization.position.read.diocese")
-                                .effect(PermissionEffect.DENY)
                                 .status(true)
                                 .build(),
                         AccountPermissionOverrideResponse.builder()
                                 .id("apo-2")
                                 .username("target")
                                 .permissionCode("organization.position.update.diocese")
-                                .effect(PermissionEffect.DENY)
                                 .status(true)
                                 .build()
                 ));

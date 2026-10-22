@@ -7,7 +7,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import phucuong.ht.common.dto.apiResponse;
-import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.modules.system.model.request.AccountPermissionOverrideBulkRequest;
 import phucuong.ht.modules.system.model.request.AccountPermissionOverrideRevokeRequest;
@@ -72,8 +71,4 @@ public class AccountPermissionOverrideController {
         return apiResponse.success("Cập nhật quyền của tài khoản thành công", service.update(id, request, authentication));
     }
 
-    @PatchMapping("/{id}/toggle-status")
-    public apiResponse<AccountPermissionOverrideResponse> toggleStatus(@PathVariable String id, @Valid @RequestBody StatusToggleRequest request, Authentication authentication) {
-        return apiResponse.success("Đổi trạng thái quyền của tài khoản thành công", service.toggleStatus(id, request, authentication));
-    }
 }

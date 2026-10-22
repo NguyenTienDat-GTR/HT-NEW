@@ -8,16 +8,12 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.modules.auth.repository.RoleRepository;
-import phucuong.ht.modules.notification.service.ToggleNotificationDispatcher;
-import phucuong.ht.modules.notification.service.ToggleNotificationRecipientResolver;
 import phucuong.ht.modules.system.model.entity.Permission;
 import phucuong.ht.modules.system.model.entity.Role;
 import phucuong.ht.modules.system.model.entity.RolePermission;
-import phucuong.ht.modules.system.model.enums.PermissionEffect;
 import phucuong.ht.modules.system.model.enums.PermissionRevocationReason;
 import phucuong.ht.modules.system.model.request.RolePermissionBulkRequest;
 import phucuong.ht.modules.system.model.request.RolePermissionRevokeRequest;
@@ -56,7 +52,6 @@ public class RolePermissionManagementService {
             "permission.resource.resourceCode",
             "permission.action.actionCode",
             "permission.scope.scopeCode",
-            "effect",
             "conditions",
             "assignedBy",
             "assignedAt",
@@ -73,10 +68,6 @@ public class RolePermissionManagementService {
     private final SystemPermissionRepository systemPermissionRepository;
     private final CommonValidationHelper commonValidationHelper;
     private final SystemAdminAuthorizationHelper authorizationHelper;
-    @Autowired(required = false)
-    private ToggleNotificationRecipientResolver toggleNotificationRecipientResolver;
-    @Autowired(required = false)
-    private ToggleNotificationDispatcher toggleNotificationDispatcher;
     @Autowired(required = false)
     private RbacAuthRefreshNotifier authRefreshNotifier;
 
@@ -103,7 +94,6 @@ public class RolePermissionManagementService {
             }
             // Quyền đã thu hồi/hết hạn không bật lại được: phân quyền mới thay thế bản ghi cũ.
             OffsetDateTime assignedAt = request.getAssignedAt() == null ? OffsetDateTime.now() : request.getAssignedAt();
-            existing.setEffect(request.getEffect());
             existing.setConditions(commonValidationHelper.normalizeOptionalText(request.getConditions()));
             existing.setExpiresAt(request.getExpiresAt());
             reissue(existing, actor, assignedAt);
@@ -144,7 +134,6 @@ public class RolePermissionManagementService {
             if (PermissionValiditySupport.isPermanentlyRevoked(rolePermission.getRevokedAt(), rolePermission.getExpiresAt(), now)) {
                 reissue(rolePermission, actor, assignedAt);
             }
-            rolePermission.setEffect(request.getEffect());
             rolePermission.setConditions(commonValidationHelper.normalizeOptionalText(request.getConditions()));
             rolePermission.setExpiresAt(request.getExpiresAt());
             rolePermission.setStatus(true);
@@ -249,9 +238,6 @@ public class RolePermissionManagementService {
         );
         requireNotRevoked(rolePermission);
 
-        if (request.getEffect() != null) {
-            rolePermission.setEffect(request.getEffect());
-        }
         if (request.getConditions() != null) {
             rolePermission.setConditions(commonValidationHelper.normalizeOptionalText(request.getConditions()));
         }
@@ -264,34 +250,6 @@ public class RolePermissionManagementService {
         return toResponse(rolePermission);
     }
 
-    @Transactional
-    public RolePermissionResponse toggleStatus(String id, StatusToggleRequest request, Authentication authentication) {
-        RolePermission rolePermission = rolePermissionRepository.findById(id)
-                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy phân quyền cho vai trò: " + id));
-        requireNotRevoked(rolePermission);
-        PermissionEffect nextEffect = rolePermission.getEffect() == PermissionEffect.DENY ? PermissionEffect.ALLOW : PermissionEffect.DENY;
-        authorizationHelper.requireRolePermissionWriteAccess(
-                authentication,
-                rolePermission.getRole(),
-                rolePermission.getPermission(),
-                nextEffect == PermissionEffect.DENY
-                        ? SystemAdminAuthorizationHelper.ROLE_PERMISSION_REVOKE_DIOCESE
-                        : SystemAdminAuthorizationHelper.ROLE_PERMISSION_ASSIGN_DIOCESE
-        );
-        commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
-        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái phân quyền cho vai trò");
-        String roleCode = rolePermission.getRole().getRoleCode();
-        Set<String> recipients = toggleNotificationRecipientResolver == null ? Set.of() : toggleNotificationRecipientResolver.byRole(roleCode);
-        rolePermission.setEffect(nextEffect);
-        rolePermission.setStatus(true);
-        rolePermission.setUpdatedAt(OffsetDateTime.now());
-        rolePermission.setUpdatedBy(actor);
-        notifyUsers(recipients, "ROLE_PERMISSION_TOGGLED");
-        if (toggleNotificationDispatcher != null) {
-            toggleNotificationDispatcher.dispatch(recipients, "ROLE_PERMISSION_TOGGLED", rolePermissionLabel(rolePermission), nextEffect == PermissionEffect.ALLOW, actor);
-        }
-        return toResponse(rolePermission);
-    }
 
     private void requireNotRevoked(RolePermission rolePermission) {
         if (PermissionValiditySupport.isPermanentlyRevoked(rolePermission.getRevokedAt(), rolePermission.getExpiresAt(), OffsetDateTime.now())) {
@@ -316,41 +274,9 @@ public class RolePermissionManagementService {
         }
     }
 
-    private void notifyUsers(Set<String> recipients, String reason) {
-        if (authRefreshNotifier != null) {
-            authRefreshNotifier.notifyUsers(recipients, reason);
-        }
-    }
 
-    private String rolePermissionLabel(RolePermission rolePermission) {
-        return permissionLabel(rolePermission == null ? null : rolePermission.getPermission())
-                + " trong vai trò "
-                + roleLabel(rolePermission == null ? null : rolePermission.getRole());
-    }
 
-    private String roleLabel(Role role) {
-        if (role == null) {
-            return "vai trò chưa xác định";
-        }
-        String name = commonValidationHelper.normalizeOptionalText(role.getRoleName());
-        String code = commonValidationHelper.normalizeOptionalText(role.getRoleCode());
-        if (name != null && code != null) {
-            return name + " (" + code + ")";
-        }
-        return name != null ? name : code != null ? code : "vai trò chưa xác định";
-    }
 
-    private String permissionLabel(Permission permission) {
-        if (permission == null) {
-            return "quyền chưa xác định";
-        }
-        String name = commonValidationHelper.normalizeOptionalText(permission.getPermissionName());
-        String code = commonValidationHelper.normalizeOptionalText(permission.getPermissionCode());
-        if (name != null && code != null) {
-            return name + " (" + code + ")";
-        }
-        return name != null ? name : code != null ? code : "quyền chưa xác định";
-    }
 
     private BaseSearchRequest copyRequest(BaseSearchRequest request) {
         BaseSearchRequest source = request == null ? new BaseSearchRequest() : request;
@@ -430,7 +356,6 @@ public class RolePermissionManagementService {
                 .roleName(rolePermission.getRole() == null ? null : rolePermission.getRole().getRoleName())
                 .permissionCode(rolePermission.getPermission() == null ? null : rolePermission.getPermission().getPermissionCode())
                 .permissionName(rolePermission.getPermission() == null ? null : rolePermission.getPermission().getPermissionName())
-                .effect(rolePermission.getEffect())
                 .conditions(rolePermission.getConditions())
                 .assignedBy(rolePermission.getAssignedBy())
                 .assignedAt(rolePermission.getAssignedAt())
@@ -474,7 +399,6 @@ public class RolePermissionManagementService {
         RolePermissionCreateRequest createRequest = new RolePermissionCreateRequest();
         createRequest.setRoleCode(role.getRoleCode());
         createRequest.setPermissionCode(permission.getPermissionCode());
-        createRequest.setEffect(phucuong.ht.modules.system.model.enums.PermissionEffect.ALLOW);
         createRequest.setAssignedAt(assignedAt);
         RolePermission rolePermission = rolePermissionRepository.create(createRequest, actor);
         rolePermission.setRole(role);

@@ -16,7 +16,6 @@ import phucuong.ht.modules.system.model.entity.Permission;
 import phucuong.ht.modules.system.model.entity.PermissionScope;
 import phucuong.ht.modules.system.model.entity.Role;
 import phucuong.ht.modules.system.model.entity.RolePermission;
-import phucuong.ht.modules.system.model.enums.PermissionEffect;
 import phucuong.ht.modules.system.model.request.RolePermissionCreateRequest;
 import phucuong.ht.modules.system.repository.RolePermissionRepository;
 import phucuong.ht.modules.system.repository.SystemPermissionRepository;
@@ -57,7 +56,6 @@ class RolePermissionManagementServiceTest {
         saved.setId("rp-1");
         saved.setRole(targetRole);
         saved.setPermission(permission);
-        saved.setEffect(PermissionEffect.ALLOW);
         saved.setStatus(true);
 
         RolePermissionCreateRequest request = request("ADMIN_PARISH", "organization.position.read.diocese");
@@ -82,7 +80,6 @@ class RolePermissionManagementServiceTest {
         saved.setId("rp-equal");
         saved.setRole(targetRole);
         saved.setPermission(permission);
-        saved.setEffect(PermissionEffect.ALLOW);
         saved.setStatus(true);
 
         RolePermissionCreateRequest request = request("CUSTOM_DIOCESE", "organization.position.read.diocese");
@@ -262,7 +259,6 @@ class RolePermissionManagementServiceTest {
         RolePermissionCreateRequest request = new RolePermissionCreateRequest();
         request.setRoleCode(roleCode);
         request.setPermissionCode(permissionCode);
-        request.setEffect(PermissionEffect.ALLOW);
         return request;
     }
 
