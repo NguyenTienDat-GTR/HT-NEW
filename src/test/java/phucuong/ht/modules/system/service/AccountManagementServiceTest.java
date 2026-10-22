@@ -76,7 +76,7 @@ class AccountManagementServiceTest {
         assertEquals("phucuongadmin", response.getUsername());
         assertNull(response.getLeaderId());
         ArgumentCaptor<Account> savedAccount = ArgumentCaptor.forClass(Account.class);
-        verify(accountRepository).save(savedAccount.capture());
+        verify(accountRepository).saveAndFlush(savedAccount.capture());
         assertNotNull(savedAccount.getValue().getCreatedAt());
         assertNotNull(savedAccount.getValue().getUpdatedAt());
         ArgumentCaptor<String> password = ArgumentCaptor.forClass(String.class);
@@ -89,6 +89,47 @@ class AccountManagementServiceTest {
         assertTrue(password.getValue().matches("[A-Za-z0-9]{12}"));
         assertTrue(savedAccount.getValue().getMustChangePassword());
         verify(passwordEncoder).encode(password.getValue());
+    }
+
+    @Test
+    void createShouldFlushDatabaseWritesBeforeSendingEmail() {
+        Diocese diocese = diocese("Phú Cường");
+        AccountCreateRequest request = new AccountCreateRequest();
+        request.setRoleCode("ADMIN_DIOCESE");
+        request.setDioceseId(diocese.getId());
+        request.setCredentialEmail("admin@phucuong.vn");
+        stubCreate(diocese, adminDioceseRole());
+        when(validation.normalizeRequiredText("admin@phucuong.vn")).thenReturn("admin@phucuong.vn");
+        when(accountRepository.existsByUsername("phucuongadmin")).thenReturn(false);
+
+        service.create(request, authentication);
+
+        var order = org.mockito.Mockito.inOrder(accountRepository, accountRoleRepository, mailService);
+        order.verify(accountRepository).saveAndFlush(any(Account.class));
+        order.verify(accountRoleRepository).flush();
+        order.verify(mailService).sendInitialCredentials(anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void createShouldPropagateMailFailureSoTransactionRollsBack() {
+        Diocese diocese = diocese("Phú Cường");
+        AccountCreateRequest request = new AccountCreateRequest();
+        request.setRoleCode("ADMIN_DIOCESE");
+        request.setDioceseId(diocese.getId());
+        request.setCredentialEmail("admin@phucuong.vn");
+        stubCreate(diocese, adminDioceseRole());
+        when(validation.normalizeRequiredText("admin@phucuong.vn")).thenReturn("admin@phucuong.vn");
+        when(accountRepository.existsByUsername("phucuongadmin")).thenReturn(false);
+        var mailFailure = new phucuong.ht.modules.auth.exception.ApiException(
+                org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+                phucuong.ht.common.exception.errorCode.INTERNAL_ERROR, "SMTP down");
+        org.mockito.Mockito.doThrow(mailFailure).when(mailService)
+                .sendInitialCredentials(anyString(), anyString(), anyString(), anyString());
+
+        var thrown = org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class,
+                () -> service.create(request, authentication));
+
+        org.junit.jupiter.api.Assertions.assertSame(mailFailure, thrown);
     }
 
     @Test
@@ -106,7 +147,7 @@ class AccountManagementServiceTest {
         when(accountRepository.existsByUsername("anchanhtoa107")).thenReturn(true);
         when(accountRepository.existsByUsername("anchanhtoa1072")).thenReturn(false);
         when(passwordEncoder.encode(anyString())).thenReturn("bcrypt-hash");
-        when(accountRepository.save(any(Account.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(accountRepository.saveAndFlush(any(Account.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         var response = service.create(request, authentication);
 
@@ -175,7 +216,7 @@ class AccountManagementServiceTest {
         when(validation.requireAuditActor(any(), anyString())).thenReturn("admin");
         when(accountRepository.existsByUsername("anchanhtoa107")).thenReturn(false);
         when(passwordEncoder.encode(anyString())).thenReturn("bcrypt-hash");
-        when(accountRepository.save(any(Account.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(accountRepository.saveAndFlush(any(Account.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(accountRoleRepository.save(any(AccountRole.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         var response = service.create(request, authentication);
@@ -221,7 +262,7 @@ class AccountManagementServiceTest {
         when(accountRepository.existsAdminDioceseByDioceseId(diocese.getId())).thenReturn(false);
         when(validation.requireAuditActor(any(), anyString())).thenReturn("superadmin");
         when(passwordEncoder.encode(anyString())).thenReturn("bcrypt-hash");
-        when(accountRepository.save(any(Account.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(accountRepository.saveAndFlush(any(Account.class))).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     private Role adminDioceseRole() { return role("ADMIN_DIOCESE"); }

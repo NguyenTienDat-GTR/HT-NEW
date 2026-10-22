@@ -217,6 +217,19 @@ public class RedisTokenSessionService {
         stringRedisTemplate.delete(userSessionsKey(username));
     }
 
+    /** Thu hồi mọi phiên của người dùng trừ phiên đang dùng. */
+    public void revokeOtherSessions(String username, String keepSessionId) {
+        if (!StringUtils.hasText(keepSessionId)) {
+            revokeAllSessions(username);
+            return;
+        }
+        for (TokenSessionState session : listActiveSessions(username)) {
+            if (!keepSessionId.equals(session.getSessionId())) {
+                revokeSession(session.getSessionId());
+            }
+        }
+    }
+
     private List<TokenSessionState> cleanupUserSessions(String username) {
         String userSessionsKey = userSessionsKey(username);
         Set<String> sessionIds = stringRedisTemplate.opsForZSet().range(userSessionsKey, 0, -1);

@@ -1302,3 +1302,26 @@ Danh sách tham dự:
 - `DELETE /api/training/participants/{id}`: người có quyền duyệt đúng cấp quản lý của khóa xóa hồ sơ khỏi danh sách tham dự, bất kể đã có điểm hay chưa, trừ hồ sơ đã có chứng nhận được duyệt (409); chứng nhận đề xuất chưa duyệt bị xóa theo; ghi sự kiện `training.participant.removed`.
 
 Ma trận endpoint (`endpoint-contract-matrix.psv`) hiện có 124 route.
+
+## Hồ sơ cá nhân và đổi mật khẩu bằng OTP (nhánh `feature/account-menu-change-password`)
+
+- `V089__account_contact_email.sql`: thêm cột `account.email` (nullable). Tạo tài khoản SUPER_ADMIN / ADMIN_DIOCESE không gắn Huynh Trưởng thì lưu `credentialEmail` vào cột này. Email nhận OTP: ưu tiên email Huynh Trưởng, sau đó `account.email` (`AccountEmailResolver`). Tài khoản cũ không gắn Huynh Trưởng chưa có email thì không đổi được mật khẩu bằng OTP cho tới khi cập nhật email.
+- `GET /api/auth/me/profile`: hồ sơ của chính mình, không cần quyền đọc Huynh Trưởng: `username`, `roles` (`code`, `name` lấy từ bảng role, `primary`; vai trò chính đứng đầu), `email`, `hasLeader`, `leader`, `rankHistory`, `certificates`.
+- `GET /api/auth/me/certificates/{code}` và `/preview`: chi tiết và bản xem trước chứng nhận, chỉ khi chứng nhận thuộc Huynh Trưởng của tài khoản (ngược lại 404).
+- Đổi mật khẩu chủ động 3 bước (`PasswordChangeService`, dữ liệu tạm trên Redis qua `PasswordOtpStore`, chỉ lưu hash):
+  - `POST /api/auth/password/otp` `{ oldPassword }`: kiểm tra mật khẩu hiện tại (sai 5 lần / 15 phút thì khóa tạm, 429), sinh OTP 6 số bằng `SecureRandom`, hạn 5 phút, gửi lại sau 60 giây, gửi email. Trả `{ email, expiresInSeconds, resendAfterSeconds }`.
+  - `POST /api/auth/password/otp/verify` `{ otp }`: tối đa 5 lần sai thì hủy OTP; đúng thì trả `changeToken` dùng một lần, hạn 10 phút.
+  - `POST /api/auth/password/change` `{ changeToken, newPassword, confirmPassword }`: mật khẩu 8–72 ký tự, khớp xác nhận, khác mật khẩu cũ; giữ phiên hiện tại, thu hồi các phiên khác (`RedisTokenSessionService.revokeOtherSessions`).
+  - `/api/auth/password/**` dùng hạng giới hạn tốc độ `auth`.
+- Luồng bắt buộc đổi mật khẩu tạm lần đầu (`POST /api/auth/change-password`) giữ nguyên, không OTP.
+- Test: `PasswordChangeServiceTest`.
+
+### Gửi email: transaction và rollback
+
+- Chỉ có 2 luồng gửi email: tạo tài khoản (mật khẩu tạm) và OTP đổi mật khẩu.
+- Tạo tài khoản (`AccountManagementService.create`, `@Transactional(rollbackFor = Exception.class)`): `saveAndFlush` tài khoản, ghi vai trò rồi `flush`, dựng response, gửi email là bước cuối. Lỗi ở bất kỳ bước nào (kể cả SMTP) thì rollback toàn bộ; gửi email lỗi trả 503 "Tài khoản chưa được tạo" và ghi log nguyên nhân (`AccountCredentialMailService`).
+- OTP (Redis, không có transaction DB) dùng bù trừ:
+  - gửi OTP: chụp OTP cũ trước khi ghi mã mới; email lỗi thì khôi phục OTP cũ, bỏ thời gian chờ gửi lại, giữ phiên đổi mật khẩu cũ, trả 503.
+  - xác thực OTP: lưu change token trước rồi mới hủy OTP; lỗi thì gỡ token, OTP vẫn dùng lại được.
+  - đổi mật khẩu (`@Transactional(rollbackFor = Exception.class)`): `saveAndFlush`, hủy change token, thu hồi phiên khác; lỗi thì DB rollback và trả lại change token để thử lại không cần OTP mới. Phiên khác đã bị thu hồi trước khi lỗi thì không khôi phục (an toàn hơn giữ lại).
+- Test: `AccountCreateMailRollbackIntegrationTest` (DB thật, email lỗi thì không còn tài khoản/vai trò), thêm ca rollback trong `AccountManagementServiceTest`, `AccountCredentialMailServiceTest`, `PasswordChangeServiceTest`.

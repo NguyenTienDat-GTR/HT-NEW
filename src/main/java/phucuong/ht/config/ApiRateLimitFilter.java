@@ -82,7 +82,8 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         String path = request.getRequestURI();
         String method = request.getMethod();
 
-        if (path.startsWith("/api/auth/login") || path.startsWith("/api/auth/refresh")) {
+        if (path.startsWith("/api/auth/login") || path.startsWith("/api/auth/refresh")
+                || path.startsWith("/api/auth/password/")) {
             return "auth";
         }
 
