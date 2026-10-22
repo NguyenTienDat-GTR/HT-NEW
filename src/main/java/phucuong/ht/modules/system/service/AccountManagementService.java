@@ -55,6 +55,7 @@ public class AccountManagementService {
     private final AccountManagementAuthorizationHelper authorizationHelper;
     private final AccountCredentialMailService mailService;
     private final RedisTokenSessionService redisTokenSessionService;
+    private final phucuong.ht.common.utils.AuditActorNameResolver auditActorNameResolver;
     @Autowired(required = false)
     private UnitOperationalStatusService unitOperationalStatusService;
 
@@ -359,6 +360,12 @@ public class AccountManagementService {
                 .authProvider(account.getAuthProvider())
                 .providerId(account.getProviderId())
                 .status(account.getStatus())
+                .createdAt(account.getCreatedAt())
+                .createdBy(account.getCreatedBy())
+                .createdByName(auditActorNameResolver.resolve(account.getCreatedBy()))
+                .updatedAt(account.getUpdatedAt())
+                .updatedBy(account.getUpdatedBy())
+                .updatedByName(auditActorNameResolver.resolve(account.getUpdatedBy()))
                 .build();
     }
 

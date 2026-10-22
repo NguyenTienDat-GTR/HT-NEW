@@ -32,4 +32,6 @@ public class LeaderResponse {
     private String deaneryName;
     private UUID parishId;
     private String parishName;
+    private String createdByName;
+    private String updatedByName;
 }

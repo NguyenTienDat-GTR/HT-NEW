@@ -85,6 +85,7 @@ public class CourseParticipationService {
     private final TrainingNotificationService trainingNotificationService;
     private final LeaderLevelService leaderLevelService;
     private final CourseActivityGuard courseActivityGuard;
+    private final phucuong.ht.common.utils.AuditActorNameResolver auditActorNameResolver;
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private phucuong.ht.common.security.UnitOperationalStatusService unitOperationalStatusService;
 
@@ -936,6 +937,11 @@ public class CourseParticipationService {
                 .parishSubmittedAt(participation.getParishSubmittedAt())
                 .approvalStatus(participation.getApprovalStatus())
                 .createdBy(participation.getCreatedBy())
+                .createdAt(participation.getCreatedAt())
+                .createdByName(auditActorNameResolver.resolve(participation.getCreatedBy()))
+                .updatedAt(participation.getUpdatedAt())
+                .updatedBy(participation.getUpdatedBy())
+                .updatedByName(auditActorNameResolver.resolve(participation.getUpdatedBy()))
                 .parishId(participation.getLeader() == null || participation.getLeader().getParish() == null ? null : participation.getLeader().getParish().getId())
                 .parishName(participation.getLeader() == null || participation.getLeader().getParish() == null ? null : participation.getLeader().getParish().getName())
                 .deaneryId(participation.getLeader() == null || participation.getLeader().getParish() == null || participation.getLeader().getParish().getDeanery() == null ? null : participation.getLeader().getParish().getDeanery().getId())
@@ -946,6 +952,7 @@ public class CourseParticipationService {
                 .certificateApprovedAt(participation.getCertificateApprovedAt())
                 .finalResult(participation.getFinalResult())
                 .approvedBy(participation.getApprovedBy())
+                .approvedByName(auditActorNameResolver.resolve(participation.getApprovedBy()))
                 // Thành phần điểm đã bị vô hiệu hóa không hiển thị (khớp với danh sách cột ở /score-components).
                 .componentScores(participation.getComponentScores().stream()
                         .filter(score -> score.getComponent() != null && Boolean.TRUE.equals(score.getComponent().getStatus()))

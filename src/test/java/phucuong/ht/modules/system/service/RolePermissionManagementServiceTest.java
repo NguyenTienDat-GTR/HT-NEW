@@ -263,7 +263,7 @@ class RolePermissionManagementServiceTest {
                 systemPermissionRepository,
                 helper,
                 authorizationHelper
-        );
+        , org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class));
     }
 
     private Role role(String roleCode, int displayOrder) {

@@ -38,6 +38,7 @@ public class ScoreComponentTemplateService {
     private final TrainingCourseTypeRepository trainingCourseTypeRepository;
     private final AccountScopeValidationHelper accountScopeValidationHelper;
     private final CommonValidationHelper commonValidationHelper;
+    private final phucuong.ht.common.utils.AuditActorNameResolver auditActorNameResolver;
 
     @Transactional
     public ScoreComponentTemplateResponse create(ScoreComponentTemplateCreateRequest request, Authentication authentication) {
@@ -182,7 +183,11 @@ public class ScoreComponentTemplateService {
                 .status(component.getStatus())
                 .hasScores(hasScores)
                 .createdAt(component.getCreatedAt())
+                .createdBy(component.getCreatedBy())
+                .createdByName(auditActorNameResolver.resolve(component.getCreatedBy()))
                 .updatedAt(component.getUpdatedAt())
+                .updatedBy(component.getUpdatedBy())
+                .updatedByName(auditActorNameResolver.resolve(component.getUpdatedBy()))
                 .build();
     }
 }

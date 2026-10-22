@@ -49,6 +49,7 @@ public class LeaderService {
     private final LeaderScopeHelper leaderScopeHelper;
     private final AccountRepository accountRepository;
     private final RankHistoryRepository rankHistoryRepository;
+    private final phucuong.ht.common.utils.AuditActorNameResolver auditActorNameResolver;
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private phucuong.ht.common.security.UnitOperationalStatusService unitOperationalStatusService;
 
@@ -269,8 +270,10 @@ public class LeaderService {
                 .id(leader.getId())
                 .createdAt(leader.getCreatedAt())
                 .createdBy(leader.getCreatedBy())
+                .createdByName(auditActorNameResolver.resolve(leader.getCreatedBy()))
                 .updatedAt(leader.getUpdatedAt())
                 .updatedBy(leader.getUpdatedBy())
+                .updatedByName(auditActorNameResolver.resolve(leader.getUpdatedBy()))
                 .status(leader.getStatus())
                 .holyName(leader.getHolyName())
                 .fullName(buildFullName(leader))
@@ -296,6 +299,12 @@ public class LeaderService {
                 .newLevel(rankHistory.getNewLevel())
                 .promotionDate(rankHistory.getPromotionDate())
                 .note(rankHistory.getNote())
+                .createdAt(rankHistory.getCreatedAt())
+                .createdBy(rankHistory.getCreatedBy())
+                .createdByName(auditActorNameResolver.resolve(rankHistory.getCreatedBy()))
+                .updatedAt(rankHistory.getUpdatedAt())
+                .updatedBy(rankHistory.getUpdatedBy())
+                .updatedByName(auditActorNameResolver.resolve(rankHistory.getUpdatedBy()))
                 .build();
     }
 

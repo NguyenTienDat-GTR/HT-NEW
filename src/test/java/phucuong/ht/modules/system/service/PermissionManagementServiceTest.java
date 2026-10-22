@@ -38,7 +38,7 @@ class PermissionManagementServiceTest {
     @Test
     void updateShouldOnlyChangeMetadata() {
         CommonValidationHelper helper = new CommonValidationHelper(new securityUtils());
-        PermissionManagementService service = new PermissionManagementService(systemPermissionRepository, helper, authorizationHelper);
+        PermissionManagementService service = new PermissionManagementService(systemPermissionRepository, helper, authorizationHelper, org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class));
 
         Permission permission = new Permission();
         permission.setPermissionCode("system.permission.read.all");

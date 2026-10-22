@@ -43,7 +43,7 @@ class CertificateIssueYearsTest {
                 certificateRepository, mock(TrainingCourseRepository.class), mock(LeaderRepository.class),
                 mock(CourseParticipationRepository.class), mock(CertificateLifecycleService.class), new CourseActivityGuard(validationHelper),
                 new TrainingWorkflowSupport(), scopeHelper, validationHelper, mock(DomainEventPublisher.class),
-                mock(CertificateRealtimeNotifier.class), mock(CertificateAccessEvaluator.class), mock(CourseFinishService.class));
+                mock(CertificateRealtimeNotifier.class), mock(CertificateAccessEvaluator.class), mock(CourseFinishService.class), org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class));
     }
 
     private Authentication authentication(String authority) {

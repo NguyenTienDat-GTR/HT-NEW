@@ -1,5 +1,6 @@
 package phucuong.ht.modules.leaderLevel.model.response;
 
+import java.time.OffsetDateTime;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -20,4 +21,10 @@ public class LeaderLevelResponse {
     // Số loại khóa đang dùng cấp này (chỉ có ở danh sách quản lý).
     private Long courseTypeCount;
     private Boolean deletable;
+    private OffsetDateTime createdAt;
+    private String createdBy;
+    private String createdByName;
+    private OffsetDateTime updatedAt;
+    private String updatedBy;
+    private String updatedByName;
 }

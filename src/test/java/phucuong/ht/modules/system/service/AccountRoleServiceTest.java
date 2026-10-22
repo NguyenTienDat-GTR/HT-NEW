@@ -46,12 +46,15 @@ class AccountRoleServiceTest {
     @Mock
     private AccountManagementAuthorizationHelper accountManagementAuthorizationHelper;
 
+    @org.mockito.Mock
+    private phucuong.ht.common.utils.AuditActorNameResolver auditActorNameResolver;
+
     @InjectMocks
     private AccountRoleService accountRoleService;
 
     @Test
     void superAdminCanBulkAssignRoleToManagedAdminDioceseAccount() {
-        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()), accountManagementAuthorizationHelper);
+        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()), accountManagementAuthorizationHelper, org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class));
         Account account = dioceseAccount("diocese-admin");
         Role targetRole = role("ADMIN_DIOCESE", true, 100, "SYSTEM");
         AccountRoleBulkRequest request = new AccountRoleBulkRequest();
@@ -75,7 +78,7 @@ class AccountRoleServiceTest {
 
     @Test
     void superAdminCannotAssignSystemRoleOutsideManagedScope() {
-        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()), accountManagementAuthorizationHelper);
+        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()), accountManagementAuthorizationHelper, org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class));
         Account account = dioceseAccount("diocese-admin");
         Role targetRole = role("ADMIN_DEANERY", true, 200, "SYSTEM");
         AccountRoleBulkRequest request = new AccountRoleBulkRequest();
@@ -90,7 +93,7 @@ class AccountRoleServiceTest {
 
     @Test
     void superAdminCanToggleInactiveAdminDioceseAssignment() {
-        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()), accountManagementAuthorizationHelper);
+        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()), accountManagementAuthorizationHelper, org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class));
         Account account = dioceseAccount("diocese-admin");
         Role targetRole = role("ADMIN_DIOCESE", true, 100, "SYSTEM");
         AccountRole accountRole = new AccountRole();
@@ -116,7 +119,7 @@ class AccountRoleServiceTest {
 
     @Test
     void disablingPrimaryRoleShouldPromoteHighestActiveRemainingRole() {
-        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()), accountManagementAuthorizationHelper);
+        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()), accountManagementAuthorizationHelper, org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class));
         Account account = dioceseAccount("diocese-admin");
         AccountRole primary = accountRole(account, role("ADMIN_DIOCESE", true, 100, "SYSTEM"));
         primary.setId("ar-primary");
@@ -148,7 +151,7 @@ class AccountRoleServiceTest {
 
     @Test
     void updatePrimaryRoleShouldClearExistingPrimaryBeforeSettingNewPrimary() {
-        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()), accountManagementAuthorizationHelper);
+        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()), accountManagementAuthorizationHelper, org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class));
         Account account = dioceseAccount("diocese-admin");
         AccountRole target = accountRole(account, role("ADMIN_DIOCESE", true, 100, "SYSTEM"));
         target.setId("ar-target");
@@ -176,7 +179,7 @@ class AccountRoleServiceTest {
 
     @Test
     void adminDioceseCanBulkAssignAdminDeaneryRoleToAccountInOwnDiocese() {
-        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()), accountManagementAuthorizationHelper);
+        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()), accountManagementAuthorizationHelper, org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class));
         UUID dioceseId = UUID.randomUUID();
         Account account = dioceseAccount("target", dioceseId);
         Role targetRole = role("ADMIN_DEANERY", true, 200, "SYSTEM");
@@ -202,7 +205,7 @@ class AccountRoleServiceTest {
 
     @Test
     void adminDioceseAssignableRolesIncludeAdminDeaneryAndAdminParishButNotAdminDiocese() {
-        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()), accountManagementAuthorizationHelper);
+        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()), accountManagementAuthorizationHelper, org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class));
         UUID dioceseId = UUID.randomUUID();
         Account account = dioceseAccount("target", dioceseId);
         Role adminDiocese = role("ADMIN_DIOCESE", true, 100, "SYSTEM");
@@ -227,7 +230,7 @@ class AccountRoleServiceTest {
 
     @Test
     void adminDeaneryCanBulkAssignAdminParishRoleToAccountInOwnDeanery() {
-        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()), accountManagementAuthorizationHelper);
+        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()), accountManagementAuthorizationHelper, org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class));
         UUID deaneryId = UUID.randomUUID();
         Account account = dioceseAccount("target");
         Role targetRole = role("ADMIN_PARISH", true, 300, "SYSTEM");
@@ -253,7 +256,7 @@ class AccountRoleServiceTest {
 
     @Test
     void adminDioceseCannotAssignAdminDioceseRoleToAccount() {
-        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()), accountManagementAuthorizationHelper);
+        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()), accountManagementAuthorizationHelper, org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class));
         Account account = dioceseAccount("target");
         Role targetRole = role("ADMIN_DIOCESE", true, 100, "SYSTEM");
         AccountRoleBulkRequest request = new AccountRoleBulkRequest();
@@ -271,7 +274,7 @@ class AccountRoleServiceTest {
 
     @Test
     void lowerRealRoleCannotAssignHigherCustomRoleEvenWithWideAuthority() {
-        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()), accountManagementAuthorizationHelper);
+        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()), accountManagementAuthorizationHelper, org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class));
         UUID dioceseId = UUID.randomUUID();
         Account account = dioceseAccount("target", dioceseId);
         Role targetRole = role("CUSTOM_HIGH", false, 100, "super-admin");
@@ -300,7 +303,7 @@ class AccountRoleServiceTest {
                 roleRepository,
                 validation
         );
-        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, validation, hierarchyHelper);
+        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, validation, hierarchyHelper, org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class));
         UUID dioceseId = UUID.randomUUID();
         Account target = dioceseAccount("phucuongadmin", dioceseId);
         Role targetAssignmentRole = role("ADMIN_PARISH", true, 300, "SYSTEM");

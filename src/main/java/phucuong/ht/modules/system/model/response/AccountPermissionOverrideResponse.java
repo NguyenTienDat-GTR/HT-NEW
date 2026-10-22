@@ -23,4 +23,12 @@ public class AccountPermissionOverrideResponse {
     private PermissionRevocationReason revocationReason;
     private OffsetDateTime revokedAt;
     private String revokedBy;
+    private String revokedByName;
+    private String leaderFullName;
+    private OffsetDateTime createdAt;
+    private String createdBy;
+    private String createdByName;
+    private OffsetDateTime updatedAt;
+    private String updatedBy;
+    private String updatedByName;
 }

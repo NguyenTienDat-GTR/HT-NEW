@@ -20,4 +20,8 @@ public class PermissionResponse {
     private Boolean status;
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;
+    private String createdBy;
+    private String createdByName;
+    private String updatedBy;
+    private String updatedByName;
 }

@@ -110,7 +110,7 @@ class RoleManagementServiceTest {
     }
 
     private RoleManagementService service() {
-        return new RoleManagementService(roleRepository, validationHelper, authorizationHelper);
+        return new RoleManagementService(roleRepository, validationHelper, authorizationHelper, org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class));
     }
 
     private Role role(String roleCode, boolean status) {

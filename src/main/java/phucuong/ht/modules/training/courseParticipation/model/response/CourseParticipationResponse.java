@@ -53,4 +53,10 @@ public class CourseParticipationResponse {
     private String approvedBy;
     private List<ComponentScoreResponse> componentScores;
     private Boolean status;
+    private String approvedByName;
+    private OffsetDateTime createdAt;
+    private String createdByName;
+    private OffsetDateTime updatedAt;
+    private String updatedBy;
+    private String updatedByName;
 }

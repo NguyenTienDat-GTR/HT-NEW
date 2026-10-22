@@ -29,4 +29,8 @@ public class ScoreComponentTemplateResponse {
     private Boolean hasScores;
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;
+    private String createdBy;
+    private String createdByName;
+    private String updatedBy;
+    private String updatedByName;
 }

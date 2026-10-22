@@ -268,7 +268,7 @@ class TrainingCourseUpdateScopeTest {
                 org.mockito.Mockito.mock(phucuong.ht.modules.certificate.repository.CertificateRepository.class),
                 org.mockito.Mockito.mock(phucuong.ht.modules.training.CourseActivityGuard.class),
                 org.mockito.Mockito.mock(phucuong.ht.modules.certificate.service.CertificateRealtimeNotifier.class)
-        );
+        , org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class));
     }
 
     private TrainingCourseType courseType(String code, UnitType managementUnitType) {

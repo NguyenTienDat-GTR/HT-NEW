@@ -109,11 +109,11 @@ class ScopedSystemAdministrationReadTest {
     }
 
     private RoleManagementService roleService() {
-        return new RoleManagementService(roleRepository, helper(), authorizationHelper);
+        return new RoleManagementService(roleRepository, helper(), authorizationHelper, org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class));
     }
 
     private PermissionManagementService permissionService() {
-        return new PermissionManagementService(permissionRepository, helper(), authorizationHelper);
+        return new PermissionManagementService(permissionRepository, helper(), authorizationHelper, org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class));
     }
 
     private RolePermissionManagementService rolePermissionService() {
@@ -123,7 +123,7 @@ class ScopedSystemAdministrationReadTest {
                 permissionRepository,
                 helper(),
                 authorizationHelper
-        );
+        , org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class));
     }
 
     private CommonValidationHelper helper() {

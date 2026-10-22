@@ -63,6 +63,9 @@ class CourseStatusToggleTest {
     @Spy
     private phucuong.ht.modules.training.TrainingWorkflowSupport trainingWorkflowSupport = new phucuong.ht.modules.training.TrainingWorkflowSupport();
 
+    @org.mockito.Mock
+    private phucuong.ht.common.utils.AuditActorNameResolver auditActorNameResolver;
+
     @InjectMocks
     private TrainingCourseService service;
 

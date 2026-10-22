@@ -48,7 +48,7 @@ class LeaderLevelServiceTest {
         repository = mock(LeaderLevelRepository.class);
         accountRepository = mock(AccountRepository.class);
         securityUtils securityUtils = new securityUtils();
-        service = new LeaderLevelService(repository, new CommonValidationHelper(securityUtils), securityUtils, accountRepository);
+        service = new LeaderLevelService(repository, new CommonValidationHelper(securityUtils), securityUtils, accountRepository, org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class));
         when(accountRepository.findActiveDioceseIdByUsername("admin-diocese")).thenReturn(Optional.of(diocese));
         levels = List.of(
                 level("NONE", "Chưa có cấp", 0, true),

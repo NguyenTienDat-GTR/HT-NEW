@@ -33,6 +33,7 @@ public class RoleManagementService {
     private final SystemRoleRepository systemRoleRepository;
     private final CommonValidationHelper commonValidationHelper;
     private final SystemAdminAuthorizationHelper authorizationHelper;
+    private final phucuong.ht.common.utils.AuditActorNameResolver auditActorNameResolver;
     @Autowired(required = false)
     private ToggleNotificationRecipientResolver toggleNotificationRecipientResolver;
     @Autowired(required = false)
@@ -210,8 +211,10 @@ public class RoleManagementService {
                 .status(role.getStatus())
                 .createdAt(role.getCreatedAt())
                 .createdBy(role.getCreatedBy())
+                .createdByName(auditActorNameResolver.resolve(role.getCreatedBy()))
                 .updatedAt(role.getUpdatedAt())
                 .updatedBy(role.getUpdatedBy())
+                .updatedByName(auditActorNameResolver.resolve(role.getUpdatedBy()))
                 .build();
     }
 }

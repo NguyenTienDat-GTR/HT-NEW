@@ -51,6 +51,7 @@ public class AccountRoleService {
     private final RoleRepository roleRepository;
     private final CommonValidationHelper commonValidationHelper;
     private final AccountManagementAuthorizationHelper accountManagementAuthorizationHelper;
+    private final phucuong.ht.common.utils.AuditActorNameResolver auditActorNameResolver;
     @Autowired(required = false)
     private UnitOperationalStatusService unitOperationalStatusService;
     @Autowired(required = false)
@@ -491,11 +492,22 @@ public class AccountRoleService {
                 .id(accountRole.getId())
                 .username(accountRole.getAccount().getUsername())
                 .roleCode(accountRole.getRole().getRoleCode())
+                .roleName(accountRole.getRole().getRoleName())
+                .leaderFullName(accountRole.getAccount().getLeader() == null
+                        ? null
+                        : phucuong.ht.common.utils.AuditActorNameResolver.displayName(accountRole.getAccount().getLeader()))
                 .isPrimary(accountRole.getIsPrimary())
                 .assignedBy(accountRole.getAssignedBy())
+                .assignedByName(auditActorNameResolver.resolve(accountRole.getAssignedBy()))
                 .assignedAt(accountRole.getAssignedAt())
                 .expiresAt(accountRole.getExpiresAt())
                 .status(accountRole.getStatus())
+                .createdAt(accountRole.getCreatedAt())
+                .createdBy(accountRole.getCreatedBy())
+                .createdByName(auditActorNameResolver.resolve(accountRole.getCreatedBy()))
+                .updatedAt(accountRole.getUpdatedAt())
+                .updatedBy(accountRole.getUpdatedBy())
+                .updatedByName(auditActorNameResolver.resolve(accountRole.getUpdatedBy()))
                 .build();
     }
 
@@ -555,7 +567,11 @@ public class AccountRoleService {
                 .displayOrder(role.getDisplayOrder())
                 .status(role.getStatus())
                 .createdAt(role.getCreatedAt())
+                .createdBy(role.getCreatedBy())
+                .createdByName(auditActorNameResolver.resolve(role.getCreatedBy()))
                 .updatedAt(role.getUpdatedAt())
+                .updatedBy(role.getUpdatedBy())
+                .updatedByName(auditActorNameResolver.resolve(role.getUpdatedBy()))
                 .build();
     }
 }
