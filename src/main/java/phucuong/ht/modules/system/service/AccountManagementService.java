@@ -58,7 +58,11 @@ public class AccountManagementService {
     @Autowired(required = false)
     private UnitOperationalStatusService unitOperationalStatusService;
 
-    @Transactional
+    /**
+     * Tạo tài khoản và gửi email mật khẩu tạm trong cùng một transaction.
+     * Ghi DB và flush trước, gửi email là bước cuối: lỗi ở bất kỳ bước nào (kể cả gửi email) đều rollback toàn bộ.
+     */
+    @Transactional(rollbackFor = Exception.class)
     public AccountResponse create(AccountCreateRequest request, Authentication authentication) {
         List<String> roleCodes = normalizeCreateRoleCodes(request);
         if (roleCodes.isEmpty()) {
@@ -94,6 +98,7 @@ public class AccountManagementService {
             recipientEmail = requireCredentialEmail(request.getCredentialEmail());
             recipientName = "Super admin";
             usernameBase = usernameBaseFromEmail(recipientEmail);
+            account.setEmail(recipientEmail);
         } else if (dioceseAdmin) {
             Diocese diocese = requireDioceseForUpdate(request.getDioceseId());
             requireUnitOperational(UnitType.DIOCESE, diocese.getId());
@@ -116,6 +121,7 @@ public class AccountManagementService {
                 recipientEmail = requireCredentialEmail(request.getCredentialEmail());
                 recipientName = "Quản trị viên " + diocese.getName();
                 usernameBase = normalize(diocese.getName()) + "admin";
+                account.setEmail(recipientEmail);
             }
         } else {
             if (request.getDioceseId() != null || request.getCredentialEmail() != null) {
@@ -143,10 +149,13 @@ public class AccountManagementService {
         account.setUpdatedAt(now);
         account.setCreatedBy(actor);
         account.setUpdatedBy(actor);
-        Account saved = accountRepository.save(account);
+        Account saved = accountRepository.saveAndFlush(account);
         assignInitialRoles(saved, roles, primaryRoleCode, actor);
+        accountRoleRepository.flush();
+        // Lỗi ràng buộc DB lộ ra ở các lần flush trên, trước khi email được gửi đi.
+        AccountResponse response = response(saved);
         mailService.sendInitialCredentials(recipientEmail, recipientName, username, rawPassword);
-        return response(saved);
+        return response;
     }
 
     @Transactional(readOnly = true)

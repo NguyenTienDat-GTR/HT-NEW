@@ -43,6 +43,9 @@ public class Account extends BaseModel {
 
     private String providerId;
 
+    /** Email liên hệ cho tài khoản không gắn Huynh Trưởng; tài khoản gắn Huynh Trưởng dùng email của Huynh Trưởng. */
+    private String email;
+
     @Column(name = "must_change_password", nullable = false)
     private Boolean mustChangePassword = Boolean.FALSE;
 }
