@@ -61,6 +61,7 @@ public class TrainingNotificationService {
             notification.setTotalCount(command.totalCount());
             notification.setApprovedCount(command.approvedCount());
             notification.setPendingCount(command.pendingCount());
+            notification.setPayload(command.payload());
             notification.setCreatedAt(now);
             notification.setCreatedBy(command.actor());
             notification.setUpdatedAt(now);
@@ -133,6 +134,7 @@ public class TrainingNotificationService {
                 .totalCount(notification.getTotalCount())
                 .approvedCount(notification.getApprovedCount())
                 .pendingCount(notification.getPendingCount())
+                .payload(notification.getPayload())
                 .readAt(notification.getReadAt())
                 .createdAt(notification.getCreatedAt())
                 .status(notification.getStatus())

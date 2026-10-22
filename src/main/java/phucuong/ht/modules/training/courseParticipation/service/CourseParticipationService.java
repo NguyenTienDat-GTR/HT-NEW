@@ -30,6 +30,8 @@ import phucuong.ht.modules.leader.repository.LeaderRepository;
 import phucuong.ht.modules.notification.service.TrainingNotificationCommand;
 import phucuong.ht.modules.notification.service.TrainingNotificationRecipientResolver;
 import phucuong.ht.modules.notification.service.TrainingNotificationService;
+import phucuong.ht.modules.notification.service.WorkflowDecisionNotifier.Decision;
+import phucuong.ht.modules.training.TrainingDecisionNotifier;
 import phucuong.ht.modules.parish.model.entity.Parish;
 import phucuong.ht.modules.parish.repository.ParishRepository;
 import phucuong.ht.modules.training.TrainingWorkflowSupport;
@@ -88,6 +90,10 @@ public class CourseParticipationService {
     private final phucuong.ht.common.utils.AuditActorNameResolver auditActorNameResolver;
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private phucuong.ht.common.security.UnitOperationalStatusService unitOperationalStatusService;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private TrainingDecisionNotifier trainingDecisionNotifier;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private phucuong.ht.modules.training.CourseScoreVisibility courseScoreVisibility;
 
     @Transactional(readOnly = true)
     public Page<CourseParticipationResponse> findAll(BaseSearchRequest request, Authentication authentication) {
@@ -262,6 +268,7 @@ public class CourseParticipationService {
                 senderType,
                 senderId,
                 courseCode,
+                course.getCourseName(),
                 createdParticipations.size(),
                 actor
         ));
@@ -421,6 +428,7 @@ public class CourseParticipationService {
         participation.setUpdatedAt(now);
         participation.setUpdatedBy(actor);
         publishEvent("training.registration.deanery_approved", "courseParticipation", participationId, actor, Map.of("approved", request.getApproved()));
+        notifyRegistrationDecision(List.of(participation), Boolean.TRUE.equals(request.getApproved()), Collections.singletonMap(participationId, request.getReview()), actor);
         return toResponse(participation);
     }
 
@@ -445,6 +453,7 @@ public class CourseParticipationService {
         participation.setUpdatedAt(now);
         participation.setUpdatedBy(actor);
         publishEvent("training.registration.diocese_approved", "courseParticipation", participationId, actor, Map.of("approved", request.getApproved()));
+        notifyRegistrationDecision(List.of(participation), Boolean.TRUE.equals(request.getApproved()), Collections.singletonMap(participationId, request.getReview()), actor);
         return toResponse(participation);
     }
 
@@ -780,7 +789,8 @@ public class CourseParticipationService {
     }
 
     private int previewParishSubmissionAutoApprovedCount(TrainingCourse course, List<CourseParticipation> participations) {
-        if (!trainingWorkflowSupport.shouldAutoApproveAfterSubmission(course.getCourseType())) {
+        if (!trainingWorkflowSupport.shouldAutoApproveAfterSubmission(course.getCourseType())
+                || !Boolean.TRUE.equals(course.getAutoApproveEligible())) {
             return 0;
         }
         return (int) participations.stream().filter(participation -> Boolean.TRUE.equals(participation.getEligible())).count();
@@ -815,13 +825,14 @@ public class CourseParticipationService {
             UnitType senderUnitType,
             UUID senderUnitId,
             String courseCode,
+            String courseName,
             int totalCount,
             String actor
     ) {
         return TrainingNotificationCommand.builder()
                 .eventType(eventType)
                 .title("Danh sách đăng ký mới")
-                .message(senderUnitName + " gửi " + totalCount + " đăng ký cho khóa " + courseCode)
+                .message(senderUnitName + " gửi " + totalCount + " đăng ký cho khóa " + (courseName == null || courseName.isBlank() ? courseCode : courseName))
                 .senderUnitType(senderUnitType)
                 .senderUnitId(senderUnitId)
                 .courseCode(courseCode)
@@ -911,6 +922,7 @@ public class CourseParticipationService {
     }
 
     private CourseParticipationResponse toResponse(CourseParticipation participation) {
+        boolean showScores = courseScoreVisibility == null || courseScoreVisibility.canSeeScores(participation.getCourse());
         return CourseParticipationResponse.builder()
                 .id(participation.getId())
                 .leaderId(participation.getLeader() == null ? null : participation.getLeader().getId())
@@ -921,14 +933,15 @@ public class CourseParticipationService {
                 .courseTypeCode(participation.getCourse() == null || participation.getCourse().getCourseType() == null ? null : participation.getCourse().getCourseType().getTypeCode())
                 .registrationDate(participation.getRegistrationDate())
                 .participationStatus(participation.getParticipationStatus())
-                .totalScore(participation.getTotalScore())
+                .scoreHidden(!showScores)
+                .totalScore(showScores ? participation.getTotalScore() : null)
                 .passingScore(participation.getCourse() == null ? null : participation.getCourse().getPassingScore())
                 .passed(participation.getCourse() != null
                         && participation.getTotalScore() != null
                         && participation.getTotalScore().compareTo(participation.getCourse().getPassingScore()) >= 0)
                 .result(participation.getResult())
                 .review(participation.getReview())
-                .scoreNote(participation.getScoreNote())
+                .scoreNote(showScores ? participation.getScoreNote() : null)
                 .eligible(participation.getEligible())
                 .exceptionReason(participation.getExceptionReason())
                 .leaderLevel(participation.getLeader() == null ? null : participation.getLeader().getLeaderLevel())
@@ -954,7 +967,7 @@ public class CourseParticipationService {
                 .approvedBy(participation.getApprovedBy())
                 .approvedByName(auditActorNameResolver.resolve(participation.getApprovedBy()))
                 // Thành phần điểm đã bị vô hiệu hóa không hiển thị (khớp với danh sách cột ở /score-components).
-                .componentScores(participation.getComponentScores().stream()
+                .componentScores(!showScores ? List.<ComponentScoreResponse>of() : participation.getComponentScores().stream()
                         .filter(score -> score.getComponent() != null && Boolean.TRUE.equals(score.getComponent().getStatus()))
                         .sorted(Comparator.comparing(score -> score.getComponent().getDisplayOrder(), Comparator.nullsLast(Integer::compareTo)))
                         .map(score -> ComponentScoreResponse.builder()
@@ -1036,6 +1049,10 @@ public class CourseParticipationService {
         // Chứng nhận hệ thống đề xuất (chưa duyệt) sinh ra khi chấm điểm đạt cũng bị xóa theo hồ sơ.
         certificate.ifPresent(certificateRepository::delete);
         courseParticipationRepository.delete(participation);
+        // Người gửi đăng ký và admin giáo xứ của hồ sơ được báo hồ sơ đã bị xóa khỏi danh sách tham dự.
+        if (trainingDecisionNotifier != null) {
+            trainingDecisionNotifier.notifyRegistrations(Decision.REGISTRATION_REMOVED, List.of(participation), null, actor);
+        }
         publishEvent("training.participant.removed", "courseParticipation", participationId, actor,
                 Map.of("courseCode", courseCode, "leaderId", String.valueOf(leaderId)));
         // Chứng nhận chờ duyệt của hồ sơ bị xóa theo: báo realtime để tab duyệt chứng nhận và màn chứng nhận tải lại.
@@ -1052,6 +1069,8 @@ public class CourseParticipationService {
         OffsetDateTime now = OffsetDateTime.now();
         List<TrainingBulkApprovalResponse.Failure> failures = new ArrayList<>();
         int success = 0;
+        List<CourseParticipation> decided = new ArrayList<>();
+        Map<String, String> reviewsById = new HashMap<>();
         for (String id : new LinkedHashSet<>(request.getIds())) {
             Optional<CourseParticipation> found = courseParticipationRepository.findByIdWithLeaderAndCourse(id);
             if (found.isEmpty()) {
@@ -1086,13 +1105,27 @@ public class CourseParticipationService {
             boolean deaneryManaged = trainingWorkflowSupport.isDeaneryManaged(participation.getCourse().getCourseType());
             publishEvent(deaneryManaged ? "training.registration.deanery_approved" : "training.registration.diocese_approved",
                     "courseParticipation", id, actor, Map.of("approved", approved));
+            decided.add(participation);
+            reviewsById.put(id, review);
             success++;
         }
+        // Một lần duyệt/từ chối hàng loạt: từ 3 hồ sơ cùng khóa thì người nhận chỉ có một thông báo gom nhóm.
+        notifyRegistrationDecision(decided, approved, reviewsById, actor);
         return TrainingBulkApprovalResponse.builder()
                 .successCount(success)
                 .failedCount(failures.size())
                 .failures(failures)
                 .build();
+    }
+
+    private void notifyRegistrationDecision(List<CourseParticipation> participations, boolean approved, Map<String, String> reviewsById, String actor) {
+        if (trainingDecisionNotifier == null || participations.isEmpty()) {
+            return;
+        }
+        // Lý do chỉ có ý nghĩa với hồ sơ bị từ chối.
+        Map<String, String> notes = approved ? null : reviewsById;
+        trainingDecisionNotifier.notifyRegistrations(approved ? Decision.REGISTRATION_APPROVED : Decision.REGISTRATION_REJECTED,
+                participations, notes, actor);
     }
 
     private TrainingBulkApprovalResponse.Failure bulkFailure(String id, String leaderName, String reason) {

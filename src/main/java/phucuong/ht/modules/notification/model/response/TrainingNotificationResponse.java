@@ -20,6 +20,7 @@ public class TrainingNotificationResponse {
     private Integer totalCount;
     private Integer approvedCount;
     private Integer pendingCount;
+    private String payload;
     private OffsetDateTime readAt;
     private OffsetDateTime createdAt;
     private Boolean status;

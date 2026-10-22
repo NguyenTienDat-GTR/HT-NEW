@@ -217,8 +217,8 @@ public class AccountRoleService {
         }
         String name = commonValidationHelper.normalizeOptionalText(role.getRoleName());
         String code = commonValidationHelper.normalizeOptionalText(role.getRoleCode());
-        if (name != null && code != null) {
-            return name + " (" + code + ")";
+        if (name != null) {
+            return name;
         }
         return name != null ? name : code != null ? code : "vai trò chưa xác định";
     }

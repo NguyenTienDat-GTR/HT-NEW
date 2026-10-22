@@ -51,8 +51,11 @@ import phucuong.ht.modules.training.trainingCourse.repository.TrainingCourseRepo
 import phucuong.ht.modules.training.trainingCourse.security.TrainingCourseAccessEvaluator;
 
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import phucuong.ht.modules.notification.service.WorkflowDecisionNotifier.Decision;
 import java.util.Map;
 import java.util.UUID;
 
@@ -86,6 +89,8 @@ public class TrainingCourseService {
     private final CourseActivityGuard courseActivityGuard;
     private final phucuong.ht.modules.certificate.service.CertificateRealtimeNotifier certificateRealtimeNotifier;
     private final phucuong.ht.common.utils.AuditActorNameResolver auditActorNameResolver;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private phucuong.ht.modules.training.TrainingDecisionNotifier trainingDecisionNotifier;
 
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_LIST, allEntries = true),
@@ -110,6 +115,8 @@ public class TrainingCourseService {
         course.setRegistrationStartAt(request.getRegistrationStartAt());
         course.setRegistrationEndAt(request.getRegistrationEndAt());
         course.setAdditionalNotes(request.getAdditionalNotes());
+        course.setAutoApproveEligible(Boolean.TRUE.equals(request.getAutoApproveEligible()));
+        course.setScoreVisible(Boolean.TRUE.equals(request.getScoreVisible()));
         course.setStatus(Boolean.TRUE);
         course.setCreatedAt(now);
         course.setUpdatedAt(now);
@@ -215,6 +222,7 @@ public class TrainingCourseService {
             @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, allEntries = true)
     })
     @EvictCaches.Analytics
+    @EvictCaches.Certificates
     @Transactional
     public TrainingCourseResponse update(String courseCode, TrainingCourseUpdateRequest request, Authentication authentication) {
         TrainingCourse existing = trainingCourseRepository.findByCodeWithType(courseCode)
@@ -275,6 +283,12 @@ public class TrainingCourseService {
         if (request.getAdditionalNotes() != null) {
             existing.setAdditionalNotes(request.getAdditionalNotes());
         }
+        if (request.getAutoApproveEligible() != null) {
+            existing.setAutoApproveEligible(request.getAutoApproveEligible());
+        }
+        if (request.getScoreVisible() != null) {
+            existing.setScoreVisible(request.getScoreVisible());
+        }
         existing.setUpdatedAt(OffsetDateTime.now());
         existing.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật khóa huấn luyện"));
         validateRegistrationWindow(existing.getRegistrationStartAt(), existing.getRegistrationEndAt());
@@ -323,10 +337,13 @@ public class TrainingCourseService {
                     + " trước đó, vui lòng tải lại trang");
         }
         OffsetDateTime now = OffsetDateTime.now();
+        List<Certificate> revokedCertificates = new ArrayList<>();
+        List<Certificate> restoredCertificates = new ArrayList<>();
         if (!target) {
             for (Certificate certificate : certificateLifecycleService.approvedOf(courseCode)) {
                 certificateLifecycleService.revoke(certificate, CertificateLifecycleService.COURSE_DISABLED_REASON,
                         CertificateRevocationSource.COURSE_DISABLED, false, actor, now);
+                revokedCertificates.add(certificate);
             }
         }
         course.setStatus(target);
@@ -335,7 +352,14 @@ public class TrainingCourseService {
         if (target) {
             for (Certificate certificate : certificateLifecycleService.revokedByCourseDisableOf(courseCode)) {
                 certificateLifecycleService.restore(certificate, null, false, actor, now);
+                restoredCertificates.add(certificate);
             }
+        }
+        if (trainingDecisionNotifier != null) {
+            Map<String, String> reasons = new HashMap<>();
+            revokedCertificates.forEach(certificate -> reasons.put(certificate.getCertificateCode(), CertificateLifecycleService.COURSE_DISABLED_REASON));
+            trainingDecisionNotifier.notifyCertificates(Decision.CERTIFICATE_REVOKED, revokedCertificates, reasons, actor);
+            trainingDecisionNotifier.notifyCertificates(Decision.CERTIFICATE_REISSUED, restoredCertificates, null, actor);
         }
         publishCourseStatusEvent(course, target, actor);
         return toResponse(course, courseParticipationRepository.existsByCourseCode(courseCode));
@@ -760,6 +784,8 @@ public class TrainingCourseService {
                 .hasParticipations(hasParticipations)
                 .approvedParticipantCount(approvedParticipantCount)
                 .scoreLocked(Boolean.TRUE.equals(course.getScoreLocked()))
+                .autoApproveEligible(Boolean.TRUE.equals(course.getAutoApproveEligible()))
+                .scoreVisible(Boolean.TRUE.equals(course.getScoreVisible()))
                 .certificateRequired(trainingWorkflowSupport.requiresCertificate(courseType))
                 .finishedAt(course.getFinishedAt())
                 .finishedBy(course.getFinishedBy())

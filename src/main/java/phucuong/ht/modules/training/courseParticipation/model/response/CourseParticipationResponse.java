@@ -25,6 +25,8 @@ public class CourseParticipationResponse {
     private LocalDate registrationDate;
     private ParticipationStatus participationStatus;
     private BigDecimal totalScore;
+    // true: điểm bị ẩn với người xem hiện tại (khóa không bật hiển thị điểm và người xem thấp hơn cấp sở hữu).
+    private Boolean scoreHidden;
     private BigDecimal passingScore;
     private Boolean passed;
     private CourseResult result;

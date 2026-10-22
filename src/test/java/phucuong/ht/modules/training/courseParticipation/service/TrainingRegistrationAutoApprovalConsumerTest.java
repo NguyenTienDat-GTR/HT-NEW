@@ -74,6 +74,32 @@ class TrainingRegistrationAutoApprovalConsumerTest {
     }
 
     @Test
+    void handleShouldNotApproveOrNotifyForExceptionParticipations() {
+        CourseParticipation exception = participation();
+        exception.setEligible(Boolean.FALSE);
+        exception.setApprovalStatus(WorkflowApprovalStatus.PENDING);
+        when(courseParticipationRepository.findAllByIdsWithLeaderAndCourse(List.of("cp-1"))).thenReturn(List.of(exception));
+
+        consumer().handle(message("training.registration.batch_submitted", true, "cp-1"));
+
+        assertEquals(WorkflowApprovalStatus.PENDING, exception.getApprovalStatus());
+        verify(trainingNotificationService, never()).notifyUsers(any(), any());
+    }
+
+    @Test
+    void handleShouldNotAutoApproveWhenCourseDisablesAutoApproval() {
+        CourseParticipation eligible = participation();
+        eligible.getCourse().setAutoApproveEligible(Boolean.FALSE);
+        eligible.setApprovalStatus(WorkflowApprovalStatus.PENDING);
+        when(courseParticipationRepository.findAllByIdsWithLeaderAndCourse(List.of("cp-1"))).thenReturn(List.of(eligible));
+
+        consumer().handle(message("training.registration.batch_submitted", true, "cp-1"));
+
+        assertEquals(WorkflowApprovalStatus.PENDING, eligible.getApprovalStatus());
+        verify(trainingNotificationService, never()).notifyUsers(any(), any());
+    }
+
+    @Test
     void handleShouldIgnoreUnrelatedEvents() {
         consumer().handle(message("training.registration.other", false, "cp-1"));
 
@@ -111,6 +137,7 @@ class TrainingRegistrationAutoApprovalConsumerTest {
         participation.setEligible(Boolean.TRUE);
         TrainingCourse course = new TrainingCourse();
         course.setCourseCode("COURSE");
+        course.setAutoApproveEligible(Boolean.TRUE);
         participation.setCourse(course);
         return participation;
     }

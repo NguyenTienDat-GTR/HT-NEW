@@ -1,7 +1,9 @@
 package phucuong.ht.modules.notification.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import phucuong.ht.common.utils.AuditActorNameResolver;
 
 import java.util.Collection;
 import java.util.List;
@@ -11,18 +13,29 @@ import java.util.List;
 public class ToggleNotificationDispatcher {
 
     private final TrainingNotificationService trainingNotificationService;
+    @Autowired(required = false)
+    private AuditActorNameResolver auditActorNameResolver;
 
     public void dispatch(Collection<String> recipients, String eventType, String targetLabel, boolean enabled, String actor) {
         if (recipients == null || recipients.isEmpty()) {
             return;
         }
-        String normalizedActor = actor == null || actor.isBlank() ? "hệ thống" : actor;
+        String normalizedActor = actorName(actor);
         trainingNotificationService.notifyUsers(List.copyOf(recipients), TrainingNotificationCommand.builder()
                 .eventType(eventType)
                 .title(title(eventType, enabled))
                 .message(message(eventType, targetLabel, enabled, normalizedActor))
                 .actor(actor)
                 .build());
+    }
+
+    // Người thao tác có thể là mã huynh trưởng hoặc username: hiển thị bằng tên.
+    private String actorName(String actor) {
+        if (actor == null || actor.isBlank()) {
+            return "hệ thống";
+        }
+        String name = auditActorNameResolver == null ? null : auditActorNameResolver.resolve(actor);
+        return name == null || name.isBlank() ? actor : name;
     }
 
     private String title(String eventType, boolean enabled) {

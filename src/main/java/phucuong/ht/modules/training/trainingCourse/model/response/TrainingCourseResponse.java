@@ -28,6 +28,8 @@ public class TrainingCourseResponse {
     // Số tham dự viên đã được duyệt của khóa.
     private Long approvedParticipantCount;
     private Boolean scoreLocked;
+    private Boolean autoApproveEligible;
+    private Boolean scoreVisible;
     // Khóa có cấp độ đạt được thì mới có chứng nhận và tab duyệt chứng nhận.
     private Boolean certificateRequired;
     private java.time.OffsetDateTime finishedAt;

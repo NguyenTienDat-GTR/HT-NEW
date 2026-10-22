@@ -279,6 +279,7 @@ class CourseParticipationServiceTest {
         UUID parishId = UUID.randomUUID();
         UUID leaderId = UUID.randomUUID();
         TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);
+        course.setAutoApproveEligible(Boolean.TRUE);
         Leader leader = leader(leaderId, parishId, "HT_XU");
         Parish parish = parish(parishId, course);
 

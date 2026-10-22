@@ -72,6 +72,8 @@ public class RolePermissionManagementService {
     private final phucuong.ht.common.utils.AuditActorNameResolver auditActorNameResolver;
     @Autowired(required = false)
     private RbacAuthRefreshNotifier authRefreshNotifier;
+    @Autowired(required = false)
+    private phucuong.ht.modules.notification.service.PermissionGrantNotifier permissionGrantNotifier;
 
     @Transactional
     public RolePermissionResponse create(RolePermissionCreateRequest request, Authentication authentication) {
@@ -100,6 +102,7 @@ public class RolePermissionManagementService {
             existing.setExpiresAt(request.getExpiresAt());
             reissue(existing, actor, assignedAt);
             notifyRolePermissionChanged(request.getRoleCode(), "ROLE_PERMISSION_CREATED");
+            notifyRoleGranted(role, List.of(permission), actor);
             return toResponse(existing);
         }
 
@@ -107,6 +110,7 @@ public class RolePermissionManagementService {
         rolePermission.setAssignedBy(actor);
         rolePermission.setAssignedAt(request.getAssignedAt() == null ? OffsetDateTime.now() : request.getAssignedAt());
         notifyRolePermissionChanged(request.getRoleCode(), "ROLE_PERMISSION_CREATED");
+        notifyRoleGranted(role, List.of(permission), actor);
         return toResponse(rolePermission);
     }
 
@@ -122,6 +126,7 @@ public class RolePermissionManagementService {
         OffsetDateTime assignedAt = request.getAssignedAt() == null ? OffsetDateTime.now() : request.getAssignedAt();
         OffsetDateTime now = OffsetDateTime.now();
         List<RolePermissionResponse> responses = new ArrayList<>();
+        List<Permission> grantedPermissions = new ArrayList<>();
 
         for (String permissionCode : new LinkedHashSet<>(request.getPermissionCodes())) {
             Permission permission = systemPermissionRepository.findById(permissionCode)
@@ -142,9 +147,11 @@ public class RolePermissionManagementService {
             rolePermission.setUpdatedAt(now);
             rolePermission.setUpdatedBy(actor);
             responses.add(toResponse(rolePermission));
+            grantedPermissions.add(permission);
         }
 
         notifyRolePermissionChanged(request.getRoleCode(), "ROLE_PERMISSION_BULK_ASSIGNED");
+        notifyRoleGranted(role, grantedPermissions, actor);
         return responses;
     }
 
@@ -302,6 +309,13 @@ public class RolePermissionManagementService {
         rolePermission.setStatus(true);
         rolePermission.setUpdatedAt(OffsetDateTime.now());
         rolePermission.setUpdatedBy(actor);
+    }
+
+    // Một request phân quyền gửi đúng một thông báo cho các tài khoản đang giữ vai trò, kèm danh sách quyền vừa phân.
+    private void notifyRoleGranted(Role role, List<Permission> permissions, String actor) {
+        if (permissionGrantNotifier != null) {
+            permissionGrantNotifier.notifyRoleGranted(role, permissions, actor);
+        }
     }
 
     private void notifyRolePermissionChanged(String roleCode, String reason) {

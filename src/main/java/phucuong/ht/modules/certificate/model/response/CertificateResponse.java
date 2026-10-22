@@ -22,6 +22,7 @@ public class CertificateResponse {
     // Khóa đã kết thúc (finishedAt != null): không duyệt/từ chối được nữa, chỉ xuất PDF.
     private Boolean courseFinished;
     private BigDecimal totalScore;
+    private Boolean scoreHidden;
     private BigDecimal passingScore;
     // Ghi chú của hồ sơ khóa huấn luyện (nhập ở tab chấm điểm).
     private String scoreNote;

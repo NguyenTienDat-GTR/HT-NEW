@@ -17,6 +17,7 @@ import phucuong.ht.config.DomainEventMessage;
 import phucuong.ht.config.DomainEventPublisher;
 import phucuong.ht.modules.certificate.model.entity.Certificate;
 import phucuong.ht.modules.certificate.model.request.CertificateApproveRequest;
+import phucuong.ht.modules.notification.service.WorkflowDecisionNotifier.Decision;
 import phucuong.ht.modules.certificate.model.request.CertificateBulkApprovalRequest;
 import phucuong.ht.modules.certificate.model.request.CertificateRejectRequest;
 import phucuong.ht.modules.certificate.model.request.CertificateRevokeRequest;
@@ -45,12 +46,18 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Optional;
 import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class CertificateService {
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private phucuong.ht.modules.training.TrainingDecisionNotifier trainingDecisionNotifier;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private phucuong.ht.modules.training.CourseScoreVisibility courseScoreVisibility;
 
     private static final String DIOCESE_FILTER_FIELD = "course.diocese.id";
     private static final String DEANERY_FILTER_FIELD = "course.deanery.id";
@@ -138,6 +145,7 @@ public class CertificateService {
         }
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người thu hồi chứng chỉ");
         certificateLifecycleService.revoke(certificate, reason, CertificateRevocationSource.MANUAL, true, actor, OffsetDateTime.now());
+        notifyDecision(Decision.CERTIFICATE_REVOKED, List.of(certificate), Map.of(certificateCode, reason), actor);
         return toDetailResponse(certificate);
     }
 
@@ -156,6 +164,7 @@ public class CertificateService {
         }
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cấp lại chứng chỉ");
         certificateLifecycleService.restore(certificate, reason, true, actor, OffsetDateTime.now());
+        notifyDecision(Decision.CERTIFICATE_REISSUED, List.of(certificate), Map.of(certificateCode, reason), actor);
         return toDetailResponse(certificate);
     }
 
@@ -172,7 +181,9 @@ public class CertificateService {
     @EvictCaches.Analytics
     @Transactional
     public CertificateResponse approve(String certificateCode, CertificateApproveRequest request, Authentication authentication) {
-        return toResponse(approveInternal(certificateCode, request, authentication));
+        Certificate certificate = approveInternal(certificateCode, request, authentication);
+        notifyDecision(Decision.CERTIFICATE_APPROVED, List.of(certificate), null, certificate.getApprovedBy());
+        return toResponse(certificate);
     }
 
     @Caching(evict = {
@@ -183,7 +194,9 @@ public class CertificateService {
     @EvictCaches.Analytics
     @Transactional
     public CertificateResponse reject(String certificateCode, CertificateRejectRequest request, Authentication authentication) {
-        return toResponse(rejectInternal(certificateCode, request == null ? null : request.getReason(), authentication));
+        Certificate certificate = rejectInternal(certificateCode, request == null ? null : request.getReason(), authentication);
+        notifyDecision(Decision.CERTIFICATE_REJECTED, List.of(certificate), Map.of(certificateCode, certificate.getRejectionReason()), certificate.getUpdatedBy());
+        return toResponse(certificate);
     }
 
     // Duyệt hoặc từ chối nhiều chứng nhận một lần; hồ sơ không hợp lệ được bỏ qua và trả về kèm lý do.
@@ -198,6 +211,9 @@ public class CertificateService {
         boolean approved = Boolean.TRUE.equals(request.getApproved());
         List<TrainingBulkApprovalResponse.Failure> failures = new ArrayList<>();
         int success = 0;
+        List<Certificate> decided = new ArrayList<>();
+        Map<String, String> reasonsByCode = new HashMap<>();
+        String bulkActor = null;
         for (String code : new LinkedHashSet<>(request.getIds())) {
             Optional<Certificate> found = certificateRepository.findByCodeWithLeaderAndCourse(code);
             if (found.isEmpty()) {
@@ -218,20 +234,33 @@ public class CertificateService {
                     single.setSignerType(request.getSignerType());
                     single.setSignerName(request.getSignerName());
                     single.setSignerTitle(request.getSignerTitle());
-                    approveInternal(code, single, authentication);
+                    Certificate done = approveInternal(code, single, authentication);
+                    decided.add(done);
+                    bulkActor = done.getApprovedBy();
                 } else {
-                    rejectInternal(code, reason, authentication);
+                    Certificate done = rejectInternal(code, reason, authentication);
+                    decided.add(done);
+                    reasonsByCode.put(code, done.getRejectionReason());
+                    bulkActor = done.getUpdatedBy();
                 }
                 success++;
             } catch (RuntimeException ex) {
                 failures.add(bulkFailure(code, leaderName, ex.getMessage()));
             }
         }
+        // Một lần duyệt/từ chối hàng loạt: từ 3 chứng nhận cùng khóa thì người nhận chỉ có một thông báo gom nhóm.
+        notifyDecision(approved ? Decision.CERTIFICATE_APPROVED : Decision.CERTIFICATE_REJECTED, decided, approved ? null : reasonsByCode, bulkActor);
         return TrainingBulkApprovalResponse.builder()
                 .successCount(success)
                 .failedCount(failures.size())
                 .failures(failures)
                 .build();
+    }
+
+    private void notifyDecision(Decision decision, List<Certificate> certificates, Map<String, String> notesByCode, String actor) {
+        if (trainingDecisionNotifier != null && !certificates.isEmpty()) {
+            trainingDecisionNotifier.notifyCertificates(decision, certificates, notesByCode, actor);
+        }
     }
 
     private TrainingBulkApprovalResponse.Failure bulkFailure(String code, String leaderName, String reason) {
@@ -436,6 +465,7 @@ public class CertificateService {
                 && participation.getTotalScore() != null
                 && participation.getCourse() != null
                 && participation.getTotalScore().compareTo(participation.getCourse().getPassingScore()) >= 0;
+        boolean showScores = courseScoreVisibility == null || courseScoreVisibility.canSeeScores(certificate.getCourse());
         return CertificateResponse.builder()
                 .certificateCode(certificate.getCertificateCode())
                 .oldCertificateCode(certificate.getOldCertificateCode())
@@ -446,9 +476,10 @@ public class CertificateService {
                 .courseCode(certificate.getCourse() == null ? null : certificate.getCourse().getCourseCode())
                 .courseName(certificate.getCourse() == null ? null : certificate.getCourse().getCourseName())
                 .courseFinished(certificate.getCourse() != null && certificate.getCourse().getFinishedAt() != null)
-                .totalScore(participation == null ? null : participation.getTotalScore())
+                .scoreHidden(!showScores)
+                .totalScore(participation == null || !showScores ? null : participation.getTotalScore())
                 .passingScore(participation == null || participation.getCourse() == null ? null : participation.getCourse().getPassingScore())
-                .scoreNote(participation == null ? null : participation.getScoreNote())
+                .scoreNote(participation == null || !showScores ? null : participation.getScoreNote())
                 .passed(participation == null || participation.getTotalScore() == null ? null : passed)
                 .approvalReasonRequired(participation != null && participation.getTotalScore() != null && !passed)
                 .result(certificate.getResult())
