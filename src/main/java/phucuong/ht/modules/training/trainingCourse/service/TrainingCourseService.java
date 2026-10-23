@@ -198,8 +198,8 @@ public class TrainingCourseService {
         if (sender == null) {
             throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền gửi đăng ký khóa huấn luyện");
         }
-        // Giáo xứ: khóa giáo phận của giáo phận mình + khóa giáo hạt của giáo hạt mình; giáo phận/giáo hạt: chỉ khóa của đơn vị mình.
-        UUID dioceseId = sender == UnitType.DEANERY ? null : accountRepository.findActiveDioceseIdByUsername(username).orElse(null);
+        // Giáo xứ và giáo hạt: khóa giáo phận của giáo phận mình + khóa giáo hạt của giáo hạt mình; giáo phận: chỉ khóa giáo phận của mình.
+        UUID dioceseId = accountRepository.findActiveDioceseIdByUsername(username).orElse(null);
         UUID deaneryId = sender == UnitType.DIOCESE ? null : accountRepository.findActiveDeaneryIdByUsername(username).orElse(null);
         if (dioceseId == null && deaneryId == null) {
             throw commonValidationHelper.forbidden("Tài khoản hiện tại không có phạm vi hợp lệ để đăng ký khóa huấn luyện");

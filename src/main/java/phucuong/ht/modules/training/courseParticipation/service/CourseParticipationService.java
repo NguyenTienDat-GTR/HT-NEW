@@ -192,10 +192,7 @@ public class CourseParticipationService {
             senderName = course.getDiocese().getName();
         } else {
             senderId = accountScopeValidationHelper.requireActiveDeaneryId(authentication, CourseParticipationAccessEvaluator.SUBMIT_DEANERY);
-            if (!deaneryManaged || course.getDeanery() == null || !senderId.equals(course.getDeanery().getId())) {
-                throw commonValidationHelper.forbidden("Giáo hạt chỉ được gửi đăng ký cho khóa thuộc giáo hạt của mình");
-            }
-            senderName = course.getDeanery().getName();
+            senderName = requireDeanerySenderWithinCourse(course, deaneryManaged, senderId, "gửi đăng ký").getName();
         }
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người gửi danh sách");
         OffsetDateTime submittedAt = OffsetDateTime.now();
@@ -254,6 +251,11 @@ public class CourseParticipationService {
             participation.setApprovalStatus(WorkflowApprovalStatus.PENDING);
             courseParticipationRepository.save(participation);
             createdParticipations.add(participation);
+        }
+
+        // Giáo hạt gửi thay giáo xứ: tài khoản quản lý của các giáo xứ có hồ sơ trong danh sách được báo.
+        if (senderType == UnitType.DEANERY) {
+            notifyParishManagersOfDeanerySubmission(createdParticipations, senderName, senderId, course, actor);
         }
 
         // Người nhận: tài khoản duyệt của đơn vị sở hữu khóa (giáo hạt với khóa giáo hạt, giáo phận với khóa giáo phận).
@@ -319,9 +321,7 @@ public class CourseParticipationService {
             }
         } else {
             scopeDeaneryId = accountScopeValidationHelper.requireActiveDeaneryId(authentication, CourseParticipationAccessEvaluator.SUBMIT_DEANERY);
-            if (!deaneryManaged || course.getDeanery() == null || !scopeDeaneryId.equals(course.getDeanery().getId())) {
-                throw commonValidationHelper.forbidden("Giáo hạt chỉ được lập danh sách cho khóa thuộc giáo hạt của mình");
-            }
+            requireDeanerySenderWithinCourse(course, deaneryManaged, scopeDeaneryId, "lập danh sách");
         }
         if (scopeParishId != null && parishId != null && !parishId.equals(scopeParishId)) {
             return new PageImpl<>(List.of(), org.springframework.data.domain.PageRequest.of(page, size), 0);
@@ -415,6 +415,7 @@ public class CourseParticipationService {
         CourseParticipation participation = courseParticipationRepository.findByIdWithLeaderAndCourse(participationId)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy đăng ký khóa huấn luyện " + participationId));
         courseActivityGuard.requireActive(participation.getCourse());
+        courseActivityGuard.requireNotEnded(participation.getCourse());
         if (!trainingWorkflowSupport.isDeaneryManaged(participation.getCourse().getCourseType())) {
             throw commonValidationHelper.validationError("Chỉ khóa Dự trưởng chỉ cần giáo hạt duyệt danh sách");
         }
@@ -440,6 +441,7 @@ public class CourseParticipationService {
         CourseParticipation participation = courseParticipationRepository.findByIdWithLeaderAndCourse(participationId)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy đăng ký khóa huấn luyện " + participationId));
         courseActivityGuard.requireActive(participation.getCourse());
+        courseActivityGuard.requireNotEnded(participation.getCourse());
         if (trainingWorkflowSupport.isDeaneryManaged(participation.getCourse().getCourseType())) {
             throw commonValidationHelper.validationError("Khóa Dự trưởng không không cần giáo phận duyệt danh sách");
         }
@@ -713,6 +715,51 @@ public class CourseParticipationService {
         }
     }
 
+    // Giáo hạt gửi được cho khóa giáo hạt của mình và khóa giáo phận mà giáo hạt trực thuộc.
+    private Deanery requireDeanerySenderWithinCourse(TrainingCourse course, boolean deaneryManaged, UUID deaneryId, String action) {
+        Deanery deanery = deaneryRepository.findById(deaneryId)
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy giáo hạt " + deaneryId));
+        if (deaneryManaged) {
+            if (course.getDeanery() == null || !deaneryId.equals(course.getDeanery().getId())) {
+                throw commonValidationHelper.forbidden("Giáo hạt chỉ được " + action + " cho khóa giáo hạt của mình hoặc khóa thuộc giáo phận của mình");
+            }
+        } else if (course.getDiocese() == null || deanery.getDiocese() == null
+                || !course.getDiocese().getId().equals(deanery.getDiocese().getId())) {
+            throw commonValidationHelper.forbidden("Giáo hạt chỉ được " + action + " cho khóa giáo hạt của mình hoặc khóa thuộc giáo phận của mình");
+        }
+        return deanery;
+    }
+
+    private void notifyParishManagersOfDeanerySubmission(List<CourseParticipation> participations, String deaneryName, UUID deaneryId, TrainingCourse course, String actor) {
+        Map<UUID, Long> countByParish = new LinkedHashMap<>();
+        for (CourseParticipation participation : participations) {
+            Parish parish = participation.getLeader().getParish();
+            if (parish != null) {
+                countByParish.merge(parish.getId(), 1L, Long::sum);
+            }
+        }
+        String courseLabel = course.getCourseName() == null || course.getCourseName().isBlank() ? course.getCourseCode() : course.getCourseName();
+        countByParish.forEach((parishId, count) -> {
+            List<String> recipients = notificationRecipientResolver.resolveRecipients(null,
+                    CourseParticipationAccessEvaluator.READ_PARISH, UnitType.PARISH, parishId);
+            if (recipients.isEmpty()) {
+                return;
+            }
+            trainingNotificationService.notifyUsers(recipients, TrainingNotificationCommand.builder()
+                    .eventType("training.registration.submitted_by_deanery")
+                    .title("Giáo hạt đã gửi đăng ký cho huynh trưởng của giáo xứ")
+                    .message(deaneryName + " đã gửi " + count + " hồ sơ đăng ký của giáo xứ bạn cho khóa " + courseLabel)
+                    .senderUnitType(UnitType.DEANERY)
+                    .senderUnitId(deaneryId)
+                    .courseCode(course.getCourseCode())
+                    .totalCount(count.intValue())
+                    .approvedCount(0)
+                    .pendingCount(count.intValue())
+                    .actor(actor)
+                    .build());
+        });
+    }
+
     private void requireParishWithinCourseScope(TrainingCourse course, Parish parish) {
         if (parish == null || parish.getDeanery() == null) {
             throw commonValidationHelper.forbidden("Giáo xứ hiện tại không có phạm vi giáo hạt hợp lệ để gửi đăng ký");
@@ -931,6 +978,8 @@ public class CourseParticipationService {
                 .leaderFullName(buildFullName(participation.getLeader()))
                 .courseCode(participation.getCourse() == null ? null : participation.getCourse().getCourseCode())
                 .courseName(participation.getCourse() == null ? null : participation.getCourse().getCourseName())
+                .courseFinished(participation.getCourse() != null && TrainingCourseStatusSupport.organizingStatus(participation.getCourse(), TrainingCourseStatusSupport.today())
+                        == phucuong.ht.modules.training.enums.CourseOrganizingStatus.ENDED)
                 .courseTypeCode(participation.getCourse() == null || participation.getCourse().getCourseType() == null ? null : participation.getCourse().getCourseType().getTypeCode())
                 .registrationDate(participation.getRegistrationDate())
                 .participationStatus(participation.getParticipationStatus())
@@ -1036,6 +1085,7 @@ public class CourseParticipationService {
         CourseParticipation participation = courseParticipationRepository.findByIdWithLeaderAndCourse(participationId)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy hồ sơ tham dự " + participationId));
         courseActivityGuard.requireActive(participation.getCourse());
+        courseActivityGuard.requireNotEnded(participation.getCourse());
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người xóa hồ sơ");
         if (!canApproveCourseOf(participation, authentication)) {
             throw commonValidationHelper.forbidden("Không có quyền xóa hồ sơ khỏi danh sách tham dự");
@@ -1149,6 +1199,9 @@ public class CourseParticipationService {
         }
         if (participation.getCourse() != null && Boolean.FALSE.equals(participation.getCourse().getStatus())) {
             return "Khóa huấn luyện đã bị vô hiệu hóa nên không thể thao tác";
+        }
+        if (courseActivityGuard.isEnded(participation.getCourse())) {
+            return "Khóa huấn luyện đã kết thúc nên không thể thao tác";
         }
         if (!isManualDecisionAllowed(participation.getApprovalStatus(), approved)) {
             return "Hồ sơ đã ở trạng thái kết thúc hoặc không chờ duyệt";
