@@ -36,7 +36,9 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
                 || path.startsWith("/api/swagger")
                 || path.startsWith("/api-docs")
                 || path.startsWith("/api/v3")
-                || path.startsWith("/api/actuator");
+                || path.startsWith("/api/actuator")
+                // Kiểm tra phiên được gọi liên tục khi tải trang; bị 429 sẽ làm người dùng bị đá ra đăng nhập.
+                || path.equals("/api/auth/me");
     }
 
     @Override
