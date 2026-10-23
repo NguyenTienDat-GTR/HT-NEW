@@ -345,6 +345,7 @@ public class AccountManagementService {
         return AccountResponse.builder()
                 .username(account.getUsername())
                 .leaderId(leader == null ? null : leader.getId())
+                .leaderHolyName(leader == null ? null : leader.getHolyName())
                 .leaderFullName(buildFullName(leader))
                 .primaryRoleCode(primaryRoleCode(activeRoles))
                 .primaryRoleName(primaryRoleName(activeRoles))
@@ -402,7 +403,15 @@ public class AccountManagementService {
 
     private boolean matchesUsernameSearch(AccountResponse response, String search) {
         if (search == null || search.isBlank()) return true;
-        return response.getUsername() != null && response.getUsername().toLowerCase(Locale.ROOT).contains(search.toLowerCase(Locale.ROOT));
+        String keyword = search.toLowerCase(Locale.ROOT);
+        // Tìm theo tên đăng nhập, tên thánh / họ tên huynh trưởng, vai trò, giáo xứ, giáo hạt.
+        java.util.List<String> haystack = new java.util.ArrayList<>(java.util.Arrays.asList(
+                response.getUsername(), response.getLeaderHolyName(), response.getLeaderFullName(),
+                response.getParishName(), response.getDeaneryName()));
+        if (response.getRoleNames() != null) {
+            haystack.addAll(response.getRoleNames());
+        }
+        return haystack.stream().anyMatch(text -> text != null && text.toLowerCase(Locale.ROOT).contains(keyword));
     }
 
     private boolean isSuperAdmin(Authentication authentication) {

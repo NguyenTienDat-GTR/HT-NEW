@@ -175,10 +175,8 @@ public class SystemAdminAuthorizationHelper {
             return;
         }
         requireRolePermissionOperationAuthority(authentication, authority);
-        if (isLowerAdminSystemRole(authentication, role, authority)) {
-            requireTargetRoleBelowActor(authentication, role);
-            return;
-        }
+        // Ba vai trò admin (giáo phận / giáo hạt / giáo xứ) chỉ SUPER_ADMIN được phân quyền hay thu hồi; cấp trên vẫn phân quyền
+        // được cho từng tài khoản mang các vai trò này (phân quyền tài khoản).
         if (Boolean.TRUE.equals(role.getIsSystem())) {
             throw commonValidationHelper.forbidden("Chỉ SUPER_ADMIN được thay đổi phân quyền của vai trò hệ thống cùng hoặc cao hơn cấp của mình");
         }
@@ -193,22 +191,6 @@ public class SystemAdminAuthorizationHelper {
         } catch (RuntimeException ignored) {
             return false;
         }
-    }
-
-    private static final java.util.Map<String, Integer> ADMIN_SYSTEM_ROLE_TIER = java.util.Map.of(
-            "ADMIN_DIOCESE", 1,
-            "ADMIN_DEANERY", 2,
-            "ADMIN_PARISH", 3
-    );
-
-    // Vai trò admin hệ thống thuộc cấp thấp hơn cấp thao tác của người dùng (giáo phận > giáo hạt > giáo xứ).
-    private boolean isLowerAdminSystemRole(Authentication authentication, Role role, String authority) {
-        if (role == null || !Boolean.TRUE.equals(role.getIsSystem())) {
-            return false;
-        }
-        Integer targetTier = ADMIN_SYSTEM_ROLE_TIER.get(role.getRoleCode());
-        int actorTier = rolePermissionAuthorityScopeOrder(authentication, authority);
-        return targetTier != null && actorTier >= 1 && actorTier != Integer.MAX_VALUE && targetTier > actorTier;
     }
 
     public boolean canReadRole(Authentication authentication, Role role) {

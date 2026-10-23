@@ -1428,3 +1428,8 @@ Ma trận endpoint (`endpoint-contract-matrix.psv`) hiện có 124 route.
 - **Thu hồi quyền tự động khi hết hạn cũng gửi thông báo**: `PermissionExpiryRevocationService` chọn (khóa ghi) các gán quyền vai trò / ngoại lệ tài khoản sắp hết hạn trước khi vô hiệu hóa rồi gọi `PermissionGrantNotifier.notifyRoleExpired / notifyAccountExpired` (sự kiện `ROLE_PERMISSION_EXPIRED`, `ACCOUNT_PERMISSION_EXPIRED`).
 - **Lọc cấp huynh trưởng** trong "Lập danh sách" và "Thêm ngoại lệ" của gửi đăng ký: tham số `leaderLevel` của `GET …/registration-candidates` (`CourseParticipationService.matchesLevelFilter`, huynh trưởng chưa có cấp tính là `NONE`).
 - **Gửi đăng ký trong tab "Đăng ký tham dự" của chi tiết khóa**: ô chọn khóa bị khóa (luôn là khóa đang xem) và hiện tên khóa thay vì mã (`readOnlyOnCreate`, `currentLabel`).
+
+### Phân quyền vai trò admin, tìm tài khoản và lọc quyền
+- **Vai trò hệ thống ADMIN_DIOCESE / ADMIN_DEANERY / ADMIN_PARISH chỉ SUPER_ADMIN được phân quyền hoặc thu hồi** (`SystemAdminAuthorizationHelper.requireRolePermissionRoleAccess`); admin giáo phận / giáo hạt không còn phân quyền cho vai trò admin cấp dưới. Cấp trên vẫn phân quyền được cho **từng tài khoản** mang các vai trò này (phân quyền tài khoản, không đổi).
+- `GET /api/system/accounts/permission-targets?search=` tìm theo tên đăng nhập, tên thánh / họ tên huynh trưởng, vai trò, giáo xứ, giáo hạt; `AccountResponse` có thêm `leaderHolyName`.
+- FE: ô chọn tài khoản rộng hết nhóm (`FormFieldSpec.wide`), mỗi tài khoản hiện vai trò, huynh trưởng (tên thánh + họ tên), giáo xứ, giáo hạt; danh sách tick quyền (phân quyền / thu hồi, vai trò / tài khoản) có bộ lọc phân hệ, đối tượng, thao tác, phạm vi và tìm không dấu.
