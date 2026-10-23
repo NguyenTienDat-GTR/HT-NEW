@@ -68,6 +68,7 @@ import java.util.*;
 public class CourseParticipationService {
 
     private static final String AUTO_APPROVAL_SYSTEM_ACTOR = "SYSTEM_AUTO_APPROVAL";
+    private static final String REMOVED_FROM_PARTICIPANTS_REVIEW = "Bị xóa khỏi danh sách tham dự";
     private static final String EVENT_BATCH_SUBMITTED = "training.registration.batch_submitted";
 
     private final CourseParticipationRepository courseParticipationRepository;
@@ -420,7 +421,7 @@ public class CourseParticipationService {
 
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người duyệt giáo hạt");
         OffsetDateTime now = OffsetDateTime.now();
-        requirePendingManualApproval(participation.getApprovalStatus());
+        requireManualApprovalAllowed(participation.getApprovalStatus(), Boolean.TRUE.equals(request.getApproved()));
         applyApprovalDecision(participation, Boolean.TRUE.equals(request.getApproved()));
         applyAchievedLevel(participation, Boolean.TRUE.equals(request.getApproved()), request.getAchievedLevel());
         participation.setReview(request.getReview());
@@ -445,7 +446,7 @@ public class CourseParticipationService {
 
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người duyệt giáo phận");
         OffsetDateTime now = OffsetDateTime.now();
-        requirePendingManualApproval(participation.getApprovalStatus());
+        requireManualApprovalAllowed(participation.getApprovalStatus(), Boolean.TRUE.equals(request.getApproved()));
         applyApprovalDecision(participation, Boolean.TRUE.equals(request.getApproved()));
         applyAchievedLevel(participation, Boolean.TRUE.equals(request.getApproved()), request.getAchievedLevel());
         participation.setReview(request.getReview());
@@ -1022,6 +1023,7 @@ public class CourseParticipationService {
     }
 
     // Xóa hồ sơ khỏi danh sách tham dự: người có quyền duyệt, bất kể đã có điểm hay chưa, trừ hồ sơ đã có chứng nhận.
+    // Hồ sơ không bị xóa hẳn mà chuyển về trạng thái bị từ chối duyệt (xóa điểm) để có thể duyệt lại.
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.CERTIFICATE_LIST, allEntries = true),
@@ -1038,6 +1040,9 @@ public class CourseParticipationService {
         if (!canApproveCourseOf(participation, authentication)) {
             throw commonValidationHelper.forbidden("Không có quyền xóa hồ sơ khỏi danh sách tham dự");
         }
+        if (participation.getApprovalStatus() != WorkflowApprovalStatus.APPROVED) {
+            throw commonValidationHelper.conflict("Chỉ xóa được hồ sơ đang nằm trong danh sách tham dự");
+        }
         UUID leaderId = participation.getLeader().getId();
         String courseCode = participation.getCourse().getCourseCode();
         Optional<Certificate> certificate = certificateRepository.findByLeaderIdAndCourseCode(leaderId, courseCode);
@@ -1046,9 +1051,14 @@ public class CourseParticipationService {
         if (hasCertificate) {
             throw commonValidationHelper.conflict("Không thể xóa hồ sơ đã có chứng nhận");
         }
-        // Chứng nhận hệ thống đề xuất (chưa duyệt) sinh ra khi chấm điểm đạt cũng bị xóa theo hồ sơ.
+        // Chứng nhận hệ thống đề xuất (chưa duyệt) sinh ra khi chấm điểm đạt bị xóa vì kết quả chấm không còn hiệu lực.
         certificate.ifPresent(certificateRepository::delete);
-        courseParticipationRepository.delete(participation);
+        applyApprovalDecision(participation, false);
+        resetScoring(participation);
+        participation.setReview(REMOVED_FROM_PARTICIPANTS_REVIEW);
+        participation.setApprovedBy(actor);
+        participation.setUpdatedAt(OffsetDateTime.now());
+        participation.setUpdatedBy(actor);
         // Người gửi đăng ký và admin giáo xứ của hồ sơ được báo hồ sơ đã bị xóa khỏi danh sách tham dự.
         if (trainingDecisionNotifier != null) {
             trainingDecisionNotifier.notifyRegistrations(Decision.REGISTRATION_REMOVED, List.of(participation), null, actor);
@@ -1079,7 +1089,7 @@ public class CourseParticipationService {
             }
             CourseParticipation participation = found.get();
             String leaderName = buildFullName(participation.getLeader());
-            String problem = bulkApprovalProblem(participation, authentication);
+            String problem = bulkApprovalProblem(participation, authentication, approved);
             if (problem != null) {
                 failures.add(bulkFailure(id, leaderName, problem));
                 continue;
@@ -1132,16 +1142,15 @@ public class CourseParticipationService {
         return TrainingBulkApprovalResponse.Failure.builder().id(id).leaderFullName(leaderName).reason(reason).build();
     }
 
-    // Quyền duyệt theo cấp quản lý của khóa (giống endpoint duyệt từng hồ sơ) và hồ sơ phải đang chờ duyệt.
-    private String bulkApprovalProblem(CourseParticipation participation, Authentication authentication) {
+    // Quyền duyệt theo cấp quản lý của khóa (giống endpoint duyệt từng hồ sơ); hồ sơ phải đang chờ duyệt hoặc (khi duyệt lại) đã bị từ chối.
+    private String bulkApprovalProblem(CourseParticipation participation, Authentication authentication, boolean approved) {
         if (!canApproveCourseOf(participation, authentication)) {
             return "Không có quyền duyệt hồ sơ này";
         }
         if (participation.getCourse() != null && Boolean.FALSE.equals(participation.getCourse().getStatus())) {
             return "Khóa huấn luyện đã bị vô hiệu hóa nên không thể thao tác";
         }
-        WorkflowApprovalStatus status = participation.getApprovalStatus();
-        if (status != WorkflowApprovalStatus.PENDING && status != WorkflowApprovalStatus.SUBMITTED) {
+        if (!isManualDecisionAllowed(participation.getApprovalStatus(), approved)) {
             return "Hồ sơ đã ở trạng thái kết thúc hoặc không chờ duyệt";
         }
         return null;
@@ -1183,10 +1192,31 @@ public class CourseParticipationService {
         participation.setParticipationStatus(approved ? ParticipationStatus.ATTENDED : ParticipationStatus.REJECTED);
     }
 
-    private void requirePendingManualApproval(WorkflowApprovalStatus status) {
-        if (status != WorkflowApprovalStatus.PENDING && status != WorkflowApprovalStatus.SUBMITTED) {
+    // Hồ sơ chờ duyệt được duyệt hoặc từ chối; hồ sơ đã bị từ chối chỉ được duyệt lại.
+    private void requireManualApprovalAllowed(WorkflowApprovalStatus status, boolean approved) {
+        if (!isManualDecisionAllowed(status, approved)) {
             throw commonValidationHelper.conflict("Hồ sơ đã ở trạng thái kết thúc hoặc không chờ duyệt");
         }
+    }
+
+    private boolean isManualDecisionAllowed(WorkflowApprovalStatus status, boolean approved) {
+        if (status == WorkflowApprovalStatus.PENDING || status == WorkflowApprovalStatus.SUBMITTED) {
+            return true;
+        }
+        return approved && status == WorkflowApprovalStatus.REJECTED;
+    }
+
+    // Hồ sơ trở về trạng thái bị từ chối thì kết quả chấm điểm cũ không còn hiệu lực.
+    private void resetScoring(CourseParticipation participation) {
+        participation.getComponentScores().clear();
+        participation.setTotalScore(null);
+        participation.setResult(null);
+        participation.setFinalResult(null);
+        participation.setScoreNote(null);
+        participation.setTargetLevel(null);
+        participation.setCertificateApprovalStatus(WorkflowApprovalStatus.NOT_REQUIRED);
+        participation.setCertificateRequestedAt(null);
+        participation.setCertificateApprovedAt(null);
     }
 
     // Chỉ được chấm điểm khi khóa đang trong thời gian diễn ra (từ ngày bắt đầu đến hết ngày kết thúc, múi giờ Việt Nam).

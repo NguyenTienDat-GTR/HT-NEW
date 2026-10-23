@@ -448,7 +448,7 @@ class CourseParticipationServiceTest {
     }
 
     @Test
-    void removeParticipantShouldDeleteScoredRegistrationWithoutCertificate() {
+    void removeParticipantShouldRejectScoredRegistrationInsteadOfDeleting() {
         courseParticipationService = buildService();
         TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);
         CourseParticipation participation = pendingParticipation("cp-r", course, "leader-9");
@@ -460,7 +460,43 @@ class CourseParticipationServiceTest {
 
         courseParticipationService.removeParticipant("cp-r", authentication("admin-diocese", "training.participation.approve.diocese"));
 
-        verify(courseParticipationRepository).delete(participation);
+        verify(courseParticipationRepository, never()).delete(any());
+        org.junit.jupiter.api.Assertions.assertEquals(WorkflowApprovalStatus.REJECTED, participation.getApprovalStatus());
+        org.junit.jupiter.api.Assertions.assertEquals(phucuong.ht.modules.training.enums.ParticipationStatus.REJECTED, participation.getParticipationStatus());
+        org.junit.jupiter.api.Assertions.assertNull(participation.getTotalScore());
+    }
+
+    @Test
+    void dioceseApproveShouldReApproveRejectedRegistration() {
+        courseParticipationService = buildService();
+        TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);
+        CourseParticipation participation = pendingParticipation("cp-ra", course, "leader-9");
+        participation.setApprovalStatus(WorkflowApprovalStatus.REJECTED);
+        participation.setParticipationStatus(phucuong.ht.modules.training.enums.ParticipationStatus.REJECTED);
+        participation.setEligible(true);
+        when(courseParticipationRepository.findByIdWithLeaderAndCourse("cp-ra")).thenReturn(Optional.of(participation));
+        phucuong.ht.modules.training.courseParticipation.model.request.TrainingApprovalRequest request =
+                new phucuong.ht.modules.training.courseParticipation.model.request.TrainingApprovalRequest();
+        request.setApproved(true);
+
+        courseParticipationService.dioceseApprove("cp-ra", request, authentication("admin-diocese", "training.participation.approve.diocese"));
+
+        org.junit.jupiter.api.Assertions.assertEquals(WorkflowApprovalStatus.APPROVED, participation.getApprovalStatus());
+        org.junit.jupiter.api.Assertions.assertEquals(phucuong.ht.modules.training.enums.ParticipationStatus.ATTENDED, participation.getParticipationStatus());
+    }
+
+    @Test
+    void dioceseRejectShouldFailForAlreadyRejectedRegistration() {
+        courseParticipationService = buildService();
+        TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);
+        CourseParticipation participation = pendingParticipation("cp-rr", course, "leader-9");
+        participation.setApprovalStatus(WorkflowApprovalStatus.REJECTED);
+        when(courseParticipationRepository.findByIdWithLeaderAndCourse("cp-rr")).thenReturn(Optional.of(participation));
+        phucuong.ht.modules.training.courseParticipation.model.request.TrainingApprovalRequest request =
+                new phucuong.ht.modules.training.courseParticipation.model.request.TrainingApprovalRequest();
+        request.setApproved(false);
+
+        assertThrows(RuntimeException.class, () -> courseParticipationService.dioceseApprove("cp-rr", request, authentication("admin-diocese", "training.participation.approve.diocese")));
     }
 
     @Test
