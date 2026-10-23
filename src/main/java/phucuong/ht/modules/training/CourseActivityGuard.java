@@ -7,6 +7,7 @@ import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.common.security.UnitOperationalStatusService;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.modules.training.trainingCourse.model.entity.TrainingCourse;
+import phucuong.ht.modules.training.trainingCourse.service.TrainingCourseStatusSupport;
 
 // Khóa huấn luyện bị vô hiệu hóa (status = false) thì không cho thao tác bất cứ gì trong khóa đó
 // (đăng ký, duyệt, chấm điểm, kết thúc, sửa, duyệt / thu hồi / cấp lại chứng nhận...). Chỉ xem được.
@@ -22,6 +23,18 @@ public class CourseActivityGuard {
     public void requireActive(TrainingCourse course) {
         requireCourseEnabled(course);
         requireOrganizerOperational(course);
+    }
+
+    // Khóa đã kết thúc (thủ công hoặc quá ngày kết thúc) thì chỉ xem, không thao tác hồ sơ nữa.
+    public boolean isEnded(TrainingCourse course) {
+        return course != null && TrainingCourseStatusSupport.organizingStatus(course, TrainingCourseStatusSupport.today())
+                == phucuong.ht.modules.training.enums.CourseOrganizingStatus.ENDED;
+    }
+
+    public void requireNotEnded(TrainingCourse course) {
+        if (isEnded(course)) {
+            throw validationHelper.conflict("Khóa huấn luyện đã kết thúc nên không thể thao tác");
+        }
     }
 
     // Dùng cho thao tác thu hồi chứng nhận: vẫn cho phép khi đơn vị tổ chức tạm ngưng, chỉ chặn khi khóa bị tắt.

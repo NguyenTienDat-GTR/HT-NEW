@@ -176,6 +176,8 @@ class OverviewAnalytics {
         if (ctx.scope.type() == AnalyticsScopeType.PARISH) return List.of();
         String participations = PARTICIPATION_FROM + " where " + ctx.leaders(false) + " and " + PARTICIPATION_VALID;
         long pendingRegistrations = repository.scalar("select count(*)" + participations + " and cp.approval_status in ('PENDING', 'SUBMITTED')", ctx.params);
+        // Hồ sơ bị từ chối duyệt (kể cả bị xóa khỏi danh sách tham dự) chờ duyệt lại; khóa đã kết thúc thì không còn xử lý.
+        long rejectedRegistrations = repository.scalar("select count(*)" + participations + " and cp.approval_status = 'REJECTED' and (c.end_date is null or c.end_date >= current_date)", ctx.params);
         long pendingScoring = repository.scalar("select count(*)" + participations + " and " + ATTENDED + " and cp.total_score is null and c.score_locked = false", ctx.params);
         long pendingCertificates = repository.scalar("select count(*)" + CERTIFICATE_FROM + " where " + ctx.leaders(false) + " and " + CERTIFICATE_VALID + " and ce.approval_status in ('PENDING', 'SUBMITTED')", ctx.params);
         String organized = ctx.organizedCourses();
@@ -183,6 +185,7 @@ class OverviewAnalytics {
                 + " and c.registration_status = 'OPEN' and c.registration_end_at between now() and now() + interval '" + CLOSING_DAYS + " days'", ctx.params);
         return List.of(
                 work("pendingRegistrations", "/training/approvals", pendingRegistrations),
+                work("rejectedRegistrations", "/training/approvals", rejectedRegistrations),
                 work("pendingScoring", "/training/scores", pendingScoring),
                 work("closingCourses", "/training/courses", closing),
                 work("pendingCertificates", "/certificates/approvals", pendingCertificates));

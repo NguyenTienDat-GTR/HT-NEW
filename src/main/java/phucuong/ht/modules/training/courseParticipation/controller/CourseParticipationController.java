@@ -66,7 +66,7 @@ public class CourseParticipationController {
     @PreAuthorize("@courseParticipationAccessEvaluator.canRemoveParticipant(authentication)")
     public apiResponse<Void> removeParticipant(@PathVariable String id, Authentication authentication) {
         courseParticipationService.removeParticipant(id, authentication);
-        return apiResponse.success("Xóa hồ sơ khỏi danh sách tham dự thành công", null);
+        return apiResponse.success("Đã chuyển hồ sơ khỏi danh sách tham dự về trạng thái từ chối duyệt", null);
     }
 
     @GetMapping("/participations/{id}")

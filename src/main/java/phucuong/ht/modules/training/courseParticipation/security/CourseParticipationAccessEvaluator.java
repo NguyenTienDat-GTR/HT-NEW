@@ -57,7 +57,9 @@ public class CourseParticipationAccessEvaluator {
                         return !deaneryManaged && directDioceseOwnsCourse(authentication, courseCode);
                     }
                     if (sender == UnitType.DEANERY) {
-                        return deaneryManaged && directDeaneryOwnsCourse(authentication, courseCode);
+                        return deaneryManaged
+                                ? directDeaneryOwnsCourse(authentication, courseCode)
+                                : directDeaneryInCourseDiocese(authentication, courseCode);
                     }
                     return false;
                 })

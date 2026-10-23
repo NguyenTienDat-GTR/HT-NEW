@@ -75,9 +75,12 @@ class TrainingAnalytics {
         kpis.add(ratio("attendanceRate", cur.attended(), cur.valid(), prev == null ? null : prev.attended(), prev == null ? null : prev.valid(), null));
         kpis.add(ratio("passRate", cur.passed(), cur.attended(), prev == null ? null : prev.passed(), prev == null ? null : prev.attended(), ratioSparkline(trends, "passed", "attended")));
         kpis.add(ratio("cancellationRate", cur.cancelled(), cur.registrations(), prev == null ? null : prev.cancelled(), prev == null ? null : prev.registrations(), null));
+        // Hồ sơ bị từ chối duyệt (gồm hồ sơ bị xóa khỏi danh sách tham dự) vẫn còn trong hệ thống và có thể được duyệt lại.
+        kpis.add(ratio("rejectionRate", cur.rejected(), cur.registrations(), prev == null ? null : prev.rejected(), prev == null ? null : prev.registrations(), null));
         kpis.add(ratio("certificateRate", cur.certificateApproved(), cur.passed(), prev == null ? null : prev.certificateApproved(), prev == null ? null : prev.passed(), null));
         kpis.add(measure("averageScore", SCORE, cur.averageScore(), prev == null ? null : prev.averageScore()));
         kpis.add(count("pendingApproval", cur.pendingApproval(), prev == null ? null : prev.pendingApproval(), null));
+        kpis.add(count("rejectedRegistrations", cur.rejected(), prev == null ? null : prev.rejected(), null));
         kpis.add(count("trainedLeaders", cur.trainedLeaders(), prev == null ? null : prev.trainedLeaders(), null));
 
         List<AnalyticsResponse.Breakdown> breakdowns = new ArrayList<>(courseRows);
@@ -108,7 +111,8 @@ class TrainingAnalytics {
                 + " count(cp.id), count(cp.id) filter (where " + VALID + "), count(cp.id) filter (where " + PS + " = 'CANCELLED'),"
                 + " count(cp.id) filter (where " + ATTENDED + "), count(cp.id) filter (where " + PASSED + "),"
                 + " count(cp.id) filter (where " + PASSED + " and cp.certificate_approval_status = 'APPROVED'),"
-                + " avg(cp.total_score) filter (where " + ATTENDED + " and cp.total_score is not null)"
+                + " avg(cp.total_score) filter (where " + ATTENDED + " and cp.total_score is not null),"
+                + " count(cp.id) filter (where " + PS + " = 'REJECTED')"
                 + " from training_course c left join training_course_type ct on ct.type_code = c.course_type_code"
                 + " left join course_participation cp on cp.course_id = c.course_code and cp.status = true and cp.leader_id in (" + participants + ")"
                 + " where c.status = true and c.start_date between :" + prefix + "From and :" + prefix + "To" + ctx.courseFilters() + " and " + visible
@@ -132,6 +136,7 @@ class TrainingAnalytics {
             metrics.put("certificateApproved", num(r[12]));
             metrics.put("passRate", rate(num(r[11]), attended));
             metrics.put("averageScore", dec(r[13]));
+            metrics.put("rejected", num(r[14]));
             result.add(breakdown("course", String.valueOf(r[0]), String.valueOf(r[1]), metrics));
         }
         return result;

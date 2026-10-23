@@ -302,19 +302,54 @@ class CourseParticipationServiceTest {
     }
 
     @Test
-    void registerShouldRejectDeanerySenderForDioceseCourse() {
+    void registerShouldRejectDeanerySenderOutsideCourseDiocese() {
         courseParticipationService = buildService();
 
         UUID deaneryId = UUID.randomUUID();
         TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);
+        Diocese foreignDiocese = new Diocese();
+        foreignDiocese.setId(UUID.randomUUID());
+        Deanery foreignDeanery = new Deanery();
+        foreignDeanery.setId(deaneryId);
+        foreignDeanery.setDiocese(foreignDiocese);
         when(trainingCourseRepository.findByCodeWithType("SMTLI-2026")).thenReturn(Optional.of(course));
         when(accountScopeValidationHelper.requireActiveDeaneryId(any(), any())).thenReturn(deaneryId);
+        when(deaneryRepository.findById(deaneryId)).thenReturn(Optional.of(foreignDeanery));
 
         TrainingRegistrationRequest request = new TrainingRegistrationRequest();
         request.setLeaderIds(List.of(UUID.randomUUID()));
 
         assertThrows(RuntimeException.class, () -> courseParticipationService.register("SMTLI-2026", request, authentication("admin-deanery", "training.participation.submit.deanery")));
         verify(courseParticipationRepository, never()).save(any());
+    }
+
+    @Test
+    void registerShouldAllowDeanerySenderForDioceseCourseAndNotifyParishManagers() {
+        courseParticipationService = buildService();
+
+        UUID parishId = UUID.randomUUID();
+        UUID leaderId = UUID.randomUUID();
+        TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);
+        Leader leader = leader(leaderId, parishId, "HT_XU");
+        Parish parish = parish(parishId, course);
+        leader.setParish(parish);
+        Deanery deanery = course.getDeanery();
+        parish.setDeanery(deanery);
+
+        when(trainingCourseRepository.findByCodeWithType("SMTLI-2026")).thenReturn(Optional.of(course));
+        when(leaderRepository.findByIdWithParish(leaderId)).thenReturn(Optional.of(leader));
+        when(accountScopeValidationHelper.requireActiveDeaneryId(any(), any())).thenReturn(deanery.getId());
+        when(deaneryRepository.findById(deanery.getId())).thenReturn(Optional.of(deanery));
+        when(trainingNotificationRecipientResolver.resolveRecipients(any(), any(), any(), any())).thenReturn(List.of("receiver"));
+
+        TrainingRegistrationRequest request = new TrainingRegistrationRequest();
+        request.setLeaderIds(List.of(leaderId));
+
+        var response = courseParticipationService.register("SMTLI-2026", request, authentication("admin-deanery", "training.participation.submit.deanery"));
+
+        assertEquals(1, response.getTotalCount());
+        // Một thông báo cho người duyệt của giáo phận, một thông báo cho quản lý giáo xứ của hồ sơ.
+        verify(trainingNotificationService, org.mockito.Mockito.times(2)).notifyUsers(any(), any());
     }
 
     @Test
@@ -448,7 +483,7 @@ class CourseParticipationServiceTest {
     }
 
     @Test
-    void removeParticipantShouldDeleteScoredRegistrationWithoutCertificate() {
+    void removeParticipantShouldRejectScoredRegistrationInsteadOfDeleting() {
         courseParticipationService = buildService();
         TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);
         CourseParticipation participation = pendingParticipation("cp-r", course, "leader-9");
@@ -460,7 +495,43 @@ class CourseParticipationServiceTest {
 
         courseParticipationService.removeParticipant("cp-r", authentication("admin-diocese", "training.participation.approve.diocese"));
 
-        verify(courseParticipationRepository).delete(participation);
+        verify(courseParticipationRepository, never()).delete(any());
+        org.junit.jupiter.api.Assertions.assertEquals(WorkflowApprovalStatus.REJECTED, participation.getApprovalStatus());
+        org.junit.jupiter.api.Assertions.assertEquals(phucuong.ht.modules.training.enums.ParticipationStatus.REJECTED, participation.getParticipationStatus());
+        org.junit.jupiter.api.Assertions.assertNull(participation.getTotalScore());
+    }
+
+    @Test
+    void dioceseApproveShouldReApproveRejectedRegistration() {
+        courseParticipationService = buildService();
+        TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);
+        CourseParticipation participation = pendingParticipation("cp-ra", course, "leader-9");
+        participation.setApprovalStatus(WorkflowApprovalStatus.REJECTED);
+        participation.setParticipationStatus(phucuong.ht.modules.training.enums.ParticipationStatus.REJECTED);
+        participation.setEligible(true);
+        when(courseParticipationRepository.findByIdWithLeaderAndCourse("cp-ra")).thenReturn(Optional.of(participation));
+        phucuong.ht.modules.training.courseParticipation.model.request.TrainingApprovalRequest request =
+                new phucuong.ht.modules.training.courseParticipation.model.request.TrainingApprovalRequest();
+        request.setApproved(true);
+
+        courseParticipationService.dioceseApprove("cp-ra", request, authentication("admin-diocese", "training.participation.approve.diocese"));
+
+        org.junit.jupiter.api.Assertions.assertEquals(WorkflowApprovalStatus.APPROVED, participation.getApprovalStatus());
+        org.junit.jupiter.api.Assertions.assertEquals(phucuong.ht.modules.training.enums.ParticipationStatus.ATTENDED, participation.getParticipationStatus());
+    }
+
+    @Test
+    void dioceseRejectShouldFailForAlreadyRejectedRegistration() {
+        courseParticipationService = buildService();
+        TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);
+        CourseParticipation participation = pendingParticipation("cp-rr", course, "leader-9");
+        participation.setApprovalStatus(WorkflowApprovalStatus.REJECTED);
+        when(courseParticipationRepository.findByIdWithLeaderAndCourse("cp-rr")).thenReturn(Optional.of(participation));
+        phucuong.ht.modules.training.courseParticipation.model.request.TrainingApprovalRequest request =
+                new phucuong.ht.modules.training.courseParticipation.model.request.TrainingApprovalRequest();
+        request.setApproved(false);
+
+        assertThrows(RuntimeException.class, () -> courseParticipationService.dioceseApprove("cp-rr", request, authentication("admin-diocese", "training.participation.approve.diocese")));
     }
 
     @Test
