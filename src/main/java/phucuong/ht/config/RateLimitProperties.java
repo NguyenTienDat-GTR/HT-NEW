@@ -10,7 +10,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class RateLimitProperties {
 
     private boolean enabled = true;
-    private Tier auth = new Tier(5, 60);
+    // Đăng nhập: chỉ đếm lần thất bại; refresh token và đổi/quên mật khẩu dùng chung nhóm auth.
+    private Tier login = new Tier(10, 300);
+    private Tier auth = new Tier(30, 60);
     private Tier write = new Tier(30, 60);
     private Tier read = new Tier(120, 60);
     private Tier workflow = new Tier(20, 60);
