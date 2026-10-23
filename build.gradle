@@ -107,4 +107,7 @@ configurations.configureEach {
 
 tasks.withType(Test).configureEach {
     useJUnitPlatform()
+    // Mỗi context Spring được cache giữ một pool riêng; giới hạn pool để nhiều context không làm Postgres hết kết nối.
+    systemProperty 'spring.datasource.hikari.maximum-pool-size', '2'
+    systemProperty 'spring.datasource.hikari.minimum-idle', '0'
 }
