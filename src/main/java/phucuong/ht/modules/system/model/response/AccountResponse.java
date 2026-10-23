@@ -12,6 +12,7 @@ import java.util.List;
 public class AccountResponse {
     private String username;
     private UUID leaderId;
+    private String leaderHolyName;
     private String leaderFullName;
     private String primaryRoleCode;
     private String primaryRoleName;

@@ -32,6 +32,10 @@ public class TrainingCourseResponse {
     private Boolean scoreVisible;
     // Khóa có cấp độ đạt được thì mới có chứng nhận và tab duyệt chứng nhận.
     private Boolean certificateRequired;
+    // Khóa quá khứ: tạo thủ công, không loại khóa/thời gian đăng ký; resultingLevel là cấp độ đạt được của khóa.
+    private Boolean pastCourse;
+    private String resultingLevel;
+    private String resultingLevelName;
     private java.time.OffsetDateTime finishedAt;
     private String finishedBy;
     private String location;

@@ -25,6 +25,10 @@ import phucuong.ht.modules.training.trainingCourse.service.TrainingCourseService
 public class TrainingCourseController {
 
     private final TrainingCourseService trainingCourseService;
+    private final phucuong.ht.common.excel.job.ExcelJobService excelJobService;
+    private final phucuong.ht.modules.leaderLevel.service.LeaderLevelService leaderLevelService;
+    private final phucuong.ht.modules.training.trainingCourse.service.PastTrainingCourseService pastTrainingCourseService;
+    private final phucuong.ht.modules.training.trainingCourse.service.PastCourseParticipantImportService pastCourseParticipantImportService;
 
     @PostMapping
     @PreAuthorize("@trainingCourseAccessEvaluator.canCreate(authentication, #request.courseTypeCode)")
@@ -32,10 +36,69 @@ public class TrainingCourseController {
         return apiResponse.success("Tạo khóa huấn luyện thành công", trainingCourseService.create(request, authentication));
     }
 
+    // Khóa quá khứ: chỉ tài khoản được super-admin cấp quyền training.course.create_past.diocese.
+    @PostMapping("/past")
+    @PreAuthorize("@trainingCourseAccessEvaluator.canCreatePast(authentication)")
+    public apiResponse<TrainingCourseResponse> createPast(@Valid @RequestBody phucuong.ht.modules.training.trainingCourse.model.request.PastTrainingCourseRequest request,
+                                                          Authentication authentication) {
+        return apiResponse.success("Tạo khóa huấn luyện quá khứ thành công", pastTrainingCourseService.create(request, authentication));
+    }
+
+    // Tải file Excel mẫu danh sách tham dự khóa quá khứ (cùng quyền với tạo khóa quá khứ).
+    @GetMapping("/past/import-template")
+    @PreAuthorize("@trainingCourseAccessEvaluator.canCreatePast(authentication)")
+    public org.springframework.http.ResponseEntity<byte[]> participantsImportTemplate(Authentication authentication) {
+        return phucuong.ht.common.excel.ExcelResponses.xlsx(
+                phucuong.ht.common.excel.ImportTemplates.participants(leaderLevelService.selectableLevelNames(authentication)),
+                "mau-import-danh-sach-tham-du-khoa-qua-khu");
+    }
+
+    // Import danh sách tham dự (email / SĐT, tổng điểm, kết quả) vào khóa quá khứ từ file Excel, chạy nền.
+    // Bắt buộc có Idempotency-Key: gửi lại cùng key trả lại đúng tác vụ cũ, không import hai lần.
+    @PostMapping(value = "/{courseCode}/participants/import", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("@trainingCourseAccessEvaluator.canCreatePast(authentication)")
+    public org.springframework.http.ResponseEntity<apiResponse<phucuong.ht.common.excel.job.ExcelJobResponse>> importParticipants(
+            @PathVariable String courseCode,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
+            @RequestHeader(value = phucuong.ht.common.idempotency.IdempotencyService.HEADER, required = false) String idempotencyKey,
+            Authentication authentication) {
+        // Báo lỗi ngay nếu không phải khóa quá khứ của giáo phận mình thay vì đợi tác vụ chạy xong.
+        pastCourseParticipantImportService.precheck(courseCode, authentication);
+        return phucuong.ht.common.excel.job.ExcelJobResponses.accepted(excelJobService.createImport(
+                phucuong.ht.common.excel.job.ExcelJobKind.IMPORT_PARTICIPANTS, courseCode, file, idempotencyKey, authentication));
+    }
+
+    // Xóa học viên nhập nhầm khỏi khóa quá khứ.
+    @DeleteMapping("/{courseCode}/participants/{participationId}")
+    @PreAuthorize("@trainingCourseAccessEvaluator.canCreatePast(authentication)")
+    public apiResponse<Void> removePastParticipant(@PathVariable String courseCode, @PathVariable String participationId, Authentication authentication) {
+        pastCourseParticipantImportService.removeParticipant(courseCode, participationId, authentication);
+        return apiResponse.success("Đã xóa học viên khỏi khóa quá khứ", null);
+    }
+
+    @PutMapping("/past/{courseCode}")
+    @PreAuthorize("@trainingCourseAccessEvaluator.canCreatePast(authentication)")
+    public apiResponse<TrainingCourseResponse> updatePast(@PathVariable String courseCode,
+                                                          @Valid @RequestBody phucuong.ht.modules.training.trainingCourse.model.request.PastTrainingCourseRequest request,
+                                                          Authentication authentication) {
+        return apiResponse.success("Cập nhật khóa huấn luyện quá khứ thành công", pastTrainingCourseService.update(courseCode, request, authentication));
+    }
+
     @GetMapping
     @PreAuthorize("@trainingCourseAccessEvaluator.canList(authentication)")
     public apiResponse<Page<TrainingCourseResponse>> findAll(BaseSearchRequest request, Authentication authentication) {
         return apiResponse.success("Lấy danh sách khóa huấn luyện thành công", trainingCourseService.findAll(request, authentication));
+    }
+
+    // Xuất Excel chạy nền theo đúng bộ lọc/tìm kiếm/sắp xếp của danh sách; trả 202 + tác vụ, theo dõi tại /api/excel-jobs.
+    @org.springframework.web.bind.annotation.PostMapping("/export")
+    @PreAuthorize("@trainingCourseAccessEvaluator.canList(authentication)")
+    public org.springframework.http.ResponseEntity<apiResponse<phucuong.ht.common.excel.job.ExcelJobResponse>> export(
+            BaseSearchRequest request,
+            @org.springframework.web.bind.annotation.RequestHeader(value = phucuong.ht.common.idempotency.IdempotencyService.HEADER, required = false) String idempotencyKey,
+            Authentication authentication) {
+        return phucuong.ht.common.excel.job.ExcelJobResponses.accepted(
+                excelJobService.createExport(phucuong.ht.common.excel.job.ExcelJobKind.EXPORT_COURSES, request, idempotencyKey, authentication));
     }
 
     @PatchMapping("/{courseCode}/score-lock")

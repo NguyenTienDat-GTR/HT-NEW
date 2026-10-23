@@ -14,4 +14,6 @@ public class CertificateApproveRequest {
     private CertificateSignerType signerType;
     private String signerName;
     private String signerTitle;
+    // Ngày duyệt do người duyệt chọn. Bắt buộc với chứng nhận của khóa quá khứ (không lấy ngày hiện tại); khóa thường bỏ qua.
+    private java.time.LocalDate approvalDate;
 }

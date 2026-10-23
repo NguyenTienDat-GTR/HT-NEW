@@ -14,6 +14,15 @@ public class TrainingWorkflowSupport {
         return courseType != null && courseType.getManagementUnitType() == UnitType.DEANERY;
     }
 
+    // Khóa do giáo hạt quản lý: khóa thường theo loại khóa (cấp giáo hạt); khóa quá khứ không có loại khóa thì theo đơn vị sở hữu
+    // (gắn giáo hạt = khóa của admin giáo hạt).
+    public boolean isDeaneryManaged(phucuong.ht.modules.training.trainingCourse.model.entity.TrainingCourse course) {
+        if (course == null) {
+            return false;
+        }
+        return course.getCourseType() != null ? isDeaneryManaged(course.getCourseType()) : course.getDeanery() != null;
+    }
+
     // Đơn vị gửi đăng ký: ưu tiên phạm vi gắn trực tiếp của tài khoản (vai trò giáo phận cũng có thể giữ quyền gửi của giáo xứ).
     public UnitType resolveRegistrationSender(
             boolean submitParish, boolean submitDiocese, boolean submitDeanery, boolean directDiocese, boolean directDeanery) {
@@ -64,6 +73,21 @@ public class TrainingWorkflowSupport {
     // các khóa còn lại chỉ cần kết quả điểm đạt hay không.
     public boolean requiresCertificate(TrainingCourseType courseType) {
         return certificateLevelFor(courseType).filter(level -> !"NONE".equals(level)).isPresent();
+    }
+
+    // Cấp độ đạt được của khóa: khóa quá khứ lưu trực tiếp trên khóa, khóa thường lấy theo loại khóa.
+    public Optional<String> certificateLevelFor(phucuong.ht.modules.training.trainingCourse.model.entity.TrainingCourse course) {
+        if (course == null) {
+            return Optional.empty();
+        }
+        if (course.isPast()) {
+            return Optional.ofNullable(course.getResultingLevel());
+        }
+        return certificateLevelFor(course.getCourseType());
+    }
+
+    public boolean requiresCertificate(phucuong.ht.modules.training.trainingCourse.model.entity.TrainingCourse course) {
+        return certificateLevelFor(course).filter(level -> !"NONE".equals(level)).isPresent();
     }
 
     public boolean needsAutomaticEligibilityApproval(TrainingCourseType courseType) {

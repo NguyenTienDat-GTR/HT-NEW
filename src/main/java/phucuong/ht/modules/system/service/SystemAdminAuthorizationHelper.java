@@ -175,10 +175,8 @@ public class SystemAdminAuthorizationHelper {
             return;
         }
         requireRolePermissionOperationAuthority(authentication, authority);
-        if (isLowerAdminSystemRole(authentication, role, authority)) {
-            requireTargetRoleBelowActor(authentication, role);
-            return;
-        }
+        // Ba vai trò admin (giáo phận / giáo hạt / giáo xứ) chỉ SUPER_ADMIN được phân quyền hay thu hồi; cấp trên vẫn phân quyền
+        // được cho từng tài khoản mang các vai trò này (phân quyền tài khoản).
         if (Boolean.TRUE.equals(role.getIsSystem())) {
             throw commonValidationHelper.forbidden("Chỉ SUPER_ADMIN được thay đổi phân quyền của vai trò hệ thống cùng hoặc cao hơn cấp của mình");
         }
@@ -193,22 +191,6 @@ public class SystemAdminAuthorizationHelper {
         } catch (RuntimeException ignored) {
             return false;
         }
-    }
-
-    private static final java.util.Map<String, Integer> ADMIN_SYSTEM_ROLE_TIER = java.util.Map.of(
-            "ADMIN_DIOCESE", 1,
-            "ADMIN_DEANERY", 2,
-            "ADMIN_PARISH", 3
-    );
-
-    // Vai trò admin hệ thống thuộc cấp thấp hơn cấp thao tác của người dùng (giáo phận > giáo hạt > giáo xứ).
-    private boolean isLowerAdminSystemRole(Authentication authentication, Role role, String authority) {
-        if (role == null || !Boolean.TRUE.equals(role.getIsSystem())) {
-            return false;
-        }
-        Integer targetTier = ADMIN_SYSTEM_ROLE_TIER.get(role.getRoleCode());
-        int actorTier = rolePermissionAuthorityScopeOrder(authentication, authority);
-        return targetTier != null && actorTier >= 1 && actorTier != Integer.MAX_VALUE && targetTier > actorTier;
     }
 
     public boolean canReadRole(Authentication authentication, Role role) {
@@ -287,7 +269,7 @@ public class SystemAdminAuthorizationHelper {
             accountManagementAuthorizationHelper.requireCanManage(authentication, target);
             accountManagementAuthorizationHelper.requireOwnedByActorScope(authentication, target);
         }
-        if (!hasAuthority(authentication, permission.getPermissionCode())) {
+        if (!hasAuthority(authentication, permission.getPermissionCode()) && !canDelegateLowerScope(authentication, permission)) {
             throw commonValidationHelper.forbidden("Không thể gán quyền mà tài khoản hiện tại không sở hữu");
         }
         if (hasAuthority(authentication, ACCOUNT_PERMISSION_MANAGE_DIOCESE)) {
@@ -303,6 +285,16 @@ public class SystemAdminAuthorizationHelper {
             return;
         }
         throw commonValidationHelper.forbidden("Không có quyền quản lý phân quyền cho tài khoản");
+    }
+
+    /**
+     * Admin giáo phận giữ quyền tạo khóa quá khứ cấp giáo phận được trao lại quyền cùng loại cấp giáo hạt cho admin giáo hạt thuộc giáo phận mình
+     * (super-admin không xem được tài khoản admin giáo hạt nên không cấp trực tiếp được). Chỉ áp dụng cho quyền này, không mở rộng cho quyền khác.
+     */
+    private boolean canDelegateLowerScope(Authentication authentication, Permission permission) {
+        return PermissionDelegation.canDelegate(
+                authentication == null ? java.util.List.of() : authentication.getAuthorities().stream().map(a -> a.getAuthority()).toList(),
+                permission == null ? null : permission.getPermissionCode());
     }
 
     private void requirePermissionAtOrBelowScope(Permission permission, int actorScopeOrder) {

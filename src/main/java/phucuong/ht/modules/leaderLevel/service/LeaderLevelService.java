@@ -75,6 +75,27 @@ public class LeaderLevelService {
         }
     }
 
+    // Tên các cấp độ chọn được (bỏ "chưa có cấp") trong danh mục của giáo phận tài khoản; dùng cho danh sách chọn trong file Excel mẫu.
+    @Transactional(readOnly = true)
+    public List<String> selectableLevelNames(Authentication authentication) {
+        return activeDioceseId(authentication)
+                .map(dioceseId -> order(dioceseId).names().entrySet().stream()
+                        .filter(entry -> !NONE.equals(entry.getKey()))
+                        .map(Map.Entry::getValue)
+                        .toList())
+                .orElse(List.of());
+    }
+
+    // Mã cấp -> tên cấp của mọi giáo phận (dùng khi xuất Excel); cùng mã ở nhiều giáo phận thì lấy tên đầu tiên.
+    @Transactional(readOnly = true)
+    public Map<String, String> allLevelNames() {
+        Map<String, String> names = new LinkedHashMap<>();
+        for (LeaderLevel level : repository.findAllAcrossDioceses()) {
+            names.putIfAbsent(level.getLevelCode(), level.getLevelName());
+        }
+        return names;
+    }
+
     // Giáo phận đang hoạt động của tài khoản (tài khoản giáo phận / giáo hạt / giáo xứ / huynh trưởng đều có).
     @Transactional(readOnly = true)
     public Optional<UUID> activeDioceseId(Authentication authentication) {

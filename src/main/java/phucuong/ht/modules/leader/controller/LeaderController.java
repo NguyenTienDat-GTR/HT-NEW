@@ -24,6 +24,8 @@ import java.util.UUID;
 public class LeaderController {
 
     private final LeaderService leaderService;
+    private final phucuong.ht.common.excel.job.ExcelJobService excelJobService;
+    private final phucuong.ht.modules.leaderLevel.service.LeaderLevelService leaderLevelService;
 
     @PostMapping
     @PreAuthorize("@leaderAccessEvaluator.canCreate(authentication)")
@@ -35,6 +37,37 @@ public class LeaderController {
     @PreAuthorize("@leaderAccessEvaluator.canList(authentication)")
     public apiResponse<Page<LeaderResponse>> findAll(BaseSearchRequest request, Authentication authentication) {
         return apiResponse.success("Lấy danh sách Huynh Trưởng thành công", leaderService.findAll(request, authentication));
+    }
+
+    // Tải file Excel mẫu để tự tạo file import (cùng quyền với tạo huynh trưởng).
+    @GetMapping("/import-template")
+    @PreAuthorize("@leaderAccessEvaluator.canCreate(authentication)")
+    public org.springframework.http.ResponseEntity<byte[]> importTemplate(Authentication authentication) {
+        return phucuong.ht.common.excel.ExcelResponses.xlsx(
+                phucuong.ht.common.excel.ImportTemplates.leaders(leaderLevelService.selectableLevelNames(authentication)), "mau-import-ho-so-huynh-truong");
+    }
+
+    // Import hồ sơ huynh trưởng từ Excel chạy nền (cùng quyền và phạm vi với tạo huynh trưởng). Có dòng lỗi thì không lưu gì.
+    // Bắt buộc có Idempotency-Key: gửi lại cùng key trả lại đúng tác vụ cũ, không import hai lần.
+    @PostMapping(value = "/import", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("@leaderAccessEvaluator.canCreate(authentication)")
+    public org.springframework.http.ResponseEntity<apiResponse<phucuong.ht.common.excel.job.ExcelJobResponse>> importLeaders(
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
+            @RequestHeader(value = phucuong.ht.common.idempotency.IdempotencyService.HEADER, required = false) String idempotencyKey,
+            Authentication authentication) {
+        return phucuong.ht.common.excel.job.ExcelJobResponses.accepted(excelJobService.createImport(
+                phucuong.ht.common.excel.job.ExcelJobKind.IMPORT_LEADERS, "", file, idempotencyKey, authentication));
+    }
+
+    // Xuất Excel chạy nền theo đúng bộ lọc/tìm kiếm/sắp xếp của danh sách; trả 202 + tác vụ, theo dõi tại /api/excel-jobs.
+    @org.springframework.web.bind.annotation.PostMapping("/export")
+    @PreAuthorize("@leaderAccessEvaluator.canList(authentication)")
+    public org.springframework.http.ResponseEntity<apiResponse<phucuong.ht.common.excel.job.ExcelJobResponse>> export(
+            BaseSearchRequest request,
+            @org.springframework.web.bind.annotation.RequestHeader(value = phucuong.ht.common.idempotency.IdempotencyService.HEADER, required = false) String idempotencyKey,
+            Authentication authentication) {
+        return phucuong.ht.common.excel.job.ExcelJobResponses.accepted(
+                excelJobService.createExport(phucuong.ht.common.excel.job.ExcelJobKind.EXPORT_LEADERS, request, idempotencyKey, authentication));
     }
 
     @GetMapping("/account-candidates")

@@ -709,7 +709,9 @@ public class CertificateConfigService {
             // Cấp độ đạt được: hồ sơ ngoại lệ theo cấp người duyệt đã chọn, còn lại theo loại khóa.
             String achieved = l == null ? null : courseParticipationRepository.findByLeaderIdAndCourseCode(l.getId(), course.getCourseCode())
                     .map(participation -> participation.getTargetLevel()).orElse(null);
-            if (achieved == null && courseType != null) {
+            if (achieved == null && course.isPast()) {
+                achieved = course.getResultingLevel();
+            } else if (achieved == null && courseType != null) {
                 achieved = courseType.getResultingLevel();
             }
             v.put("resultingLevel", achieved == null ? "" : levelNames.getOrDefault(achieved, achieved));

@@ -162,6 +162,7 @@ public class RolePermissionManagementService {
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy vai trò: " + request.getRoleCode()));
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người thu hồi phân quyền của vai trò");
         int revoked = 0;
+        List<Permission> revokedPermissions = new java.util.ArrayList<>();
         for (String permissionCode : new LinkedHashSet<>(request.getPermissionCodes())) {
             RolePermission rolePermission = rolePermissionRepository.findByRoleCodeAndPermissionCode(request.getRoleCode(), permissionCode)
                     .orElseThrow(() -> commonValidationHelper.notFound("Vai trò chưa được gán quyền: " + permissionCode));
@@ -177,9 +178,14 @@ public class RolePermissionManagementService {
             rolePermission.setRevocationReason(PermissionRevocationReason.MANUAL);
             rolePermission.setUpdatedAt(now);
             rolePermission.setUpdatedBy(actor);
+            revokedPermissions.add(rolePermission.getPermission());
             revoked++;
         }
         notifyRolePermissionChanged(request.getRoleCode(), "ROLE_PERMISSION_BULK_REVOKED");
+        // Một request thu hồi gửi đúng một thông báo cho các tài khoản đang giữ vai trò, kèm danh sách quyền bị thu hồi.
+        if (permissionGrantNotifier != null) {
+            permissionGrantNotifier.notifyRoleRevoked(role, revokedPermissions, actor);
+        }
         return revoked;
     }
 

@@ -87,6 +87,7 @@ public class TrainingCourseService {
     private final CertificateLifecycleService certificateLifecycleService;
     private final CertificateRepository certificateRepository;
     private final CourseActivityGuard courseActivityGuard;
+    private final phucuong.ht.modules.leaderLevel.service.LeaderLevelService leaderLevelService;
     private final phucuong.ht.modules.certificate.service.CertificateRealtimeNotifier certificateRealtimeNotifier;
     private final phucuong.ht.common.utils.AuditActorNameResolver auditActorNameResolver;
     @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -209,6 +210,14 @@ public class TrainingCourseService {
                 .toList();
     }
 
+    // Chi tiết khóa không qua cache (dùng ngay sau khi tạo/sửa để trả dữ liệu mới nhất).
+    @Transactional(readOnly = true)
+    public TrainingCourseResponse loadDetail(String courseCode) {
+        return toResponse(trainingCourseRepository.findByCodeWithType(courseCode)
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy khóa huấn luyện " + courseCode)),
+                courseParticipationRepository.existsByCourseCode(courseCode));
+    }
+
     @Cacheable(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, key = "@cacheScopeKeyHelper.detailKey(#authentication, #courseCode)")
     @Transactional(readOnly = true)
     public TrainingCourseResponse findById(String courseCode, Authentication authentication) {
@@ -229,6 +238,9 @@ public class TrainingCourseService {
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy khóa huấn luyện " + courseCode));
         courseActivityGuard.requireActive(existing);
 
+        if (existing.isPast()) {
+            throw commonValidationHelper.conflict("Khóa quá khứ được sửa tại chức năng riêng của khóa quá khứ");
+        }
         TrainingCourseType currentType = existing.getCourseType();
         boolean typeChanging = request.getCourseTypeCode() != null
                 && !request.getCourseTypeCode().isBlank()
@@ -412,7 +424,7 @@ public class TrainingCourseService {
 
     private void requireUpdateScope(Authentication authentication, TrainingCourse existing, TrainingCourseType targetCourseType) {
         UUID sourceDioceseId = sourceDioceseId(existing);
-        if (trainingWorkflowSupport.isDeaneryManaged(existing.getCourseType())) {
+        if (trainingWorkflowSupport.isDeaneryManaged(existing)) {
             requireAuthority(authentication, TrainingCourseAccessEvaluator.UPDATE_DEANERY);
             UUID activeDeaneryId = accountScopeValidationHelper.requireActiveDeaneryId(
                     authentication,
@@ -460,7 +472,7 @@ public class TrainingCourseService {
     }
 
     private UUID sourceDioceseId(TrainingCourse course) {
-        if (trainingWorkflowSupport.isDeaneryManaged(course.getCourseType())) {
+        if (trainingWorkflowSupport.isDeaneryManaged(course)) {
             if (course.getDeanery() == null || course.getDeanery().getDiocese() == null) {
                 throw commonValidationHelper.conflict("Khóa giáo hạt không có phạm vi giáo hạt / giáo phận hợp lệ");
             }
@@ -538,7 +550,7 @@ public class TrainingCourseService {
     }
 
     private void publishRegistrationEvent(TrainingCourse course, boolean open, String reason, String actor) {
-        boolean deaneryManaged = trainingWorkflowSupport.isDeaneryManaged(course.getCourseType());
+        boolean deaneryManaged = trainingWorkflowSupport.isDeaneryManaged(course);
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("courseCode", course.getCourseCode());
         payload.put("courseName", course.getCourseName());
@@ -639,7 +651,7 @@ public class TrainingCourseService {
         if (usernames.isEmpty()) {
             return;
         }
-        boolean deanery = trainingWorkflowSupport.isDeaneryManaged(course.getCourseType());
+        boolean deanery = trainingWorkflowSupport.isDeaneryManaged(course);
         UUID scopeId = deanery ? course.getDeanery().getId() : course.getDiocese().getId();
         course.getRecipientUsernames().addAll(notificationRecipientResolver.resolveRecipients(
                 usernames,
@@ -786,7 +798,11 @@ public class TrainingCourseService {
                 .scoreLocked(Boolean.TRUE.equals(course.getScoreLocked()))
                 .autoApproveEligible(Boolean.TRUE.equals(course.getAutoApproveEligible()))
                 .scoreVisible(Boolean.TRUE.equals(course.getScoreVisible()))
-                .certificateRequired(trainingWorkflowSupport.requiresCertificate(courseType))
+                .certificateRequired(trainingWorkflowSupport.requiresCertificate(course))
+                .pastCourse(course.isPast())
+                .resultingLevel(course.isPast() ? course.getResultingLevel() : null)
+                .resultingLevelName(course.isPast() && course.getResultingLevel() != null
+                        ? leaderLevelService.order(trainingWorkflowSupport.dioceseIdOf(course)).nameOf(course.getResultingLevel()) : null)
                 .finishedAt(course.getFinishedAt())
                 .finishedBy(course.getFinishedBy())
                 .finishedByName(auditActorNameResolver.resolve(course.getFinishedBy()))

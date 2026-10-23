@@ -143,6 +143,7 @@ public class AccountPermissionOverrideManagementService {
         requireValidSuperAdminTarget(authentication, account);
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người thu hồi phân quyền của tài khoản");
         int revoked = 0;
+        List<Permission> revokedPermissions = new java.util.ArrayList<>();
         for (String permissionCode : new LinkedHashSet<>(request.getPermissionCodes())) {
             AccountPermissionOverride override = accountPermissionOverrideRepository.findByUsernameAndPermissionCode(request.getUsername(), permissionCode)
                     .orElseThrow(() -> commonValidationHelper.notFound("Tài khoản chưa được gán quyền riêng: " + permissionCode));
@@ -157,9 +158,14 @@ public class AccountPermissionOverrideManagementService {
             override.setRevocationReason(PermissionRevocationReason.MANUAL);
             override.setUpdatedAt(now);
             override.setUpdatedBy(actor);
+            revokedPermissions.add(override.getPermission());
             revoked++;
         }
         notifyAccountPermissionChanged(request.getUsername(), "ACCOUNT_PERMISSION_BULK_REVOKED");
+        // Một request thu hồi gửi đúng một thông báo, chỉ tới tài khoản bị thu hồi quyền riêng.
+        if (permissionGrantNotifier != null) {
+            permissionGrantNotifier.notifyAccountRevoked(request.getUsername(), revokedPermissions, actor);
+        }
         return revoked;
     }
 

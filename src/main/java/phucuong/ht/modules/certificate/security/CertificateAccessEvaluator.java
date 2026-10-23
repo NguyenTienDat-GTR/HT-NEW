@@ -98,7 +98,7 @@ public class CertificateAccessEvaluator {
                     if (username == null || username.isBlank() || certificate.getCourse() == null) {
                         return false;
                     }
-                    if (trainingWorkflowSupport.isDeaneryManaged(certificate.getCourse().getCourseType())) {
+                    if (trainingWorkflowSupport.isDeaneryManaged(certificate.getCourse())) {
                         return securityUtils.hasAuthority(authentication, "training.certificate." + action + ".deanery")
                                 && accountRepository.findActiveDeaneryIdByUsername(username)
                                 .flatMap(activeId -> certificateRepository.findDeaneryIdByCertificateCode(certificateCode).map(activeId::equals))

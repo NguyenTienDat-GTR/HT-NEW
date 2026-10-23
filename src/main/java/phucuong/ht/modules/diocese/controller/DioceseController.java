@@ -25,6 +25,7 @@ import java.util.UUID;
 public class DioceseController {
 
     private final DioceseService dioceseService;
+    private final phucuong.ht.common.excel.job.ExcelJobService excelJobService;
 
     @PostMapping
     @PreAuthorize("@dioceseAccessEvaluator.canCreate(authentication)")
@@ -36,6 +37,17 @@ public class DioceseController {
     @PreAuthorize("@dioceseAccessEvaluator.canList(authentication)")
     public apiResponse<Page<DioceseResponse>> findAll(BaseSearchRequest request, Authentication authentication) {
         return apiResponse.success("Lấy danh sách giáo phận thành công", dioceseService.findAll(request, authentication));
+    }
+
+    // Xuất Excel chạy nền theo đúng bộ lọc/tìm kiếm/sắp xếp của danh sách; trả 202 + tác vụ, theo dõi tại /api/excel-jobs.
+    @org.springframework.web.bind.annotation.PostMapping("/export")
+    @PreAuthorize("@dioceseAccessEvaluator.canList(authentication)")
+    public org.springframework.http.ResponseEntity<apiResponse<phucuong.ht.common.excel.job.ExcelJobResponse>> export(
+            BaseSearchRequest request,
+            @org.springframework.web.bind.annotation.RequestHeader(value = phucuong.ht.common.idempotency.IdempotencyService.HEADER, required = false) String idempotencyKey,
+            Authentication authentication) {
+        return phucuong.ht.common.excel.job.ExcelJobResponses.accepted(
+                excelJobService.createExport(phucuong.ht.common.excel.job.ExcelJobKind.EXPORT_DIOCESES, request, idempotencyKey, authentication));
     }
 
     @GetMapping("/{id}")

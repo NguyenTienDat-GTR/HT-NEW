@@ -96,6 +96,21 @@ public class ParishRepository extends BaseRepo<Parish, UUID> {
                 .getResultList();
     }
 
+    /** Toàn bộ giáo xứ kèm giáo hạt và giáo phận (dùng để đối chiếu tên giáo xứ khi import huynh trưởng). */
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<Parish> findAllWithDeaneryAndDiocese() {
+        return entityManager.createQuery(
+                        """
+                                select p
+                                from Parish p
+                                join fetch p.deanery d
+                                join fetch d.diocese
+                                """,
+                        Parish.class
+                )
+                .getResultList();
+    }
+
     public Optional<UUID> findDeaneryIdByParishId(UUID parishId) {
         List<UUID> results = entityManager.createQuery(
                         """

@@ -21,6 +21,8 @@ public class CourseScoreVisibility {
     private static final String SUPER_ADMIN_AUTHORITY = "ROLE_SUPER_ADMIN";
     private static final String VIEWER_ATTRIBUTE = CourseScoreVisibility.class.getName() + ".viewer";
 
+    private static final ThreadLocal<Viewer> THREAD_VIEWER = new ThreadLocal<>();
+
     private final securityUtils securityUtils;
     private final AccountRepository accountRepository;
 
@@ -49,7 +51,17 @@ public class CourseScoreVisibility {
         }
         RequestAttributes attributes = RequestContextHolder.getRequestAttributes();
         if (attributes == null) {
-            return null;
+            // Tác vụ nền (xuất Excel) chạy với quyền của người tạo nhưng không có request: vẫn phải che điểm như khi người đó tự xem.
+            Viewer cachedViewer = THREAD_VIEWER.get();
+            if (cachedViewer == null) {
+                String name = securityUtils.currentUsername(authentication);
+                cachedViewer = new Viewer(
+                        securityUtils.hasAuthority(authentication, SUPER_ADMIN_AUTHORITY),
+                        name == null ? null : accountRepository.findDirectActiveDioceseIdByUsername(name).orElse(null),
+                        name == null ? null : accountRepository.findDirectActiveDeaneryIdByUsername(name).orElse(null));
+                THREAD_VIEWER.set(cachedViewer);
+            }
+            return cachedViewer;
         }
         Object cached = attributes.getAttribute(VIEWER_ATTRIBUTE, RequestAttributes.SCOPE_REQUEST);
         if (cached instanceof Viewer viewer) {
@@ -62,6 +74,11 @@ public class CourseScoreVisibility {
                 username == null ? null : accountRepository.findDirectActiveDeaneryIdByUsername(username).orElse(null));
         attributes.setAttribute(VIEWER_ATTRIBUTE, viewer, RequestAttributes.SCOPE_REQUEST);
         return viewer;
+    }
+
+    /** Worker nền gọi khi kết thúc mỗi job để người xem của job này không rò sang job khác trên cùng luồng. */
+    public static void clearThreadViewer() {
+        THREAD_VIEWER.remove();
     }
 
     private record Viewer(boolean superAdmin, UUID dioceseId, UUID deaneryId) {

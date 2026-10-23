@@ -28,6 +28,20 @@ public class globalExceptionHandler {
                 .body(apiResponse.error(exception.getMessage(), exception.getErrorCode().name()));
     }
 
+    @ExceptionHandler(phucuong.ht.common.excel.ImportValidationException.class)
+    public ResponseEntity<apiResponse<java.util.List<phucuong.ht.common.excel.ImportError>>> handleImportValidation(
+            phucuong.ht.common.excel.ImportValidationException exception
+    ) {
+        return ResponseEntity.badRequest()
+                .body(apiResponse.<java.util.List<phucuong.ht.common.excel.ImportError>>builder()
+                        .success(false)
+                        .message(exception.getMessage())
+                        .errorCode(errorCode.VALIDATION_ERROR.name())
+                        .data(exception.getErrors())
+                        .timestamp(java.time.OffsetDateTime.now())
+                        .build());
+    }
+
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<apiResponse<Void>> handleBadCredentials(BadCredentialsException exception) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)

@@ -25,6 +25,7 @@ import java.util.UUID;
 public class DeaneryController {
 
     private final DeaneryService deaneryService;
+    private final phucuong.ht.common.excel.job.ExcelJobService excelJobService;
 
     @PostMapping
     @PreAuthorize("@deaneryAccessEvaluator.canCreate(authentication)")
@@ -36,6 +37,17 @@ public class DeaneryController {
     @PreAuthorize("@deaneryAccessEvaluator.canList(authentication)")
     public apiResponse<Page<DeaneryResponse>> findAll(BaseSearchRequest request, Authentication authentication) {
         return apiResponse.success("Lấy danh sách giáo hạt thành công", deaneryService.findAll(request, authentication));
+    }
+
+    // Xuất Excel chạy nền theo đúng bộ lọc/tìm kiếm/sắp xếp của danh sách; trả 202 + tác vụ, theo dõi tại /api/excel-jobs.
+    @org.springframework.web.bind.annotation.PostMapping("/export")
+    @PreAuthorize("@deaneryAccessEvaluator.canList(authentication)")
+    public org.springframework.http.ResponseEntity<apiResponse<phucuong.ht.common.excel.job.ExcelJobResponse>> export(
+            BaseSearchRequest request,
+            @org.springframework.web.bind.annotation.RequestHeader(value = phucuong.ht.common.idempotency.IdempotencyService.HEADER, required = false) String idempotencyKey,
+            Authentication authentication) {
+        return phucuong.ht.common.excel.job.ExcelJobResponses.accepted(
+                excelJobService.createExport(phucuong.ht.common.excel.job.ExcelJobKind.EXPORT_DEANERIES, request, idempotencyKey, authentication));
     }
 
     @GetMapping("/{id}")

@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.when;
 
-// Cấp giáo phận phân quyền cho admin-deanery / admin-parish, cấp giáo hạt cho admin-parish; không phân quyền cho cấp ngang hoặc cao hơn.
+// Ba vai trò admin hệ thống chỉ SUPER_ADMIN được phân quyền / thu hồi; cấp dưới và cấp trên khác đều bị từ chối.
 class RolePermissionRoleTierTest {
 
     private final RoleRepository roleRepository = Mockito.mock(RoleRepository.class);
@@ -48,19 +48,29 @@ class RolePermissionRoleTierTest {
     }
 
     @Test
-    void dioceseLevelMayAssignDeaneryAndParishAdminRoles() {
+    void dioceseLevelMayNotAssignAnyAdminSystemRole() {
         var auth = actor("ADMIN_DIOCESE", 100, "system.role_permission.assign.diocese");
-        assertDoesNotThrow(() -> helper().requireRolePermissionRoleAccess(auth, systemRole("ADMIN_DEANERY", 200), "system.role_permission.assign.diocese"));
-        assertDoesNotThrow(() -> helper().requireRolePermissionRoleAccess(auth, systemRole("ADMIN_PARISH", 300), "system.role_permission.assign.diocese"));
-        assertThrows(RuntimeException.class, () -> helper().requireRolePermissionRoleAccess(auth, systemRole("ADMIN_DIOCESE", 100), "system.role_permission.assign.diocese"));
+        for (String code : List.of("ADMIN_DIOCESE", "ADMIN_DEANERY", "ADMIN_PARISH")) {
+            assertThrows(RuntimeException.class, () -> helper().requireRolePermissionRoleAccess(auth, systemRole(code, 200), "system.role_permission.assign.diocese"), code);
+            assertThrows(RuntimeException.class, () -> helper().requireRolePermissionRoleAccess(auth, systemRole(code, 200), "system.role_permission.revoke.diocese"), code);
+        }
     }
 
     @Test
-    void deaneryLevelMayAssignParishAdminOnly() {
+    void deaneryLevelMayNotAssignAnyAdminSystemRole() {
         var auth = actor("ADMIN_DEANERY", 200, "system.role_permission.assign.deanery");
-        assertDoesNotThrow(() -> helper().requireRolePermissionRoleAccess(auth, systemRole("ADMIN_PARISH", 300), "system.role_permission.assign.deanery"));
-        assertThrows(RuntimeException.class, () -> helper().requireRolePermissionRoleAccess(auth, systemRole("ADMIN_DEANERY", 200), "system.role_permission.assign.deanery"));
-        assertThrows(RuntimeException.class, () -> helper().requireRolePermissionRoleAccess(auth, systemRole("ADMIN_DIOCESE", 100), "system.role_permission.assign.deanery"));
+        for (String code : List.of("ADMIN_DIOCESE", "ADMIN_DEANERY", "ADMIN_PARISH")) {
+            assertThrows(RuntimeException.class, () -> helper().requireRolePermissionRoleAccess(auth, systemRole(code, 300), "system.role_permission.assign.deanery"), code);
+        }
+    }
+
+    @Test
+    void superAdminStillManagesAdminSystemRoles() {
+        AuthUserDetails principal = AuthUserDetails.tokenPrincipal("root", null, List.of("SUPER_ADMIN"), List.of());
+        var auth = new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
+        for (String code : List.of("ADMIN_DIOCESE", "ADMIN_DEANERY", "ADMIN_PARISH")) {
+            assertDoesNotThrow(() -> helper().requireRolePermissionRoleAccess(auth, systemRole(code, 100), "system.role_permission.assign.all"), code);
+        }
     }
 
     @Test

@@ -73,6 +73,7 @@ public class LeaderService {
             Parish parish = leaderValidationHelper.requireExistingParish(request.getParishId());
             requireParishOperational(parish.getId());
             leaderValidationHelper.validateCreateEmailUniqueness(request.getEmail());
+            leaderValidationHelper.validateCreatePhoneUniqueness(request.getPhoneNumber());
             LeaderValidationHelper.LeaderNameParts nameParts = leaderValidationHelper.splitFullName(request.getFullName());
             Leader leader = new Leader();
             leader.setHolyName(request.getHolyName());
@@ -168,6 +169,7 @@ public class LeaderService {
         Leader existingLeader = leaderValidationHelper.requireExistingLeaderWithParish(id);
         String auditActor = leaderValidationHelper.getRequiredAuditActor(authentication);
         leaderValidationHelper.validateUpdateEmailUniqueness(id, request.getEmail(), existingLeader.getEmail());
+        leaderValidationHelper.validateUpdatePhoneUniqueness(id, request.getPhoneNumber(), existingLeader.getPhoneNumber());
 
         UUID currentParishId = existingLeader.getParish() == null ? null : existingLeader.getParish().getId();
         boolean transferringParish = request.getParishId() != null && !request.getParishId().equals(currentParishId);

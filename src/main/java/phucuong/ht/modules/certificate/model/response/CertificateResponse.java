@@ -21,6 +21,8 @@ public class CertificateResponse {
     private String courseName;
     // Khóa đã kết thúc (finishedAt != null): không duyệt/từ chối được nữa, chỉ xuất PDF.
     private Boolean courseFinished;
+    // Khóa quá khứ: duyệt chứng nhận phải chọn ngày duyệt.
+    private Boolean coursePast;
     private BigDecimal totalScore;
     private Boolean scoreHidden;
     private BigDecimal passingScore;

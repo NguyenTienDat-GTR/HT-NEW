@@ -40,6 +40,9 @@ public class CertificateLifecycleService {
     private final CommonValidationHelper commonValidationHelper;
     private final DomainEventPublisher domainEventPublisher;
     private final CertificateRealtimeNotifier certificateRealtimeNotifier;
+    // Khóa hàng chứng nhận / huynh trưởng trước khi đổi trạng thái và cấp độ (tuỳ chọn để test đơn vị không cần).
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private phucuong.ht.common.concurrency.EntityLockService entityLockService;
 
     // Cấp độ chứng nhận này trao: hồ sơ ngoại lệ theo cấp người duyệt chọn, còn lại theo cấp của loại khóa.
     public String achievedLevel(Certificate certificate) {
@@ -47,8 +50,7 @@ public class CertificateLifecycleService {
         if (participation.isPresent() && participation.get().getTargetLevel() != null) {
             return participation.get().getTargetLevel();
         }
-        return certificate.getCourse() == null || certificate.getCourse().getCourseType() == null
-                ? null : certificate.getCourse().getCourseType().getResultingLevel();
+        return certificate.getCourse() == null ? null : trainingWorkflowSupport.certificateLevelFor(certificate.getCourse()).orElse(null);
     }
 
     // Thu hồi chứng nhận đã duyệt. Hồ sơ của khóa trở thành không đạt dù điểm cao hơn điểm đạt và huynh trưởng được hạ về
@@ -56,6 +58,7 @@ public class CertificateLifecycleService {
     public void revoke(Certificate certificate, String reason, CertificateRevocationSource source, boolean enforceOrder,
                        String actor, OffsetDateTime now) {
         requireLinked(certificate);
+        lockForUpdate(certificate);
         if (certificate.getApprovalStatus() == WorkflowApprovalStatus.REVOKED) {
             throw commonValidationHelper.conflict("Chứng nhận đã bị thu hồi trước đó");
         }
@@ -99,6 +102,7 @@ public class CertificateLifecycleService {
     // reissue = false (bật lại khóa): mở lại tất cả chứng nhận bị thu hồi do vô hiệu hóa, không ràng buộc thứ tự.
     public void restore(Certificate certificate, String reason, boolean reissue, String actor, OffsetDateTime now) {
         requireLinked(certificate);
+        lockForUpdate(certificate);
         if (certificate.getApprovalStatus() != WorkflowApprovalStatus.REVOKED) {
             throw commonValidationHelper.conflict("Chỉ cấp lại được chứng nhận đã bị thu hồi");
         }
@@ -177,6 +181,14 @@ public class CertificateLifecycleService {
             return Optional.empty();
         }
         return courseParticipationRepository.findByLeaderIdAndCourseCode(certificate.getLeader().getId(), certificate.getCourse().getCourseCode());
+    }
+
+    // Thứ tự khóa thống nhất: chứng nhận rồi huynh trưởng. Nạp lại để đọc đúng trạng thái / cấp độ đã commit của người thao tác trước.
+    private void lockForUpdate(Certificate certificate) {
+        if (entityLockService != null) {
+            entityLockService.lock(certificate);
+            entityLockService.lock(certificate.getLeader());
+        }
     }
 
     private void requireLinked(Certificate certificate) {

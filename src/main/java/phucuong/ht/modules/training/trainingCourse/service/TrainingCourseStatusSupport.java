@@ -18,6 +18,10 @@ public final class TrainingCourseStatusSupport {
 
     // Đóng thủ công (CLOSED) được giữ nguyên cho tới khi mở thủ công hoặc hết hạn đăng ký.
     public static CourseRegistrationStatus registrationStatus(TrainingCourse course, OffsetDateTime now) {
+        // Khóa quá khứ không có thời gian đăng ký: luôn đã kết thúc đăng ký.
+        if (course.isPast()) {
+            return CourseRegistrationStatus.ENDED;
+        }
         OffsetDateTime start = course.getRegistrationStartAt();
         OffsetDateTime end = course.getRegistrationEndAt();
         if (end != null && now.isAfter(end)) {

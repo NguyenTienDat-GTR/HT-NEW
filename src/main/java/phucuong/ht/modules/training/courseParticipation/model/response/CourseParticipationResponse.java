@@ -23,6 +23,8 @@ public class CourseParticipationResponse {
     private String courseName;
     // Khóa đã kết thúc (thủ công hoặc quá ngày kết thúc): hồ sơ chỉ xem, không duyệt/xóa được nữa.
     private Boolean courseFinished;
+    // Khóa quá khứ: duyệt chứng nhận phải chọn ngày duyệt.
+    private Boolean coursePast;
     private String courseTypeCode;
     private LocalDate registrationDate;
     private ParticipationStatus participationStatus;
