@@ -287,7 +287,7 @@ public class SystemAdminAuthorizationHelper {
             accountManagementAuthorizationHelper.requireCanManage(authentication, target);
             accountManagementAuthorizationHelper.requireOwnedByActorScope(authentication, target);
         }
-        if (!hasAuthority(authentication, permission.getPermissionCode())) {
+        if (!hasAuthority(authentication, permission.getPermissionCode()) && !canDelegateLowerScope(authentication, permission)) {
             throw commonValidationHelper.forbidden("Không thể gán quyền mà tài khoản hiện tại không sở hữu");
         }
         if (hasAuthority(authentication, ACCOUNT_PERMISSION_MANAGE_DIOCESE)) {
@@ -303,6 +303,16 @@ public class SystemAdminAuthorizationHelper {
             return;
         }
         throw commonValidationHelper.forbidden("Không có quyền quản lý phân quyền cho tài khoản");
+    }
+
+    /**
+     * Admin giáo phận giữ quyền tạo khóa quá khứ cấp giáo phận được trao lại quyền cùng loại cấp giáo hạt cho admin giáo hạt thuộc giáo phận mình
+     * (super-admin không xem được tài khoản admin giáo hạt nên không cấp trực tiếp được). Chỉ áp dụng cho quyền này, không mở rộng cho quyền khác.
+     */
+    private boolean canDelegateLowerScope(Authentication authentication, Permission permission) {
+        return PermissionDelegation.canDelegate(
+                authentication == null ? java.util.List.of() : authentication.getAuthorities().stream().map(a -> a.getAuthority()).toList(),
+                permission == null ? null : permission.getPermissionCode());
     }
 
     private void requirePermissionAtOrBelowScope(Permission permission, int actorScopeOrder) {

@@ -76,6 +76,9 @@ public class CertificateService {
     private final CertificateAccessEvaluator certificateAccessEvaluator;
     private final phucuong.ht.modules.training.trainingCourse.service.CourseFinishService courseFinishService;
     private final phucuong.ht.common.utils.AuditActorNameResolver auditActorNameResolver;
+    // Khóa hàng chứng nhận / huynh trưởng khi duyệt, từ chối, thu hồi: chống nhiều người thao tác cùng lúc (tuỳ chọn để test đơn vị không cần).
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private phucuong.ht.common.concurrency.EntityLockService entityLockService;
 
     @Cacheable(cacheNames = CacheNames.CERTIFICATE_LIST, key = "@cacheScopeKeyHelper.listKey(#authentication, #request)")
     public Page<CertificateResponse> findAll(BaseSearchRequest request, Authentication authentication) {
@@ -169,8 +172,25 @@ public class CertificateService {
     }
 
     private Certificate requireCertificate(String certificateCode) {
-        return certificateRepository.findByCodeWithLeaderAndCourse(certificateCode)
+        Certificate certificate = certificateRepository.findByCodeWithLeaderAndCourse(certificateCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy chứng chỉ: " + certificateCode));
+        lockCertificate(certificate);
+        return certificate;
+    }
+
+    // Khóa hàng chứng nhận rồi nạp lại: người đến sau chờ người trước xong và thấy đúng trạng thái đã commit (đã duyệt / đã thu hồi...).
+    private void lockCertificate(Certificate certificate) {
+        if (entityLockService != null) {
+            entityLockService.lock(certificate);
+        }
+    }
+
+    // Khóa luôn huynh trưởng ngay sau chứng nhận (thứ tự thống nhất: chứng nhận rồi huynh trưởng) và TRƯỚC mọi thao tác khác trên hồ sơ của họ:
+    // khóa muộn hơn thì hai giao dịch cùng giữ khóa yếu trên hàng huynh trưởng rồi cùng nâng lên khóa ghi, gây deadlock.
+    private void lockLeaderOf(Certificate certificate) {
+        if (entityLockService != null && certificate.getLeader() != null) {
+            entityLockService.lock(certificate.getLeader());
+        }
     }
 
     @Caching(evict = {
@@ -214,7 +234,8 @@ public class CertificateService {
         List<Certificate> decided = new ArrayList<>();
         Map<String, String> reasonsByCode = new HashMap<>();
         String bulkActor = null;
-        for (String code : new LinkedHashSet<>(request.getIds())) {
+        // Duyệt theo thứ tự mã: hai lần duyệt hàng loạt chồng nhau khóa hàng cùng thứ tự nên không deadlock.
+        for (String code : new java.util.TreeSet<>(request.getIds())) {
             Optional<Certificate> found = certificateRepository.findByCodeWithLeaderAndCourse(code);
             if (found.isEmpty()) {
                 failures.add(bulkFailure(code, null, "Không tìm thấy chứng nhận"));
@@ -234,6 +255,7 @@ public class CertificateService {
                     single.setSignerType(request.getSignerType());
                     single.setSignerName(request.getSignerName());
                     single.setSignerTitle(request.getSignerTitle());
+                    single.setApprovalDate(request.getApprovalDate());
                     Certificate done = approveInternal(code, single, authentication);
                     decided.add(done);
                     bulkActor = done.getApprovedBy();
@@ -270,11 +292,12 @@ public class CertificateService {
     private Certificate rejectInternal(String certificateCode, String rawReason, Authentication authentication) {
         Certificate certificate = certificateRepository.findByCodeWithLeaderAndCourse(certificateCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy chứng chỉ: " + certificateCode));
+        lockCertificate(certificate);
         if (certificate.getLeader() == null || certificate.getCourse() == null) {
             throw commonValidationHelper.validationError("Chứng chỉ phải được liên kết với leader và khóa huấn luyện");
         }
         courseActivityGuard.requireActive(certificate.getCourse());
-        if (certificate.getCourse().getFinishedAt() != null) {
+        if (certificate.getCourse().getFinishedAt() != null && !certificate.getCourse().isPast()) {
             throw commonValidationHelper.conflict("Khóa huấn luyện đã kết thúc nên không từ chối chứng nhận được, chỉ xuất được PDF");
         }
         WorkflowApprovalStatus current = certificate.getApprovalStatus();
@@ -329,6 +352,9 @@ public class CertificateService {
     private Certificate approveInternal(String certificateCode, CertificateApproveRequest request, Authentication authentication) {
         Certificate certificate = certificateRepository.findByCodeWithLeaderAndCourse(certificateCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy chứng chỉ: " + certificateCode));
+        // Khóa hàng trước khi kiểm tra trạng thái: hai người cùng duyệt thì người sau thấy "đã được duyệt" và bị từ chối, không ghi lịch sử cấp độ hai lần.
+        lockCertificate(certificate);
+        lockLeaderOf(certificate);
         if (certificate.getLeader() == null || certificate.getCourse() == null) {
             throw commonValidationHelper.validationError("Chứng chỉ phải được liên kết với leader và khóa huấn luyện");
         }
@@ -339,9 +365,12 @@ public class CertificateService {
         if (certificate.getApprovalStatus() == WorkflowApprovalStatus.REVOKED) {
             throw commonValidationHelper.conflict("Chứng nhận đã bị thu hồi nên không duyệt lại được");
         }
-        if (certificate.getCourse().getFinishedAt() != null) {
+        boolean pastCourse = certificate.getCourse().isPast();
+        if (certificate.getCourse().getFinishedAt() != null && !pastCourse) {
             throw commonValidationHelper.conflict("Khóa huấn luyện đã kết thúc nên không duyệt chứng nhận được, chỉ xuất được PDF");
         }
+        // Khóa quá khứ: người duyệt phải chọn ngày duyệt, không tự lấy ngày hiện tại.
+        LocalDate approvalDate = pastCourse ? requirePastApprovalDate(certificate, request) : null;
 
         CourseParticipation participation = courseParticipationRepository.findByLeaderIdAndCourseCode(
                         certificate.getLeader().getId(),
@@ -350,7 +379,10 @@ public class CertificateService {
                 .orElseThrow(() -> commonValidationHelper.validationError("Leader không có bản ghi tham gia cho khóa huấn luyện này"));
 
         requireApprovedParticipationForCertificate(participation);
-        boolean passingScore = participation.getCourse() != null
+        // Khóa quá khứ: kết quả Đạt đã nhập từ Excel là căn cứ (điểm có thể không có).
+        boolean passingScore = pastCourse
+                ? participation.getResult() == phucuong.ht.modules.training.enums.CourseResult.COMPLETED
+                : participation.getCourse() != null
                 && participation.getTotalScore() != null
                 && participation.getTotalScore().compareTo(participation.getCourse().getPassingScore()) >= 0;
         String approvalReason = request == null ? null : commonValidationHelper.normalizeOptionalText(request.getApprovalReason());
@@ -363,19 +395,24 @@ public class CertificateService {
 
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người duyệt chứng chỉ");
         OffsetDateTime now = OffsetDateTime.now();
+        // Khóa quá khứ: ngày duyệt/ngày cấp là ngày người duyệt chọn (giữa trưa giờ Việt Nam để không lệch ngày theo múi giờ).
+        OffsetDateTime approvedAt = approvalDate == null ? now
+                : approvalDate.atTime(12, 0).atZone(java.time.ZoneId.of("Asia/Ho_Chi_Minh")).toOffsetDateTime();
         certificate.setApprovalStatus(WorkflowApprovalStatus.APPROVED);
-        certificate.setApprovedAt(now);
+        certificate.setApprovedAt(approvedAt);
         certificate.setApprovedBy(actor);
         certificate.setApprovedByException(!passingScore);
         certificate.setExceptionApprovalReason(approvalReason);
-        if (certificate.getIssueDate() == null) {
+        if (approvalDate != null) {
+            certificate.setIssueDate(approvalDate);
+        } else if (certificate.getIssueDate() == null) {
             certificate.setIssueDate(LocalDate.now());
         }
         certificate.setUpdatedAt(now);
         certificate.setUpdatedBy(actor);
 
         participation.setCertificateApprovalStatus(WorkflowApprovalStatus.APPROVED);
-        participation.setCertificateApprovedAt(now);
+        participation.setCertificateApprovedAt(approvedAt);
         participation.setApprovedBy(actor);
         participation.setUpdatedAt(now);
         participation.setUpdatedBy(actor);
@@ -391,9 +428,25 @@ public class CertificateService {
         return certificate;
     }
 
+    private LocalDate requirePastApprovalDate(Certificate certificate, CertificateApproveRequest request) {
+        LocalDate date = request == null ? null : request.getApprovalDate();
+        if (date == null) {
+            throw commonValidationHelper.validationError("Phải chọn ngày duyệt khi duyệt chứng nhận của khóa quá khứ");
+        }
+        if (date.isAfter(LocalDate.now())) {
+            throw commonValidationHelper.validationError("Ngày duyệt không được sau ngày hiện tại");
+        }
+        Integer hostYear = certificate.getCourse().getHostYear();
+        if (hostYear != null && date.getYear() < hostYear) {
+            throw commonValidationHelper.validationError("Ngày duyệt không được trước năm tổ chức khóa (" + hostYear + ")");
+        }
+        return date;
+    }
+
     private void requireApprovedParticipationForCertificate(CourseParticipation participation) {
+        boolean pastCourse = participation.getCourse() != null && participation.getCourse().isPast();
         if (participation.getParticipationStatus() == phucuong.ht.modules.training.enums.ParticipationStatus.CANCELLED
-                || participation.getTotalScore() == null) {
+                || (participation.getTotalScore() == null && !pastCourse)) {
             throw commonValidationHelper.validationError("Chứng chỉ chỉ được duyệt cho hồ sơ đã chấm điểm hợp lệ");
         }
         if (participation.getApprovalStatus() != WorkflowApprovalStatus.APPROVED) {
@@ -445,7 +498,7 @@ public class CertificateService {
                 .courseEndDate(course == null ? null : course.getEndDate())
                 // Cấp độ đạt được: hồ sơ ngoại lệ theo cấp người duyệt đã chọn, còn lại theo loại khóa.
                 .resultingLevel(participation != null && participation.getTargetLevel() != null ? participation.getTargetLevel()
-                        : courseType == null ? null : courseType.getResultingLevel())
+                        : course == null ? null : trainingWorkflowSupport.certificateLevelFor(course).orElse(null))
                 .finalResult(participation == null || participation.getFinalResult() == null ? null : participation.getFinalResult().name())
                 .build();
     }
@@ -476,6 +529,7 @@ public class CertificateService {
                 .courseCode(certificate.getCourse() == null ? null : certificate.getCourse().getCourseCode())
                 .courseName(certificate.getCourse() == null ? null : certificate.getCourse().getCourseName())
                 .courseFinished(certificate.getCourse() != null && certificate.getCourse().getFinishedAt() != null)
+                .coursePast(certificate.getCourse() != null && certificate.getCourse().isPast())
                 .scoreHidden(!showScores)
                 .totalScore(participation == null || !showScores ? null : participation.getTotalScore())
                 .passingScore(participation == null || participation.getCourse() == null ? null : participation.getCourse().getPassingScore())

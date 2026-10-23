@@ -35,6 +35,9 @@ public class CourseFinishService {
     private final LeaderLevelService leaderLevelService;
     private final RankPromotionService rankPromotionService;
     private final TrainingWorkflowSupport trainingWorkflowSupport;
+    // Khóa hàng huynh trưởng trước khi so sánh / đổi cấp độ (tuỳ chọn để test đơn vị không cần).
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private phucuong.ht.common.concurrency.EntityLockService entityLockService;
 
     // Gọi trong transaction của người gọi. Trả về số hồ sơ đạt.
     public int finish(TrainingCourse course, String actor, OffsetDateTime now) {
@@ -79,18 +82,29 @@ public class CourseFinishService {
         boolean scorePassed = participation.getResult() == CourseResult.COMPLETED;
         boolean certificateApproved = certificate.map(item -> item.getApprovalStatus() == WorkflowApprovalStatus.APPROVED).orElse(false);
         // Khóa không có cấp độ đạt được không cần chứng nhận: chỉ xét kết quả điểm.
-        boolean certificateRequired = trainingWorkflowSupport.requiresCertificate(course.getCourseType());
+        boolean certificateRequired = trainingWorkflowSupport.requiresCertificate(course);
         CourseFinalResult result = scorePassed && (!certificateRequired || certificateApproved) ? CourseFinalResult.PASSED : CourseFinalResult.FAILED;
         CourseFinalResult before = participation.getFinalResult();
         participation.setFinalResult(result);
         participation.setUpdatedAt(now);
         participation.setUpdatedBy(actor);
         if (result == CourseFinalResult.PASSED && before != CourseFinalResult.PASSED) {
+            // Hai chứng nhận / hai lần kết thúc khóa cùng đổi cấp một huynh trưởng: khóa hàng để không mất cập nhật cấp độ.
+            if (entityLockService != null) {
+                entityLockService.lock(participation.getLeader());
+            }
             // Cấp đạt được: hồ sơ ngoại lệ theo cấp người duyệt đã chọn, còn lại theo cấp của loại khóa.
             String achieved = participation.getTargetLevel() != null
                     ? participation.getTargetLevel()
-                    : trainingWorkflowSupport.certificateLevelFor(course.getCourseType()).orElse(null);
-            if (achieved != null && levelOrder.higher(achieved, participation.getLeader().getLeaderLevel())) {
+                    : trainingWorkflowSupport.certificateLevelFor(course).orElse(null);
+            if (achieved != null && course.isPast()) {
+                // Khóa quá khứ: luôn ghi lịch sử cấp độ theo ngày duyệt chứng nhận; cấp hiện tại chỉ tăng khi cấp mới cao hơn.
+                java.time.LocalDate approvedDate = participation.getCertificateApprovedAt() == null ? null
+                        : participation.getCertificateApprovedAt().atZoneSameInstant(java.time.ZoneId.of("Asia/Ho_Chi_Minh")).toLocalDate();
+                rankPromotionService.recordPastCourse(participation.getLeader(), achieved,
+                        levelOrder.higher(achieved, participation.getLeader().getLeaderLevel()),
+                        course.getCourseCode(), approvedDate, actor, now);
+            } else if (achieved != null && levelOrder.higher(achieved, participation.getLeader().getLeaderLevel())) {
                 rankPromotionService.promote(participation.getLeader(), achieved, course.getCourseCode(), actor, now);
             }
         }

@@ -53,6 +53,58 @@ public class LeaderRepository extends BaseRepo<Leader, UUID> {
         return count != null && count > 0;
     }
 
+    public boolean existsByPhoneNumber(String phoneNumber) {
+        Long count = entityManager.createQuery(
+                        "select count(l) from Leader l where l.phoneNumber = :phone", Long.class)
+                .setParameter("phone", phoneNumber)
+                .getSingleResult();
+        return count != null && count > 0;
+    }
+
+    public boolean existsByPhoneNumberAndIdNot(String phoneNumber, UUID id) {
+        Long count = entityManager.createQuery(
+                        "select count(l) from Leader l where l.phoneNumber = :phone and l.id <> :id", Long.class)
+                .setParameter("phone", phoneNumber)
+                .setParameter("id", id)
+                .getSingleResult();
+        return count != null && count > 0;
+    }
+
+    /** Huynh trưởng theo email (không phân biệt hoa thường), kèm giáo xứ/giáo hạt/giáo phận để kiểm tra phạm vi. */
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<Leader> findAllByEmailsIgnoreCase(java.util.Collection<String> emailsLowerCase) {
+        if (emailsLowerCase == null || emailsLowerCase.isEmpty()) {
+            return List.of();
+        }
+        return entityManager.createQuery(
+                        """
+                                select l from Leader l
+                                join fetch l.parish p
+                                join fetch p.deanery d
+                                join fetch d.diocese
+                                where lower(l.email) in :emails
+                                """, Leader.class)
+                .setParameter("emails", emailsLowerCase)
+                .getResultList();
+    }
+
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<Leader> findAllByPhoneNumbers(java.util.Collection<String> phoneNumbers) {
+        if (phoneNumbers == null || phoneNumbers.isEmpty()) {
+            return List.of();
+        }
+        return entityManager.createQuery(
+                        """
+                                select l from Leader l
+                                join fetch l.parish p
+                                join fetch p.deanery d
+                                join fetch d.diocese
+                                where l.phoneNumber in :phones
+                                """, Leader.class)
+                .setParameter("phones", phoneNumbers)
+                .getResultList();
+    }
+
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public Optional<Leader> findByIdWithParish(UUID id) {
         List<Leader> results = entityManager.createQuery(

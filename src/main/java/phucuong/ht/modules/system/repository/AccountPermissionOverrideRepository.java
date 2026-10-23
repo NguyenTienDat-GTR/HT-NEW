@@ -51,6 +51,17 @@ public class AccountPermissionOverrideRepository extends BaseRepo<AccountPermiss
         return query.getResultList();
     }
 
+    /** Các quyền riêng sắp bị thu hồi do hết hạn (chưa thu hồi, đã quá hạn), khóa dòng để nhiều node chỉ xử lý / thông báo một lần. */
+    @org.springframework.transaction.annotation.Transactional
+    public java.util.List<AccountPermissionOverride> findExpiredOverrides(OffsetDateTime threshold) {
+        return entityManager.createQuery(
+                        "select apo from AccountPermissionOverride apo where apo.revokedAt is null and apo.expiresAt is not null and apo.expiresAt <= :threshold",
+                        AccountPermissionOverride.class)
+                .setParameter("threshold", threshold)
+                .setLockMode(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+                .getResultList();
+    }
+
     /** Thu hồi vĩnh viễn (lý do EXPIRED) các quyền riêng đã quá hạn, giữ lại bản ghi để hiển thị. */
     @org.springframework.transaction.annotation.Transactional
     public int deactivateExpiredOverrides(OffsetDateTime expiresAtThreshold, OffsetDateTime updatedAt, String actor) {

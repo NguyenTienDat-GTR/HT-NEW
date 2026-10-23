@@ -67,7 +67,8 @@ public class TrainingDecisionNotifier {
                 course == null ? null : course.getCourseName(),
                 leader == null ? "" : AuditActorNameResolver.displayName(leader),
                 certificateCode,
-                note
+                note,
+                leader == null ? null : leader.getId()
         );
     }
 
@@ -82,7 +83,8 @@ public class TrainingDecisionNotifier {
                 course.getCourseName(),
                 AuditActorNameResolver.displayName(leader),
                 certificate.getCertificateCode(),
-                note
+                note,
+                leader.getId()
         );
     }
 }

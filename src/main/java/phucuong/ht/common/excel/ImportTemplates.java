@@ -1,0 +1,222 @@
+package phucuong.ht.common.excel;
+
+import org.apache.poi.ss.usermodel.BorderStyle;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.DataValidation;
+import org.apache.poi.ss.usermodel.DataValidationConstraint;
+import org.apache.poi.ss.usermodel.DataValidationHelper;
+import org.apache.poi.ss.usermodel.FillPatternType;
+import org.apache.poi.ss.usermodel.Font;
+import org.apache.poi.ss.usermodel.IndexedColors;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.util.CellRangeAddressList;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import phucuong.ht.modules.leader.service.LeaderImportService;
+import phucuong.ht.modules.training.trainingCourse.service.PastCourseParticipantImportService;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.time.LocalDate;
+import java.util.List;
+
+/**
+ * File Excel mẫu để người dùng tự tạo file import. Tiêu đề cột lấy từ đúng hằng số mà bộ đọc file dùng nên mẫu luôn khớp với cách import đọc cột.
+ * Sheet đầu tiên là sheet dữ liệu (bộ đọc chỉ đọc sheet đầu), sau đó là "Hướng dẫn" và "Danh mục" (cấp độ của giáo phận).
+ */
+public final class ImportTemplates {
+
+    public static final String LEADERS_SHEET = "Huynh trưởng";
+    public static final String PARTICIPANTS_SHEET = "Danh sách tham dự";
+    private static final String GUIDE_SHEET = "Hướng dẫn";
+    private static final String LOOKUP_SHEET = "Danh mục";
+    private static final int VALIDATED_ROWS = 5000;
+
+    private ImportTemplates() {
+    }
+
+    private record Column(String header, boolean required, int width, Kind kind) {
+    }
+
+    private enum Kind { TEXT, DATE, NUMBER, GENDER, RESULT, LEVEL, GENERAL }
+
+    /** Mẫu import hồ sơ huynh trưởng. levelNames: tên cấp độ trong danh mục của giáo phận người tải (để chọn nhanh). */
+    public static byte[] leaders(List<String> levelNames) {
+        List<Column> columns = List.of(
+                new Column(LeaderImportService.COL_HOLY_NAME, true, 16, Kind.GENERAL),
+                new Column(LeaderImportService.COL_FULL_NAME, true, 28, Kind.GENERAL),
+                new Column(LeaderImportService.COL_BIRTH_DATE, true, 14, Kind.DATE),
+                new Column(LeaderImportService.COL_GENDER, true, 12, Kind.GENDER),
+                new Column(LeaderImportService.COL_EMAIL, true, 32, Kind.GENERAL),
+                new Column(LeaderImportService.COL_PHONE, true, 16, Kind.TEXT),
+                new Column(LeaderImportService.COL_LEVEL, false, 26, Kind.LEVEL),
+                new Column(LeaderImportService.COL_DEANERY, true, 22, Kind.GENERAL),
+                new Column(LeaderImportService.COL_PARISH, true, 22, Kind.GENERAL));
+        List<List<Object>> samples = List.of(
+                List.of("Phêrô", "Nguyễn Văn An", LocalDate.of(1995, 3, 7), "Nam", "nguyen.van.an@example.com", "0901234567", "", "Tên giáo hạt", "Tên giáo xứ"),
+                List.of("Maria", "Trần Thị Bình", LocalDate.of(1998, 11, 21), "Nữ", "tran.thi.binh@example.com", "0912345678", "", "Tên giáo hạt", "Tên giáo xứ"));
+        List<String> guide = List.of(
+                "1. Điền dữ liệu ở sheet \"" + LEADERS_SHEET + "\" (sheet đầu tiên), từ dòng 2. Xóa các dòng ví dụ trước khi import. Tên cột có thể có hoặc không có dấu *, thứ tự cột không quan trọng.",
+                "2. Tất cả các cột đều bắt buộc (tiêu đề màu đỏ), TRỪ cột Cấp độ: Tên thánh, Họ và tên, Ngày sinh, Giới tính, Email, Số điện thoại, Giáo hạt, Giáo xứ.",
+                "3. Ngày sinh theo dạng dd/MM/yyyy (ví dụ 07/03/1995), không được sau ngày hiện tại.",
+                "4. Giới tính chỉ nhận: Nam hoặc Nữ (chọn từ danh sách).",
+                "5. Email và Số điện thoại không được trùng với huynh trưởng đã có trong hệ thống hoặc trùng giữa các dòng trong file. Số điện thoại gồm 10 chữ số và bắt đầu bằng 0 (cột đã để định dạng Text để không mất số 0 đầu).",
+                "6. Cấp độ: chọn từ danh sách (sheet \"" + LOOKUP_SHEET + "\") hoặc nhập tên / mã cấp độ trong danh mục của giáo phận. Để trống nghĩa là \"Chưa có cấp\".",
+                "7. Giáo hạt và Giáo xứ phải ĐÃ CÓ trong hệ thống (nhập đúng tên) và giáo xứ phải thuộc đúng giáo hạt đã nhập; nếu chưa có, dòng đó báo lỗi (hệ thống không tự tạo giáo hạt / giáo xứ).",
+                "8. Chỉ nhập được huynh trưởng cho giáo xứ trong phạm vi tài khoản của bạn. Chỉ cần một dòng lỗi thì toàn bộ file không được lưu; hệ thống báo rõ sheet, dòng, cột bị lỗi ở khay tác vụ để bạn sửa rồi import lại.",
+                "9. Mỗi lần import tối đa 5.000 dòng.");
+        return build(LEADERS_SHEET, "Hướng dẫn import hồ sơ huynh trưởng", columns, samples, guide, levelNames);
+    }
+
+    /** Mẫu import danh sách tham dự khóa quá khứ (mọi cột bắt buộc trừ Cấp độ và Nhận xét). */
+    public static byte[] participants(List<String> levelNames) {
+        List<Column> columns = List.of(
+                new Column(PastCourseParticipantImportService.COL_EMAIL, true, 32, Kind.GENERAL),
+                new Column(PastCourseParticipantImportService.COL_PHONE, true, 16, Kind.TEXT),
+                new Column(PastCourseParticipantImportService.COL_SCORE, true, 12, Kind.NUMBER),
+                new Column(PastCourseParticipantImportService.COL_RESULT, true, 14, Kind.RESULT),
+                new Column(PastCourseParticipantImportService.COL_REVIEW, false, 30, Kind.GENERAL),
+                new Column(LeaderImportService.COL_HOLY_NAME, true, 14, Kind.GENERAL),
+                new Column(LeaderImportService.COL_FULL_NAME, true, 26, Kind.GENERAL),
+                new Column(LeaderImportService.COL_BIRTH_DATE, true, 14, Kind.DATE),
+                new Column(LeaderImportService.COL_GENDER, true, 12, Kind.GENDER),
+                new Column(LeaderImportService.COL_LEVEL, false, 24, Kind.LEVEL),
+                new Column(LeaderImportService.COL_DEANERY, true, 20, Kind.GENERAL),
+                new Column(LeaderImportService.COL_PARISH, true, 20, Kind.GENERAL));
+        List<List<Object>> samples = List.of(
+                List.of("nguyen.van.an@example.com", "0901234567", 8.5, "Đạt", "Hoàn thành tốt khóa học", "Phêrô", "Nguyễn Văn An", LocalDate.of(1995, 3, 7), "Nam", "", "Tên giáo hạt", "Tên giáo xứ"),
+                List.of("tran.thi.binh@example.com", "0912345678", 5, "Không đạt", "", "Maria", "Trần Thị Bình", LocalDate.of(1998, 11, 21), "Nữ", "", "Tên giáo hạt", "Tên giáo xứ"));
+        List<String> guide = List.of(
+                "1. Chỉ dùng cho khóa huấn luyện quá khứ (tạo bằng nút \"Tạo khóa quá khứ\"). Mở chi tiết khóa, vào tab \"Danh sách tham dự\" và bấm \"Import Excel\".",
+                "2. Điền dữ liệu ở sheet \"" + PARTICIPANTS_SHEET + "\" (sheet đầu tiên), từ dòng 2. Xóa các dòng ví dụ trước khi import.",
+                "3. MỌI DÒNG đều phải nhập đủ tất cả các cột (tiêu đề màu đỏ), chỉ được để trống cột Nhận xét và Cấp độ: Email, Số điện thoại, Tổng điểm, Kết quả, Tên thánh, Họ và tên, Ngày sinh, Giới tính, Giáo hạt, Giáo xứ.",
+                "4. Huynh trưởng được tìm theo Email và Số điện thoại (hai thông tin này là duy nhất, nếu khớp hai huynh trưởng khác nhau thì báo lỗi). Không dùng mã định danh (UUID).",
+                "5. Huynh trưởng ĐÃ CÓ HỒ SƠ: hệ thống chỉ thêm huynh trưởng đó vào khóa, KHÔNG tạo mới và KHÔNG sửa hồ sơ (thông tin trong dòng chỉ để kiểm tra đủ dữ liệu). Huynh trưởng CHƯA CÓ HỒ SƠ: hệ thống tạo hồ sơ từ chính dòng này rồi thêm vào khóa.",
+                "6. Ngày sinh theo dạng dd/MM/yyyy; Giới tính chọn Nam hoặc Nữ; Số điện thoại gồm 10 chữ số và bắt đầu bằng 0; Cấp độ chọn từ sheet \"" + LOOKUP_SHEET + "\" (để trống là Chưa có cấp).",
+                "7. Giáo hạt và Giáo xứ phải ĐÃ CÓ trong hệ thống, giáo xứ phải thuộc đúng giáo hạt đã nhập và thuộc giáo phận (khóa giáo phận) hoặc giáo hạt (khóa giáo hạt) của khóa; giáo xứ phải đang hoạt động. Huynh trưởng đã có hồ sơ cũng phải thuộc giáo phận / giáo hạt của khóa.",
+                "8. Kết quả: Đạt hoặc Không đạt (chọn từ danh sách). Tổng điểm từ 0 đến 1000.",
+                "9. Một huynh trưởng chỉ xuất hiện một lần trong file và một lần trong khóa; huynh trưởng đã có trong danh sách tham dự của khóa sẽ báo lỗi.",
+                "10. Nếu khóa có \"Cấp độ đạt được\", học viên Đạt sẽ tự chuyển sang tab \"Duyệt chứng nhận\". Khi duyệt phải chọn ngày duyệt; sau khi duyệt, cấp độ được ghi vào lịch sử cấp độ (cấp hiện tại chỉ tăng nếu cấp mới cao hơn).",
+                "11. Chỉ cần một dòng lỗi thì toàn bộ file không được lưu (kể cả huynh trưởng mới); lỗi được báo rõ sheet, dòng, cột ở khay tác vụ để sửa rồi import lại. Mỗi lần import tối đa 5.000 dòng.");
+        return build(PARTICIPANTS_SHEET, "Hướng dẫn import danh sách tham dự khóa huấn luyện quá khứ", columns, samples, guide, levelNames);
+    }
+
+    private static byte[] build(String dataSheetName, String guideTitle, List<Column> columns, List<List<Object>> samples,
+                                List<String> guide, List<String> levelNames) {
+        try (XSSFWorkbook workbook = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            Sheet sheet = workbook.createSheet(dataSheetName);
+
+            Font bold = workbook.createFont();
+            bold.setBold(true);
+            Font requiredFont = workbook.createFont();
+            requiredFont.setBold(true);
+            requiredFont.setColor(IndexedColors.RED.getIndex());
+            CellStyle requiredStyle = headerStyle(workbook, requiredFont, IndexedColors.GREY_25_PERCENT);
+            CellStyle optionalStyle = headerStyle(workbook, bold, IndexedColors.LEMON_CHIFFON);
+            CellStyle textStyle = workbook.createCellStyle();
+            textStyle.setDataFormat(workbook.createDataFormat().getFormat("@"));
+            CellStyle dateStyle = workbook.createCellStyle();
+            dateStyle.setDataFormat(workbook.createDataFormat().getFormat("dd/mm/yyyy"));
+
+            Row header = sheet.createRow(0);
+            for (int c = 0; c < columns.size(); c++) {
+                Column column = columns.get(c);
+                Cell cell = header.createCell(c);
+                cell.setCellValue(column.required() ? column.header() + " *" : column.header());
+                cell.setCellStyle(column.required() ? requiredStyle : optionalStyle);
+                sheet.setColumnWidth(c, column.width() * 256);
+                if (column.kind() == Kind.TEXT) {
+                    sheet.setDefaultColumnStyle(c, textStyle);
+                } else if (column.kind() == Kind.DATE) {
+                    sheet.setDefaultColumnStyle(c, dateStyle);
+                }
+            }
+            sheet.createFreezePane(0, 1);
+
+            for (int r = 0; r < samples.size(); r++) {
+                Row row = sheet.createRow(r + 1);
+                List<Object> values = samples.get(r);
+                for (int c = 0; c < values.size() && c < columns.size(); c++) {
+                    Object value = values.get(c);
+                    if (value == null || (value instanceof String text && text.isEmpty())) {
+                        continue;
+                    }
+                    Cell cell = row.createCell(c);
+                    if (value instanceof LocalDate date) {
+                        cell.setCellValue(date);
+                        cell.setCellStyle(dateStyle);
+                    } else if (value instanceof Number number) {
+                        cell.setCellValue(number.doubleValue());
+                    } else {
+                        cell.setCellValue(value.toString());
+                        if (columns.get(c).kind() == Kind.TEXT) {
+                            cell.setCellStyle(textStyle);
+                        }
+                    }
+                }
+            }
+
+            // Danh mục cấp độ của giáo phận người tải: chọn nhanh bằng danh sách thả xuống.
+            Sheet lookup = workbook.createSheet(LOOKUP_SHEET);
+            lookup.setColumnWidth(0, 32 * 256);
+            lookup.createRow(0).createCell(0).setCellValue("Cấp độ (" + LeaderImportService.COL_LEVEL + ")");
+            for (int i = 0; i < levelNames.size(); i++) {
+                lookup.createRow(i + 1).createCell(0).setCellValue(levelNames.get(i));
+            }
+
+            DataValidationHelper validations = sheet.getDataValidationHelper();
+            for (int c = 0; c < columns.size(); c++) {
+                DataValidationConstraint constraint = switch (columns.get(c).kind()) {
+                    case GENDER -> validations.createExplicitListConstraint(new String[]{"Nam", "Nữ"});
+                    case RESULT -> validations.createExplicitListConstraint(new String[]{"Đạt", "Không đạt"});
+                    case LEVEL -> levelNames.isEmpty() ? null
+                            : validations.createFormulaListConstraint("'" + LOOKUP_SHEET + "'!$A$2:$A$" + (levelNames.size() + 1));
+                    default -> null;
+                };
+                if (constraint != null) {
+                    DataValidation validation = validations.createValidation(constraint, new CellRangeAddressList(1, VALIDATED_ROWS, c, c));
+                    // Cho phép nhập tay (tên / mã cấp độ khác, "Dat"...): bộ đọc file chuẩn hóa dấu và hoa thường.
+                    validation.setShowErrorBox(false);
+                    // XSSF ghi cờ này ngược nghĩa với tên: true mới là HIỆN mũi tên danh sách chọn trong Excel (false làm mũi tên bị ẩn).
+                    validation.setSuppressDropDownArrow(true);
+                    sheet.addValidationData(validation);
+                }
+            }
+
+            Sheet guideSheet = workbook.createSheet(GUIDE_SHEET);
+            guideSheet.setColumnWidth(0, 120 * 256);
+            CellStyle wrap = workbook.createCellStyle();
+            wrap.setWrapText(true);
+            wrap.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.TOP);
+            Font title = workbook.createFont();
+            title.setBold(true);
+            title.setFontHeightInPoints((short) 14);
+            CellStyle titleStyle = workbook.createCellStyle();
+            titleStyle.setFont(title);
+            Cell titleCell = guideSheet.createRow(0).createCell(0);
+            titleCell.setCellValue(guideTitle);
+            titleCell.setCellStyle(titleStyle);
+            for (int i = 0; i < guide.size(); i++) {
+                Cell cell = guideSheet.createRow(i + 2).createCell(0);
+                cell.setCellValue(guide.get(i));
+                cell.setCellStyle(wrap);
+            }
+
+            workbook.write(out);
+            return out.toByteArray();
+        } catch (IOException exception) {
+            throw new UncheckedIOException("Không thể tạo file Excel mẫu", exception);
+        }
+    }
+
+    private static CellStyle headerStyle(XSSFWorkbook workbook, Font font, IndexedColors fill) {
+        CellStyle style = workbook.createCellStyle();
+        style.setFont(font);
+        style.setFillForegroundColor(fill.getIndex());
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        style.setBorderBottom(BorderStyle.THIN);
+        return style;
+    }
+}

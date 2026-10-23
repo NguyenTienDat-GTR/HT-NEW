@@ -66,9 +66,15 @@ public class WorkflowDecisionNotifier {
      *
      * @param submitterActor giá trị createdBy của hồ sơ đăng ký (mã huynh trưởng hoặc username của người gửi)
      * @param note           lý do từ chối / thu hồi / cấp lại, có thể rỗng
+     * @param leaderId       huynh trưởng của hồ sơ; có tài khoản đang hoạt động thì cũng nhận thông báo về hồ sơ / chứng nhận của chính mình
      */
     public record Entry(String submitterActor, UUID parishId, String parishName, String courseCode, String courseName,
-                        String leaderName, String documentCode, String note) {
+                        String leaderName, String documentCode, String note, UUID leaderId) {
+
+        public Entry(String submitterActor, UUID parishId, String parishName, String courseCode, String courseName,
+                     String leaderName, String documentCode, String note) {
+            this(submitterActor, parishId, parishName, courseCode, courseName, leaderName, documentCode, note, null);
+        }
     }
 
     public void notifyDecisions(Decision decision, List<Entry> entries, String actor) {
@@ -114,6 +120,7 @@ public class WorkflowDecisionNotifier {
         if (hasText(entry.note())) {
             message.append(" Lý do: ").append(entry.note().trim()).append(".");
         }
+        message.append(" Chọn thông báo để xem chi tiết.");
         return TrainingNotificationCommand.builder()
                 .eventType(decision.eventType)
                 .title(decision.title)
@@ -122,6 +129,8 @@ public class WorkflowDecisionNotifier {
                 .senderUnitId(entry.parishId())
                 .courseCode(entry.courseCode())
                 .totalCount(1)
+                // Thông báo lẻ cũng mở bảng chi tiết (khóa, huynh trưởng, giáo xứ / mã chứng nhận, lý do, người thực hiện) như thông báo phân quyền.
+                .payload(toJson(payloadOf(decision, List.of(entry), actorName)))
                 .actor(actor)
                 .build();
     }
@@ -136,6 +145,21 @@ public class WorkflowDecisionNotifier {
         }
         message.append(". Chọn thông báo để xem danh sách hồ sơ.");
 
+        Map<String, Object> payload = payloadOf(decision, entries, actorName);
+        return TrainingNotificationCommand.builder()
+                .eventType(decision.eventType)
+                .title(title)
+                .message(message.toString())
+                .courseCode(first.courseCode())
+                .totalCount(entries.size())
+                .payload(toJson(payload))
+                .actor(actor)
+                .build();
+    }
+
+    // Nội dung bảng chi tiết dùng chung cho thông báo lẻ và thông báo gộp.
+    private Map<String, Object> payloadOf(Decision decision, List<Entry> entries, String actorName) {
+        Entry first = entries.get(0);
         List<Map<String, String>> items = new ArrayList<>();
         for (Entry entry : entries) {
             Map<String, String> item = new LinkedHashMap<>();
@@ -150,16 +174,11 @@ public class WorkflowDecisionNotifier {
         payload.put("kind", "DECISION_LIST");
         payload.put("decision", decision.name());
         payload.put("heading", "Khóa " + courseLabel(first));
+        if (hasText(actorName)) {
+            payload.put("actorName", actorName);
+        }
         payload.put("items", items);
-        return TrainingNotificationCommand.builder()
-                .eventType(decision.eventType)
-                .title(title)
-                .message(message.toString())
-                .courseCode(first.courseCode())
-                .totalCount(entries.size())
-                .payload(toJson(payload))
-                .actor(actor)
-                .build();
+        return payload;
     }
 
     private String joinDetail(Entry entry) {
@@ -191,6 +210,10 @@ public class WorkflowDecisionNotifier {
         }
         if (entry.parishId() != null) {
             recipients.addAll(parishAdminCache.computeIfAbsent(entry.parishId(), this::findParishAdmins));
+        }
+        // Chính huynh trưởng (nếu có tài khoản) cũng nhận thông báo về hồ sơ / chứng nhận của mình.
+        if (entry.leaderId() != null) {
+            recipients.addAll(submitterCache.computeIfAbsent(entry.leaderId().toString(), this::findSubmitterAccounts));
         }
         return recipients;
     }

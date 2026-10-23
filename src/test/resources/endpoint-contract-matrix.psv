@@ -220,3 +220,24 @@ POST /api/training/courses/{courseCode}/finish|200|401|403|400|404|409
 POST /api/certificates/{certificateCode}/reissue|200|401|403|400|404|409
 GET /api/training/courses/{courseCode}/status-impact|200|401|403|N/A: course code is a path variable only|404|N/A: read-only endpoint does not mutate state
 GET /api/certificates/issue-years|200|401|403|N/A: no request parameters to validate|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+
+# Excel export / import and past training courses
+POST /api/dioceses/export|202|401|403|400|N/A: export of a collection does not resolve an individual resource|409
+POST /api/deaneries/export|202|401|403|400|N/A: export of a collection does not resolve an individual resource|409
+POST /api/parishes/export|202|401|403|400|N/A: export of a collection does not resolve an individual resource|409
+POST /api/leaders/export|202|401|403|400|N/A: export of a collection does not resolve an individual resource|409
+POST /api/certificates/export|202|401|403|400|N/A: export of a collection does not resolve an individual resource|409
+POST /api/training/courses/export|202|401|403|400|N/A: export of a collection does not resolve an individual resource|409
+POST /api/training/participations/export|202|401|403|400|N/A: export of a collection does not resolve an individual resource|409
+POST /api/training/participants/export|202|401|403|400|N/A: export of a collection does not resolve an individual resource|409
+GET /api/excel-jobs|200|401|N/A: every authenticated user lists only their own jobs|N/A: list has no request parameters|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/excel-jobs/{id}|200|401|N/A: jobs of other users are reported as not found|400|404|N/A: read-only endpoint does not mutate state
+GET /api/excel-jobs/{id}/file|200|401|N/A: jobs of other users are reported as not found|400|404|N/A: read-only endpoint does not mutate state
+POST /api/excel-jobs/{id}/cancel|200|401|N/A: jobs of other users are reported as not found|400|404|409
+POST /api/leaders/import|202|401|403|400|N/A: import resolves parishes by name inside the file, no path resource|409
+POST /api/training/courses/past|200|401|403|400|404|409
+PUT /api/training/courses/past/{courseCode}|200|401|403|400|404|409
+POST /api/training/courses/{courseCode}/participants/import|202|401|403|400|404|409
+DELETE /api/training/courses/{courseCode}/participants/{participationId}|200|401|403|N/A: both identifiers are opaque strings checked as not found|404|409
+GET /api/leaders/import-template|200|401|403|N/A: template download has no request parameters|N/A: template download does not resolve a resource|N/A: read-only endpoint does not mutate state
+GET /api/training/courses/past/import-template|200|401|403|N/A: template download has no request parameters|N/A: template download does not resolve a resource|N/A: read-only endpoint does not mutate state

@@ -267,6 +267,7 @@ class TrainingCourseUpdateScopeTest {
                 org.mockito.Mockito.mock(phucuong.ht.modules.certificate.service.CertificateLifecycleService.class),
                 org.mockito.Mockito.mock(phucuong.ht.modules.certificate.repository.CertificateRepository.class),
                 org.mockito.Mockito.mock(phucuong.ht.modules.training.CourseActivityGuard.class),
+                org.mockito.Mockito.mock(phucuong.ht.modules.leaderLevel.service.LeaderLevelService.class),
                 org.mockito.Mockito.mock(phucuong.ht.modules.certificate.service.CertificateRealtimeNotifier.class)
         , org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class));
     }

@@ -75,6 +75,17 @@ public class RolePermissionRepository extends BaseRepo<RolePermission, String> {
         return query.getResultList();
     }
 
+    /** Các phân quyền sắp bị thu hồi do hết hạn (chưa thu hồi, đã quá hạn), khóa dòng để nhiều node chỉ xử lý / thông báo một lần. */
+    @Transactional
+    public java.util.List<RolePermission> findExpiredAssignments(OffsetDateTime threshold) {
+        return entityManager.createQuery(
+                        "select rp from RolePermission rp where rp.revokedAt is null and rp.expiresAt is not null and rp.expiresAt <= :threshold",
+                        RolePermission.class)
+                .setParameter("threshold", threshold)
+                .setLockMode(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+                .getResultList();
+    }
+
     /** Thu hồi vĩnh viễn (lý do EXPIRED) các phân quyền đã quá hạn, giữ lại bản ghi để hiển thị. */
     @Transactional
     public int deactivateExpiredAssignments(OffsetDateTime expiresAtThreshold, OffsetDateTime updatedAt, String actor) {

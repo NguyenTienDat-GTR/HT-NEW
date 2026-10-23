@@ -42,7 +42,7 @@ public class CourseParticipationAccessEvaluator {
         }
         return trainingCourseRepository.findByCodeWithType(courseCode)
                 .map(course -> {
-                    boolean deaneryManaged = trainingWorkflowSupport.isDeaneryManaged(course.getCourseType());
+                    boolean deaneryManaged = trainingWorkflowSupport.isDeaneryManaged(course);
                     UnitType sender = trainingWorkflowSupport.resolveRegistrationSender(
                             securityUtils.hasAuthority(authentication, SUBMIT_PARISH),
                             securityUtils.hasAuthority(authentication, SUBMIT_DIOCESE),
@@ -87,7 +87,7 @@ public class CourseParticipationAccessEvaluator {
     public boolean canDeaneryApprove(Authentication authentication, String participationId) {
         return securityUtils.hasAuthority(authentication, APPROVE_DEANERY)
                 && courseParticipationRepository.findByIdWithLeaderAndCourse(participationId)
-                .map(participation -> trainingWorkflowSupport.isDeaneryManaged(participation.getCourse().getCourseType())
+                .map(participation -> trainingWorkflowSupport.isDeaneryManaged(participation.getCourse())
                         && deaneryScopeOwnsCourse(authentication, participation.getCourse().getCourseCode()))
                 .orElse(false);
     }
@@ -95,7 +95,7 @@ public class CourseParticipationAccessEvaluator {
     public boolean canDioceseApprove(Authentication authentication, String participationId) {
         return securityUtils.hasAuthority(authentication, APPROVE_DIOCESE)
                 && courseParticipationRepository.findByIdWithLeaderAndCourse(participationId)
-                .map(participation -> !trainingWorkflowSupport.isDeaneryManaged(participation.getCourse().getCourseType())
+                .map(participation -> !trainingWorkflowSupport.isDeaneryManaged(participation.getCourse())
                         && dioceseScopeOwnsCourse(authentication, participation.getCourse().getCourseCode()))
                 .orElse(false);
     }
@@ -106,7 +106,7 @@ public class CourseParticipationAccessEvaluator {
         }
         return courseParticipationRepository.findByIdWithLeaderAndCourse(participationId)
                 .map(participation -> {
-                    if (trainingWorkflowSupport.isDeaneryManaged(participation.getCourse().getCourseType())) {
+                    if (trainingWorkflowSupport.isDeaneryManaged(participation.getCourse())) {
                         return securityUtils.hasAuthority(authentication, SCORE_DEANERY)
                                 && scopedDeanery(authentication, participation.getCourse().getCourseCode());
                     }
@@ -122,7 +122,7 @@ public class CourseParticipationAccessEvaluator {
             return false;
         }
         return trainingCourseRepository.findByCodeWithType(courseCode)
-                .map(course -> trainingWorkflowSupport.isDeaneryManaged(course.getCourseType())
+                .map(course -> trainingWorkflowSupport.isDeaneryManaged(course)
                         ? securityUtils.hasAuthority(authentication, SCORE_DEANERY) && scopedDeanery(authentication, courseCode)
                         : securityUtils.hasAuthority(authentication, SCORE_DIOCESE) && scopedDiocese(authentication, courseCode))
                 .orElse(false);
@@ -144,7 +144,7 @@ public class CourseParticipationAccessEvaluator {
                     if (securityUtils.hasAuthority(authentication, READ_PARISH) && scopedParish(authentication, participation)) {
                         return true;
                     }
-                    if (trainingWorkflowSupport.isDeaneryManaged(participation.getCourse().getCourseType())) {
+                    if (trainingWorkflowSupport.isDeaneryManaged(participation.getCourse())) {
                         return hasDeaneryReadAuthority(authentication)
                                 && scopedDeanery(authentication, participation.getCourse().getCourseCode());
                     }

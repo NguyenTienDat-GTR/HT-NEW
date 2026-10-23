@@ -83,6 +83,21 @@ public class LeaderValidationHelper {
         }
     }
 
+    public void validateCreatePhoneUniqueness(String phoneNumber) {
+        if (phoneNumber != null && leaderRepository.existsByPhoneNumber(phoneNumber)) {
+            throw commonValidationHelper.conflict("Số điện thoại Huynh Trưởng đã tồn tại");
+        }
+    }
+
+    public void validateUpdatePhoneUniqueness(UUID leaderId, String requestedPhone, String currentPhone) {
+        if (!commonValidationHelper.isChanged(requestedPhone, currentPhone)) {
+            return;
+        }
+        if (leaderRepository.existsByPhoneNumberAndIdNot(requestedPhone, leaderId)) {
+            throw commonValidationHelper.conflict("Số điện thoại Huynh Trưởng đã tồn tại");
+        }
+    }
+
     public LeaderNameParts splitFullName(String fullName) {
         String normalized = commonValidationHelper.normalizeRequiredText(fullName);
         if (normalized == null || normalized.isBlank()) {

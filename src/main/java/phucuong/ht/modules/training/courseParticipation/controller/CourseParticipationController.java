@@ -37,11 +37,34 @@ import java.util.UUID;
 public class CourseParticipationController {
 
     private final CourseParticipationService courseParticipationService;
+    private final phucuong.ht.common.excel.job.ExcelJobService excelJobService;
 
     @GetMapping("/participations")
     @PreAuthorize("@courseParticipationAccessEvaluator.canRead(authentication)")
     public apiResponse<Page<CourseParticipationResponse>> findAll(BaseSearchRequest request, Authentication authentication) {
         return apiResponse.success("Lấy danh sách hồ sơ đào tạo thành công", courseParticipationService.findAll(request, authentication));
+    }
+
+    // Xuất Excel chạy nền theo đúng bộ lọc/tìm kiếm/sắp xếp của danh sách; trả 202 + tác vụ, theo dõi tại /api/excel-jobs.
+    @org.springframework.web.bind.annotation.PostMapping("/participations/export")
+    @PreAuthorize("@courseParticipationAccessEvaluator.canRead(authentication)")
+    public org.springframework.http.ResponseEntity<apiResponse<phucuong.ht.common.excel.job.ExcelJobResponse>> exportParticipations(
+            BaseSearchRequest request,
+            @org.springframework.web.bind.annotation.RequestHeader(value = phucuong.ht.common.idempotency.IdempotencyService.HEADER, required = false) String idempotencyKey,
+            Authentication authentication) {
+        return phucuong.ht.common.excel.job.ExcelJobResponses.accepted(
+                excelJobService.createExport(phucuong.ht.common.excel.job.ExcelJobKind.EXPORT_PARTICIPATIONS, request, idempotencyKey, authentication));
+    }
+
+    // Xuất Excel chạy nền theo đúng bộ lọc/tìm kiếm/sắp xếp của danh sách; trả 202 + tác vụ, theo dõi tại /api/excel-jobs.
+    @org.springframework.web.bind.annotation.PostMapping("/participants/export")
+    @PreAuthorize("@courseParticipationAccessEvaluator.canRead(authentication)")
+    public org.springframework.http.ResponseEntity<apiResponse<phucuong.ht.common.excel.job.ExcelJobResponse>> exportParticipants(
+            BaseSearchRequest request,
+            @org.springframework.web.bind.annotation.RequestHeader(value = phucuong.ht.common.idempotency.IdempotencyService.HEADER, required = false) String idempotencyKey,
+            Authentication authentication) {
+        return phucuong.ht.common.excel.job.ExcelJobResponses.accepted(
+                excelJobService.createExport(phucuong.ht.common.excel.job.ExcelJobKind.EXPORT_PARTICIPANTS, request, idempotencyKey, authentication));
     }
 
     @GetMapping("/courses/{courseCode}/score-components")
@@ -83,6 +106,7 @@ public class CourseParticipationController {
             @RequestParam(required = false) String search,
             @RequestParam(required = false) UUID deaneryId,
             @RequestParam(required = false) UUID parishId,
+            @RequestParam(required = false) String leaderLevel,
             @RequestParam(required = false) List<UUID> excludeLeaderIds,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
@@ -90,7 +114,7 @@ public class CourseParticipationController {
     ) {
         boolean eligibleOnly = !"EXCEPTION".equalsIgnoreCase(mode);
         return apiResponse.success("Lấy danh sách huynh trưởng lập danh sách đăng ký thành công",
-                courseParticipationService.findRegistrationCandidates(courseCode, eligibleOnly, search, deaneryId, parishId, excludeLeaderIds, Math.max(page, 0), Math.min(Math.max(size, 1), BaseSearchRequest.MAX_PAGE_SIZE), authentication));
+                courseParticipationService.findRegistrationCandidates(courseCode, eligibleOnly, search, deaneryId, parishId, leaderLevel, excludeLeaderIds, Math.max(page, 0), Math.min(Math.max(size, 1), BaseSearchRequest.MAX_PAGE_SIZE), authentication));
     }
 
     @PostMapping("/courses/{courseCode}/registrations")

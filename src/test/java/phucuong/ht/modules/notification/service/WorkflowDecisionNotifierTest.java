@@ -76,9 +76,37 @@ class WorkflowDecisionNotifierTest {
         verify(trainingNotificationService, atLeastOnce()).notifyUsers(any(), captor.capture());
         List<TrainingNotificationCommand> sent = captor.getAllValues();
         assertEquals(2, sent.size());
-        assertNull(sent.get(0).payload());
         assertTrue(sent.get(0).message().contains("không được duyệt"));
         assertTrue(sent.get(0).message().contains("Lý do: thiếu giấy tờ"));
+        // Thông báo lẻ cũng mở bảng chi tiết như thông báo phân quyền: khóa, huynh trưởng, lý do và người thực hiện.
+        assertNotNull(sent.get(0).payload());
+        assertTrue(sent.get(0).payload().contains("DECISION_LIST"), sent.get(0).payload());
+        assertTrue(sent.get(0).payload().contains("Huấn luyện A"), sent.get(0).payload());
+        assertTrue(sent.get(0).payload().contains("Huynh trưởng 1"), sent.get(0).payload());
+        assertTrue(sent.get(0).payload().contains("thiếu giấy tờ"), sent.get(0).payload());
+        assertTrue(sent.get(0).payload().contains("Quản trị viên"), sent.get(0).payload());
+        assertTrue(sent.get(0).message().contains("Chọn thông báo để xem chi tiết"));
+    }
+
+    @Test
+    void theLeaderWithAnAccountAlsoReceivesTheNotificationAboutTheirOwnRecord() {
+        UUID leaderId = UUID.randomUUID();
+        Query leaderQuery = org.mockito.Mockito.mock(Query.class);
+        lenient().when(leaderQuery.setParameter(anyString(), any())).thenReturn(leaderQuery);
+        lenient().when(leaderQuery.getResultList()).thenReturn(List.of("tai-khoan-huynh-truong"));
+        lenient().when(entityManager.createNativeQuery(org.mockito.ArgumentMatchers.contains("a.leader_id"))).thenReturn(leaderQuery);
+
+        notifier.notifyDecisions(Decision.CERTIFICATE_REVOKED,
+                List.of(new Entry("submitter", UUID.randomUUID(), "Giáo xứ Phú Cường", "KH-A", "Huấn luyện A", "Nguyễn Văn An", "GPPC-HTI-2026-1",
+                        "nhập nhầm", leaderId)), "admin");
+
+        ArgumentCaptor<List<String>> recipients = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<TrainingNotificationCommand> command = ArgumentCaptor.forClass(TrainingNotificationCommand.class);
+        verify(trainingNotificationService, atLeastOnce()).notifyUsers(recipients.capture(), command.capture());
+        assertTrue(recipients.getValue().contains("tai-khoan-huynh-truong"), recipients.getValue().toString());
+        assertTrue(recipients.getValue().contains("submitter"), recipients.getValue().toString());
+        assertEquals("training.certificate.revoked", command.getValue().eventType());
+        assertTrue(command.getValue().payload().contains("GPPC-HTI-2026-1"), command.getValue().payload());
     }
 
     private List<Entry> entries(int count) {

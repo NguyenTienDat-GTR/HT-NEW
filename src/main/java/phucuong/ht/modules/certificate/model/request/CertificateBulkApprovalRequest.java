@@ -27,4 +27,6 @@ public class CertificateBulkApprovalRequest {
     private phucuong.ht.modules.certificate.model.enums.CertificateSignerType signerType;
     private String signerName;
     private String signerTitle;
+    // Ngày duyệt áp dụng cho các chứng nhận của khóa quá khứ trong lần duyệt hàng loạt này.
+    private java.time.LocalDate approvalDate;
 }

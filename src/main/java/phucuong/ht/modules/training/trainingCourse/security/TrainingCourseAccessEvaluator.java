@@ -18,6 +18,10 @@ public class TrainingCourseAccessEvaluator {
     public static final String UPDATE_DIOCESE = "training.course.update.diocese";
     public static final String TOGGLE_DIOCESE = "training.course.toggle.diocese";
     public static final String CREATE_DEANERY = "training.course.create.deanery";
+    // Quyền riêng do super-admin cấp cho từng tài khoản giáo phận: tạo khóa quá khứ và import danh sách tham dự.
+    public static final String CREATE_PAST_DIOCESE = "training.course.create_past.diocese";
+    // Cấp giáo hạt: super-admin cấp cho admin giáo phận, admin giáo phận (giữ quyền cấp giáo phận) cấp lại cho admin giáo hạt.
+    public static final String CREATE_PAST_DEANERY = "training.course.create_past.deanery";
     public static final String READ_DEANERY = "training.course.read.deanery";
     public static final String UPDATE_DEANERY = "training.course.update.deanery";
     public static final String TOGGLE_DEANERY = "training.course.toggle.deanery";
@@ -27,6 +31,12 @@ public class TrainingCourseAccessEvaluator {
     private final TrainingCourseRepository trainingCourseRepository;
     private final TrainingCourseTypeRepository trainingCourseTypeRepository;
     private final TrainingWorkflowSupport trainingWorkflowSupport;
+
+    // Tạo khóa quá khứ / import danh sách tham dự: chỉ tài khoản được cấp riêng quyền create_past.
+    public boolean canCreatePast(Authentication authentication) {
+        return securityUtils.hasAuthority(authentication, CREATE_PAST_DIOCESE)
+                || securityUtils.hasAuthority(authentication, CREATE_PAST_DEANERY);
+    }
 
     public boolean canCreate(Authentication authentication, String courseTypeCode) {
         if (courseTypeCode == null || courseTypeCode.isBlank()) {
@@ -82,7 +92,7 @@ public class TrainingCourseAccessEvaluator {
                             || !Boolean.TRUE.equals(course.getStatus())) {
                         return false;
                     }
-                    if (trainingWorkflowSupport.isDeaneryManaged(course.getCourseType())) {
+                    if (trainingWorkflowSupport.isDeaneryManaged(course)) {
                         return course.getDeanery() != null && accountRepository.findActiveDeaneryIdByUsername(username)
                                 .map(course.getDeanery().getId()::equals).orElse(false);
                     }
@@ -117,7 +127,7 @@ public class TrainingCourseAccessEvaluator {
 
         return trainingCourseRepository.findByCodeWithType(courseCode)
                 .map(course -> {
-                    if (trainingWorkflowSupport.isDeaneryManaged(course.getCourseType())) {
+                    if (trainingWorkflowSupport.isDeaneryManaged(course)) {
                         if (!securityUtils.hasAuthority(authentication, deaneryAuthority)) {
                             return false;
                         }

@@ -49,7 +49,7 @@ public class TrainingCourse extends BaseModel {
 
     // Loại khóa (catalog quản lý được), đã bao gồm điều kiện tham dự.
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "course_type_code", nullable = false)
+    @JoinColumn(name = "course_type_code")
     private TrainingCourseType courseType;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -100,4 +100,17 @@ public class TrainingCourse extends BaseModel {
     private String finishedBy;
 
     private String additionalNotes;
+
+    // Khóa trong quá khứ: tạo thủ công bởi tài khoản được super-admin cấp quyền riêng, không có loại khóa và thời gian đăng ký,
+    // đã kết thúc ngay khi tạo; danh sách tham dự được import từ Excel.
+    @Column(name = "is_past_course", nullable = false)
+    private Boolean pastCourse = Boolean.FALSE;
+
+    // Cấp độ đạt được của khóa quá khứ (khóa thường lấy theo loại khóa).
+    @Column(name = "resulting_level")
+    private String resultingLevel;
+
+    public boolean isPast() {
+        return Boolean.TRUE.equals(pastCourse);
+    }
 }

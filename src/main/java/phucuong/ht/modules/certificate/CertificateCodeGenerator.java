@@ -55,6 +55,23 @@ public class CertificateCodeGenerator {
         return builder.toString();
     }
 
+    // Ký hiệu trong mã chứng nhận của khóa quá khứ (khóa không có loại khóa).
+    public static final String PAST_COURSE_SHORT_CODE = "QK";
+
+    public String buildCodeWithShortCode(String unitPrefix, String unitName, String shortCode, Integer hostYear, long sequence) {
+        if (hostYear == null) {
+            throw commonValidationHelper.validationError("Năm tổ chức là bắt buộc để tạo mã chứng chỉ");
+        }
+        return unitAbbreviation(unitPrefix, unitName) + "-" + shortCode + "-" + hostYear + "-" + sequence;
+    }
+
+    public String buildPrefixWithShortCode(String unitPrefix, String unitName, String shortCode, Integer hostYear) {
+        if (hostYear == null) {
+            throw commonValidationHelper.validationError("Năm tổ chức là bắt buộc để tạo mã chứng chỉ");
+        }
+        return unitAbbreviation(unitPrefix, unitName) + "-" + shortCode + "-" + hostYear + "-";
+    }
+
     // Mã viết tắt lấy từ cấu hình loại khóa; fallback về mã loại khi chưa khai báo.
     public String courseShortCode(TrainingCourseType courseType) {
         if (courseType == null) {
