@@ -48,11 +48,11 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         String tier = resolveTier(request);
         RateLimitProperties.Tier tierConfig = resolveTierConfig(tier);
         String key = buildKey(request, tier);
-        RedisRateLimitService.RateLimitDecision decision = redisRateLimitService.evaluate(
-                key,
-                tierConfig.getLimit(),
-                tierConfig.getWindowSeconds()
-        );
+        boolean login = "login".equals(tier);
+        // Đăng nhập chỉ bị tính khi thất bại, nên nhập đúng mật khẩu hay mở lại trang không làm hết lượt.
+        RedisRateLimitService.RateLimitDecision decision = login
+                ? redisRateLimitService.peek(key, tierConfig.getLimit(), tierConfig.getWindowSeconds())
+                : redisRateLimitService.evaluate(key, tierConfig.getLimit(), tierConfig.getWindowSeconds());
 
         if (!decision.allowed()) {
             response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
@@ -67,10 +67,14 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+        if (login && response.getStatus() >= 400) {
+            redisRateLimitService.record(key, tierConfig.getWindowSeconds());
+        }
     }
 
     private RateLimitProperties.Tier resolveTierConfig(String tier) {
         return switch (tier) {
+            case "login" -> rateLimitProperties.getLogin();
             case "auth" -> rateLimitProperties.getAuth();
             case "workflow" -> rateLimitProperties.getWorkflow();
             case "write" -> rateLimitProperties.getWrite();
@@ -82,7 +86,11 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         String path = request.getRequestURI();
         String method = request.getMethod();
 
-        if (path.startsWith("/api/auth/login") || path.startsWith("/api/auth/refresh")
+        if (path.startsWith("/api/auth/login")) {
+            return "login";
+        }
+
+        if (path.startsWith("/api/auth/refresh")
                 || path.startsWith("/api/auth/password/")) {
             return "auth";
         }
