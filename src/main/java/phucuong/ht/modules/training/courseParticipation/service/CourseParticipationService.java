@@ -1052,6 +1052,10 @@ public class CourseParticipationService {
                 .certificateApprovedAt(participation.getCertificateApprovedAt())
                 .finalResult(participation.getFinalResult())
                 .approvedBy(participation.getApprovedBy())
+                .teamName(participation.getTeamName())
+                .leaderEmail(participation.getLeader() == null ? null : participation.getLeader().getEmail())
+                .leaderPhone(participation.getLeader() == null ? null : participation.getLeader().getPhoneNumber())
+                .leaderGender(participation.getLeader() == null || participation.getLeader().getGender() == null ? null : participation.getLeader().getGender().name())
                 .approvedByName(auditActorNameResolver.resolve(participation.getApprovedBy()))
                 // Thành phần điểm đã bị vô hiệu hóa không hiển thị (khớp với danh sách cột ở /score-components).
                 .componentScores(!showScores ? List.<ComponentScoreResponse>of() : participation.getComponentScores().stream()
@@ -1288,6 +1292,10 @@ public class CourseParticipationService {
     private void applyApprovalDecision(CourseParticipation participation, boolean approved) {
         participation.setApprovalStatus(approved ? WorkflowApprovalStatus.APPROVED : WorkflowApprovalStatus.REJECTED);
         participation.setParticipationStatus(approved ? ParticipationStatus.ATTENDED : ParticipationStatus.REJECTED);
+        // Hồ sơ ra khỏi danh sách tham dự thì không còn thuộc đội nào.
+        if (!approved) {
+            participation.setTeamName(null);
+        }
     }
 
     // Hồ sơ chờ duyệt được duyệt hoặc từ chối; hồ sơ đã bị từ chối chỉ được duyệt lại.

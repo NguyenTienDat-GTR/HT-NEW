@@ -65,6 +65,8 @@ public class PastCourseParticipantImportService {
     public static final String COL_RESULT = "Kết quả";
     public static final String COL_REVIEW = "Nhận xét";
     public static final String COL_EXCEPTION_REASON = "Lí do ngoại lệ";
+    public static final String COL_TEAM = "Tên đội";
+    private static final int MAX_TEAM_NAME = 150;
 
     private static final BigDecimal MAX_SCORE = new BigDecimal("1000");
 
@@ -88,7 +90,7 @@ public class PastCourseParticipantImportService {
 
     // leader: huynh trưởng đã có hồ sơ; newLeader: thông tin để tạo mới (đúng một trong hai khác null).
     private record Parsed(ExcelRowData row, Leader leader, LeaderImportService.NewLeader newLeader, CourseResult result, BigDecimal score, String review,
-                          boolean exception, String exceptionReason) {
+                          boolean exception, String exceptionReason, String teamName) {
     }
 
     @Caching(evict = {
@@ -101,9 +103,29 @@ public class PastCourseParticipantImportService {
     @EvictCaches.Leaders
     @Transactional
     public ImportSummary importParticipants(String courseCode, java.nio.file.Path file, Authentication authentication, JobProgress progress) {
+        return importParticipants(courseCode, file, authentication, progress, false);
+    }
+
+    /**
+     * withTeam = true: import danh sách chia đội của khóa thường. File giống danh sách tham dự nhưng thêm cột "Tên đội", không có sheet Ngoại lệ,
+     * mọi hồ sơ vào thẳng danh sách tham dự (đã duyệt đăng ký, không kiểm tra điều kiện của khóa) và gắn đội.
+     */
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_DETAIL, allEntries = true)
+    })
+    @EvictCaches.Analytics
+    @EvictCaches.Leaders
+    @Transactional
+    public ImportSummary importParticipants(String courseCode, java.nio.file.Path file, Authentication authentication, JobProgress progress, boolean withTeam) {
         TrainingCourse course = trainingCourseRepository.findByCodeWithType(courseCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy khóa huấn luyện " + courseCode));
         boolean past = course.isPast();
+        if (withTeam && past) {
+            throw commonValidationHelper.validationError("Khóa quá khứ không áp dụng chia đội");
+        }
         requireImportAllowed(course, authentication);
         lockCourse(course);
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người import danh sách tham dự");
@@ -119,9 +141,12 @@ public class PastCourseParticipantImportService {
             if (past) {
                 sheet.requireColumns(errors, COL_SCORE, COL_RESULT);
             }
+            if (withTeam) {
+                sheet.requireColumns(errors, COL_TEAM);
+            }
             errors.throwIfAny();
             // Khóa thường có thêm sheet "Ngoại lệ" (huynh trưởng không đủ điều kiện, chờ duyệt đăng ký); sheet này có thể không có hoặc để trống.
-            ExcelSheetData exceptionSheet = past ? null : reader.sheet(ImportTemplates.EXCEPTION_SHEET);
+            ExcelSheetData exceptionSheet = past || withTeam ? null : reader.sheet(ImportTemplates.EXCEPTION_SHEET);
             if (exceptionSheet != null) {
                 exceptionSheet.requireColumns(errors, COL_EMAIL, COL_PHONE, COL_EXCEPTION_REASON,
                         LeaderImportService.COL_HOLY_NAME, LeaderImportService.COL_FULL_NAME, LeaderImportService.COL_BIRTH_DATE,
@@ -131,7 +156,7 @@ public class PastCourseParticipantImportService {
             if (sheet.rows().isEmpty() && (exceptionSheet == null || exceptionSheet.rows().isEmpty())) {
                 throw commonValidationHelper.validationError("File Excel không có dòng dữ liệu nào");
             }
-            parsed = parse(sheet, exceptionSheet, course, errors, past);
+            parsed = parse(sheet, exceptionSheet, course, errors, past, withTeam);
             errors.throwIfAny();
         }
         progress.report(0, parsed.size());
@@ -192,6 +217,7 @@ public class PastCourseParticipantImportService {
                 participation.setResult(CourseResult.UNCOMPLETED);
                 participation.setParticipationStatus(ParticipationStatus.ATTENDED);
                 participation.setCertificateApprovalStatus(WorkflowApprovalStatus.NOT_REQUIRED);
+                participation.setTeamName(item.teamName());
             }
             participation.setStatus(Boolean.TRUE);
             participation.setCreatedAt(now);
@@ -207,7 +233,9 @@ public class PastCourseParticipantImportService {
                 progress.report(created, parsed.size());
             }
         }
-        String message = "Đã import " + created + " học viên vào khóa \"" + course.getCourseName() + "\""
+        String message = withTeam ? "Đã import " + created + " học viên đã chia đội vào khóa \"" + course.getCourseName() + "\""
+                + (newLeaders > 0 ? ", trong đó tạo mới " + newLeaders + " hồ sơ huynh trưởng" : "")
+                : "Đã import " + created + " học viên vào khóa \"" + course.getCourseName() + "\""
                 + (exceptions > 0 ? ", trong đó " + exceptions + " hồ sơ ngoại lệ chờ duyệt đăng ký" : "")
                 + (newLeaders > 0 ? ", trong đó tạo mới " + newLeaders + " hồ sơ huynh trưởng" : "");
         return new ImportSummary(created, message);
@@ -244,8 +272,16 @@ public class PastCourseParticipantImportService {
     // Kiểm tra nhanh lúc tạo job (đúng khóa quá khứ của giáo phận mình, khóa còn bật) để báo lỗi ngay thay vì đợi job chạy.
     @Transactional(readOnly = true)
     public void precheck(String courseCode, Authentication authentication) {
+        precheck(courseCode, authentication, false);
+    }
+
+    @Transactional(readOnly = true)
+    public void precheck(String courseCode, Authentication authentication, boolean withTeam) {
         TrainingCourse course = trainingCourseRepository.findByCodeWithType(courseCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy khóa huấn luyện " + courseCode));
+        if (withTeam && course.isPast()) {
+            throw commonValidationHelper.validationError("Khóa quá khứ không áp dụng chia đội");
+        }
         requireImportAllowed(course, authentication);
     }
 
@@ -270,14 +306,14 @@ public class PastCourseParticipantImportService {
         }
     }
 
-    private List<Parsed> parse(ExcelSheetData sheet, ExcelSheetData exceptionSheet, TrainingCourse course, ImportErrors errors, boolean past) {
+    private List<Parsed> parse(ExcelSheetData sheet, ExcelSheetData exceptionSheet, TrainingCourse course, ImportErrors errors, boolean past, boolean withTeam) {
         // Gộp dòng của cả hai sheet để tra cứu huynh trưởng / chỉ mục giáo xứ / cấp độ đúng một lần cho cả file.
         List<ExcelRowData> allRows = new ArrayList<>(sheet.rows());
         int mainCount = allRows.size();
         if (exceptionSheet != null) {
             allRows.addAll(exceptionSheet.rows());
         }
-        LeaderLevelService.LevelOrder courseLevels = past ? null : leaderLevelService.order(trainingWorkflowSupport.dioceseIdOf(course));
+        LeaderLevelService.LevelOrder courseLevels = past || withTeam ? null : leaderLevelService.order(trainingWorkflowSupport.dioceseIdOf(course));
         // Tra cứu huynh trưởng một lần cho cả file.
         Set<String> emails = new HashSet<>();
         Set<String> phones = new HashSet<>();
@@ -360,7 +396,14 @@ public class PastCourseParticipantImportService {
                 }
             }
             String exceptionReason = null;
-            if (!past) {
+            String teamName = null;
+            if (withTeam) {
+                teamName = row.requiredText(errors, COL_TEAM);
+                if (teamName != null && teamName.length() > MAX_TEAM_NAME) {
+                    row.error(errors, COL_TEAM, "Tên đội tối đa " + MAX_TEAM_NAME + " ký tự");
+                }
+            }
+            if (!past && !withTeam) {
                 if (exceptionRow) {
                     exceptionReason = row.requiredText(errors, COL_EXCEPTION_REASON);
                 }
@@ -379,7 +422,7 @@ public class PastCourseParticipantImportService {
                 }
             }
             if (errorCount(errors) == before && (leader != null || newLeader != null) && (!past || courseResult != null)) {
-                result.add(new Parsed(row, leader, newLeader, courseResult, score, review, exceptionRow, exceptionReason));
+                result.add(new Parsed(row, leader, newLeader, courseResult, score, review, exceptionRow, exceptionReason, teamName));
             }
         }
         return result;

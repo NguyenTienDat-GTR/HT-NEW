@@ -83,6 +83,19 @@ public final class TrainingExcelExports {
         ), rows);
     }
 
+    /** Danh sách chia đội: tên khóa ở dòng tiêu đề, các cột chỉ gồm tên thánh, họ và tên, giáo xứ, giáo hạt, đội. */
+    public static byte[] teams(String courseName, List<CourseParticipationResponse> rows) {
+        return ExcelExportWriter.write("Chia đội", courseName == null || courseName.isBlank() ? null : courseName, List.of(
+                ExcelColumn.<CourseParticipationResponse>of("Tên thánh", 16, CourseParticipationResponse::getLeaderHolyName),
+                ExcelColumn.<CourseParticipationResponse>of("Họ và tên", 28, CourseParticipationResponse::getLeaderFullName),
+                ExcelColumn.<CourseParticipationResponse>of("Email", 32, CourseParticipationResponse::getLeaderEmail),
+                ExcelColumn.<CourseParticipationResponse>of("Số điện thoại", 16, CourseParticipationResponse::getLeaderPhone),
+                ExcelColumn.<CourseParticipationResponse>of("Giáo xứ", 26, CourseParticipationResponse::getParishName),
+                ExcelColumn.<CourseParticipationResponse>of("Giáo hạt", 26, CourseParticipationResponse::getDeaneryName),
+                ExcelColumn.<CourseParticipationResponse>of("Đội", 20, CourseParticipationResponse::getTeamName)
+        ), rows);
+    }
+
     public static byte[] certificates(List<CertificateResponse> rows) {
         return ExcelExportWriter.write("Chứng nhận", List.of(
                 ExcelColumn.<CertificateResponse>of("Mã chứng nhận", 30, CertificateResponse::getCertificateCode),

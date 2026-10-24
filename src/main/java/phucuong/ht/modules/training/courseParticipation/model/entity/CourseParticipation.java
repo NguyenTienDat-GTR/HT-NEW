@@ -68,6 +68,10 @@ public class CourseParticipation extends BaseModel {
 
     private OffsetDateTime parishSubmittedAt;
 
+    // Đội được chia trong khóa (chỉ khóa thường); null = chưa chia đội.
+    @Column(name = "team_name", length = 150)
+    private String teamName;
+
     // Trạng thái duyệt đăng ký: khóa giáo hạt do giáo hạt duyệt, khóa giáo phận do giáo phận duyệt.
     @Enumerated(EnumType.STRING)
     private WorkflowApprovalStatus approvalStatus;

@@ -220,7 +220,7 @@ public class ExcelJobWorker {
             Path dir = Files.createDirectories(Path.of(baseDir, "outputs"));
             output = dir.resolve(row.id() + ".xlsx");
             Files.write(output, content);
-            String name = row.kind().fileBase() + "-" + LocalDate.now() + ".xlsx";
+            String name = handlers.exportFileBase(row.kind(), request) + "-" + LocalDate.now() + ".xlsx";
             Path written = output;
             Integer updated = shortTx.execute(status -> repository.markSucceeded(row.id(),
                     json(Map.of("message", "Đã xuất file " + name)), written.toString(), name, null, null));

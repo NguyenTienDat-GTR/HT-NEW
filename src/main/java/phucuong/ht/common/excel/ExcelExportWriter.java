@@ -29,6 +29,11 @@ public final class ExcelExportWriter {
     }
 
     public static <T> byte[] write(String sheetName, List<ExcelColumn<T>> columns, List<T> rows) {
+        return write(sheetName, null, columns, rows);
+    }
+
+    /** title != null: dòng đầu là tiêu đề (gộp ô, in đậm), dòng tiêu đề cột nằm ngay dưới. */
+    public static <T> byte[] write(String sheetName, String title, List<ExcelColumn<T>> columns, List<T> rows) {
         SXSSFWorkbook workbook = new SXSSFWorkbook(200);
         try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             Sheet sheet = workbook.createSheet(safeSheetName(sheetName));
@@ -46,16 +51,31 @@ public final class ExcelExportWriter {
             CellStyle dateTimeStyle = workbook.createCellStyle();
             dateTimeStyle.setDataFormat(workbook.getCreationHelper().createDataFormat().getFormat("dd/MM/yyyy HH:mm"));
 
-            Row header = sheet.createRow(0);
+            int headerIndex = 0;
+            if (title != null && !columns.isEmpty()) {
+                CellStyle titleStyle = workbook.createCellStyle();
+                Font titleFont = workbook.createFont();
+                titleFont.setBold(true);
+                titleFont.setFontHeightInPoints((short) 14);
+                titleStyle.setFont(titleFont);
+                Cell titleCell = sheet.createRow(0).createCell(0);
+                titleCell.setCellValue(title);
+                titleCell.setCellStyle(titleStyle);
+                if (columns.size() > 1) {
+                    sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, columns.size() - 1));
+                }
+                headerIndex = 1;
+            }
+            Row header = sheet.createRow(headerIndex);
             for (int c = 0; c < columns.size(); c++) {
                 Cell cell = header.createCell(c);
                 cell.setCellValue(columns.get(c).header());
                 cell.setCellStyle(headerStyle);
                 sheet.setColumnWidth(c, Math.min(Math.max(columns.get(c).width(), 8), 80) * 256);
             }
-            sheet.createFreezePane(0, 1);
+            sheet.createFreezePane(0, headerIndex + 1);
 
-            int rowIndex = 1;
+            int rowIndex = headerIndex + 1;
             for (T item : rows) {
                 Row row = sheet.createRow(rowIndex++);
                 for (int c = 0; c < columns.size(); c++) {
@@ -63,7 +83,7 @@ public final class ExcelExportWriter {
                 }
             }
             if (!columns.isEmpty()) {
-                sheet.setAutoFilter(new CellRangeAddress(0, 0, 0, columns.size() - 1));
+                sheet.setAutoFilter(new CellRangeAddress(headerIndex, headerIndex, 0, columns.size() - 1));
             }
             workbook.write(out);
             return out.toByteArray();

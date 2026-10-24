@@ -26,6 +26,22 @@ public class DeaneryRepository extends BaseRepo<Deanery, UUID> {
         return deanery;
     }
 
+    // Số giáo hạt đang hoạt động (bản thân và giáo phận cha đều bật) của giáo phận.
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public int countActiveByDioceseId(UUID dioceseId) {
+        Long count = entityManager.createQuery(
+                        """
+                        select count(de)
+                        from Deanery de
+                        where de.diocese.id = :dioceseId and de.status = true and de.diocese.status = true
+                        """,
+                        Long.class
+                )
+                .setParameter("dioceseId", dioceseId)
+                .getSingleResult();
+        return count == null ? 0 : count.intValue();
+    }
+
     public boolean existsByNameAndDioceseId(String name, UUID dioceseId) {
         Long count = entityManager.createQuery(
                         """

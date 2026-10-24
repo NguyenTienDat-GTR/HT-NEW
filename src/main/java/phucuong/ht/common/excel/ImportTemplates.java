@@ -139,6 +139,35 @@ public final class ImportTemplates {
                 EXCEPTION_SHEET, exceptionColumns, exceptionSamples);
     }
 
+    /** Mẫu import danh sách chia đội: như danh sách tham dự khóa thường, thêm cột Tên đội, không có sheet Ngoại lệ. */
+    public static byte[] teamParticipants(List<String> levelNames) {
+        List<Column> columns = List.of(
+                new Column(PastCourseParticipantImportService.COL_EMAIL, true, 32, Kind.GENERAL),
+                new Column(PastCourseParticipantImportService.COL_PHONE, true, 16, Kind.TEXT),
+                new Column(LeaderImportService.COL_HOLY_NAME, true, 14, Kind.GENERAL),
+                new Column(LeaderImportService.COL_FULL_NAME, true, 26, Kind.GENERAL),
+                new Column(LeaderImportService.COL_BIRTH_DATE, true, 14, Kind.DATE),
+                new Column(LeaderImportService.COL_GENDER, true, 12, Kind.GENDER),
+                new Column(LeaderImportService.COL_LEVEL, false, 24, Kind.LEVEL),
+                new Column(LeaderImportService.COL_DEANERY, true, 20, Kind.GENERAL),
+                new Column(LeaderImportService.COL_PARISH, true, 20, Kind.GENERAL),
+                new Column(PastCourseParticipantImportService.COL_TEAM, true, 20, Kind.GENERAL));
+        List<List<Object>> samples = List.of(
+                List.of("nguyen.van.an@example.com", "0901234567", "Phêrô", "Nguyễn Văn An", LocalDate.of(1995, 3, 7), "Nam", "", "Tên giáo hạt", "Tên giáo xứ", "Đội 1"),
+                List.of("tran.thi.binh@example.com", "0912345678", "Maria", "Trần Thị Bình", LocalDate.of(1998, 11, 21), "Nữ", "", "Tên giáo hạt", "Tên giáo xứ", "Đội 1"));
+        List<String> guide = List.of(
+                "1. Dùng cho khóa huấn luyện thường (không phải khóa quá khứ). Mở chi tiết khóa, vào tab \"Chia đội\" và bấm \"Nhập excel chia đội\".",
+                "2. Chỉ có một sheet dữ liệu \"" + PARTICIPANTS_SHEET + "\" (sheet đầu tiên), không có sheet Ngoại lệ; điền từ dòng 2 và xóa các dòng ví dụ trước khi import.",
+                "3. MỌI DÒNG đều phải nhập đủ các cột (tiêu đề màu đỏ), chỉ được để trống cột Cấp độ: Email, Số điện thoại, Tên thánh, Họ và tên, Ngày sinh, Giới tính, Giáo hạt, Giáo xứ, Tên đội (tối đa 150 ký tự).",
+                "4. Huynh trưởng được tìm theo Email và Số điện thoại (hai thông tin này là duy nhất, nếu khớp hai huynh trưởng khác nhau thì báo lỗi). Huynh trưởng ĐÃ CÓ HỒ SƠ chỉ được thêm vào khóa (hồ sơ không bị sửa); CHƯA CÓ HỒ SƠ thì được tạo mới từ chính dòng này.",
+                "5. Hồ sơ được import mặc định là ĐÃ DUYỆT đăng ký: vào thẳng danh sách tham dự của khóa và gắn vào đội theo cột Tên đội. Hệ thống không kiểm tra điều kiện tham dự của khóa ở bước này.",
+                "6. Ngày sinh theo dạng dd/MM/yyyy; Giới tính chọn Nam hoặc Nữ; Số điện thoại gồm 10 chữ số và bắt đầu bằng 0; Cấp độ chọn từ sheet \"" + LOOKUP_SHEET + "\" (để trống là Chưa có cấp).",
+                "7. Giáo hạt và Giáo xứ phải ĐÃ CÓ trong hệ thống, giáo xứ phải thuộc đúng giáo hạt đã nhập và thuộc giáo phận (khóa giáo phận) hoặc giáo hạt (khóa giáo hạt) của khóa; giáo xứ phải đang hoạt động.",
+                "8. Một huynh trưởng chỉ xuất hiện một lần trong cả file; huynh trưởng đã có hồ sơ đăng ký / tham dự của khóa sẽ báo lỗi.",
+                "9. Chỉ cần một dòng lỗi thì toàn bộ file không được lưu (kể cả huynh trưởng mới); lỗi được báo rõ sheet, dòng, cột ở khay tác vụ để sửa rồi import lại. Mỗi lần import tối đa 5.000 dòng.");
+        return build(PARTICIPANTS_SHEET, "Hướng dẫn import danh sách chia đội khóa huấn luyện", columns, samples, guide, levelNames);
+    }
+
     private static byte[] build(String dataSheetName, String guideTitle, List<Column> columns, List<List<Object>> samples,
                                 List<String> guide, List<String> levelNames) {
         return build(dataSheetName, guideTitle, columns, samples, guide, levelNames, null, null, null);

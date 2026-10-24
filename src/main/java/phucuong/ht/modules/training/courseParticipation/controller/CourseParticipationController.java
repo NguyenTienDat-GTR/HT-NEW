@@ -67,6 +67,17 @@ public class CourseParticipationController {
                 excelJobService.createExport(phucuong.ht.common.excel.job.ExcelJobKind.EXPORT_PARTICIPANTS, request, idempotencyKey, authentication));
     }
 
+    // Xuất Excel chia đội (tên thánh, họ tên, giáo xứ, giáo hạt, đội; tên khóa ở dòng tiêu đề) theo bộ lọc của tab Chia đội.
+    @org.springframework.web.bind.annotation.PostMapping("/participants/teams/export")
+    @PreAuthorize("@courseParticipationAccessEvaluator.canRead(authentication)")
+    public org.springframework.http.ResponseEntity<apiResponse<phucuong.ht.common.excel.job.ExcelJobResponse>> exportTeams(
+            BaseSearchRequest request,
+            @org.springframework.web.bind.annotation.RequestHeader(value = phucuong.ht.common.idempotency.IdempotencyService.HEADER, required = false) String idempotencyKey,
+            Authentication authentication) {
+        return phucuong.ht.common.excel.job.ExcelJobResponses.accepted(
+                excelJobService.createExport(phucuong.ht.common.excel.job.ExcelJobKind.EXPORT_TEAMS, request, idempotencyKey, authentication));
+    }
+
     @GetMapping("/courses/{courseCode}/score-components")
     @PreAuthorize("@courseParticipationAccessEvaluator.canScoreCourse(authentication, #courseCode)")
     public apiResponse<List<ScoreEntryComponentResponse>> scoreComponents(@PathVariable String courseCode) {

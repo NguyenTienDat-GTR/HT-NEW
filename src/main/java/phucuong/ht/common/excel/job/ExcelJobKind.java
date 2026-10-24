@@ -9,9 +9,11 @@ public enum ExcelJobKind {
     EXPORT_COURSES("Xuất Excel khóa huấn luyện", "khoa-huan-luyen", false),
     EXPORT_PARTICIPATIONS("Xuất Excel đăng ký tham dự", "dang-ky-tham-du", false),
     EXPORT_PARTICIPANTS("Xuất Excel danh sách tham dự", "danh-sach-tham-du", false),
+    EXPORT_TEAMS("Xuất Excel chia đội", "chia-doi", false),
     EXPORT_CERTIFICATES("Xuất Excel chứng nhận", "chung-nhan", false),
     IMPORT_LEADERS("Import hồ sơ huynh trưởng", "", true),
-    IMPORT_PARTICIPANTS("Import danh sách tham dự khóa huấn luyện", "", true);
+    IMPORT_PARTICIPANTS("Import danh sách tham dự khóa huấn luyện", "", true),
+    IMPORT_TEAM_PARTICIPANTS("Import danh sách chia đội khóa huấn luyện", "", true);
 
     private final String label;
     private final String fileBase;

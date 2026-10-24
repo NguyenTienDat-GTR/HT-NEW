@@ -43,6 +43,19 @@ class ImportTemplatesTest {
     }
 
     @Test
+    void teamTemplateHasTheTeamColumnAndNoExceptionSheet() {
+        byte[] content = ImportTemplates.teamParticipants(List.of("Dự trưởng"));
+        try (ExcelWorkbookReader reader = ExcelWorkbookReader.open(upload(content))) {
+            ExcelSheetData sheet = reader.firstSheet();
+            assertEquals(ImportTemplates.PARTICIPANTS_SHEET, sheet.name());
+            assertTrue(sheet.requireColumns(new ImportErrors(), PastCourseParticipantImportService.COL_TEAM,
+                    PastCourseParticipantImportService.COL_EMAIL, PastCourseParticipantImportService.COL_PHONE));
+            assertEquals(null, reader.sheet(ImportTemplates.EXCEPTION_SHEET));
+            assertEquals("Đội 1", sheet.rows().get(0).text(PastCourseParticipantImportService.COL_TEAM));
+        }
+    }
+
+    @Test
     void participantTemplateHasTheResultColumnAndTheOptionalLeaderColumns() {
         byte[] content = ImportTemplates.participants(List.of("Dự trưởng"));
         try (ExcelWorkbookReader reader = ExcelWorkbookReader.open(upload(content))) {

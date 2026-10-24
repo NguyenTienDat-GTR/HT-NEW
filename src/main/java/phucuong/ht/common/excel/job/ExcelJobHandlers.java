@@ -1,5 +1,6 @@
 package phucuong.ht.common.excel.job;
 
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
@@ -39,6 +40,33 @@ public class ExcelJobHandlers {
     private final CertificateService certificateService;
     private final LeaderImportService leaderImportService;
     private final PastCourseParticipantImportService pastCourseParticipantImportService;
+    private final phucuong.ht.modules.training.trainingCourse.repository.TrainingCourseRepository trainingCourseRepository;
+
+    /** Phần đầu tên file xuất; danh sách chia đội kèm tên khóa (không dấu) để biết file thuộc khóa nào. */
+    public String exportFileBase(ExcelJobKind kind, BaseSearchRequest request) {
+        if (kind != ExcelJobKind.EXPORT_TEAMS || request == null || request.getFilters() == null) {
+            return kind.fileBase();
+        }
+        Object code = request.getFilters().get("course.courseCode");
+        if (code == null) {
+            return kind.fileBase();
+        }
+        String slug = trainingCourseRepository.findByCodeWithType(String.valueOf(code))
+                .map(course -> slug(course.getCourseName()))
+                .orElse("");
+        return slug.isEmpty() ? kind.fileBase() : kind.fileBase() + "-" + slug;
+    }
+
+    private static String slug(String text) {
+        if (text == null) {
+            return "";
+        }
+        String plain = java.text.Normalizer.normalize(text.replace('đ', 'd').replace('Đ', 'D'), java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}+", "")
+                .replaceAll("[^A-Za-z0-9]+", "-")
+                .replaceAll("^-+|-+$", "");
+        return plain.length() > 80 ? plain.substring(0, 80).replaceAll("-+$", "") : plain;
+    }
 
     public byte[] export(ExcelJobKind kind, BaseSearchRequest request, Authentication authentication, JobProgress progress) {
         return switch (kind) {
@@ -57,6 +85,11 @@ public class ExcelJobHandlers {
                     ExcelExportSupport.collectAll(request, page -> courseParticipationService.findAll(page, authentication), progress));
             case EXPORT_PARTICIPANTS -> TrainingExcelExports.participations(
                     ExcelExportSupport.collectAll(request, page -> courseParticipationService.findParticipants(page, authentication), progress));
+            case EXPORT_TEAMS -> {
+                List<phucuong.ht.modules.training.courseParticipation.model.response.CourseParticipationResponse> rows = ExcelExportSupport.collectAll(
+                        request, page -> courseParticipationService.findParticipants(page, authentication), progress);
+                yield TrainingExcelExports.teams(rows.isEmpty() ? null : rows.get(0).getCourseName(), rows);
+            }
             case EXPORT_CERTIFICATES -> TrainingExcelExports.certificates(
                     ExcelExportSupport.collectAll(request, page -> certificateService.findAll(page, authentication), progress));
             default -> throw new IllegalArgumentException("Không phải tác vụ xuất: " + kind);
@@ -67,6 +100,7 @@ public class ExcelJobHandlers {
         return switch (kind) {
             case IMPORT_LEADERS -> leaderImportService.importLeaders(file, authentication, progress);
             case IMPORT_PARTICIPANTS -> pastCourseParticipantImportService.importParticipants(target, file, authentication, progress);
+            case IMPORT_TEAM_PARTICIPANTS -> pastCourseParticipantImportService.importParticipants(target, file, authentication, progress, true);
             default -> throw new IllegalArgumentException("Không phải tác vụ nhập: " + kind);
         };
     }
