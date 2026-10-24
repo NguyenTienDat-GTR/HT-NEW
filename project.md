@@ -33,6 +33,16 @@
 - `DeaneryResponse` / `ParishResponse` có `effectiveStatus`; danh sách huynh trưởng chọn được chỉ gồm giáo xứ hiệu lực.
 - Analytics có `includeInactiveUnits` (mặc định `false`, nằm trong cache key): số liệu snapshot (số đơn vị, huynh trưởng hiện tại, cơ cấu) loại đơn vị bị khóa; số liệu sự kiện lịch sử (đăng ký, chứng nhận, huynh trưởng mới theo thời gian) luôn đầy đủ. Thêm KPI `inactiveDeaneries`, `inactiveParishes`, `leadersInInactiveUnits`.
 
+## Chia đội khóa huấn luyện (khóa thường, không áp dụng khóa quá khứ)
+
+- Cột `course_participation.team_name` (migration `V100`); `CourseParticipationResponse` có thêm `teamName`, `leaderGender`. Lọc theo đội bằng filter `teamName` của `/api/training/participants`.
+- API (`CourseTeamController`, quyền như duyệt đăng ký đúng đơn vị sở hữu khóa; xem tổng quan/đội theo quyền đọc hồ sơ tham dự): `GET /api/training/courses/{code}/teams/overview` (tổng hồ sơ, nam/nữ, số đơn vị đang hoạt động, sĩ số từng đội), `GET .../teams/options` (tên đội để lọc), `POST .../teams/divide`, `DELETE .../teams`.
+- `divide` nhận `teamCount`, `teamSize` (sĩ số tối đa mỗi đội), `namingMode` (`SEQUENTIAL` = "Đội 1..N" | `CUSTOM` + `teamNames`), `assignmentMode` (`RANDOM` | `UNIT_LIMIT` + `maxUnitsPerTeam`). `UNIT_LIMIT`: mỗi đội chỉ gồm hồ sơ của tối đa N đơn vị (giáo hạt với khóa giáo phận, giáo xứ với khóa giáo hạt), N không vượt số đơn vị đang hoạt động. Chia lại ghi đè đội cũ.
+- Thuật toán `TeamDivisionPlanner`: sĩ số chênh nhau tối đa 1; hạn ngạch nam/nữ từng đội theo tỉ lệ toàn danh sách (giới tính chưa có xếp riêng) nên cân bằng nhất có thể; với `UNIT_LIMIT` dồn cùng đơn vị vào cùng đội, thử tối đa 300 lần ngẫu nhiên, không chia được thì báo lỗi gợi ý tăng N.
+- Gán đội thủ công: `PATCH .../teams/assignments` (`assignments[{participationId, teamName}]`, tên rỗng = bỏ khỏi đội, tên không phân biệt hoa thường dùng lại cách viết của đội đã có). Hồ sơ bị xóa / từ chối khỏi danh sách tham dự (`applyApprovalDecision(false)`) bị xóa `teamName`; hồ sơ được duyệt xuất hiện ở tab chia đội vì tab dùng chính danh sách tham dự.
+- Xuất Excel tab chia đội: `POST /api/training/participants/teams/export` (job `EXPORT_TEAMS`), tên khóa ở dòng tiêu đề, cột Tên thánh, Họ và tên, Giáo xứ, Giáo hạt, Đội.
+- Import: `GET /api/training/courses/teams/import-template`, `POST /api/training/courses/{code}/teams/import` (job `IMPORT_TEAM_PARTICIPANTS`). Giống import danh sách tham dự khóa thường nhưng thêm cột bắt buộc `Tên đội`, không có sheet Ngoại lệ; hồ sơ vào thẳng danh sách tham dự (đã duyệt, không kiểm tra điều kiện khóa) và gắn đội.
+
 ## Nhật ký hệ thống (audit log)
 
 - Mỗi yêu cầu `/api/**` ghi một dòng `system_log` (`ApiAuditLoggingFilter`). Để truy vết: `resource` (loại đối tượng, luôn có cho mọi đường dẫn đã biết, đường dẫn lạ lấy đoạn tài nguyên đầu), `resource_id` (chỉ mã thật: UUID, số hoặc mã có chữ số; các đoạn như `me`, `options` không còn bị ghi nhầm thành mã), `resource_name` (tên dễ đọc, tra trước khi xử lý để sửa/xóa vẫn giữ tên lúc bị tác động; huynh trưởng luôn kèm tên thánh), `operation` (LIST, VIEW, CREATE, UPDATE, DELETE hoặc hành động như APPROVE, TOGGLE_STATUS), `query_string` (bộ lọc yêu cầu, bỏ `password`, `token`, `otp`, `secret`, `code`), `duration_ms`.

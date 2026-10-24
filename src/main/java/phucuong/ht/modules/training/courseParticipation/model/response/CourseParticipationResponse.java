@@ -60,6 +60,11 @@ public class CourseParticipationResponse {
     private List<ComponentScoreResponse> componentScores;
     private Boolean status;
     private String approvedByName;
+    // Đội được chia trong khóa và giới tính của huynh trưởng (NAM/NU).
+    private String teamName;
+    private String leaderGender;
+    private String leaderEmail;
+    private String leaderPhone;
     private OffsetDateTime createdAt;
     private String createdByName;
     private OffsetDateTime updatedAt;

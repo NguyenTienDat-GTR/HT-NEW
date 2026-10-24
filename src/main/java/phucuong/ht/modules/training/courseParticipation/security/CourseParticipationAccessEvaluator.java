@@ -154,6 +154,24 @@ public class CourseParticipationAccessEvaluator {
                 .orElse(false);
     }
 
+    // Xem tổng quan chia đội / danh sách đội của khóa: đọc được hồ sơ tham dự đúng cấp quản lý của khóa.
+    public boolean canReadCourseTeams(Authentication authentication, String courseCode) {
+        return canRead(authentication) && trainingCourseRepository.findByCodeWithType(courseCode)
+                .map(course -> trainingWorkflowSupport.isDeaneryManaged(course)
+                        ? hasDeaneryReadAuthority(authentication) && scopedDeanery(authentication, courseCode)
+                        : hasDioceseReadAuthority(authentication) && scopedDiocese(authentication, courseCode))
+                .orElse(false);
+    }
+
+    // Chia đội / xóa chia đội / import chia đội: người duyệt đăng ký đúng đơn vị sở hữu khóa.
+    public boolean canManageCourseTeams(Authentication authentication, String courseCode) {
+        return trainingCourseRepository.findByCodeWithType(courseCode)
+                .map(course -> trainingWorkflowSupport.isDeaneryManaged(course)
+                        ? securityUtils.hasAuthority(authentication, APPROVE_DEANERY) && deaneryScopeOwnsCourse(authentication, courseCode)
+                        : securityUtils.hasAuthority(authentication, APPROVE_DIOCESE) && dioceseScopeOwnsCourse(authentication, courseCode))
+                .orElse(false);
+    }
+
     private boolean hasDeaneryReadAuthority(Authentication authentication) {
         return securityUtils.hasAuthority(authentication, READ_DEANERY)
                 || securityUtils.hasAuthority(authentication, APPROVE_DEANERY)

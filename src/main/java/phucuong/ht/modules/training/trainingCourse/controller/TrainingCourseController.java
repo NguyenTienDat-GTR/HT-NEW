@@ -77,6 +77,28 @@ public class TrainingCourseController {
                 phucuong.ht.common.excel.job.ExcelJobKind.IMPORT_PARTICIPANTS, courseCode, file, idempotencyKey, authentication));
     }
 
+    // Tải file Excel mẫu danh sách chia đội (giống danh sách tham dự khóa thường, thêm cột Tên đội, không có sheet Ngoại lệ).
+    @GetMapping("/teams/import-template")
+    @PreAuthorize("@trainingCourseAccessEvaluator.canImportRegularParticipants(authentication)")
+    public org.springframework.http.ResponseEntity<byte[]> teamParticipantsImportTemplate(Authentication authentication) {
+        return phucuong.ht.common.excel.ExcelResponses.xlsx(
+                phucuong.ht.common.excel.ImportTemplates.teamParticipants(leaderLevelService.selectableLevelNames(authentication)),
+                "mau-import-danh-sach-chia-doi");
+    }
+
+    // Import danh sách chia đội từ file Excel, chạy nền; hồ sơ vào thẳng danh sách tham dự (đã duyệt) kèm tên đội. Chỉ khóa thường.
+    @PostMapping(value = "/{courseCode}/teams/import", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("@trainingCourseAccessEvaluator.canImportRegularParticipants(authentication)")
+    public org.springframework.http.ResponseEntity<apiResponse<phucuong.ht.common.excel.job.ExcelJobResponse>> importTeamParticipants(
+            @PathVariable String courseCode,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
+            @RequestHeader(value = phucuong.ht.common.idempotency.IdempotencyService.HEADER, required = false) String idempotencyKey,
+            Authentication authentication) {
+        pastCourseParticipantImportService.precheck(courseCode, authentication, true);
+        return phucuong.ht.common.excel.job.ExcelJobResponses.accepted(excelJobService.createImport(
+                phucuong.ht.common.excel.job.ExcelJobKind.IMPORT_TEAM_PARTICIPANTS, courseCode, file, idempotencyKey, authentication));
+    }
+
     // Xóa học viên nhập nhầm khỏi khóa quá khứ.
     @DeleteMapping("/{courseCode}/participants/{participationId}")
     @PreAuthorize("@trainingCourseAccessEvaluator.canCreatePast(authentication)")
