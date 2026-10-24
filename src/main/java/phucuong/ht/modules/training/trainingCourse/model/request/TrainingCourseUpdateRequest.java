@@ -44,5 +44,11 @@ public class TrainingCourseUpdateRequest {
 
     private Boolean scoreVisible;
 
+    // Bật điểm danh bằng mã QR (email thông tin tham dự chỉ kèm mã QR khi cờ này bật); null = giữ nguyên.
+    private Boolean attendanceEnabled;
+
+    // Tự gửi email thông tin tham dự khi hồ sơ được duyệt; null = giữ nguyên.
+    private Boolean autoSendInvitation;
+
     private String additionalNotes;
 }

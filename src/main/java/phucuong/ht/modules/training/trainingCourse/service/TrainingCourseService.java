@@ -118,6 +118,8 @@ public class TrainingCourseService {
         course.setAdditionalNotes(request.getAdditionalNotes());
         course.setAutoApproveEligible(Boolean.TRUE.equals(request.getAutoApproveEligible()));
         course.setScoreVisible(Boolean.TRUE.equals(request.getScoreVisible()));
+        course.setAttendanceEnabled(Boolean.TRUE.equals(request.getAttendanceEnabled()));
+        course.setAutoSendInvitation(Boolean.TRUE.equals(request.getAutoSendInvitation()));
         course.setStatus(Boolean.TRUE);
         course.setCreatedAt(now);
         course.setUpdatedAt(now);
@@ -300,6 +302,12 @@ public class TrainingCourseService {
         }
         if (request.getScoreVisible() != null) {
             existing.setScoreVisible(request.getScoreVisible());
+        }
+        if (request.getAttendanceEnabled() != null) {
+            existing.setAttendanceEnabled(request.getAttendanceEnabled());
+        }
+        if (request.getAutoSendInvitation() != null) {
+            existing.setAutoSendInvitation(request.getAutoSendInvitation());
         }
         existing.setUpdatedAt(OffsetDateTime.now());
         existing.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật khóa huấn luyện"));
@@ -804,6 +812,8 @@ public class TrainingCourseService {
                 .scoreLocked(Boolean.TRUE.equals(course.getScoreLocked()))
                 .autoApproveEligible(Boolean.TRUE.equals(course.getAutoApproveEligible()))
                 .scoreVisible(Boolean.TRUE.equals(course.getScoreVisible()))
+                .attendanceEnabled(Boolean.TRUE.equals(course.getAttendanceEnabled()))
+                .autoSendInvitation(Boolean.TRUE.equals(course.getAutoSendInvitation()))
                 .certificateRequired(trainingWorkflowSupport.requiresCertificate(course))
                 .pastCourse(course.isPast())
                 .resultingLevel(course.isPast() ? course.getResultingLevel() : null)

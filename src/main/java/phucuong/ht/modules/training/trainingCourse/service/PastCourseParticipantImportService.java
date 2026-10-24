@@ -87,6 +87,8 @@ public class PastCourseParticipantImportService {
     private phucuong.ht.common.concurrency.EntityLockService entityLockService;
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private phucuong.ht.common.security.UnitOperationalStatusService unitOperationalStatusService;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private phucuong.ht.modules.training.courseInvitation.service.CourseInvitationAutoTrigger invitationAutoTrigger;
 
     // leader: huynh trưởng đã có hồ sơ; newLeader: thông tin để tạo mới (đúng một trong hai khác null).
     private record Parsed(ExcelRowData row, Leader leader, LeaderImportService.NewLeader newLeader, CourseResult result, BigDecimal score, String review,
@@ -167,6 +169,8 @@ public class PastCourseParticipantImportService {
         int created = 0;
         int newLeaders = 0;
         int exceptions = 0;
+        // Khóa thường: hồ sơ vào thẳng danh sách tham dự coi như vừa được duyệt (khóa bật tự gửi email sẽ gửi thông tin tham dự).
+        List<CourseParticipation> directlyApproved = new java.util.ArrayList<>();
         for (Parsed item : parsed) {
             Leader leader = item.leader();
             if (leader == null) {
@@ -218,6 +222,7 @@ public class PastCourseParticipantImportService {
                 participation.setParticipationStatus(ParticipationStatus.ATTENDED);
                 participation.setCertificateApprovalStatus(WorkflowApprovalStatus.NOT_REQUIRED);
                 participation.setTeamName(item.teamName());
+                directlyApproved.add(participation);
             }
             participation.setStatus(Boolean.TRUE);
             participation.setCreatedAt(now);
@@ -232,6 +237,9 @@ public class PastCourseParticipantImportService {
             if (created % 200 == 0) {
                 progress.report(created, parsed.size());
             }
+        }
+        if (invitationAutoTrigger != null) {
+            invitationAutoTrigger.afterApproved(directlyApproved);
         }
         String message = withTeam ? "Đã import " + created + " học viên đã chia đội vào khóa \"" + course.getCourseName() + "\""
                 + (newLeaders > 0 ? ", trong đó tạo mới " + newLeaders + " hồ sơ huynh trưởng" : "")

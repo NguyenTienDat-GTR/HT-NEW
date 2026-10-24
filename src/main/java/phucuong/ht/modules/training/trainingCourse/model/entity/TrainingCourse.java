@@ -88,6 +88,14 @@ public class TrainingCourse extends BaseModel {
     @Column(name = "auto_approve_eligible", nullable = false)
     private Boolean autoApproveEligible = Boolean.FALSE;
 
+    // Bật điểm danh: hồ sơ trong danh sách tham dự có mã QR ký số để quét điểm danh; chỉ khóa thường (không phải khóa quá khứ).
+    @Column(name = "attendance_enabled", nullable = false)
+    private Boolean attendanceEnabled = Boolean.FALSE;
+
+    // Bật thì tự gửi email thông tin tham dự cho hồ sơ ngay khi được duyệt vào danh sách tham dự (kèm mã QR khi khóa bật điểm danh).
+    @Column(name = "auto_send_invitation", nullable = false)
+    private Boolean autoSendInvitation = Boolean.FALSE;
+
     // Bật thì cấp thấp hơn cấp sở hữu khóa (giáo xứ, chính huynh trưởng) mới thấy điểm trong chứng nhận và kết quả khóa.
     @Column(name = "score_visible", nullable = false)
     private Boolean scoreVisible = Boolean.FALSE;

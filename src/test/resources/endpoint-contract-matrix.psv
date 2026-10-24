@@ -241,3 +241,32 @@ POST /api/training/courses/{courseCode}/participants/import|202|401|403|400|404|
 DELETE /api/training/courses/{courseCode}/participants/{participationId}|200|401|403|N/A: both identifiers are opaque strings checked as not found|404|409
 GET /api/leaders/import-template|200|401|403|N/A: template download has no request parameters|N/A: template download does not resolve a resource|N/A: read-only endpoint does not mutate state
 GET /api/training/courses/past/import-template|200|401|403|N/A: template download has no request parameters|N/A: template download does not resolve a resource|N/A: read-only endpoint does not mutate state
+GET /api/badges/config|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/badges/config/options|200|401|403|N/A: fixed catalog with no request parameters to validate|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/badges/config/fields|200|401|403|N/A: fixed catalog with no request parameters to validate|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/badges/config/{id}|200|401|403|400|404|N/A: read-only endpoint does not mutate state
+POST /api/badges/config|200|401|403|400|N/A: creation has no existing resource lookup|N/A: duplicate names get an automatic numeric suffix
+PUT /api/badges/config/{id}|200|401|403|400|404|N/A: duplicate names get an automatic numeric suffix
+PUT /api/badges/config/{id}/default|200|401|403|400|404|N/A: setting the default is idempotent
+DELETE /api/badges/config/{id}|200|401|403|400|404|409
+POST /api/training/courses/{courseCode}/badges/export/jobs|200|401|403|400|N/A: the export job reports an unknown course asynchronously|N/A: submitting an export has no uniqueness conflict
+GET /api/training/courses/{courseCode}/badges/export/jobs/{jobId}|200|401|403|N/A: job id is an opaque string reported as FAILED when unknown|N/A: unknown jobs are reported as FAILED in the response body|N/A: read-only endpoint does not mutate state
+GET /api/training/courses/{courseCode}/badges/export/jobs/{jobId}/file|200|401|403|N/A: job id is an opaque string checked as not found|404|N/A: read-only endpoint does not mutate state
+GET /api/training/courses/{courseCode}/attendance/summary|200|401|403|N/A: course code is an opaque string|404|N/A: read-only endpoint does not mutate state
+POST /api/training/courses/{courseCode}/attendance/scan|200|401|403|400|404|409
+PUT /api/training/courses/{courseCode}/attendance/participants/{participationId}|200|401|403|400|404|409
+POST /api/training/courses/{courseCode}/invitations/send|200|401|403|400|404|409
+GET /api/training/courses/{courseCode}/invitations/jobs/{jobId}|200|401|403|N/A: job id is an opaque string reported as FAILED when unknown|N/A: unknown jobs are reported as FAILED in the response body|N/A: read-only endpoint does not mutate state
+GET /api/training/courses/{courseCode}/teams/overview|200|401|403|N/A: course code is an opaque string|404|N/A: read-only endpoint does not mutate state
+GET /api/training/courses/{courseCode}/teams/options|200|401|403|N/A: course code is an opaque string|404|N/A: read-only endpoint does not mutate state
+POST /api/training/courses/{courseCode}/teams/divide|200|401|403|400|404|409
+PATCH /api/training/courses/{courseCode}/teams/assignments|200|401|403|400|404|409
+DELETE /api/training/courses/{courseCode}/teams|200|401|403|N/A: course code is an opaque string|404|409
+POST /api/training/participants/teams/export|202|401|403|400|N/A: export of a collection does not resolve an individual resource|409
+GET /api/training/courses/teams/import-template|200|401|403|N/A: template download has no request parameters|N/A: template download does not resolve a resource|N/A: read-only endpoint does not mutate state
+POST /api/training/courses/{courseCode}/teams/import|202|401|403|400|404|409
+GET /api/training/courses/participants/import-template|200|401|403|N/A: template download has no request parameters|N/A: template download does not resolve a resource|N/A: read-only endpoint does not mutate state
+GET /api/training/courses/{courseCode}/attendance/participants|200|401|403|400|404|N/A: read-only endpoint does not mutate state
+GET /api/training/courses/{courseCode}/badges/configs|200|401|403|N/A: course code is an opaque string|404|N/A: read-only endpoint does not mutate state
+POST /api/training/courses/{courseCode}/attendance/lookup|200|401|403|400|404|409
+GET /api/training/courses/{courseCode}/attendance/participants/{participationId}|200|401|403|N/A: both identifiers are opaque strings checked as not found|404|N/A: read-only endpoint does not mutate state

@@ -33,6 +33,8 @@ public class TrainingRegistrationAutoApprovalConsumer {
     private final TrainingNotificationService trainingNotificationService;
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private TrainingDecisionNotifier trainingDecisionNotifier;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private phucuong.ht.modules.training.courseInvitation.service.CourseInvitationAutoTrigger invitationAutoTrigger;
 
     @RabbitListener(queues = rabbitMQConfig.DOMAIN_WORKFLOW_QUEUE)
     @EvictCaches.Courses
@@ -81,6 +83,10 @@ public class TrainingRegistrationAutoApprovalConsumer {
         // Chỉ hồ sơ đủ điều kiện mới được tự duyệt; hồ sơ ngoại lệ vẫn chờ duyệt thủ công nên không có thông báo "đã duyệt".
         if (approvedCount == 0) {
             return;
+        }
+        // Khóa bật "tự gửi email thông tin tham dự": gửi cho hồ sơ vừa được tự duyệt (sau khi giao dịch commit).
+        if (invitationAutoTrigger != null) {
+            invitationAutoTrigger.afterApproved(approvedParticipations);
         }
 
         int pendingCount = (int) participations.stream()

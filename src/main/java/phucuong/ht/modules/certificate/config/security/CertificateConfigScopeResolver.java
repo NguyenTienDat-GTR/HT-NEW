@@ -54,7 +54,13 @@ public class CertificateConfigScopeResolver {
         return scopeKey.startsWith(DEANERY + ":") ? DEANERY : DIOCESE;
     }
 
+    // Phạm vi theo quyền cấu hình chứng nhận (training.certificate_config.*).
     public ActorScope resolve(Authentication authentication) {
+        return resolve(authentication, "training.certificate_config.", "Bạn không có quyền với cấu hình chứng nhận");
+    }
+
+    // permissionPrefix: tiền tố quyền thư viện cấu hình, vd "training.badge_config." cho thẻ tham dự.
+    public ActorScope resolve(Authentication authentication, String permissionPrefix, String forbiddenMessage) {
         if (securityUtils.hasAuthority(authentication, SUPER_ADMIN_ROLE)) {
             return new ActorScope(SYSTEM, SYSTEM, null);
         }
@@ -62,8 +68,8 @@ public class CertificateConfigScopeResolver {
         if (username == null || username.isBlank()) {
             throw validationHelper.forbidden("Không xác định được phạm vi của tài khoản");
         }
-        boolean diocese = hasAnyConfigAuthority(authentication, DIOCESE.toLowerCase());
-        boolean deanery = hasAnyConfigAuthority(authentication, DEANERY.toLowerCase());
+        boolean diocese = hasAnyConfigAuthority(authentication, permissionPrefix, DIOCESE.toLowerCase());
+        boolean deanery = hasAnyConfigAuthority(authentication, permissionPrefix, DEANERY.toLowerCase());
         if (diocese) {
             UUID dioceseId = accountRepository.findActiveDioceseIdByUsername(username)
                     .orElseThrow(() -> validationHelper.forbidden("Tài khoản chưa thuộc giáo phận nào đang hoạt động"));
@@ -80,12 +86,12 @@ public class CertificateConfigScopeResolver {
                     .orElse(List.of(key, SYSTEM));
             return new ActorScope(DEANERY, key, usable);
         }
-        throw validationHelper.forbidden("Bạn không có quyền với cấu hình chứng nhận");
+        throw validationHelper.forbidden(forbiddenMessage);
     }
 
-    private boolean hasAnyConfigAuthority(Authentication authentication, String scopeCode) {
+    private boolean hasAnyConfigAuthority(Authentication authentication, String permissionPrefix, String scopeCode) {
         for (String action : new String[]{"read", "create", "update", "delete"}) {
-            if (securityUtils.hasAuthority(authentication, "training.certificate_config." + action + "." + scopeCode)) {
+            if (securityUtils.hasAuthority(authentication, permissionPrefix + action + "." + scopeCode)) {
                 return true;
             }
         }

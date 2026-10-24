@@ -72,6 +72,21 @@ public class CourseParticipation extends BaseModel {
     @Column(name = "team_name", length = 150)
     private String teamName;
 
+    // Điểm danh bằng QR hoặc thủ công; null = chưa điểm danh.
+    @Column(name = "checked_in_at")
+    private OffsetDateTime checkedInAt;
+
+    @Column(name = "checked_in_by", length = 100)
+    private String checkedInBy;
+
+    // Thời điểm gửi email thông tin tham dự thành công gần nhất; null = chưa gửi.
+    @Column(name = "invitation_sent_at")
+    private OffsetDateTime invitationSentAt;
+
+    // Lý do gửi email thông tin tham dự thất bại gần nhất (không có email, email sai định dạng, lỗi SMTP...); null = không lỗi.
+    @Column(name = "invitation_error", length = 500)
+    private String invitationError;
+
     // Trạng thái duyệt đăng ký: khóa giáo hạt do giáo hạt duyệt, khóa giáo phận do giáo phận duyệt.
     @Enumerated(EnumType.STRING)
     private WorkflowApprovalStatus approvalStatus;
