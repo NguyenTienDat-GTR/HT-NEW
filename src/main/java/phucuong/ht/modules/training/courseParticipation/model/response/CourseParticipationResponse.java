@@ -63,6 +63,12 @@ public class CourseParticipationResponse {
     // Đội được chia trong khóa và giới tính của huynh trưởng (NAM/NU).
     private String teamName;
     private String leaderGender;
+    // Điểm danh và email thông tin tham dự (null = chưa điểm danh / chưa gửi); invitationError là lý do gửi thất bại gần nhất.
+    private OffsetDateTime checkedInAt;
+    private String checkedInBy;
+    private OffsetDateTime invitationSentAt;
+    private String invitationError;
+    private Boolean attendanceEnabled;
     private String leaderEmail;
     private String leaderPhone;
     private OffsetDateTime createdAt;

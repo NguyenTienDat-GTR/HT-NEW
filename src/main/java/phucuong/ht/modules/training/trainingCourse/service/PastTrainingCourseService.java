@@ -80,6 +80,8 @@ public class PastTrainingCourseService {
         course.setStatus(Boolean.TRUE);
         course.setScoreVisible(Boolean.TRUE);
         course.setAutoApproveEligible(Boolean.FALSE);
+        course.setAttendanceEnabled(Boolean.FALSE);
+        course.setAutoSendInvitation(Boolean.FALSE);
         // Đã kết thúc ngay: không đăng ký, không chấm điểm, không kết thúc lại.
         course.setScoreLocked(Boolean.TRUE);
         course.setFinishedAt(finishedAt(course, now));

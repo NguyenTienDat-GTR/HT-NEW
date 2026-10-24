@@ -36,13 +36,47 @@ class TrainingRegistrationAutoApprovalConsumerTest {
     @Mock
     private TrainingNotificationService trainingNotificationService;
 
+    @Mock
+    private phucuong.ht.modules.training.courseInvitation.service.CourseInvitationAutoTrigger invitationAutoTrigger;
+
     private TrainingRegistrationAutoApprovalConsumer consumer() {
-        return new TrainingRegistrationAutoApprovalConsumer(
+        TrainingRegistrationAutoApprovalConsumer consumer = new TrainingRegistrationAutoApprovalConsumer(
                 courseParticipationRepository,
                 new TrainingWorkflowSupport(),
                 trainingNotificationRecipientResolver,
                 trainingNotificationService
         );
+        org.springframework.test.util.ReflectionTestUtils.setField(consumer, "invitationAutoTrigger", invitationAutoTrigger);
+        return consumer;
+    }
+
+    @Test
+    void handleShouldHandOverOnlyAutoApprovedParticipationsToTheInvitationTrigger() {
+        CourseParticipation eligible = participation();
+        eligible.setApprovalStatus(WorkflowApprovalStatus.PENDING);
+        when(courseParticipationRepository.findAllByIdsWithLeaderAndCourse(List.of("cp-1"))).thenReturn(List.of(eligible));
+        when(trainingNotificationRecipientResolver.resolveRecipients(any(), any(), any(), any())).thenReturn(List.of("approver"));
+
+        consumer().handle(message("training.registration.batch_submitted", true, "cp-1"));
+
+        verify(invitationAutoTrigger).afterApproved(List.of(eligible));
+    }
+
+    @Test
+    void handleShouldNotTriggerInvitationsForExceptionsOrWhenAutoApprovalIsOff() {
+        CourseParticipation exception = participation();
+        exception.setEligible(Boolean.FALSE);
+        exception.setApprovalStatus(WorkflowApprovalStatus.PENDING);
+        when(courseParticipationRepository.findAllByIdsWithLeaderAndCourse(List.of("cp-1"))).thenReturn(List.of(exception));
+        consumer().handle(message("training.registration.batch_submitted", true, "cp-1"));
+
+        CourseParticipation autoOff = participation();
+        autoOff.getCourse().setAutoApproveEligible(Boolean.FALSE);
+        autoOff.setApprovalStatus(WorkflowApprovalStatus.PENDING);
+        when(courseParticipationRepository.findAllByIdsWithLeaderAndCourse(List.of("cp-1"))).thenReturn(List.of(autoOff));
+        consumer().handle(message("training.registration.batch_submitted", true, "cp-1"));
+
+        verify(invitationAutoTrigger, never()).afterApproved(any());
     }
 
     @Test

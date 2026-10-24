@@ -10,8 +10,10 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 import phucuong.ht.common.dto.apiResponse;
 import phucuong.ht.modules.auth.exception.ApiException;
@@ -80,6 +82,15 @@ public class globalExceptionHandler {
                         .data(errors)
                         .timestamp(java.time.OffsetDateTime.now())
                         .build());
+    }
+
+    // Tham số truy vấn / đường dẫn sai kiểu (ví dụ giá trị enum không tồn tại) hoặc thiếu tham số bắt buộc là lỗi của người gọi (400), không phải lỗi hệ thống.
+    @ExceptionHandler({MethodArgumentTypeMismatchException.class, MissingServletRequestParameterException.class})
+    public ResponseEntity<apiResponse<Void>> handleBadRequestParameter(Exception exception) {
+        String name = exception instanceof MethodArgumentTypeMismatchException mismatch ? mismatch.getName()
+                : ((MissingServletRequestParameterException) exception).getParameterName();
+        return ResponseEntity.badRequest()
+                .body(apiResponse.error("Tham số không hợp lệ: " + name, errorCode.VALIDATION_ERROR.name()));
     }
 
     @ExceptionHandler(ConstraintViolationException.class)

@@ -23,6 +23,18 @@ public class AsyncConfig {
         return executor;
     }
 
+    // Executor gửi email thông tin tham dự khóa huấn luyện (mỗi thư vài trăm ms, cả khóa có thể hàng trăm thư).
+    @Bean(name = "invitationMailExecutor")
+    public Executor invitationMailExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(4);
+        executor.setQueueCapacity(100);
+        executor.setThreadNamePrefix("invitation-mail-");
+        executor.initialize();
+        return executor;
+    }
+
     // Executor riêng sinh mã QR chứng nhận, chạy song song với việc chuẩn bị dữ liệu PDF.
     // Hàng đợi đầy thì luồng gọi tự chạy (CallerRuns) để không bao giờ bỏ sót mã QR của chứng nhận nào.
     @Bean(name = "certificateQrExecutor")

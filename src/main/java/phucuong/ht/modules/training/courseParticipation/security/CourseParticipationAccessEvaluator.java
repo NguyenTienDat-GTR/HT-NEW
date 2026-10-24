@@ -172,6 +172,28 @@ public class CourseParticipationAccessEvaluator {
                 .orElse(false);
     }
 
+    // Xem điểm danh / thẻ / email thông tin tham dự của khóa: quyền đọc hồ sơ tham dự đúng cấp quản lý của khóa.
+    public boolean canReadCourseParticipants(Authentication authentication, String courseCode) {
+        return canReadCourseTeams(authentication, courseCode);
+    }
+
+    public static final String SCAN_DEANERY = "training.attendance.scan.deanery";
+    public static final String SCAN_DIOCESE = "training.attendance.scan.diocese";
+
+    // Quét QR, xác nhận và sửa điểm danh: quyền riêng training.attendance.scan.* đúng cấp và đúng đơn vị sở hữu khóa (không dùng quyền duyệt đăng ký).
+    public boolean canScanAttendance(Authentication authentication, String courseCode) {
+        return trainingCourseRepository.findByCodeWithType(courseCode)
+                .map(course -> trainingWorkflowSupport.isDeaneryManaged(course)
+                        ? securityUtils.hasAuthority(authentication, SCAN_DEANERY) && deaneryScopeOwnsCourse(authentication, courseCode)
+                        : securityUtils.hasAuthority(authentication, SCAN_DIOCESE) && dioceseScopeOwnsCourse(authentication, courseCode))
+                .orElse(false);
+    }
+
+    // Xuất thẻ, gửi email thông tin tham dự: người duyệt đăng ký đúng đơn vị sở hữu khóa.
+    public boolean canManageCourseParticipants(Authentication authentication, String courseCode) {
+        return canManageCourseTeams(authentication, courseCode);
+    }
+
     private boolean hasDeaneryReadAuthority(Authentication authentication) {
         return securityUtils.hasAuthority(authentication, READ_DEANERY)
                 || securityUtils.hasAuthority(authentication, APPROVE_DEANERY)

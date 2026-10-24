@@ -95,6 +95,8 @@ public class CourseParticipationService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private TrainingDecisionNotifier trainingDecisionNotifier;
     @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private phucuong.ht.modules.training.courseInvitation.service.CourseInvitationAutoTrigger invitationAutoTrigger;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
     private phucuong.ht.modules.training.CourseScoreVisibility courseScoreVisibility;
 
     @Transactional(readOnly = true)
@@ -1053,6 +1055,11 @@ public class CourseParticipationService {
                 .finalResult(participation.getFinalResult())
                 .approvedBy(participation.getApprovedBy())
                 .teamName(participation.getTeamName())
+                .checkedInAt(participation.getCheckedInAt())
+                .checkedInBy(participation.getCheckedInBy())
+                .invitationSentAt(participation.getInvitationSentAt())
+                .invitationError(participation.getInvitationError())
+                .attendanceEnabled(participation.getCourse() != null && Boolean.TRUE.equals(participation.getCourse().getAttendanceEnabled()))
                 .leaderEmail(participation.getLeader() == null ? null : participation.getLeader().getEmail())
                 .leaderPhone(participation.getLeader() == null ? null : participation.getLeader().getPhoneNumber())
                 .leaderGender(participation.getLeader() == null || participation.getLeader().getGender() == null ? null : participation.getLeader().getGender().name())
@@ -1220,6 +1227,10 @@ public class CourseParticipationService {
     }
 
     private void notifyRegistrationDecision(List<CourseParticipation> participations, boolean approved, Map<String, String> reviewsById, String actor) {
+        // Khóa bật "tự gửi email thông tin tham dự": gửi cho hồ sơ vừa được duyệt (sau khi giao dịch duyệt commit).
+        if (approved && invitationAutoTrigger != null) {
+            invitationAutoTrigger.afterApproved(participations);
+        }
         if (trainingDecisionNotifier == null || participations.isEmpty()) {
             return;
         }
@@ -1295,6 +1306,10 @@ public class CourseParticipationService {
         // Hồ sơ ra khỏi danh sách tham dự thì không còn thuộc đội nào.
         if (!approved) {
             participation.setTeamName(null);
+            participation.setCheckedInAt(null);
+            participation.setCheckedInBy(null);
+            participation.setInvitationSentAt(null);
+            participation.setInvitationError(null);
         }
     }
 

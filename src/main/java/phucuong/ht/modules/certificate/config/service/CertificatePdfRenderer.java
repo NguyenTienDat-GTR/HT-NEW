@@ -135,6 +135,13 @@ public class CertificatePdfRenderer {
 
     private void drawItem(PDDocument document, PDPageContentStream cs, RenderItem item, float pageWidth, float pageHeight,
                           Map<String, PDType0Font> fontCache) throws Exception {
+        drawItem(document, cs, item, 0, 0, pageWidth, pageHeight, false, fontCache);
+    }
+
+    // Vẽ chữ trong khung (originX, originY = góc dưới-trái, boxWidth x boxHeight điểm); toạ độ và cỡ chữ của phần tử là tỉ lệ theo khung.
+    // shrinkToFit: thu nhỏ chữ cho vừa bề ngang khung (dùng cho thẻ, tên dài không tràn sang thẻ bên cạnh).
+    public void drawItem(PDDocument document, PDPageContentStream cs, RenderItem item, float originX, float originY,
+                  float pageWidth, float pageHeight, boolean shrinkToFit, Map<String, PDType0Font> fontCache) throws Exception {
         String text = item.text();
         if (text == null || text.isEmpty()) {
             return;
@@ -148,13 +155,25 @@ public class CertificatePdfRenderer {
         float fontSizeRatio = item.fontSize() > 0 ? (float) item.fontSize() : 0.03f;
         float fontSize = fontSizeRatio * pageHeight;
 
-        float anchorX = (float) item.x() * pageWidth;
+        float anchorX = originX + (float) item.x() * pageWidth;
         // Toạ độ y tỉ lệ tính từ trên; PDF gốc dưới-trái nên quy đổi và trừ baseline.
         float topY = (float) item.y() * pageHeight;
-        float baselineY = pageHeight - topY - fontSize;
+        float baselineY = originY + pageHeight - topY - fontSize;
 
         float textWidth = font.getStringWidth(text) / 1000f * fontSize;
         String align = item.align() == null ? "left" : item.align();
+        if (shrinkToFit && textWidth > 0) {
+            float room = switch (align) {
+                case "center" -> 2f * Math.min(anchorX - originX, originX + pageWidth - anchorX);
+                case "right" -> anchorX - originX;
+                default -> originX + pageWidth - anchorX;
+            };
+            if (room > 0 && textWidth > room) {
+                fontSize *= room / textWidth;
+                textWidth = room;
+                baselineY = originY + pageHeight - topY - fontSize;
+            }
+        }
         float x = switch (align) {
             case "center" -> anchorX - textWidth / 2f;
             case "right" -> anchorX - textWidth;
@@ -180,6 +199,11 @@ public class CertificatePdfRenderer {
 
     // Vẽ mã QR dạng vector (sắc nét khi in): nền trắng kèm vùng yên tĩnh rồi các module đen gộp theo từng hàng.
     private void drawQr(PDPageContentStream cs, RenderQr qr, float pageWidth, float pageHeight) throws Exception {
+        drawQr(cs, qr, 0, 0, pageWidth, pageHeight);
+    }
+
+    // Vẽ mã QR trong khung (originX, originY = góc dưới-trái); cạnh mã tính theo chiều cao khung.
+    public void drawQr(PDPageContentStream cs, RenderQr qr, float originX, float originY, float pageWidth, float pageHeight) throws Exception {
         BitMatrix matrix = qr.matrix();
         if (matrix == null) {
             throw new IllegalStateException("Thiếu mã QR của chứng nhận");
@@ -188,8 +212,8 @@ public class CertificatePdfRenderer {
         float side = (float) sizeRatio * pageHeight;
         int modules = matrix.getWidth() + CertificateQrService.QUIET_ZONE * 2;
         float module = side / modules;
-        float left = (float) qr.x() * pageWidth - side / 2f;
-        float top = pageHeight - ((float) qr.y() * pageHeight - side / 2f);
+        float left = originX + (float) qr.x() * pageWidth - side / 2f;
+        float top = originY + pageHeight - ((float) qr.y() * pageHeight - side / 2f);
 
         cs.setNonStrokingColor(Color.WHITE);
         cs.addRect(left, top - side, side, side);

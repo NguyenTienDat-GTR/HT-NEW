@@ -1,0 +1,426 @@
+package phucuong.ht.modules.badge.config.service;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.security.core.Authentication;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import phucuong.ht.common.repository.BaseSearchRequest;
+import phucuong.ht.common.utils.securityUtils;
+import phucuong.ht.common.validation.CommonValidationHelper;
+import phucuong.ht.modules.badge.config.model.BadgeMergeField;
+import phucuong.ht.modules.badge.config.model.entity.BadgeConfig;
+import phucuong.ht.modules.badge.config.model.request.BadgeConfigUpsertRequest;
+import phucuong.ht.modules.badge.config.model.response.BadgeConfigResponse;
+import phucuong.ht.modules.badge.config.repository.BadgeConfigRepository;
+import phucuong.ht.modules.badge.config.security.BadgeConfigAccessEvaluator;
+import phucuong.ht.modules.certificate.config.model.CertificateLayoutItem;
+import phucuong.ht.modules.certificate.config.model.response.CertificateFieldCatalogItem;
+import phucuong.ht.modules.certificate.config.security.CertificateConfigScopeResolver;
+import phucuong.ht.modules.certificate.config.security.CertificateConfigScopeResolver.ActorScope;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.text.Normalizer;
+import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+
+// Thư viện cấu hình thẻ tham dự: CRUD theo phạm vi sở hữu (hệ thống / giáo phận / giáo hạt), tên duy nhất trong phạm vi,
+// mỗi phạm vi một cấu hình chung. Cấu hình của cấp trên chỉ được xem và dùng.
+@Service
+@RequiredArgsConstructor
+public class BadgeConfigService {
+
+    public static final double DEFAULT_CARD_WIDTH_MM = 90;
+    public static final double DEFAULT_CARD_HEIGHT_MM = 55;
+    public static final double DEFAULT_MARGIN_MM = 10;
+
+    private static final int MAX_NAME_LENGTH = 200;
+    private static final int MAX_LAYOUT_ITEMS = 100;
+    private static final int MAX_TEXT_LENGTH = 500;
+    private static final int MAX_BACKGROUND_LENGTH = 12_000_000;
+    private static final Set<String> ITEM_TYPES = Set.of("FIELD", "TEXT", "QR");
+
+    private final BadgeConfigRepository configRepository;
+    private final CertificateConfigScopeResolver scopeResolver;
+    private final CommonValidationHelper validationHelper;
+    private final securityUtils securityUtils;
+
+    private ActorScope actorOf(Authentication authentication) {
+        return scopeResolver.resolve(authentication, BadgeConfigAccessEvaluator.PREFIX, "Bạn không có quyền với cấu hình thẻ tham dự");
+    }
+
+    // Danh sách trường cố định cho trình soạn bố cục thẻ.
+    public List<CertificateFieldCatalogItem> fieldCatalog() {
+        return Arrays.stream(BadgeMergeField.values())
+                .map(f -> new CertificateFieldCatalogItem(f.getKey(), f.getLabel(), f.getGroup()))
+                .toList();
+    }
+
+    // Toàn bộ cấu hình xem / dùng được ở dạng gọn (không kèm ảnh nền và bố cục), cho ô chọn cấu hình.
+    @Transactional(readOnly = true)
+    public List<BadgeConfigResponse> options(Authentication authentication) {
+        ActorScope actor = actorOf(authentication);
+        return visibleConfigs(actor).stream().map(config -> toSummary(config, actor)).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public BadgeConfigResponse get(UUID id, Authentication authentication) {
+        ActorScope actor = actorOf(authentication);
+        BadgeConfig config = configRepository.findById(id)
+                .filter(c -> actor.canSee(c.getScopeKey()))
+                .orElseThrow(() -> validationHelper.notFound("Không tìm thấy cấu hình thẻ tham dự"));
+        return toResponse(config, actor);
+    }
+
+    // Tìm kiếm / lọc / sắp xếp / phân trang thư viện (dạng gọn).
+    // search: tên cấu hình (không phân biệt hoa thường và dấu); filters: scope (SYSTEM|DIOCESE|DEANERY), isDefault,
+    // paperSize, cardOrientation, hasBack; sortBy: name | updatedAt | scopeLevel (mặc định cấu hình chung lên đầu rồi theo tên).
+    @Transactional(readOnly = true)
+    public Page<BadgeConfigResponse> search(BaseSearchRequest request, Authentication authentication) {
+        ActorScope actor = actorOf(authentication);
+        Map<String, Object> filters = request.getFilters() == null ? Map.of() : request.getFilters();
+        String keyword = foldText(request.getSearch());
+        String scope = filterText(filters, "scope");
+        Boolean isDefault = filterBoolean(filters, "isDefault");
+        Boolean hasBack = filterBoolean(filters, "hasBack");
+        String paperSize = filterText(filters, "paperSize");
+        String cardOrientation = filterText(filters, "cardOrientation");
+
+        List<BadgeConfigResponse> matched = new ArrayList<>();
+        for (BadgeConfig config : visibleConfigs(actor)) {
+            if (scope != null && !scope.equalsIgnoreCase(CertificateConfigScopeResolver.levelOf(config.getScopeKey()))) continue;
+            if (isDefault != null && isDefault != Boolean.TRUE.equals(config.getIsDefault())) continue;
+            if (hasBack != null && hasBack != Boolean.TRUE.equals(config.getHasBack())) continue;
+            if (paperSize != null && !paperSize.equalsIgnoreCase(config.getPaperSize())) continue;
+            if (cardOrientation != null && !cardOrientation.equalsIgnoreCase(config.getCardOrientation())) continue;
+            if (!keyword.isEmpty() && !foldText(config.getName()).contains(keyword)) continue;
+            matched.add(toSummary(config, actor));
+        }
+
+        Comparator<BadgeConfigResponse> byName = Comparator.comparing(c -> foldText(c.getName()));
+        Comparator<BadgeConfigResponse> order = switch (request.getSortBy() == null ? "" : request.getSortBy()) {
+            case "name" -> byName;
+            case "updatedAt" -> Comparator.comparing(BadgeConfigResponse::getUpdatedAt, Comparator.nullsFirst(Comparator.naturalOrder()));
+            case "scopeLevel" -> Comparator.comparing(BadgeConfigResponse::getScopeLevel).thenComparing(byName);
+            default -> Comparator.comparing((BadgeConfigResponse c) -> !Boolean.TRUE.equals(c.getIsDefault())).thenComparing(byName);
+        };
+        if (request.getSortBy() != null && "DESC".equalsIgnoreCase(request.getSortDirection())) {
+            order = order.reversed();
+        }
+        matched.sort(order);
+
+        int size = Math.max(1, request.getSize());
+        int from = (int) Math.min((long) request.getPage() * size, matched.size());
+        int to = Math.min(from + size, matched.size());
+        return new PageImpl<>(matched.subList(from, to), PageRequest.of(request.getPage(), size), matched.size());
+    }
+
+    // Tạo cấu hình mới trong phạm vi của người dùng. Trùng tên thì thêm hậu tố số; cấu hình đầu tiên của phạm vi là cấu hình chung.
+    @Transactional
+    public BadgeConfigResponse create(BadgeConfigUpsertRequest request, Authentication authentication) {
+        ActorScope actor = actorOf(authentication);
+        String audit = securityUtils.currentAuditActor(authentication);
+        OffsetDateTime now = OffsetDateTime.now();
+
+        BadgeConfig config = new BadgeConfig();
+        config.setId(UUID.randomUUID());
+        config.setScopeKey(actor.key());
+        config.setName(uniqueName(actor.key(), request.getName(), null));
+        config.setIsDefault(configRepository.findDefault(actor.key()).isEmpty());
+        config.setCreatedAt(now);
+        config.setCreatedBy(audit);
+        config.setStatus(Boolean.TRUE);
+        applyContent(config, request, now, audit);
+        return toResponse(configRepository.persist(config), actor);
+    }
+
+    @Transactional
+    public BadgeConfigResponse update(UUID id, BadgeConfigUpsertRequest request, Authentication authentication) {
+        ActorScope actor = actorOf(authentication);
+        BadgeConfig config = requireEditable(id, actor);
+        String audit = securityUtils.currentAuditActor(authentication);
+        OffsetDateTime now = OffsetDateTime.now();
+
+        if (normalize(request.getName()) != null) {
+            config.setName(uniqueName(config.getScopeKey(), request.getName(), config.getName()));
+        }
+        applyContent(config, request, now, audit);
+        return toResponse(configRepository.merge(config), actor);
+    }
+
+    // Đặt cấu hình làm cấu hình chung của phạm vi chứa nó; cấu hình chung cũ trở thành cấu hình thường.
+    @Transactional
+    public BadgeConfigResponse setDefault(UUID id, Authentication authentication) {
+        ActorScope actor = actorOf(authentication);
+        BadgeConfig config = requireEditable(id, actor);
+        String audit = securityUtils.currentAuditActor(authentication);
+        OffsetDateTime now = OffsetDateTime.now();
+
+        if (!Boolean.TRUE.equals(config.getIsDefault())) {
+            configRepository.findDefault(config.getScopeKey()).ifPresent(current -> {
+                current.setIsDefault(Boolean.FALSE);
+                current.setUpdatedAt(now);
+                current.setUpdatedBy(audit);
+                configRepository.merge(current);
+            });
+            // Chỉ mục duy nhất một cấu hình chung mỗi phạm vi: bỏ cờ cũ xuống DB trước khi đặt cờ mới.
+            configRepository.flush();
+            config.setIsDefault(Boolean.TRUE);
+            config.setUpdatedAt(now);
+            config.setUpdatedBy(audit);
+            config = configRepository.merge(config);
+        }
+        return toResponse(config, actor);
+    }
+
+    // Không xóa được cấu hình chung (phải chọn cấu hình khác làm chung trước).
+    @Transactional
+    public void delete(UUID id, Authentication authentication) {
+        ActorScope actor = actorOf(authentication);
+        BadgeConfig config = requireEditable(id, actor);
+        if (Boolean.TRUE.equals(config.getIsDefault())) {
+            throw validationHelper.conflict(
+                    "Không thể xóa cấu hình chung. Hãy chọn một cấu hình khác làm cấu hình chung trước khi xóa.");
+        }
+        configRepository.remove(config.getId());
+    }
+
+    private BadgeConfig requireEditable(UUID id, ActorScope actor) {
+        BadgeConfig config = configRepository.findById(id)
+                .filter(c -> actor.canSee(c.getScopeKey()))
+                .orElseThrow(() -> validationHelper.notFound("Không tìm thấy cấu hình thẻ tham dự"));
+        if (!actor.canEdit(config.getScopeKey())) {
+            throw validationHelper.forbidden("Cấu hình này thuộc cấp khác, bạn chỉ được xem và dùng, không được sửa hoặc xóa");
+        }
+        return config;
+    }
+
+    private List<BadgeConfig> visibleConfigs(ActorScope actor) {
+        return actor.usableKeys() == null
+                ? configRepository.findAllConfigs()
+                : configRepository.findByScopeKeys(actor.usableKeys());
+    }
+
+    // Kiểm tra và áp nội dung cấu hình. Mọi sai lệch trả 400 kèm thông báo tiếng Việt cụ thể.
+    void applyContent(BadgeConfig config, BadgeConfigUpsertRequest request, OffsetDateTime now, String audit) {
+        String paperSize = normalize(request.getPaperSize()) == null ? "A4" : request.getPaperSize().trim().toUpperCase(Locale.ROOT);
+        if (!BadgeSheetLayout.isKnownPaper(paperSize)) {
+            throw validationHelper.validationError("Khổ giấy không hợp lệ: " + request.getPaperSize() + " (chọn A3, A4, A5, Letter hoặc Legal)");
+        }
+        String paperOrientation = orientation(request.getPaperOrientation(), "PORTRAIT", "Hướng giấy");
+        String cardOrientation = orientation(request.getCardOrientation(), "LANDSCAPE", "Hướng thẻ");
+
+        double width = range(request.getCardWidthMm(), DEFAULT_CARD_WIDTH_MM, BadgeSheetLayout.MIN_CARD_MM, BadgeSheetLayout.MAX_CARD_MM, "Chiều rộng thẻ");
+        double height = range(request.getCardHeightMm(), DEFAULT_CARD_HEIGHT_MM, BadgeSheetLayout.MIN_CARD_MM, BadgeSheetLayout.MAX_CARD_MM, "Chiều cao thẻ");
+        // Hướng thẻ quyết định cạnh dài nằm ngang (LANDSCAPE) hay thẳng đứng (PORTRAIT).
+        double longSide = Math.max(width, height);
+        double shortSide = Math.min(width, height);
+        width = "LANDSCAPE".equals(cardOrientation) ? longSide : shortSide;
+        height = "LANDSCAPE".equals(cardOrientation) ? shortSide : longSide;
+
+        double margin = range(request.getMarginMm(), DEFAULT_MARGIN_MM, 0, BadgeSheetLayout.MAX_MARGIN_MM, "Lề giấy");
+        double gap = range(request.getGapMm(), 0, 0, BadgeSheetLayout.MAX_GAP_MM, "Khoảng cách giữa các thẻ");
+
+        double[] paper = BadgeSheetLayout.paperMm(paperSize, paperOrientation);
+        if (BadgeSheetLayout.compute(paper[0], paper[1], width, height, margin, gap) == null) {
+            throw validationHelper.validationError("Thẻ " + trim(width) + " x " + trim(height) + " mm lớn hơn vùng in của khổ "
+                    + paperSize + " (lề " + trim(margin) + " mm). Hãy giảm kích thước thẻ, giảm lề hoặc chọn khổ giấy lớn hơn");
+        }
+
+        boolean hasBack = Boolean.TRUE.equals(request.getHasBack());
+        config.setPaperSize(paperSize);
+        config.setPaperOrientation(paperOrientation);
+        config.setCardWidthMm(mm(width));
+        config.setCardHeightMm(mm(height));
+        config.setCardOrientation(cardOrientation);
+        config.setMarginMm(mm(margin));
+        config.setGapMm(mm(gap));
+        config.setCropMarks(request.getCropMarks() == null || request.getCropMarks());
+        config.setHasBack(hasBack);
+        config.setFrontBackground(checkBackground(request.getFrontBackground(), "mặt trước"));
+        config.setFrontLayout(checkLayout(request.getFrontLayout(), "mặt trước"));
+        // Không có mặt sau thì bỏ hẳn nội dung mặt sau.
+        config.setBackBackground(hasBack ? checkBackground(request.getBackBackground(), "mặt sau") : null);
+        config.setBackLayout(hasBack ? checkLayout(request.getBackLayout(), "mặt sau") : new ArrayList<>());
+        config.setUpdatedAt(now);
+        config.setUpdatedBy(audit);
+    }
+
+    private String orientation(String value, String fallback, String label) {
+        if (normalize(value) == null) {
+            return fallback;
+        }
+        String upper = value.trim().toUpperCase(Locale.ROOT);
+        if (!"PORTRAIT".equals(upper) && !"LANDSCAPE".equals(upper)) {
+            throw validationHelper.validationError(label + " không hợp lệ: " + value + " (chọn PORTRAIT hoặc LANDSCAPE)");
+        }
+        return upper;
+    }
+
+    private double range(Double value, double fallback, double min, double max, String label) {
+        if (value == null) {
+            return fallback;
+        }
+        if (value.isNaN() || value.isInfinite() || value < min || value > max) {
+            throw validationHelper.validationError(label + " phải từ " + trim(min) + " đến " + trim(max) + " mm");
+        }
+        return value;
+    }
+
+    private String checkBackground(String dataUrl, String side) {
+        if (dataUrl == null || dataUrl.isBlank()) {
+            return null;
+        }
+        if (dataUrl.length() > MAX_BACKGROUND_LENGTH) {
+            throw validationHelper.validationError("Ảnh nền " + side + " quá lớn, vui lòng chọn ảnh nhỏ hơn");
+        }
+        return dataUrl;
+    }
+
+    private List<CertificateLayoutItem> checkLayout(List<CertificateLayoutItem> layout, String side) {
+        if (layout == null || layout.isEmpty()) {
+            return new ArrayList<>();
+        }
+        if (layout.size() > MAX_LAYOUT_ITEMS) {
+            throw validationHelper.validationError("Bố cục " + side + " tối đa " + MAX_LAYOUT_ITEMS + " phần tử");
+        }
+        for (CertificateLayoutItem item : layout) {
+            if (item == null || item.getType() == null || !ITEM_TYPES.contains(item.getType().trim().toUpperCase(Locale.ROOT))) {
+                throw validationHelper.validationError("Bố cục " + side + " có phần tử sai loại (chỉ nhận FIELD, TEXT, QR)");
+            }
+            String type = item.getType().trim().toUpperCase(Locale.ROOT);
+            if ("FIELD".equals(type) && !BadgeMergeField.isKnown(item.getFieldKey())) {
+                throw validationHelper.validationError("Bố cục " + side + " có trường không tồn tại: " + item.getFieldKey());
+            }
+            if ("TEXT".equals(type) && item.getText() != null && item.getText().length() > MAX_TEXT_LENGTH) {
+                throw validationHelper.validationError("Văn bản trong bố cục " + side + " tối đa " + MAX_TEXT_LENGTH + " ký tự");
+            }
+            checkRatio(item.getX(), "Tọa độ X", side);
+            checkRatio(item.getY(), "Tọa độ Y", side);
+            checkRatio(item.getFontSize(), "Cỡ chữ", side);
+            checkRatio(item.getSize(), "Kích thước mã QR", side);
+        }
+        return new ArrayList<>(layout);
+    }
+
+    private void checkRatio(Double value, String label, String side) {
+        if (value != null && (value.isNaN() || value.isInfinite() || value < 0 || value > 1)) {
+            throw validationHelper.validationError(label + " trong bố cục " + side + " phải là tỉ lệ từ 0 đến 1");
+        }
+    }
+
+    // Tên duy nhất (không phân biệt hoa thường) trong phạm vi; trùng thì thêm " (1)", " (2)"...
+    private String uniqueName(String scopeKey, String requested, String currentName) {
+        String base = normalize(requested);
+        if (base == null) {
+            base = "Cấu hình thẻ tham dự";
+        }
+        if (base.length() > MAX_NAME_LENGTH) {
+            base = base.substring(0, MAX_NAME_LENGTH).trim();
+        }
+        Set<String> taken = new HashSet<>();
+        for (String name : configRepository.findNamesInScope(scopeKey)) {
+            taken.add(name.toLowerCase());
+        }
+        if (currentName != null) {
+            taken.remove(currentName.toLowerCase());
+        }
+        String candidate = base;
+        for (int n = 1; taken.contains(candidate.toLowerCase()); n++) {
+            candidate = base + " (" + n + ")";
+        }
+        return candidate;
+    }
+
+    BadgeConfigResponse toResponse(BadgeConfig config, ActorScope actor) {
+        return summaryBuilder(config, actor)
+                .frontBackground(config.getFrontBackground())
+                .backBackground(config.getBackBackground())
+                .frontLayout(config.getFrontLayout())
+                .backLayout(config.getBackLayout())
+                .build();
+    }
+
+    // Dạng gọn cho danh sách: không kèm ảnh nền base64 và bố cục.
+    private BadgeConfigResponse toSummary(BadgeConfig config, ActorScope actor) {
+        return summaryBuilder(config, actor).build();
+    }
+
+    private BadgeConfigResponse.BadgeConfigResponseBuilder summaryBuilder(BadgeConfig config, ActorScope actor) {
+        BadgeSheetLayout.Grid grid = gridOf(config);
+        return BadgeConfigResponse.builder()
+                .id(config.getId())
+                .name(config.getName())
+                .isDefault(config.getIsDefault())
+                .scopeLevel(CertificateConfigScopeResolver.levelOf(config.getScopeKey()))
+                .editable(actor.canEdit(config.getScopeKey()))
+                .paperSize(config.getPaperSize())
+                .paperOrientation(config.getPaperOrientation())
+                .cardWidthMm(config.getCardWidthMm().doubleValue())
+                .cardHeightMm(config.getCardHeightMm().doubleValue())
+                .cardOrientation(config.getCardOrientation())
+                .marginMm(config.getMarginMm().doubleValue())
+                .gapMm(config.getGapMm().doubleValue())
+                .cropMarks(config.getCropMarks())
+                .hasBack(config.getHasBack())
+                .columns(grid == null ? 0 : grid.columns())
+                .rows(grid == null ? 0 : grid.rows())
+                .cardsPerPage(grid == null ? 0 : grid.perPage())
+                .status(config.getStatus())
+                .updatedAt(config.getUpdatedAt());
+    }
+
+    // Lưới xếp thẻ của cấu hình trên khổ giấy của nó; null nếu dữ liệu cũ không còn xếp nổi một thẻ.
+    public static BadgeSheetLayout.Grid gridOf(BadgeConfig config) {
+        double[] paper = BadgeSheetLayout.paperMm(config.getPaperSize(), config.getPaperOrientation());
+        return BadgeSheetLayout.compute(paper[0], paper[1], config.getCardWidthMm().doubleValue(),
+                config.getCardHeightMm().doubleValue(), config.getMarginMm().doubleValue(), config.getGapMm().doubleValue());
+    }
+
+    private static BigDecimal mm(double value) {
+        return BigDecimal.valueOf(value).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private static String trim(double value) {
+        return value == Math.rint(value) ? String.valueOf((long) value) : String.valueOf(value);
+    }
+
+    private static String filterText(Map<String, Object> filters, String key) {
+        Object value = filters.get(key);
+        return value == null || value.toString().isBlank() ? null : value.toString().trim();
+    }
+
+    private static Boolean filterBoolean(Map<String, Object> filters, String key) {
+        String value = filterText(filters, key);
+        return value == null ? null : Boolean.valueOf(value);
+    }
+
+    // Chữ thường, bỏ dấu tiếng Việt để tìm kiếm thân thiện.
+    private static String foldText(String value) {
+        if (value == null) {
+            return "";
+        }
+        return Normalizer.normalize(value, Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "").replace('đ', 'd').replace('Đ', 'D')
+                .toLowerCase().trim();
+    }
+
+    private static String normalize(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+}
