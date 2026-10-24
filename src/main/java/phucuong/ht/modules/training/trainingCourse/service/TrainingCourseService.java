@@ -794,6 +794,12 @@ public class TrainingCourseService {
                 .hostYear(course.getHostYear())
                 .yearsActive(course.getYearsActive() == null ? 0 : course.getYearsActive())
                 .hasParticipations(hasParticipations)
+                .requiredCurrentLevelName(hasParticipations != null && courseType != null && courseType.getRequiredCurrentLevel() != null
+                        ? leaderLevelService.order(trainingWorkflowSupport.dioceseIdOf(course)).nameOf(courseType.getRequiredCurrentLevel()) : null)
+                .requiredMinAge(hasParticipations != null && courseType != null ? courseType.getRequiredMinAge() : null)
+                .prerequisiteTypeName(hasParticipations != null && courseType != null && courseType.getPrerequisiteType() != null
+                        ? courseType.getPrerequisiteType().getTypeName() : null)
+                .maxYearsAfterPrerequisite(hasParticipations != null && courseType != null ? courseType.getMaxYearsAfterPrerequisite() : null)
                 .approvedParticipantCount(approvedParticipantCount)
                 .scoreLocked(Boolean.TRUE.equals(course.getScoreLocked()))
                 .autoApproveEligible(Boolean.TRUE.equals(course.getAutoApproveEligible()))

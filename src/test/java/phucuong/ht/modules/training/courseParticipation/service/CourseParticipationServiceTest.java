@@ -783,6 +783,28 @@ class CourseParticipationServiceTest {
         verify(domainEventPublisher, never()).publishAfterCommit(any());
     }
 
+    private final phucuong.ht.modules.rankHistory.repository.RankHistoryRepository rankHistoryRepository =
+            org.mockito.Mockito.mock(phucuong.ht.modules.rankHistory.repository.RankHistoryRepository.class);
+
+    @Test
+    void yearsActiveShouldBeCountedFromTheYearTheRequiredLevelWasReached() {
+        TrainingCourseType prerequisite = new TrainingCourseType();
+        prerequisite.setTypeCode("L1");
+        TrainingCourse course = course("L2", UnitType.DIOCESE);
+        course.getCourseType().setRequiredCurrentLevel("LEVEL_1");
+        course.getCourseType().setPrerequisiteType(prerequisite);
+        course.setHostYear(2026);
+        course.setYearsActive(3);
+        java.util.UUID leaderId = java.util.UUID.randomUUID();
+        CourseParticipationService service = buildService();
+
+        when(rankHistoryRepository.findLatestYearReachedLevel(leaderId, "LEVEL_1")).thenReturn(Optional.of(2024));
+        org.junit.jupiter.api.Assertions.assertFalse(service.isEligible("LEVEL_1", null, leaderId, course));
+
+        when(rankHistoryRepository.findLatestYearReachedLevel(leaderId, "LEVEL_1")).thenReturn(Optional.of(2023));
+        org.junit.jupiter.api.Assertions.assertTrue(service.isEligible("LEVEL_1", null, leaderId, course));
+    }
+
     private CourseParticipationService buildService() {
         return new CourseParticipationService(
                 courseParticipationRepository,
@@ -801,7 +823,8 @@ class CourseParticipationServiceTest {
                 trainingNotificationRecipientResolver,
                 trainingNotificationService,
                 org.mockito.Mockito.mock(phucuong.ht.modules.leaderLevel.service.LeaderLevelService.class),
-                org.mockito.Mockito.mock(phucuong.ht.modules.training.CourseActivityGuard.class)
+                org.mockito.Mockito.mock(phucuong.ht.modules.training.CourseActivityGuard.class),
+                rankHistoryRepository
         , org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class));
     }
 

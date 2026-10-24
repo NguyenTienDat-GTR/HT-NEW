@@ -211,19 +211,24 @@ public class LeaderImportService {
     }
 
     /** Chỉ mục giáo xứ theo tên và tập tên giáo hạt (không dấu, không phân biệt hoa thường) để đối chiếu hai cột Giáo hạt, Giáo xứ với dữ liệu hệ thống. */
-    public record ParishIndex(Map<String, List<Parish>> byName, Set<String> deaneryNames) {
+    public record ParishIndex(Map<String, List<Parish>> byName, Set<String> deaneryNames, Map<String, List<Parish>> byDeaneryAndName) {
     }
 
     public ParishIndex indexParishes(java.util.Collection<Parish> parishes) {
         Map<String, List<Parish>> byName = new HashMap<>();
         Set<String> deaneryNames = new HashSet<>();
+        // Khóa "giáo hạt|giáo xứ" đã chuẩn hóa: mỗi dòng Excel tra thẳng một lần, không duyệt lại danh sách giáo xứ cùng tên.
+        Map<String, List<Parish>> byDeaneryAndName = new HashMap<>();
         for (Parish parish : parishes) {
-            byName.computeIfAbsent(ExcelWorkbookReader.normalize(parish.getName()), key -> new ArrayList<>()).add(parish);
+            String parishKey = ExcelWorkbookReader.normalize(parish.getName());
+            byName.computeIfAbsent(parishKey, key -> new ArrayList<>()).add(parish);
             if (parish.getDeanery() != null) {
-                deaneryNames.add(ExcelWorkbookReader.normalize(parish.getDeanery().getName()));
+                String deaneryKey = ExcelWorkbookReader.normalize(parish.getDeanery().getName());
+                deaneryNames.add(deaneryKey);
+                byDeaneryAndName.computeIfAbsent(deaneryKey + "|" + parishKey, key -> new ArrayList<>()).add(parish);
             }
         }
-        return new ParishIndex(byName, deaneryNames);
+        return new ParishIndex(byName, deaneryNames, byDeaneryAndName);
     }
 
     /**
@@ -341,8 +346,7 @@ public class LeaderImportService {
         if (!deaneryKnown || sameName.isEmpty()) {
             return null;
         }
-        List<Parish> matches = new ArrayList<>(sameName);
-        matches.removeIf(parish -> !ExcelWorkbookReader.normalize(parish.getDeanery().getName()).equals(wantedDeanery));
+        List<Parish> matches = parishIndex.byDeaneryAndName().getOrDefault(wantedDeanery + "|" + ExcelWorkbookReader.normalize(parishName), List.of());
         if (matches.isEmpty()) {
             row.error(errors, COL_PARISH, "Giáo xứ '" + parishName + "' không thuộc giáo hạt '" + deaneryName + "'");
             return null;

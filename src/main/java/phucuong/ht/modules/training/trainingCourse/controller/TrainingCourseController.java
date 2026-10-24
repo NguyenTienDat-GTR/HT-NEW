@@ -53,16 +53,25 @@ public class TrainingCourseController {
                 "mau-import-danh-sach-tham-du-khoa-qua-khu");
     }
 
-    // Import danh sách tham dự (email / SĐT, tổng điểm, kết quả) vào khóa quá khứ từ file Excel, chạy nền.
+    // Tải file Excel mẫu danh sách tham dự khóa thường (không có điểm / kết quả): cùng quyền với duyệt đăng ký.
+    @GetMapping("/participants/import-template")
+    @PreAuthorize("@trainingCourseAccessEvaluator.canImportRegularParticipants(authentication)")
+    public org.springframework.http.ResponseEntity<byte[]> regularParticipantsImportTemplate(Authentication authentication) {
+        return phucuong.ht.common.excel.ExcelResponses.xlsx(
+                phucuong.ht.common.excel.ImportTemplates.regularParticipants(leaderLevelService.selectableLevelNames(authentication)),
+                "mau-import-danh-sach-tham-du");
+    }
+
+    // Import danh sách tham dự từ file Excel, chạy nền. Khóa quá khứ: email / SĐT, tổng điểm, kết quả; khóa thường: chỉ email / SĐT và thông tin huynh trưởng.
     // Bắt buộc có Idempotency-Key: gửi lại cùng key trả lại đúng tác vụ cũ, không import hai lần.
     @PostMapping(value = "/{courseCode}/participants/import", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("@trainingCourseAccessEvaluator.canCreatePast(authentication)")
+    @PreAuthorize("@trainingCourseAccessEvaluator.canImportParticipants(authentication, #courseCode)")
     public org.springframework.http.ResponseEntity<apiResponse<phucuong.ht.common.excel.job.ExcelJobResponse>> importParticipants(
             @PathVariable String courseCode,
             @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
             @RequestHeader(value = phucuong.ht.common.idempotency.IdempotencyService.HEADER, required = false) String idempotencyKey,
             Authentication authentication) {
-        // Báo lỗi ngay nếu không phải khóa quá khứ của giáo phận mình thay vì đợi tác vụ chạy xong.
+        // Báo lỗi ngay nếu khóa không thuộc đơn vị của mình thay vì đợi tác vụ chạy xong.
         pastCourseParticipantImportService.precheck(courseCode, authentication);
         return phucuong.ht.common.excel.job.ExcelJobResponses.accepted(excelJobService.createImport(
                 phucuong.ht.common.excel.job.ExcelJobKind.IMPORT_PARTICIPANTS, courseCode, file, idempotencyKey, authentication));

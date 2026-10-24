@@ -88,6 +88,7 @@ public class CourseParticipationService {
     private final TrainingNotificationService trainingNotificationService;
     private final LeaderLevelService leaderLevelService;
     private final CourseActivityGuard courseActivityGuard;
+    private final phucuong.ht.modules.rankHistory.repository.RankHistoryRepository rankHistoryRepository;
     private final phucuong.ht.common.utils.AuditActorNameResolver auditActorNameResolver;
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private phucuong.ht.common.security.UnitOperationalStatusService unitOperationalStatusService;
@@ -360,7 +361,7 @@ public class CourseParticipationService {
 
     // Cấp độ đạt được gần nhất của loại khóa: cấp thăng của khóa tiên quyết (nếu không có thì cấp hiện tại yêu cầu).
     // Huynh trưởng có cấp cao hơn mức này không được đưa vào danh sách ngoại lệ.
-    private boolean exceedsNearestAchievedLevel(String leaderLevel, TrainingCourse course, LevelOrder levelOrder) {
+    public boolean exceedsNearestAchievedLevel(String leaderLevel, TrainingCourse course, LevelOrder levelOrder) {
         TrainingCourseType courseType = course.getCourseType();
         if (courseType == null || leaderLevel == null) {
             return false;
@@ -938,16 +939,21 @@ public class CourseParticipationService {
     }
 
     private boolean isEligible(Leader leader, TrainingCourse course) {
+        return isEligible(leader.getLeaderLevel(), leader.getBirthDate(), leader.getId(), course);
+    }
+
+    // leaderId null: huynh trưởng chưa có hồ sơ (đang được import) nên chưa từng đạt khóa nào.
+    public boolean isEligible(String leaderLevel, LocalDate birthDate, UUID leaderId, TrainingCourse course) {
         TrainingCourseType courseType = course.getCourseType();
         if (courseType != null) {
-            if (courseType.getRequiredCurrentLevel() != null && !courseType.getRequiredCurrentLevel().equals(leader.getLeaderLevel())) {
+            if (courseType.getRequiredCurrentLevel() != null && !courseType.getRequiredCurrentLevel().equals(leaderLevel)) {
                 return false;
             }
             if (courseType.getRequiredMinAge() != null) {
-                if (leader.getBirthDate() == null) {
+                if (birthDate == null) {
                     return false;
                 }
-                int age = Period.between(leader.getBirthDate(), LocalDate.now()).getYears();
+                int age = Period.between(birthDate, LocalDate.now()).getYears();
                 if (age < courseType.getRequiredMinAge()) {
                     return false;
                 }
@@ -955,27 +961,38 @@ public class CourseParticipationService {
         }
 
         return trainingWorkflowSupport.prerequisiteOf(course.getCourseType())
-                .map(prerequisite -> meetsPrerequisite(leader, course, prerequisite))
+                .map(prerequisite -> leaderId != null && meetsPrerequisite(leaderId, course, prerequisite))
                 .orElse(true);
     }
 
-    // Phải đạt khóa tiên quyết, và năm tổ chức khóa này - năm đạt khóa tiên quyết GẦN NHẤT >= số năm hoạt động của khóa
-    // (áp dụng cho cả khóa có và không có chứng nhận). Ví dụ khóa cấp 2 tổ chức 2026 yêu cầu 2 năm: lần đạt cấp 1 gần nhất phải từ 2024 trở về trước.
-    private boolean meetsPrerequisite(Leader leader, TrainingCourse course, TrainingCourseType prerequisite) {
-        Optional<Integer> achievedYear = courseParticipationRepository
-                .findLatestCompletedYearByLeaderAndCourseType(leader.getId(), prerequisite.getTypeCode());
+    // "Số năm hoạt động" = cách lần đạt được cấp độ hiện tại yêu cầu của loại khóa tối thiểu N năm: năm tổ chức khóa này - năm đạt cấp độ đó >= N.
+    // Năm đạt lấy từ lịch sử cấp độ; huynh trưởng chưa có lịch sử cấp độ thì lấy năm đạt khóa tiên quyết gần nhất (duyệt chứng nhận / năm tổ chức khóa).
+    // Ví dụ khóa cấp 2 tổ chức 2026 yêu cầu 2 năm: lần đạt cấp 1 gần nhất phải từ 2024 trở về trước.
+    // Thời hạn tối đa sau khóa tiên quyết vẫn tính từ năm đạt khóa tiên quyết gần nhất (không theo lịch sử cấp độ).
+    private boolean meetsPrerequisite(UUID leaderId, TrainingCourse course, TrainingCourseType prerequisite) {
+        TrainingCourseType courseType = course.getCourseType();
+        String requiredLevel = courseType == null ? null : courseType.getRequiredCurrentLevel();
+        Optional<Integer> achievedYear = requiredLevel == null ? Optional.empty() : rankHistoryRepository.findLatestYearReachedLevel(leaderId, requiredLevel);
         if (achievedYear.isEmpty()) {
-            return false;
+            achievedYear = courseParticipationRepository.findLatestCompletedYearByLeaderAndCourseType(leaderId, prerequisite.getTypeCode());
         }
         int requiredYears = course.getYearsActive() == null ? 0 : course.getYearsActive();
-        int yearsSinceAchieved = resolveHostYear(course) - achievedYear.get();
-        if (yearsSinceAchieved < requiredYears) {
+        Integer maxYears = courseType == null ? null : courseType.getMaxYearsAfterPrerequisite();
+        if (achievedYear.isEmpty()) {
+            // Không xác định được năm đạt: chỉ chấp nhận khi khóa không đặt ràng buộc về số năm.
+            return requiredLevel != null && requiredYears == 0 && maxYears == null;
+        }
+        if (resolveHostYear(course) - achievedYear.get() < requiredYears) {
             return false;
         }
-        // Giới hạn thời hạn: phải đi khóa này trong vòng N năm kể từ lần đạt khóa tiên quyết gần nhất.
+        if (maxYears == null) {
+            return true;
+        }
+        // Giới hạn thời hạn: phải đi khóa này trong vòng N năm kể từ lần đạt KHÓA TIÊN QUYẾT gần nhất.
         // Ví dụ đạt khóa tiên quyết 2022, khóa 2026 tối đa 3 năm: 2026 - 2022 = 4 > 3 nên không đủ điều kiện (phải đạt từ 2023).
-        Integer maxYears = course.getCourseType() == null ? null : course.getCourseType().getMaxYearsAfterPrerequisite();
-        return maxYears == null || yearsSinceAchieved <= maxYears;
+        return courseParticipationRepository.findLatestCompletedYearByLeaderAndCourseType(leaderId, prerequisite.getTypeCode())
+                .map(year -> resolveHostYear(course) - year <= maxYears)
+                .orElse(false);
     }
 
     private int resolveHostYear(TrainingCourse course) {
@@ -1226,12 +1243,20 @@ public class CourseParticipationService {
         if (!isManualDecisionAllowed(participation.getApprovalStatus(), approved)) {
             return "Hồ sơ đã ở trạng thái kết thúc hoặc không chờ duyệt";
         }
+        // Duyệt hàng loạt chỉ áp dụng cho hồ sơ đủ điều kiện; hồ sơ ngoại lệ phải duyệt riêng để chọn cấp độ đạt được.
+        if (approved && Boolean.FALSE.equals(participation.getEligible())) {
+            return "Hồ sơ ngoại lệ phải được duyệt riêng từng hồ sơ";
+        }
         return null;
     }
 
     // Tài khoản có quyền duyệt đúng cấp quản lý của khóa: giáo hạt với khóa giáo hạt, giáo phận với khóa giáo phận.
     private boolean canApproveCourseOf(CourseParticipation participation, Authentication authentication) {
-        TrainingCourse course = participation.getCourse();
+        return canApproveCourse(participation.getCourse(), authentication);
+    }
+
+    // Người duyệt đăng ký đúng đơn vị sở hữu khóa (giáo hạt với khóa giáo hạt, giáo phận với khóa giáo phận).
+    public boolean canApproveCourse(TrainingCourse course, Authentication authentication) {
         if (trainingWorkflowSupport.isDeaneryManaged(course)) {
             return hasAuthority(authentication, CourseParticipationAccessEvaluator.APPROVE_DEANERY)
                     && course.getDeanery() != null
