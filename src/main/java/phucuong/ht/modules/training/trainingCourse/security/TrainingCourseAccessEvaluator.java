@@ -38,6 +38,18 @@ public class TrainingCourseAccessEvaluator {
                 || securityUtils.hasAuthority(authentication, CREATE_PAST_DEANERY);
     }
 
+    // Import danh sách tham dự: khóa quá khứ cần quyền create_past; khóa thường cần quyền duyệt đăng ký (service kiểm tra thêm đúng đơn vị sở hữu khóa).
+    public boolean canImportParticipants(Authentication authentication, String courseCode) {
+        return trainingCourseRepository.findByCodeWithType(courseCode)
+                .map(course -> course.isPast() ? canCreatePast(authentication) : canImportRegularParticipants(authentication))
+                .orElse(false);
+    }
+
+    public boolean canImportRegularParticipants(Authentication authentication) {
+        return securityUtils.hasAuthority(authentication, phucuong.ht.modules.training.courseParticipation.security.CourseParticipationAccessEvaluator.APPROVE_DEANERY)
+                || securityUtils.hasAuthority(authentication, phucuong.ht.modules.training.courseParticipation.security.CourseParticipationAccessEvaluator.APPROVE_DIOCESE);
+    }
+
     public boolean canCreate(Authentication authentication, String courseTypeCode) {
         if (courseTypeCode == null || courseTypeCode.isBlank()) {
             // Để service trả lỗi validation rõ ràng thay vì 403.

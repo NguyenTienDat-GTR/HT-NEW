@@ -37,6 +37,25 @@ public class RankHistoryRepository {
                 .getResultList();
     }
 
+    // Năm GẦN NHẤT huynh trưởng đạt được một cấp độ (theo lịch sử cấp độ, bỏ qua lần đã bị hạ cấp).
+    public java.util.Optional<Integer> findLatestYearReachedLevel(UUID leaderId, String level) {
+        return entityManager.createQuery(
+                        """
+                                select max(extract(year from rh.promotionDate))
+                                from RankHistory rh
+                                where rh.leader.id = :leaderId
+                                  and rh.newLevel = :level
+                                  and rh.reverted = false
+                                  and rh.promotionDate is not null
+                                """,
+                        Integer.class
+                )
+                .setParameter("leaderId", leaderId)
+                .setParameter("level", level)
+                .getResultList()
+                .stream().filter(java.util.Objects::nonNull).findFirst();
+    }
+
     // Lần thăng cấp gần nhất chưa bị hạ cấp của huynh trưởng do một khóa sinh ra.
     public java.util.Optional<RankHistory> findLatestActivePromotion(UUID leaderId, String courseCode) {
         return entityManager.createQuery(

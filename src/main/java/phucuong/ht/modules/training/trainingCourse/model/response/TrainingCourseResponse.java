@@ -23,6 +23,11 @@ public class TrainingCourseResponse {
     private UnitType managementUnitType;
     private Integer hostYear;
     private Integer yearsActive;
+    // Điều kiện tham dự của khóa (từ loại khóa); chỉ có ở chi tiết khóa. requiredCurrentLevelName là tên cấp độ hiện tại yêu cầu.
+    private String requiredCurrentLevelName;
+    private Integer requiredMinAge;
+    private String prerequisiteTypeName;
+    private Integer maxYearsAfterPrerequisite;
     // Chỉ có ở chi tiết/cập nhật khóa: đã có hồ sơ tham gia thì khóa các trường loại khóa, năm tổ chức, số năm hoạt động, điểm đạt.
     private Boolean hasParticipations;
     // Số tham dự viên đã được duyệt của khóa.
