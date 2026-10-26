@@ -60,7 +60,7 @@ public final class AttendanceModels {
     public record ParticipantQuery(String search, String team, Boolean checkedIn, InvitationFilter invitation, int page, int size) {
     }
 
-    public record ScanResult(ScanStatus status, String participationId, String holyName, String fullName, String parishName,
+    public record ScanResult(ScanStatus status, String participationId, String courseCode, String courseName, String holyName, String fullName, String parishName,
                              String deaneryName, String teamName, OffsetDateTime checkedInAt) {
     }
 }

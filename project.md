@@ -1506,3 +1506,9 @@ Ma trận endpoint (`endpoint-contract-matrix.psv`) hiện có 124 route.
 
 ### Test liên quan
 `ForgotPasswordServiceTest`, `EmailMaskerTest`, `TemporaryPasswordGeneratorTest`, `AuthServiceTest` (hạn mật khẩu tạm, rememberMe), `RedisTokenSessionServiceTest` (hạn trượt/tuyệt đối), `AccountManagementServiceTest` + `AccountManagementAuthorizationHelperTest` (đặt lại mật khẩu), `AccountPasswordResetIntegrationTest` (rollback trên DB thật), `ForgotPasswordControllerSecurityIntegrationTest`, `AuthControllerSecurityIntegrationTest` (cookie phiên / cookie lưu), `EndpointContractMatrixTest`.
+
+## 2026-10-26 Mã QR điểm danh có mã khóa (nhánh `feature/responsive-unified-qr-scan`)
+
+- `AttendanceTokenService`: token đổi sang `HTATT2.<mã khóa>.<mã hồ sơ>.<chữ ký>` (HMAC phủ cả mã khóa); `verify` trả `Verified(courseCode, participationId)`; mã `HTATT1` cũ bị từ chối với thông báo xuất lại thẻ / gửi lại email. Thẻ tham dự và email thông tin tham dự tạo mã mới.
+- Thêm `POST /api/training/attendance/lookup|scan` (`AttendanceScanController`): khóa lấy từ mã QR, quyền kiểm tra bằng `canScanAttendance` theo khóa đó. Endpoint theo khóa vẫn giữ và báo lỗi nếu mã thuộc khóa khác.
+- Thông báo khi khóa không điểm danh được nêu rõ tên khóa: vô hiệu hóa / đã kết thúc / chưa bật điểm danh. `ScanResult` có thêm `courseCode`, `courseName`.

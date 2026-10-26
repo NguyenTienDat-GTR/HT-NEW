@@ -169,7 +169,7 @@ public class CourseInvitationService {
             helper.setSubject(content.subject());
             helper.setText(content.text(), content.html());
             if (includeQr) {
-                byte[] png = tokenService.pngFor(recipient.participationId(), QR_MODULE_PIXELS);
+                byte[] png = tokenService.pngFor(course.code(), recipient.participationId(), QR_MODULE_PIXELS);
                 helper.addInline(InvitationMailTemplate.QR_CONTENT_ID, new ByteArrayResource(png), "image/png");
                 helper.addAttachment("qr-diem-danh.png", new ByteArrayResource(png), "image/png");
             }

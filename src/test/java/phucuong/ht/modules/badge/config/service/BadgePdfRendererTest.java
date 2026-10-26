@@ -153,7 +153,7 @@ class BadgePdfRendererTest {
 
     @Test
     void rendersAttendanceQrWithoutBreakingTheText() throws Exception {
-        RenderQr qr = new RenderQr(tokens.matrixFor("participation-1"), 0.8, 0.5, 0.5);
+        RenderQr qr = new RenderQr(tokens.matrixFor("KH-1", "participation-1"), 0.8, 0.5, 0.5);
         BadgePdfRenderer.Side withQr = new BadgePdfRenderer.Side(null, List.of(text("Có QR", 0.3, 0.4, 0.1, "center")), List.of(qr));
         byte[] pdf = renderer.render(List.of(sheet(true, withQr)));
         assertTrue(textOf(pdf, 1).contains("Có QR"));

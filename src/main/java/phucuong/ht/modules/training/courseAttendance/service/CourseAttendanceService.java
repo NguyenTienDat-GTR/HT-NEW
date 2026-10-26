@@ -18,6 +18,7 @@ import phucuong.ht.modules.training.courseAttendance.model.AttendanceModels.Part
 import phucuong.ht.modules.training.courseAttendance.model.AttendanceModels.ScanResult;
 import phucuong.ht.modules.training.courseAttendance.model.AttendanceModels.ScanStatus;
 import phucuong.ht.modules.training.courseAttendance.model.AttendanceModels.Summary;
+import phucuong.ht.modules.training.courseAttendance.service.AttendanceTokenService.Verified;
 import phucuong.ht.modules.training.courseInvitation.service.CourseInvitationService;
 import phucuong.ht.modules.training.courseParticipation.model.entity.CourseParticipation;
 import phucuong.ht.modules.training.courseParticipation.repository.CourseParticipationRepository;
@@ -160,17 +161,44 @@ public class CourseAttendanceService {
         return resolve(courseCode, token).result(false);
     }
 
+    // Mã khóa nằm trong mã QR (đã kiểm tra chữ ký) để quét ở header không phải chọn khóa; dùng để kiểm tra quyền trước khi tra cứu / điểm danh.
+    public String courseCodeOf(String token) {
+        return verifyToken(token).courseCode();
+    }
+
+    @Transactional(readOnly = true)
+    public ScanResult lookup(String token) {
+        return resolve(null, token).result(false);
+    }
+
+    @EvictCaches.Courses
+    @Transactional
+    public ScanResult scan(String token, Authentication authentication) {
+        return checkIn(resolve(null, token).participation(), authentication);
+    }
+
+    private Verified verifyToken(String token) {
+        if (tokenService.isLegacy(token)) {
+            throw commonValidationHelper.validationError("Mã QR điểm danh này thuộc phiên bản cũ (chưa có mã khóa huấn luyện). Hãy xuất lại thẻ hoặc gửi lại email để có mã mới");
+        }
+        return tokenService.verify(token)
+                .orElseThrow(() -> commonValidationHelper.validationError("Mã QR không hợp lệ hoặc không phải mã điểm danh của hệ thống"));
+    }
+
     private record Resolved(CourseParticipation participation, CourseAttendanceService service) {
         ScanResult result(boolean unused) {
             return service.result(participation.getCheckedInAt() != null ? ScanStatus.ALREADY_CHECKED_IN : ScanStatus.READY, participation);
         }
     }
 
-    private Resolved resolve(String courseCode, String token) {
-        TrainingCourse course = requireAttendanceOpen(courseCode);
-        String participationId = tokenService.verify(token)
-                .orElseThrow(() -> commonValidationHelper.validationError("Mã QR không hợp lệ hoặc không phải mã điểm danh của hệ thống"));
-        CourseParticipation participation = courseParticipationRepository.findByIdWithLeaderAndCourse(participationId)
+    // expectedCourseCode null khi quét ở header (khóa lấy từ chính mã QR); có giá trị khi quét trong trang điểm danh của một khóa.
+    private Resolved resolve(String expectedCourseCode, String token) {
+        Verified verified = verifyToken(token);
+        if (expectedCourseCode != null && !expectedCourseCode.equals(verified.courseCode())) {
+            throw commonValidationHelper.validationError("Mã QR này thuộc khóa huấn luyện khác");
+        }
+        TrainingCourse course = requireAttendanceOpen(verified.courseCode());
+        CourseParticipation participation = courseParticipationRepository.findByIdWithLeaderAndCourse(verified.participationId())
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy hồ sơ của mã QR này"));
         if (participation.getCourse() == null || !course.getCourseCode().equals(participation.getCourse().getCourseCode())) {
             throw commonValidationHelper.validationError("Mã QR này thuộc khóa huấn luyện khác");
@@ -183,7 +211,10 @@ public class CourseAttendanceService {
     @EvictCaches.Courses
     @Transactional
     public ScanResult scan(String courseCode, String token, Authentication authentication) {
-        CourseParticipation participation = resolve(courseCode, token).participation();
+        return checkIn(resolve(courseCode, token).participation(), authentication);
+    }
+
+    private ScanResult checkIn(CourseParticipation participation, Authentication authentication) {
         if (participation.getCheckedInAt() != null) {
             return result(ScanStatus.ALREADY_CHECKED_IN, participation);
         }
@@ -219,10 +250,16 @@ public class CourseAttendanceService {
 
     private TrainingCourse requireAttendanceOpen(String courseCode) {
         TrainingCourse course = participantSupport.requireRegularCourse(courseCode, "điểm danh");
+        String label = "Khóa huấn luyện \"" + course.getCourseName() + "\"";
+        if (Boolean.FALSE.equals(course.getStatus())) {
+            throw commonValidationHelper.conflict(label + " đã bị vô hiệu hóa nên không thể điểm danh");
+        }
         courseActivityGuard.requireActive(course);
-        courseActivityGuard.requireNotEnded(course);
+        if (courseActivityGuard.isEnded(course)) {
+            throw commonValidationHelper.conflict(label + " đã kết thúc nên không thể điểm danh");
+        }
         if (!Boolean.TRUE.equals(course.getAttendanceEnabled())) {
-            throw commonValidationHelper.conflict("Khóa huấn luyện chưa bật điểm danh");
+            throw commonValidationHelper.conflict(label + " chưa bật điểm danh");
         }
         return course;
     }
@@ -247,7 +284,9 @@ public class CourseAttendanceService {
         Leader leader = participation.getLeader();
         var parish = leader.getParish();
         var deanery = parish == null ? null : parish.getDeanery();
+        TrainingCourse course = participation.getCourse();
         return new ScanResult(status, participation.getId(),
+                course == null ? null : course.getCourseCode(), course == null ? null : course.getCourseName(),
                 leader.getHolyName(), CourseParticipantSupport.plainName(leader),
                 parish == null ? null : parish.getName(), deanery == null ? null : deanery.getName(),
                 participation.getTeamName(), participation.getCheckedInAt());
