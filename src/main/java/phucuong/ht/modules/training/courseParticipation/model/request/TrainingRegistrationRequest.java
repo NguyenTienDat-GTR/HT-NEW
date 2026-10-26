@@ -19,4 +19,10 @@ public class TrainingRegistrationRequest {
 
     // Danh sách ngoại lệ: huynh trưởng không đủ điều kiện -> lí do. Không được trùng với leaderIds.
     private Map<UUID, String> exceptionReasonsByLeaderId;
+
+    // Lí do riêng cho từng hồ sơ gửi ngoài đợt của khóa giáo phận dành cho một số giáo hạt (bắt buộc với hồ sơ ngoài đợt).
+    private Map<UUID, String> offTargetReasonsByLeaderId;
+
+    // Ghi chú tùy chọn của người gửi cho từng hồ sơ (tối đa 1000 ký tự).
+    private Map<UUID, String> notesByLeaderId;
 }

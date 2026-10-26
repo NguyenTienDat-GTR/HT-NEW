@@ -38,6 +38,15 @@ public class CourseParticipationResponse {
     private String scoreNote;
     private Boolean eligible;
     private String exceptionReason;
+    // Ghi chú của người gửi; hồ sơ gửi ngoài đợt (kèm lí do) hoặc liên giáo hạt (kèm giáo hạt nhà, người đồng ý, lí do).
+    private String registrationNote;
+    private Boolean offTarget;
+    private String offTargetReason;
+    private Boolean crossDeanery;
+    private String crossDeaneryReason;
+    private String homeDeaneryName;
+    private String homeDeaneryApprovedBy;
+    private OffsetDateTime homeDeaneryApprovedAt;
     // Cấp hiện tại của huynh trưởng, cấp độ đạt được của loại khóa và cấp đạt được do người duyệt chọn (hồ sơ ngoại lệ).
     private String leaderLevel;
     private String courseResultingLevel;

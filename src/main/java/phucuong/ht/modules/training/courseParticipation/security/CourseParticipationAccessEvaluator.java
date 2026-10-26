@@ -22,6 +22,7 @@ public class CourseParticipationAccessEvaluator {
     public static final String SUBMIT_DEANERY = "training.participation.submit.deanery";
     public static final String APPROVE_DEANERY = "training.participation.approve.deanery";
     public static final String APPROVE_DIOCESE = "training.participation.approve.diocese";
+    public static final String CROSS_APPROVE_DEANERY = "training.participation.cross_approve.deanery";
     public static final String SCORE_DEANERY = "training.participation.score.deanery";
     public static final String SCORE_DIOCESE = "training.participation.score.diocese";
     public static final String READ_PARISH = "training.participation.read.parish";
@@ -126,6 +127,20 @@ public class CourseParticipationAccessEvaluator {
                         ? securityUtils.hasAuthority(authentication, SCORE_DEANERY) && scopedDeanery(authentication, courseCode)
                         : securityUtils.hasAuthority(authentication, SCORE_DIOCESE) && scopedDiocese(authentication, courseCode))
                 .orElse(false);
+    }
+
+    // Gửi hồ sơ liên giáo hạt: giáo xứ (quyền gửi giáo xứ) hoặc giáo hạt nhà (quyền gửi giáo hạt).
+    public boolean canSubmitCrossDeanery(Authentication authentication) {
+        return securityUtils.hasAuthority(authentication, SUBMIT_PARISH) || securityUtils.hasAuthority(authentication, SUBMIT_DEANERY);
+    }
+
+    // Xem yêu cầu liên giáo hạt: bên gửi hoặc giáo hạt nhà đồng ý.
+    public boolean canReadCrossDeanery(Authentication authentication) {
+        return canSubmitCrossDeanery(authentication) || securityUtils.hasAuthority(authentication, CROSS_APPROVE_DEANERY);
+    }
+
+    public boolean canApproveCrossDeanery(Authentication authentication) {
+        return securityUtils.hasAuthority(authentication, CROSS_APPROVE_DEANERY);
     }
 
     public boolean canRead(Authentication authentication) {

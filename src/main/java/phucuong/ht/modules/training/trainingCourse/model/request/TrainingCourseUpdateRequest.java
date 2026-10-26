@@ -39,6 +39,9 @@ public class TrainingCourseUpdateRequest {
     // null = giữ nguyên; danh sách (kể cả rỗng) = thay thế.
     private List<String> recipientUsernames;
 
+    // Giáo hạt mà khóa giáo phận dành cho (một đợt): null = giữ nguyên; danh sách (kể cả rỗng = mở cho tất cả) = thay thế.
+    private List<java.util.UUID> targetDeaneryIds;
+
     // null = giữ nguyên (khi sửa) hoặc tắt (khi tạo).
     private Boolean autoApproveEligible;
 

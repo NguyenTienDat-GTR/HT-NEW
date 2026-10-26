@@ -16,6 +16,11 @@ import java.util.UUID;
 @Getter
 @Builder
 public class TrainingCourseResponse {
+
+    // Giáo hạt mà khóa giáo phận dành cho.
+    public record TargetDeanery(UUID id, String name) {
+    }
+
     private String courseCode;
     private String courseName;
     private String courseTypeCode;
@@ -58,6 +63,9 @@ public class TrainingCourseResponse {
     private CourseRegistrationStatus registrationStatus;
     private CourseOrganizingStatus organizingStatus;
     private List<String> recipientUsernames;
+    // Giáo hạt mà khóa giáo phận dành cho (rỗng = mở cho tất cả).
+    private List<UUID> targetDeaneryIds;
+    private List<TargetDeanery> targetDeaneries;
     private String createdBy;
     private String updatedBy;
     private BigDecimal passingScore;

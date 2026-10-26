@@ -77,6 +77,9 @@ public final class TrainingExcelExports {
                 ExcelColumn.<CourseParticipationResponse>of("Nhận xét", 30, CourseParticipationResponse::getReview),
                 ExcelColumn.<CourseParticipationResponse>of("Ghi chú điểm", 30, CourseParticipationResponse::getScoreNote),
                 ExcelColumn.<CourseParticipationResponse>of("Lý do ngoại lệ", 30, CourseParticipationResponse::getExceptionReason),
+                ExcelColumn.<CourseParticipationResponse>of("Lý do gửi ngoài đợt", 30, CourseParticipationResponse::getOffTargetReason),
+                ExcelColumn.<CourseParticipationResponse>of("Lý do gửi liên giáo hạt", 30, CourseParticipationResponse::getCrossDeaneryReason),
+                ExcelColumn.<CourseParticipationResponse>of("Ghi chú", 30, CourseParticipationResponse::getRegistrationNote),
                 ExcelColumn.<CourseParticipationResponse>of("Trạng thái chứng nhận", 22, row -> ExcelLabels.approval(row.getCertificateApprovalStatus())),
                 ExcelColumn.<CourseParticipationResponse>of("Ngày tạo", 18, CourseParticipationResponse::getCreatedAt),
                 ExcelColumn.<CourseParticipationResponse>of("Người tạo", 22, CourseParticipationResponse::getCreatedByName)
@@ -92,7 +95,8 @@ public final class TrainingExcelExports {
                 ExcelColumn.<CourseParticipationResponse>of("Số điện thoại", 16, CourseParticipationResponse::getLeaderPhone),
                 ExcelColumn.<CourseParticipationResponse>of("Giáo xứ", 26, CourseParticipationResponse::getParishName),
                 ExcelColumn.<CourseParticipationResponse>of("Giáo hạt", 26, CourseParticipationResponse::getDeaneryName),
-                ExcelColumn.<CourseParticipationResponse>of("Đội", 20, CourseParticipationResponse::getTeamName)
+                ExcelColumn.<CourseParticipationResponse>of("Đội", 20, CourseParticipationResponse::getTeamName),
+                ExcelColumn.<CourseParticipationResponse>of("Ghi chú", 30, CourseParticipationResponse::getRegistrationNote)
         ), rows);
     }
 

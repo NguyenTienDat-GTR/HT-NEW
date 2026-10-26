@@ -93,6 +93,30 @@ public class TrainingCourseRepository extends BaseRepo<TrainingCourse, String> {
         return query.getResultList();
     }
 
+    // Khóa giáo hạt đang mở đăng ký của các giáo hạt KHÁC trong cùng giáo phận (đích của hồ sơ liên giáo hạt).
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<TrainingCourse> findOpenDeaneryCoursesOfOtherDeaneries(UUID dioceseId, UUID excludeDeaneryId) {
+        return entityManager.createQuery(
+                        """
+                                select tc
+                                from TrainingCourse tc
+                                join fetch tc.courseType ct
+                                join fetch tc.deanery d
+                                where tc.status = true
+                                  and tc.pastCourse = false
+                                  and tc.registrationStatus = phucuong.ht.modules.training.enums.CourseRegistrationStatus.OPEN
+                                  and ct.managementUnitType = phucuong.ht.common.enums.UnitType.DEANERY
+                                  and d.diocese.id = :dioceseId
+                                  and d.id <> :excludeDeaneryId
+                                order by tc.startDate desc, tc.courseName
+                                """,
+                        TrainingCourse.class
+                )
+                .setParameter("dioceseId", dioceseId)
+                .setParameter("excludeDeaneryId", excludeDeaneryId)
+                .getResultList();
+    }
+
     // Các khóa chưa ở trạng thái cuối (đăng ký và tổ chức đều đã ENDED thì không cần quét).
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public List<TrainingCourse> findCoursesWithOpenStatuses() {
