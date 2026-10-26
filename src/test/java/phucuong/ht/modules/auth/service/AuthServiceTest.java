@@ -24,13 +24,17 @@ import phucuong.ht.modules.system.model.entity.AccountRole;
 import phucuong.ht.modules.system.model.entity.Role;
 
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -90,14 +94,13 @@ class AuthServiceTest {
         when(passwordEncoder.encode("htgppc2026")).thenReturn("encoded-password");
         when(accountRepository.save(any(Account.class))).thenReturn(savedAccount);
         when(authUserDetailsService.loadUserByUsername("superadminpc")).thenReturn(principal);
-        when(redisTokenSessionService.createSession(eq("superadminpc"), eq("bootstrap"), anyString(), anyString(), eq("pending")))
+        when(redisTokenSessionService.createSession(eq("superadminpc"), eq("bootstrap"), anyString(), anyString(), eq("pending"), anyBoolean()))
                 .thenReturn(sessionState);
         when(jwtUtils.generateAccessToken(eq(principal), eq("session-1"), anyString())).thenReturn("access-token");
-        when(jwtUtils.generateRefreshToken(eq(principal), eq("session-1"), anyString())).thenReturn("refresh-token");
+        when(jwtUtils.generateRefreshToken(eq(principal), eq("session-1"), anyString(), any(Instant.class))).thenReturn("refresh-token");
         when(redisTokenSessionService.rotateSession(eq("session-1"), eq("superadminpc"), anyString(), anyString(), eq("refresh-token")))
                 .thenReturn(sessionState);
         when(jwtUtils.getAccessTokenExpirationMs()).thenReturn(900000L);
-        when(jwtUtils.getRefreshTokenExpirationMs()).thenReturn(604800000L);
 
         authService.bootstrapSuperAdmin();
 
@@ -125,14 +128,13 @@ class AuthServiceTest {
         TokenSessionState sessionState = session("session-2", "superadminpc", "127.0.0.1");
 
         when(authenticationManager.authenticate(any(Authentication.class))).thenReturn(authentication);
-        when(redisTokenSessionService.createSession(eq("superadminpc"), eq("127.0.0.1"), anyString(), anyString(), eq("pending")))
+        when(redisTokenSessionService.createSession(eq("superadminpc"), eq("127.0.0.1"), anyString(), anyString(), eq("pending"), anyBoolean()))
                 .thenReturn(sessionState);
         when(jwtUtils.generateAccessToken(eq(principal), eq("session-2"), anyString())).thenReturn("access-token");
-        when(jwtUtils.generateRefreshToken(eq(principal), eq("session-2"), anyString())).thenReturn("refresh-token");
+        when(jwtUtils.generateRefreshToken(eq(principal), eq("session-2"), anyString(), any(Instant.class))).thenReturn("refresh-token");
         when(redisTokenSessionService.rotateSession(eq("session-2"), eq("superadminpc"), anyString(), anyString(), eq("refresh-token")))
                 .thenReturn(sessionState);
         when(jwtUtils.getAccessTokenExpirationMs()).thenReturn(900000L);
-        when(jwtUtils.getRefreshTokenExpirationMs()).thenReturn(604800000L);
 
         AuthTokenResponse response = authService.login(request, "127.0.0.1");
 
@@ -161,12 +163,15 @@ class AuthServiceTest {
                 jwtUtils.REFRESH_TOKEN_TYPE
         );
 
+        TokenSessionState currentSession = session("session-3", "superadminpc", "127.0.0.1");
+        when(redisTokenSessionService.findActiveSession("session-3")).thenReturn(currentSession);
+        when(redisTokenSessionService.isRememberMe(currentSession)).thenReturn(true);
+        when(redisTokenSessionService.nextExpiry(currentSession)).thenReturn(Instant.now().plusSeconds(3600));
         when(jwtUtils.parseRefreshTokenClaims("refresh-token-old")).thenReturn(tokenClaims);
         when(authUserDetailsService.loadUserByUsername("superadminpc")).thenReturn(principal);
         when(jwtUtils.generateAccessToken(eq(principal), eq("session-3"), anyString())).thenReturn("access-token-new");
-        when(jwtUtils.generateRefreshToken(eq(principal), eq("session-3"), anyString())).thenReturn("refresh-token-new");
+        when(jwtUtils.generateRefreshToken(eq(principal), eq("session-3"), anyString(), any(Instant.class))).thenReturn("refresh-token-new");
         when(jwtUtils.getAccessTokenExpirationMs()).thenReturn(900000L);
-        when(jwtUtils.getRefreshTokenExpirationMs()).thenReturn(604800000L);
 
         AuthTokenResponse response = authService.refresh("refresh-token-old");
 
@@ -308,6 +313,113 @@ class AuthServiceTest {
         verify(redisTokenSessionService, never()).revokeAllSessions(anyString());
     }
 
+    @Test
+    void loginWithoutRememberMeShouldCreateShortSessionAndSessionCookieFlag() {
+        AuthService authService = createService();
+        LoginRequest request = new LoginRequest();
+        request.setUsername("superadminpc");
+        request.setPassword("secret");
+        AuthUserDetails principal = stubLogin("session-4");
+
+        AuthTokenResponse response = authService.login(request, "127.0.0.1");
+
+        verify(redisTokenSessionService).createSession(
+                eq("superadminpc"), eq("127.0.0.1"), anyString(), anyString(), eq("pending"), eq(false));
+        assertFalse(response.isRememberMe());
+        assertEquals(principal.getUsername(), response.getUser().getUsername());
+    }
+
+    @Test
+    void loginWithRememberMeShouldCreateLongSession() {
+        AuthService authService = createService();
+        LoginRequest request = new LoginRequest();
+        request.setUsername("superadminpc");
+        request.setPassword("secret");
+        request.setRememberMe(true);
+        stubLogin("session-5");
+
+        AuthTokenResponse response = authService.login(request, "127.0.0.1");
+
+        verify(redisTokenSessionService).createSession(
+                eq("superadminpc"), eq("127.0.0.1"), anyString(), anyString(), eq("pending"), eq(true));
+        assertTrue(response.isRememberMe());
+    }
+
+    @Test
+    void loginShouldRejectExpiredTemporaryPassword() {
+        AuthService authService = createService();
+        LoginRequest request = new LoginRequest();
+        request.setUsername("admin-parish");
+        request.setPassword("TempPass");
+        AuthUserDetails principal = AuthUserDetails.databasePrincipal(
+                "admin-parish", "hash", null, List.of("ADMIN_PARISH"), List.of(), true);
+        Authentication authentication = new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
+        Account account = new Account();
+        account.setUsername("admin-parish");
+        account.setMustChangePassword(Boolean.TRUE);
+        account.setTemporaryPasswordExpiresAt(OffsetDateTime.now().minusMinutes(1));
+        when(authenticationManager.authenticate(any(Authentication.class))).thenReturn(authentication);
+        when(accountRepository.findById("admin-parish")).thenReturn(Optional.of(account));
+
+        assertThrows(ApiException.class, () -> authService.login(request, "127.0.0.1"));
+        verifyNoInteractions(redisTokenSessionService);
+    }
+
+    @Test
+    void loginShouldAcceptTemporaryPasswordBeforeItExpires() {
+        AuthService authService = createService();
+        LoginRequest request = new LoginRequest();
+        request.setUsername("superadminpc");
+        request.setPassword("TempPass");
+        stubLogin("session-6");
+        Account account = new Account();
+        account.setUsername("superadminpc");
+        account.setMustChangePassword(Boolean.TRUE);
+        account.setTemporaryPasswordExpiresAt(OffsetDateTime.now().plusMinutes(5));
+        when(accountRepository.findById("superadminpc")).thenReturn(Optional.of(account));
+
+        AuthTokenResponse response = authService.login(request, "127.0.0.1");
+
+        assertEquals("access-token", response.getAccessToken());
+    }
+
+    @Test
+    void refreshShouldRejectWhenSessionIsGone() {
+        AuthService authService = createService();
+        AuthUserDetails principal = AuthUserDetails.databasePrincipal(
+                "superadminpc", "encoded-password", null, List.of("SUPER_ADMIN"), List.of(), true);
+        jwtUtils.TokenClaims tokenClaims = new jwtUtils.TokenClaims(
+                AuthUserDetails.tokenPrincipal("superadminpc", null, List.of("SUPER_ADMIN"), List.of()),
+                "session-gone",
+                "refresh-jti-old",
+                Instant.now(),
+                Instant.now().plusSeconds(600),
+                jwtUtils.REFRESH_TOKEN_TYPE
+        );
+        when(jwtUtils.parseRefreshTokenClaims("refresh-token-old")).thenReturn(tokenClaims);
+        when(authUserDetailsService.loadUserByUsername("superadminpc")).thenReturn(principal);
+        when(redisTokenSessionService.findActiveSession("session-gone")).thenReturn(null);
+
+        assertThrows(ApiException.class, () -> authService.refresh("refresh-token-old"));
+        verify(redisTokenSessionService, never()).rotateRefreshSession(
+                anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
+    }
+
+    private AuthUserDetails stubLogin(String sessionId) {
+        AuthUserDetails principal = AuthUserDetails.databasePrincipal(
+                "superadminpc", "encoded-password", null, List.of("SUPER_ADMIN"), List.of("auth.session.manage.all"), true);
+        Authentication authentication = new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
+        TokenSessionState sessionState = session(sessionId, "superadminpc", "127.0.0.1");
+        when(authenticationManager.authenticate(any(Authentication.class))).thenReturn(authentication);
+        when(redisTokenSessionService.createSession(
+                eq("superadminpc"), eq("127.0.0.1"), anyString(), anyString(), eq("pending"), anyBoolean()))
+                .thenReturn(sessionState);
+        when(jwtUtils.generateAccessToken(eq(principal), eq(sessionId), anyString())).thenReturn("access-token");
+        when(jwtUtils.generateRefreshToken(eq(principal), eq(sessionId), anyString(), any(Instant.class))).thenReturn("refresh-token");
+        when(jwtUtils.getAccessTokenExpirationMs()).thenReturn(900000L);
+        return principal;
+    }
+
     private AuthService createService() {
         return new AuthService(
                 authenticationManager,
@@ -342,7 +454,9 @@ class AuthServiceTest {
                 "hash",
                 now,
                 now.plusSeconds(600),
-                now
+                now,
+                true,
+                now.plusSeconds(3600)
         );
     }
 }

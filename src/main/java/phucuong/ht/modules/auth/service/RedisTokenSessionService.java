@@ -53,6 +53,17 @@ public class RedisTokenSessionService {
             String refreshTokenJti,
             String refreshToken
     ) {
+        return createSession(username, ipAddress, accessTokenJti, refreshTokenJti, refreshToken, true);
+    }
+
+    public TokenSessionState createSession(
+            String username,
+            String ipAddress,
+            String accessTokenJti,
+            String refreshTokenJti,
+            String refreshToken,
+            boolean rememberMe
+    ) {
         cleanupUserSessions(username);
 
         List<TokenSessionState> activeSessions = listActiveSessions(username);
@@ -71,6 +82,8 @@ public class RedisTokenSessionService {
         }
 
         Instant now = Instant.now();
+        Instant absoluteExpiresAt = now.plusMillis(absoluteMs(rememberMe));
+        Instant idleExpiresAt = now.plusMillis(idleMs(rememberMe));
         TokenSessionState sessionState = new TokenSessionState(
                 UUID.randomUUID().toString(),
                 username,
@@ -80,11 +93,53 @@ public class RedisTokenSessionService {
                 refreshTokenJti,
                 hashRefreshToken(refreshToken),
                 now,
-                now.plusMillis(authProperties.getJwt().getRefreshTokenExpirationMs()),
-                now
+                idleExpiresAt.isBefore(absoluteExpiresAt) ? idleExpiresAt : absoluteExpiresAt,
+                now,
+                rememberMe,
+                absoluteExpiresAt
         );
         saveSession(sessionState);
         return sessionState;
+    }
+
+    /** Phiên còn hiệu lực hoặc null (không tồn tại / đã hết hạn). Không thu hồi phiên. */
+    public TokenSessionState findActiveSession(String sessionId) {
+        TokenSessionState sessionState = getSession(sessionId);
+        return sessionState == null || isExpired(sessionState) ? null : sessionState;
+    }
+
+    /** Phiên cũ (chưa có cờ rememberMe) được coi là có ghi nhớ đăng nhập. */
+    public boolean isRememberMe(TokenSessionState sessionState) {
+        return sessionState.getRememberMe() == null || sessionState.getRememberMe();
+    }
+
+    /**
+     * Hạn mới của phiên khi được gia hạn lúc này: không hoạt động tối đa idle,
+     * nhưng không bao giờ vượt hạn tuyệt đối kể từ lúc đăng nhập.
+     */
+    public Instant nextExpiry(TokenSessionState sessionState) {
+        return slideExpiry(sessionState, Instant.now());
+    }
+
+    private Instant slideExpiry(TokenSessionState sessionState, Instant now) {
+        boolean rememberMe = isRememberMe(sessionState);
+        Instant absolute = sessionState.getAbsoluteExpiresAt();
+        if (absolute == null) {
+            Instant base = sessionState.getIssuedAt() != null ? sessionState.getIssuedAt() : now;
+            absolute = base.plusMillis(absoluteMs(rememberMe));
+        }
+        Instant idle = now.plusMillis(idleMs(rememberMe));
+        return idle.isBefore(absolute) ? idle : absolute;
+    }
+
+    private long idleMs(boolean rememberMe) {
+        AuthProperties.Jwt jwt = authProperties.getJwt();
+        return rememberMe ? jwt.getRememberMeIdleMs() : jwt.getSessionIdleMs();
+    }
+
+    private long absoluteMs(boolean rememberMe) {
+        AuthProperties.Jwt jwt = authProperties.getJwt();
+        return rememberMe ? jwt.getRememberMeAbsoluteMs() : jwt.getSessionAbsoluteMs();
     }
 
     public TokenSessionState requireRefreshSession(
@@ -123,7 +178,7 @@ public class RedisTokenSessionService {
         sessionState.setAccessTokenJti(accessTokenJti);
         sessionState.setRefreshTokenJti(refreshTokenJti);
         sessionState.setRefreshTokenHash(hashRefreshToken(refreshToken));
-        sessionState.setExpiresAt(now.plusMillis(authProperties.getJwt().getRefreshTokenExpirationMs()));
+        sessionState.setExpiresAt(slideExpiry(sessionState, now));
         sessionState.setLastUsedAt(now);
         saveSession(sessionState);
         return sessionState;
@@ -156,7 +211,7 @@ public class RedisTokenSessionService {
         sessionState.setAccessTokenJti(accessTokenJti);
         sessionState.setRefreshTokenJti(refreshTokenJti);
         sessionState.setRefreshTokenHash(hashRefreshToken(refreshToken));
-        sessionState.setExpiresAt(now.plusMillis(authProperties.getJwt().getRefreshTokenExpirationMs()));
+        sessionState.setExpiresAt(slideExpiry(sessionState, now));
         sessionState.setLastUsedAt(now);
 
         try {

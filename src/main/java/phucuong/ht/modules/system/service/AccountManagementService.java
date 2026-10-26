@@ -1,6 +1,7 @@
 package phucuong.ht.modules.system.service;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -19,6 +20,8 @@ import phucuong.ht.modules.auth.model.AuthUserDetails;
 import phucuong.ht.modules.auth.repository.AccountRepository;
 import phucuong.ht.modules.auth.repository.AccountRoleRepository;
 import phucuong.ht.modules.auth.repository.RoleRepository;
+import phucuong.ht.modules.auth.service.AccountEmailResolver;
+import phucuong.ht.modules.auth.service.EmailMasker;
 import phucuong.ht.modules.auth.service.RedisTokenSessionService;
 import phucuong.ht.modules.diocese.model.entity.Diocese;
 import phucuong.ht.modules.diocese.repository.DioceseRepository;
@@ -28,6 +31,7 @@ import phucuong.ht.modules.system.model.entity.Account;
 import phucuong.ht.modules.system.model.entity.AccountRole;
 import phucuong.ht.modules.system.model.entity.Role;
 import phucuong.ht.modules.system.model.request.AccountCreateRequest;
+import phucuong.ht.modules.system.model.response.AccountPasswordResetResponse;
 import phucuong.ht.modules.system.model.response.AccountResponse;
 
 import java.security.SecureRandom;
@@ -35,6 +39,7 @@ import java.text.Normalizer;
 import java.time.OffsetDateTime;
 import java.util.*;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AccountManagementService {
@@ -44,6 +49,7 @@ public class AccountManagementService {
     private static final List<String> SUPER_ADMIN_ACCOUNT_LIST_ROLES = List.of(SUPER_ADMIN, ADMIN_DIOCESE);
     private static final List<String> ACCOUNT_PERMISSION_ADMIN_ROLES = List.of(ADMIN_DIOCESE, "ADMIN_DEANERY", "ADMIN_PARISH");
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    private static final java.time.Duration TEMPORARY_PASSWORD_TTL = java.time.Duration.ofMinutes(10);
 
     private final AccountRepository accountRepository;
     private final AccountRoleRepository accountRoleRepository;
@@ -55,6 +61,7 @@ public class AccountManagementService {
     private final AccountManagementAuthorizationHelper authorizationHelper;
     private final AccountCredentialMailService mailService;
     private final RedisTokenSessionService redisTokenSessionService;
+    private final AccountEmailResolver emailResolver;
     private final phucuong.ht.common.utils.AuditActorNameResolver auditActorNameResolver;
     @Autowired(required = false)
     private UnitOperationalStatusService unitOperationalStatusService;
@@ -200,6 +207,52 @@ public class AccountManagementService {
         account.setUpdatedBy(validation.requireAuditActor(authentication, "Không xác định được người đổi trạng thái tài khoản"));
         redisTokenSessionService.revokeAllSessions(account.getUsername());
         return response(account);
+    }
+
+    /**
+     * Đặt lại mật khẩu: sinh mật khẩu tạm 8 chữ cái, hạn 10 phút, bắt buộc đổi khi đăng nhập, gửi qua email.
+     * Ghi DB và flush trước, gửi email rồi mới thu hồi phiên: email lỗi thì rollback, mật khẩu cũ giữ nguyên và
+     * các phiên đang đăng nhập không bị ảnh hưởng. Mật khẩu tạm không bao giờ trả về qua API.
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public AccountPasswordResetResponse resetPassword(String username, Authentication authentication) {
+        Account account = require(username);
+        if (!Boolean.TRUE.equals(account.getStatus())) {
+            throw validation.validationError("Tài khoản đang bị khóa, không thể đặt lại mật khẩu");
+        }
+        requireAccountWritable(account.getUsername());
+        authorizationHelper.requireCanResetPassword(authentication, account);
+        authorizationHelper.requireOwnedByActorScope(authentication, account);
+
+        String email = emailResolver.resolve(account);
+        if (email == null) {
+            throw validation.validationError("Tài khoản chưa có email nhận mật khẩu tạm, vui lòng cập nhật email Huynh Trưởng trước");
+        }
+        String actor = validation.requireAuditActor(authentication, "Không xác định được người đặt lại mật khẩu");
+        String actorUsername = authentication.getPrincipal() instanceof AuthUserDetails principal
+                ? principal.getUsername()
+                : actor;
+        String rawPassword = TemporaryPasswordGenerator.generate();
+        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime expiresAt = now.plus(TEMPORARY_PASSWORD_TTL);
+
+        account.setPassword(passwordEncoder.encode(rawPassword));
+        account.setMustChangePassword(Boolean.TRUE);
+        account.setTemporaryPasswordExpiresAt(expiresAt);
+        account.setUpdatedAt(now);
+        account.setUpdatedBy(actor);
+        accountRepository.saveAndFlush(account);
+
+        String recipientName = account.getLeader() != null ? fullName(account.getLeader()) : account.getUsername();
+        mailService.sendResetPassword(email, recipientName, account.getUsername(), rawPassword, expiresAt, actorUsername);
+        redisTokenSessionService.revokeAllSessions(account.getUsername());
+        log.info("Tài khoản {} đã được {} đặt lại mật khẩu tạm, hết hạn lúc {}", account.getUsername(), actorUsername, expiresAt);
+
+        return AccountPasswordResetResponse.builder()
+                .username(account.getUsername())
+                .maskedEmail(EmailMasker.mask(email))
+                .expiresAt(expiresAt)
+                .build();
     }
 
     private Account require(String username) {

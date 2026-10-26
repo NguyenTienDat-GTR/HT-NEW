@@ -20,6 +20,9 @@ POST /api/auth/refresh|200|401|N/A: public refresh endpoint has no permission ga
 POST /api/auth/logout|200|N/A: idempotent logout succeeds even when no valid session remains|N/A: public logout endpoint has no permission gate|N/A: refresh token is read from a cookie rather than a request body|N/A: missing or invalid refresh cookie is treated as already logged out|N/A: logout is idempotent and does not create a persistent conflict
 GET /api/auth/me|200|401|N/A: authenticated caller needs no additional permission|N/A: endpoint accepts no client request data|N/A: current authenticated account is resolved from the session|N/A: read-only endpoint does not mutate state
 POST /api/auth/change-password|200|401|N/A: authenticated caller changes only its own password|400|N/A: current authenticated account is resolved from the session|N/A: password change has no uniqueness conflict
+POST /api/auth/forgot-password/otp|200|N/A: public endpoint used before authentication|N/A: public endpoint has no permission gate|400|N/A: unknown accounts are reported as a generic 400 to avoid account enumeration|N/A: resend limits are reported as 429 rather than a conflict
+POST /api/auth/forgot-password/otp/verify|200|N/A: public endpoint used before authentication|N/A: public endpoint has no permission gate|400|N/A: unknown accounts are reported as a generic 400 to avoid account enumeration|N/A: OTP verification has no uniqueness conflict
+POST /api/auth/forgot-password/reset|200|N/A: public endpoint used before authentication|N/A: public endpoint has no permission gate|400|N/A: unknown accounts are reported as a generic 400 to avoid account enumeration|N/A: password reset has no uniqueness conflict
 GET /api/auth/admin/summary|200|401|403|N/A: endpoint accepts no client request data|N/A: summary is scoped to the authenticated administrator|N/A: read-only endpoint does not mutate state
 GET /api/auth/me/profile|200|401|N/A: authenticated caller reads only its own profile|N/A: endpoint accepts no client request data|404|N/A: read-only endpoint does not mutate state
 GET /api/auth/me/permissions|200|401|N/A: authenticated caller reads only the permissions of its own account|N/A: endpoint accepts no client request data|N/A: current authenticated account is resolved from the session|N/A: read-only endpoint does not mutate state
@@ -97,6 +100,7 @@ POST /api/system/accounts|200|401|403|400|404|409
 GET /api/system/accounts|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
 GET /api/system/accounts/permission-targets|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
 GET /api/system/accounts/{username}|200|401|403|N/A: username is an opaque string|404|N/A: read-only endpoint does not mutate state
+POST /api/system/accounts/{username}/reset-password|200|401|403|400|404|N/A: password reset has no uniqueness conflict
 PATCH /api/system/accounts/{username}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict
 
 # Account permission overrides

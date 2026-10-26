@@ -60,8 +60,12 @@ public class jwtUtils {
     }
 
     public String generateRefreshToken(AuthUserDetails principal, String sessionId, String tokenId) {
+        return generateRefreshToken(principal, sessionId, tokenId,
+                Instant.now().plusMillis(authProperties.getJwt().getRefreshTokenExpirationMs()));
+    }
+
+    public String generateRefreshToken(AuthUserDetails principal, String sessionId, String tokenId, Instant expiresAt) {
         Instant now = Instant.now();
-        Instant expiresAt = now.plusMillis(authProperties.getJwt().getRefreshTokenExpirationMs());
 
         return Jwts.builder()
                 .subject(principal.getUsername())

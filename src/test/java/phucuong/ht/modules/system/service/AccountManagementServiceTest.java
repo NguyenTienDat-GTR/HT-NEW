@@ -56,6 +56,7 @@ class AccountManagementServiceTest {
     @Mock AccountManagementAuthorizationHelper authorizationHelper;
     @Mock AccountCredentialMailService mailService;
     @Mock RedisTokenSessionService redisTokenSessionService;
+    @Mock phucuong.ht.modules.auth.service.AccountEmailResolver emailResolver;
     @Mock Authentication authentication;
 
     @org.mockito.Mock
@@ -335,5 +336,143 @@ class AccountManagementServiceTest {
     private UsernamePasswordAuthenticationToken authentication(String username, List<String> roles, List<String> permissions) {
         AuthUserDetails principal = AuthUserDetails.tokenPrincipal(username, null, roles, permissions);
         return new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
+    }
+
+    // ---- Admin đặt lại mật khẩu
+
+    @Test
+    void resetPasswordShouldStoreTemporaryPasswordMailItAndOnlyThenRevokeSessions() {
+        Account target = resetTarget();
+        stubResetActor();
+        when(accountRepository.findById("parish.admin")).thenReturn(Optional.of(target));
+        when(emailResolver.resolve(target)).thenReturn("parish.admin@gmail.com");
+        when(passwordEncoder.encode(anyString())).thenReturn("new-hash");
+
+        var response = service.resetPassword("parish.admin", authentication);
+
+        ArgumentCaptor<String> raw = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<java.time.OffsetDateTime> expiresAt = ArgumentCaptor.forClass(java.time.OffsetDateTime.class);
+        verify(mailService).sendResetPassword(
+                org.mockito.ArgumentMatchers.eq("parish.admin@gmail.com"),
+                org.mockito.ArgumentMatchers.eq("parish.admin"),
+                org.mockito.ArgumentMatchers.eq("parish.admin"),
+                raw.capture(), expiresAt.capture(),
+                org.mockito.ArgumentMatchers.eq("admin.deanery"));
+        assertTrue(raw.getValue().matches("[A-Za-z]{8}"), "Mật khẩu tạm gồm đúng 8 chữ cái: " + raw.getValue());
+        verify(passwordEncoder).encode(raw.getValue());
+        assertEquals("new-hash", target.getPassword());
+        assertTrue(target.getMustChangePassword());
+        assertEquals(expiresAt.getValue(), target.getTemporaryPasswordExpiresAt());
+        long minutes = java.time.Duration.between(java.time.OffsetDateTime.now(), expiresAt.getValue()).toMinutes();
+        assertTrue(minutes >= 9 && minutes <= 10, "Hạn mật khẩu tạm 10 phút, thực tế còn " + minutes);
+        assertEquals("pa***@g***.com", response.getMaskedEmail());
+        assertEquals("parish.admin", response.getUsername());
+        var order = org.mockito.Mockito.inOrder(accountRepository, mailService, redisTokenSessionService);
+        order.verify(accountRepository).saveAndFlush(target);
+        order.verify(mailService).sendResetPassword(anyString(), anyString(), anyString(), anyString(), any(), anyString());
+        order.verify(redisTokenSessionService).revokeAllSessions("parish.admin");
+    }
+
+    @Test
+    void resetPasswordShouldNotRevokeSessionsWhenMailFailsSoTransactionRollsBack() {
+        Account target = resetTarget();
+        stubResetActor();
+        when(accountRepository.findById("parish.admin")).thenReturn(Optional.of(target));
+        when(emailResolver.resolve(target)).thenReturn("parish.admin@gmail.com");
+        when(passwordEncoder.encode(anyString())).thenReturn("new-hash");
+        org.mockito.Mockito.doThrow(new ApiException(
+                        org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+                        phucuong.ht.common.exception.errorCode.INTERNAL_ERROR, "SMTP down"))
+                .when(mailService).sendResetPassword(anyString(), anyString(), anyString(), anyString(), any(), anyString());
+
+        ApiException exception = assertThrows(ApiException.class, () -> service.resetPassword("parish.admin", authentication));
+
+        assertEquals(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE, exception.getStatus());
+        verify(redisTokenSessionService, org.mockito.Mockito.never()).revokeAllSessions(anyString());
+    }
+
+    @Test
+    void resetPasswordShouldRejectAccountWithoutAnyEmail() {
+        Account target = resetTarget();
+        when(accountRepository.findById("parish.admin")).thenReturn(Optional.of(target));
+        when(emailResolver.resolve(target)).thenReturn(null);
+        when(validation.validationError(anyString())).thenReturn(new ApiException(
+                org.springframework.http.HttpStatus.BAD_REQUEST,
+                phucuong.ht.common.exception.errorCode.VALIDATION_ERROR, "no email"));
+
+        assertThrows(ApiException.class, () -> service.resetPassword("parish.admin", authentication));
+
+        verify(accountRepository, org.mockito.Mockito.never()).saveAndFlush(any(Account.class));
+        verify(passwordEncoder, org.mockito.Mockito.never()).encode(anyString());
+    }
+
+    @Test
+    void resetPasswordShouldRejectLockedAccount() {
+        Account target = resetTarget();
+        target.setStatus(false);
+        when(accountRepository.findById("parish.admin")).thenReturn(Optional.of(target));
+        when(validation.validationError(anyString())).thenReturn(new ApiException(
+                org.springframework.http.HttpStatus.BAD_REQUEST,
+                phucuong.ht.common.exception.errorCode.VALIDATION_ERROR, "locked"));
+
+        assertThrows(ApiException.class, () -> service.resetPassword("parish.admin", authentication));
+
+        verify(mailService, org.mockito.Mockito.never())
+                .sendResetPassword(anyString(), anyString(), anyString(), anyString(), any(), anyString());
+    }
+
+    @Test
+    void resetPasswordShouldStopBeforeAnyWriteWhenScopeCheckFails() {
+        Account target = resetTarget();
+        when(accountRepository.findById("parish.admin")).thenReturn(Optional.of(target));
+        org.mockito.Mockito.doThrow(new ApiException(
+                        org.springframework.http.HttpStatus.FORBIDDEN,
+                        phucuong.ht.common.exception.errorCode.ACCESS_DENIED, "out of scope"))
+                .when(authorizationHelper).requireCanResetPassword(authentication, target);
+
+        ApiException exception = assertThrows(ApiException.class, () -> service.resetPassword("parish.admin", authentication));
+
+        assertEquals(org.springframework.http.HttpStatus.FORBIDDEN, exception.getStatus());
+        verify(accountRepository, org.mockito.Mockito.never()).saveAndFlush(any(Account.class));
+        verify(passwordEncoder, org.mockito.Mockito.never()).encode(anyString());
+        verify(mailService, org.mockito.Mockito.never())
+                .sendResetPassword(anyString(), anyString(), anyString(), anyString(), any(), anyString());
+        verify(redisTokenSessionService, org.mockito.Mockito.never()).revokeAllSessions(anyString());
+    }
+
+    @Test
+    void resetPasswordShouldUseLeaderNameWhenAccountHasLeader() {
+        Account target = resetTarget();
+        Leader leader = new Leader();
+        leader.setLastName("Nguyễn");
+        leader.setFirstName("Phước");
+        target.setLeader(leader);
+        stubResetActor();
+        when(accountRepository.findById("parish.admin")).thenReturn(Optional.of(target));
+        when(emailResolver.resolve(target)).thenReturn("leader@gmail.com");
+        when(passwordEncoder.encode(anyString())).thenReturn("new-hash");
+
+        service.resetPassword("parish.admin", authentication);
+
+        verify(mailService).sendResetPassword(
+                org.mockito.ArgumentMatchers.eq("leader@gmail.com"),
+                org.mockito.ArgumentMatchers.eq("Nguyễn Phước"),
+                org.mockito.ArgumentMatchers.eq("parish.admin"),
+                anyString(), any(), anyString());
+    }
+
+    private Account resetTarget() {
+        Account target = new Account();
+        target.setUsername("parish.admin");
+        target.setPassword("old-hash");
+        target.setStatus(true);
+        target.setMustChangePassword(false);
+        return target;
+    }
+
+    private void stubResetActor() {
+        AuthUserDetails principal = AuthUserDetails.tokenPrincipal("admin.deanery", null, List.of("ADMIN_DEANERY"), List.of());
+        when(authentication.getPrincipal()).thenReturn(principal);
+        when(validation.requireAuditActor(org.mockito.ArgumentMatchers.eq(authentication), anyString())).thenReturn("leader-id-1");
     }
 }

@@ -92,7 +92,7 @@ class PasswordChangeServiceTest {
         assertTrue(otp.getValue().matches("[0-9]{6}"));
         verify(otpStore).saveOtp(eq(USERNAME), eq(otp.getValue()), any());
         assertEquals(300, response.getExpiresInSeconds());
-        assertEquals("adminthanhpho@gmail.com", response.getEmail());
+        assertEquals("ad***@g***.com", response.getEmail());
     }
 
     @Test

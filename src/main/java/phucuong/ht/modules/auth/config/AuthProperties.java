@@ -20,6 +20,12 @@ public class AuthProperties {
         private String refreshSecret;
         private long accessTokenExpirationMs;
         private long refreshTokenExpirationMs;
+        // Phiên thường: hết hạn sau 8 giờ không hoạt động, tối đa 12 giờ kể từ lúc đăng nhập.
+        private long sessionIdleMs = 8L * 60 * 60 * 1000;
+        private long sessionAbsoluteMs = 12L * 60 * 60 * 1000;
+        // Ghi nhớ đăng nhập: 7 ngày không hoạt động, tối đa 30 ngày kể từ lúc đăng nhập.
+        private long rememberMeIdleMs = 7L * 24 * 60 * 60 * 1000;
+        private long rememberMeAbsoluteMs = 30L * 24 * 60 * 60 * 1000;
         private String issuer;
         private String audience;
     }

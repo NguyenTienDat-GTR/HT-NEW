@@ -22,6 +22,10 @@ public class AccountManagementAuthorizationHelper {
     public static final String MANAGE_DIOCESE = "system.account.manage.diocese";
     public static final String MANAGE_DEANERY = "system.account.manage.deanery";
     public static final String MANAGE_PARISH = "system.account.manage.parish";
+    public static final String RESET_PASSWORD_ALL = "system.account.reset_password.all";
+    public static final String RESET_PASSWORD_DIOCESE = "system.account.reset_password.diocese";
+    public static final String RESET_PASSWORD_DEANERY = "system.account.reset_password.deanery";
+    public static final String RESET_PASSWORD_PARISH = "system.account.reset_password.parish";
     public static final String ACCOUNT_PERMISSION_MANAGE_DIOCESE = "system.account_permission.manage.diocese";
     public static final String ACCOUNT_PERMISSION_MANAGE_DEANERY = "system.account_permission.manage.deanery";
     public static final String ACCOUNT_PERMISSION_MANAGE_PARISH = "system.account_permission.manage.parish";
@@ -74,6 +78,44 @@ public class AccountManagementAuthorizationHelper {
                 .min((left, right) -> Integer.compare(order(left), order(right)))
                 .orElse(null);
         requireScopedAccess(authentication, target, highestTargetRole);
+    }
+
+    /**
+     * Quyền đặt lại mật khẩu dùng quyền riêng system.account.reset_password.* (không suy ra từ quyền quản lý).
+     * Không tự đặt lại mật khẩu của mình, không đặt lại SUPER_ADMIN; các cấp chỉ thao tác trong đúng phạm vi và
+     * trên tài khoản có vai trò không cao hơn mình. Việc "do cấp mình tạo" kiểm tra thêm ở requireOwnedByActorScope.
+     */
+    public void requireCanResetPassword(Authentication authentication, Account target) {
+        if (currentUsername(authentication).equals(target.getUsername())) {
+            throw validation.forbidden("Quản trị viên không được tự đặt lại mật khẩu của mình, hãy dùng chức năng Quên mật khẩu hoặc Đổi mật khẩu");
+        }
+        if (hasTargetRole(target, SUPER_ADMIN)) {
+            throw validation.forbidden("Không được đặt lại mật khẩu tài khoản có vai trò SUPER_ADMIN");
+        }
+        if (hasRole(authentication, SUPER_ADMIN)) {
+            if (!hasAuthority(authentication, RESET_PASSWORD_ALL)) {
+                throw validation.forbidden("Tài khoản hiện tại không có quyền đặt lại mật khẩu tài khoản");
+            }
+            if (!ManagementOwnership.isSuperAdminOwned(target.getCreatedBy())) {
+                throw validation.forbidden("SUPER_ADMIN chỉ được đặt lại mật khẩu tài khoản do super-admin tạo");
+            }
+            return;
+        }
+
+        Role highestTargetRole = accountRoleRepository.findActiveByUsername(target.getUsername()).stream()
+                .map(accountRole -> accountRole.getRole())
+                .min((left, right) -> Integer.compare(order(left), order(right)))
+                .orElse(null);
+        if (hasAuthority(authentication, RESET_PASSWORD_DIOCESE)) {
+            requireSame("giao phan", actorDiocese(authentication), dioceseId(target));
+        } else if (hasAuthority(authentication, RESET_PASSWORD_DEANERY)) {
+            requireSame("giao hat", actorDeanery(authentication), deaneryId(target));
+        } else if (hasAuthority(authentication, RESET_PASSWORD_PARISH)) {
+            requireSame("giao xu", actorParish(authentication), parishId(target));
+        } else {
+            throw validation.forbidden("Tài khoản hiện tại không có quyền đặt lại mật khẩu tài khoản");
+        }
+        requireTargetRoleNotAboveActor(authentication, highestTargetRole);
     }
 
     /** Các cấp giáo phận / giáo hạt / giáo xứ chỉ thay đổi tài khoản do chính mình (hoặc cấp mình) tạo. */

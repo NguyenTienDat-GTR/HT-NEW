@@ -25,4 +25,7 @@ public class TokenSessionState {
     private Instant issuedAt;
     private Instant expiresAt;
     private Instant lastUsedAt;
+    /** null = phiên tạo trước khi có ghi nhớ đăng nhập: coi như ghi nhớ, hạn tuyệt đối tính từ issuedAt. */
+    private Boolean rememberMe;
+    private Instant absoluteExpiresAt;
 }

@@ -78,6 +78,7 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         return switch (tier) {
             case "login" -> rateLimitProperties.getLogin();
             case "auth" -> rateLimitProperties.getAuth();
+            case "forgot" -> rateLimitProperties.getForgot();
             case "workflow" -> rateLimitProperties.getWorkflow();
             case "write" -> rateLimitProperties.getWrite();
             default -> rateLimitProperties.getRead();
@@ -90,6 +91,10 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
 
         if (path.startsWith("/api/auth/login")) {
             return "login";
+        }
+
+        if (path.startsWith("/api/auth/forgot-password/")) {
+            return "forgot";
         }
 
         if (path.startsWith("/api/auth/refresh")

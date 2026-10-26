@@ -53,6 +53,7 @@ public class securityConfig {
                 "/api/auth/login",
                 "/api/auth/refresh",
                 "/api/auth/logout",
+                "/api/auth/forgot-password/**",
                 "/actuator/health",
                 "/ws/notifications",
                 "/swagger-auth-token.js",
@@ -65,6 +66,7 @@ public class securityConfig {
                 "/api/auth/login",
                 "/api/auth/refresh",
                 "/api/auth/logout",
+                "/api/auth/forgot-password/**",
                 "/actuator/health",
                 "/ws/notifications"
         };

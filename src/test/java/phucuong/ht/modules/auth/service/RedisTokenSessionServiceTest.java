@@ -183,6 +183,75 @@ class RedisTokenSessionServiceTest {
     }
 
     @Test
+    void sessionWithoutRememberMeShouldExpireAfterEightHoursIdleAndTwelveHoursAbsolute() {
+        TokenSessionState session = redisTokenSessionService.createSession(
+                "superadminpc", "127.0.0.1", "access-1", "refresh-1", "refresh-token-1", false);
+
+        assertFalse(redisTokenSessionService.isRememberMe(session));
+        assertNear(java.time.Instant.now().plus(Duration.ofHours(8)), session.getExpiresAt());
+        assertNear(java.time.Instant.now().plus(Duration.ofHours(12)), session.getAbsoluteExpiresAt());
+    }
+
+    @Test
+    void sessionWithRememberMeShouldExpireAfterSevenDaysIdleAndThirtyDaysAbsolute() {
+        TokenSessionState session = redisTokenSessionService.createSession(
+                "superadminpc", "127.0.0.1", "access-1", "refresh-1", "refresh-token-1", true);
+
+        assertTrue(redisTokenSessionService.isRememberMe(session));
+        assertNear(java.time.Instant.now().plus(Duration.ofDays(7)), session.getExpiresAt());
+        assertNear(java.time.Instant.now().plus(Duration.ofDays(30)), session.getAbsoluteExpiresAt());
+    }
+
+    @Test
+    void slidingRenewalShouldNeverPassTheAbsoluteDeadline() {
+        java.time.Instant now = java.time.Instant.now();
+        TokenSessionState nearlyOver = new TokenSessionState(
+                "s1", "superadminpc", "127.0.0.1", "a", new java.util.ArrayList<>(), "r", "h",
+                now.minus(Duration.ofDays(29)).minusSeconds(3600), now.plusSeconds(60), now,
+                true, now.plus(Duration.ofHours(2)));
+
+        java.time.Instant renewed = redisTokenSessionService.nextExpiry(nearlyOver);
+
+        assertEquals(nearlyOver.getAbsoluteExpiresAt(), renewed);
+    }
+
+    @Test
+    void slidingRenewalShouldExtendIdleWindowWhileBelowAbsoluteDeadline() {
+        java.time.Instant now = java.time.Instant.now();
+        TokenSessionState fresh = new TokenSessionState(
+                "s2", "superadminpc", "127.0.0.1", "a", new java.util.ArrayList<>(), "r", "h",
+                now, now.plusSeconds(60), now, false, now.plus(Duration.ofHours(12)));
+
+        assertNear(now.plus(Duration.ofHours(8)), redisTokenSessionService.nextExpiry(fresh));
+    }
+
+    @Test
+    void legacySessionWithoutRememberMeFieldsShouldBeTreatedAsRememberedWithAbsoluteFromIssueTime() {
+        java.time.Instant now = java.time.Instant.now();
+        java.time.Instant issuedAt = now.minus(Duration.ofDays(29));
+        TokenSessionState legacy = new TokenSessionState(
+                "s3", "superadminpc", "127.0.0.1", "a", new java.util.ArrayList<>(), "r", "h",
+                issuedAt, now.plusSeconds(60), now, null, null);
+
+        assertTrue(redisTokenSessionService.isRememberMe(legacy));
+        assertEquals(issuedAt.plus(Duration.ofDays(30)), redisTokenSessionService.nextExpiry(legacy));
+    }
+
+    @Test
+    void findActiveSessionShouldReturnNullForUnknownOrExpiredSession() {
+        assertEquals(null, redisTokenSessionService.findActiveSession("missing"));
+        TokenSessionState session = redisTokenSessionService.createSession(
+                "superadminpc", "127.0.0.1", "access-1", "refresh-1", "refresh-token-1", true);
+
+        assertEquals(session.getSessionId(), redisTokenSessionService.findActiveSession(session.getSessionId()).getSessionId());
+    }
+
+    private static void assertNear(java.time.Instant expected, java.time.Instant actual) {
+        long diffMs = Math.abs(Duration.between(expected, actual).toMillis());
+        assertTrue(diffMs < 5_000, "Lệch " + diffMs + "ms: " + expected + " vs " + actual);
+    }
+
+    @Test
     void shouldAllowOnlyOneRefreshRotationWhenAtomicCompareAndSetIsContended() {
         TokenSessionState session = redisTokenSessionService.createSession(
                 "superadminpc", "127.0.0.1", "access-1", "refresh-1", "refresh-token-1");
