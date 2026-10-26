@@ -112,6 +112,38 @@ public class CourseParticipationRepository extends BaseRepo<CourseParticipation,
                 .getResultList();
     }
 
+    // Hồ sơ trong danh sách tham dự (đã duyệt, không hủy) của nhiều khóa, kèm huynh trưởng và đơn vị.
+    public List<CourseParticipation> findApprovedByCourseCodes(java.util.Collection<String> courseCodes) {
+        if (courseCodes == null || courseCodes.isEmpty()) {
+            return List.of();
+        }
+        return entityManager.createQuery(
+                        """
+                                select cp
+                                from CourseParticipation cp
+                                join fetch cp.course c
+                                join fetch cp.leader l
+                                join fetch l.parish p
+                                join fetch p.deanery de
+                                join fetch de.diocese d
+                                where c.courseCode in :codes
+                                  and cp.approvalStatus = phucuong.ht.modules.training.enums.WorkflowApprovalStatus.APPROVED
+                                  and cp.participationStatus <> phucuong.ht.modules.training.enums.ParticipationStatus.CANCELLED
+                                """,
+                        CourseParticipation.class
+                )
+                .setParameter("codes", courseCodes)
+                .getResultList();
+    }
+
+    // Mã huynh trưởng đã có hồ sơ (mọi trạng thái) trong khóa.
+    public java.util.Set<UUID> findLeaderIdsByCourseCode(String courseCode) {
+        return new java.util.HashSet<>(entityManager.createQuery(
+                        "select cp.leader.id from CourseParticipation cp where cp.course.courseCode = :courseCode", UUID.class)
+                .setParameter("courseCode", courseCode)
+                .getResultList());
+    }
+
     public List<CourseParticipation> findAllByIdsWithLeaderAndCourse(List<String> ids) {
         if (ids == null || ids.isEmpty()) {
             return List.of();

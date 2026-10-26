@@ -85,10 +85,11 @@ public final class ImportTemplates {
                 new Column(LeaderImportService.COL_GENDER, true, 12, Kind.GENDER),
                 new Column(LeaderImportService.COL_LEVEL, false, 24, Kind.LEVEL),
                 new Column(LeaderImportService.COL_DEANERY, true, 20, Kind.GENERAL),
-                new Column(LeaderImportService.COL_PARISH, true, 20, Kind.GENERAL));
+                new Column(LeaderImportService.COL_PARISH, true, 20, Kind.GENERAL),
+                new Column(PastCourseParticipantImportService.COL_NOTE, false, 30, Kind.GENERAL));
         List<List<Object>> samples = List.of(
-                List.of("nguyen.van.an@example.com", "0901234567", 8.5, "Đạt", "Hoàn thành tốt khóa học", "Phêrô", "Nguyễn Văn An", LocalDate.of(1995, 3, 7), "Nam", "", "Tên giáo hạt", "Tên giáo xứ"),
-                List.of("tran.thi.binh@example.com", "0912345678", 5, "Không đạt", "", "Maria", "Trần Thị Bình", LocalDate.of(1998, 11, 21), "Nữ", "", "Tên giáo hạt", "Tên giáo xứ"));
+                List.of("nguyen.van.an@example.com", "0901234567", 8.5, "Đạt", "Hoàn thành tốt khóa học", "Phêrô", "Nguyễn Văn An", LocalDate.of(1995, 3, 7), "Nam", "", "Tên giáo hạt", "Tên giáo xứ", "Ghi chú tùy chọn"),
+                List.of("tran.thi.binh@example.com", "0912345678", 5, "Không đạt", "", "Maria", "Trần Thị Bình", LocalDate.of(1998, 11, 21), "Nữ", "", "Tên giáo hạt", "Tên giáo xứ", ""));
         List<String> guide = List.of(
                 "1. Chỉ dùng cho khóa huấn luyện quá khứ (tạo bằng nút \"Tạo khóa quá khứ\"). Mở chi tiết khóa, vào tab \"Danh sách tham dự\" và bấm \"Import Excel\".",
                 "2. Điền dữ liệu ở sheet \"" + PARTICIPANTS_SHEET + "\" (sheet đầu tiên), từ dòng 2. Xóa các dòng ví dụ trước khi import.",
@@ -100,7 +101,8 @@ public final class ImportTemplates {
                 "8. Kết quả: Đạt hoặc Không đạt (chọn từ danh sách). Tổng điểm từ 0 đến 1000.",
                 "9. Một huynh trưởng chỉ xuất hiện một lần trong file và một lần trong khóa; huynh trưởng đã có trong danh sách tham dự của khóa sẽ báo lỗi.",
                 "10. Nếu khóa có \"Cấp độ đạt được\", học viên Đạt sẽ tự chuyển sang tab \"Duyệt chứng nhận\". Khi duyệt phải chọn ngày duyệt; sau khi duyệt, cấp độ được ghi vào lịch sử cấp độ (cấp hiện tại chỉ tăng nếu cấp mới cao hơn).",
-                "11. Chỉ cần một dòng lỗi thì toàn bộ file không được lưu (kể cả huynh trưởng mới); lỗi được báo rõ sheet, dòng, cột ở khay tác vụ để sửa rồi import lại. Mỗi lần import tối đa 5.000 dòng.");
+                "11. Chỉ cần một dòng lỗi thì toàn bộ file không được lưu (kể cả huynh trưởng mới); lỗi được báo rõ sheet, dòng, cột ở khay tác vụ để sửa rồi import lại. Mỗi lần import tối đa 5.000 dòng.",
+                "12. Cột \"Ghi chú\" là TÙY CHỌN (có thể bỏ trống, tối đa 1.000 ký tự): ghi chú của hồ sơ đăng ký, hiển thị ở danh sách tham dự và sửa được sau khi import.");
         return build(PARTICIPANTS_SHEET, "Hướng dẫn import danh sách tham dự khóa huấn luyện quá khứ", columns, samples, guide, levelNames);
     }
 
@@ -115,14 +117,15 @@ public final class ImportTemplates {
                 new Column(LeaderImportService.COL_GENDER, true, 12, Kind.GENDER),
                 new Column(LeaderImportService.COL_LEVEL, false, 24, Kind.LEVEL),
                 new Column(LeaderImportService.COL_DEANERY, true, 20, Kind.GENERAL),
-                new Column(LeaderImportService.COL_PARISH, true, 20, Kind.GENERAL));
+                new Column(LeaderImportService.COL_PARISH, true, 20, Kind.GENERAL),
+                new Column(PastCourseParticipantImportService.COL_NOTE, false, 30, Kind.GENERAL));
         List<Column> exceptionColumns = new java.util.ArrayList<>(columns);
         exceptionColumns.add(new Column(PastCourseParticipantImportService.COL_EXCEPTION_REASON, true, 40, Kind.GENERAL));
         List<List<Object>> exceptionSamples = List.of(
-                List.of("le.van.cuong@example.com", "0923456789", "Giuse", "Lê Văn Cường", LocalDate.of(2000, 5, 12), "Nam", "", "Tên giáo hạt", "Tên giáo xứ", "Chưa đủ số năm hoạt động nhưng được giáo xứ đề cử"));
+                List.of("le.van.cuong@example.com", "0923456789", "Giuse", "Lê Văn Cường", LocalDate.of(2000, 5, 12), "Nam", "", "Tên giáo hạt", "Tên giáo xứ", "", "Chưa đủ số năm hoạt động nhưng được giáo xứ đề cử"));
         List<List<Object>> samples = List.of(
-                List.of("nguyen.van.an@example.com", "0901234567", "Phêrô", "Nguyễn Văn An", LocalDate.of(1995, 3, 7), "Nam", "", "Tên giáo hạt", "Tên giáo xứ"),
-                List.of("tran.thi.binh@example.com", "0912345678", "Maria", "Trần Thị Bình", LocalDate.of(1998, 11, 21), "Nữ", "", "Tên giáo hạt", "Tên giáo xứ"));
+                List.of("nguyen.van.an@example.com", "0901234567", "Phêrô", "Nguyễn Văn An", LocalDate.of(1995, 3, 7), "Nam", "", "Tên giáo hạt", "Tên giáo xứ", "Ghi chú tùy chọn"),
+                List.of("tran.thi.binh@example.com", "0912345678", "Maria", "Trần Thị Bình", LocalDate.of(1998, 11, 21), "Nữ", "", "Tên giáo hạt", "Tên giáo xứ", ""));
         List<String> guide = List.of(
                 "1. Dùng cho khóa huấn luyện thường (không phải khóa quá khứ). Mở chi tiết khóa, vào tab \"Danh sách tham dự\" và bấm \"Nhập excel danh sách tham dự\".",
                 "2. Có hai sheet dữ liệu, điền từ dòng 2 và xóa các dòng ví dụ trước khi import: sheet \"" + PARTICIPANTS_SHEET + "\" (sheet đầu tiên) cho huynh trưởng ĐỦ điều kiện của khóa; sheet \"" + EXCEPTION_SHEET + "\" cho huynh trưởng KHÔNG đủ điều kiện của khóa (điều kiện hiển thị ở phần \"Điều kiện của khóa\" trong chi tiết khóa). Có thể bỏ trống một trong hai sheet.",
@@ -134,7 +137,8 @@ public final class ImportTemplates {
                 "8. Sheet \"" + PARTICIPANTS_SHEET + "\": huynh trưởng được đưa thẳng vào danh sách tham dự (đã duyệt), không qua đăng ký và duyệt đăng ký; nếu huynh trưởng không đủ điều kiện của khóa thì báo lỗi, hãy chuyển sang sheet \"" + EXCEPTION_SHEET + "\".",
                 "9. Sheet \"" + EXCEPTION_SHEET + "\": huynh trưởng được đưa vào danh sách CHỜ DUYỆT đăng ký và gắn cờ ngoại lệ kèm lí do; người duyệt xử lý ở tab \"Duyệt đăng ký\". Huynh trưởng đã đủ điều kiện hoặc có cấp độ cao hơn cấp độ đạt được gần nhất của loại khóa thì báo lỗi.",
                 "10. Một huynh trưởng chỉ xuất hiện một lần trong cả file; huynh trưởng đã có hồ sơ đăng ký / tham dự của khóa sẽ báo lỗi. Điểm được chấm sau ở tab \"Chấm điểm\".",
-                "11. Chỉ cần một dòng lỗi thì toàn bộ file không được lưu (kể cả huynh trưởng mới); lỗi được báo rõ sheet, dòng, cột ở khay tác vụ để sửa rồi import lại. Mỗi lần import tối đa 5.000 dòng mỗi sheet.");
+                "11. Chỉ cần một dòng lỗi thì toàn bộ file không được lưu (kể cả huynh trưởng mới); lỗi được báo rõ sheet, dòng, cột ở khay tác vụ để sửa rồi import lại. Mỗi lần import tối đa 5.000 dòng mỗi sheet.",
+                "12. Cột \"Ghi chú\" là TÙY CHỌN (có thể bỏ trống, tối đa 1.000 ký tự): ghi chú của hồ sơ đăng ký, hiển thị ở danh sách tham dự và sửa được sau khi import.");
         return build(PARTICIPANTS_SHEET, "Hướng dẫn import danh sách tham dự khóa huấn luyện", columns, samples, guide, levelNames,
                 EXCEPTION_SHEET, exceptionColumns, exceptionSamples);
     }
@@ -151,10 +155,11 @@ public final class ImportTemplates {
                 new Column(LeaderImportService.COL_LEVEL, false, 24, Kind.LEVEL),
                 new Column(LeaderImportService.COL_DEANERY, true, 20, Kind.GENERAL),
                 new Column(LeaderImportService.COL_PARISH, true, 20, Kind.GENERAL),
-                new Column(PastCourseParticipantImportService.COL_TEAM, true, 20, Kind.GENERAL));
+                new Column(PastCourseParticipantImportService.COL_TEAM, true, 20, Kind.GENERAL),
+                new Column(PastCourseParticipantImportService.COL_NOTE, false, 30, Kind.GENERAL));
         List<List<Object>> samples = List.of(
-                List.of("nguyen.van.an@example.com", "0901234567", "Phêrô", "Nguyễn Văn An", LocalDate.of(1995, 3, 7), "Nam", "", "Tên giáo hạt", "Tên giáo xứ", "Đội 1"),
-                List.of("tran.thi.binh@example.com", "0912345678", "Maria", "Trần Thị Bình", LocalDate.of(1998, 11, 21), "Nữ", "", "Tên giáo hạt", "Tên giáo xứ", "Đội 1"));
+                List.of("nguyen.van.an@example.com", "0901234567", "Phêrô", "Nguyễn Văn An", LocalDate.of(1995, 3, 7), "Nam", "", "Tên giáo hạt", "Tên giáo xứ", "Đội 1", "Ghi chú tùy chọn"),
+                List.of("tran.thi.binh@example.com", "0912345678", "Maria", "Trần Thị Bình", LocalDate.of(1998, 11, 21), "Nữ", "", "Tên giáo hạt", "Tên giáo xứ", "Đội 1", ""));
         List<String> guide = List.of(
                 "1. Dùng cho khóa huấn luyện thường (không phải khóa quá khứ). Mở chi tiết khóa, vào tab \"Chia đội\" và bấm \"Nhập excel chia đội\".",
                 "2. Chỉ có một sheet dữ liệu \"" + PARTICIPANTS_SHEET + "\" (sheet đầu tiên), không có sheet Ngoại lệ; điền từ dòng 2 và xóa các dòng ví dụ trước khi import.",
@@ -164,7 +169,8 @@ public final class ImportTemplates {
                 "6. Ngày sinh theo dạng dd/MM/yyyy; Giới tính chọn Nam hoặc Nữ; Số điện thoại gồm 10 chữ số và bắt đầu bằng 0; Cấp độ chọn từ sheet \"" + LOOKUP_SHEET + "\" (để trống là Chưa có cấp).",
                 "7. Giáo hạt và Giáo xứ phải ĐÃ CÓ trong hệ thống, giáo xứ phải thuộc đúng giáo hạt đã nhập và thuộc giáo phận (khóa giáo phận) hoặc giáo hạt (khóa giáo hạt) của khóa; giáo xứ phải đang hoạt động.",
                 "8. Một huynh trưởng chỉ xuất hiện một lần trong cả file; huynh trưởng đã có hồ sơ đăng ký / tham dự của khóa sẽ báo lỗi.",
-                "9. Chỉ cần một dòng lỗi thì toàn bộ file không được lưu (kể cả huynh trưởng mới); lỗi được báo rõ sheet, dòng, cột ở khay tác vụ để sửa rồi import lại. Mỗi lần import tối đa 5.000 dòng.");
+                "9. Chỉ cần một dòng lỗi thì toàn bộ file không được lưu (kể cả huynh trưởng mới); lỗi được báo rõ sheet, dòng, cột ở khay tác vụ để sửa rồi import lại. Mỗi lần import tối đa 5.000 dòng.",
+                "10. Cột \"Ghi chú\" là TÙY CHỌN (có thể bỏ trống, tối đa 1.000 ký tự): ghi chú của hồ sơ đăng ký, hiển thị ở danh sách tham dự và sửa được sau khi import.");
         return build(PARTICIPANTS_SHEET, "Hướng dẫn import danh sách chia đội khóa huấn luyện", columns, samples, guide, levelNames);
     }
 

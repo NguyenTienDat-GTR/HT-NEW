@@ -21,7 +21,7 @@ import java.time.OffsetDateTime;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-@ToString(exclude = "recipientUsernames")
+@ToString(exclude = {"recipientUsernames", "targetDeaneryIds"})
 @EqualsAndHashCode(callSuper = true)
 public class TrainingCourse extends BaseModel {
 
@@ -79,6 +79,12 @@ public class TrainingCourse extends BaseModel {
     @CollectionTable(name = "training_course_recipient", joinColumns = @JoinColumn(name = "course_code"))
     @Column(name = "username")
     private Set<String> recipientUsernames = new LinkedHashSet<>();
+
+    // Giáo hạt mà khóa giáo phận này dành cho (một đợt); rỗng = mở cho tất cả. Hồ sơ của giáo hạt khác vẫn gửi được nhưng phải kèm lí do và duyệt thủ công.
+    @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(name = "training_course_target_deanery", joinColumns = @JoinColumn(name = "course_code"))
+    @Column(name = "deanery_id")
+    private Set<java.util.UUID> targetDeaneryIds = new LinkedHashSet<>();
 
     // Khóa chỉnh sửa điểm: admin giáo phận/giáo hạt (có quyền lock) bật/tắt trong thời gian diễn ra khóa; khi khóa thì không nhập điểm được.
     @Column(name = "score_locked", nullable = false)

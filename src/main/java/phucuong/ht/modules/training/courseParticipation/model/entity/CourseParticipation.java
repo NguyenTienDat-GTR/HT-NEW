@@ -87,6 +87,27 @@ public class CourseParticipation extends BaseModel {
     @Column(name = "invitation_error", length = 500)
     private String invitationError;
 
+    // Lí do gửi hồ sơ ngoài đợt (khóa giáo phận dành cho một số giáo hạt); khác null thì luôn duyệt thủ công.
+    @Column(name = "off_target_reason", length = 500)
+    private String offTargetReason;
+
+    // Ghi chú của người gửi đăng ký (tùy chọn, sửa được sau khi gửi).
+    @Column(name = "registration_note", length = 1000)
+    private String registrationNote;
+
+    // Hồ sơ gửi liên giáo hạt (giáo hạt nhà đã đồng ý): lí do gửi, giáo hạt nhà, người đồng ý và thời điểm đồng ý; luôn duyệt thủ công.
+    @Column(name = "cross_deanery_reason", length = 500)
+    private String crossDeaneryReason;
+
+    @Column(name = "home_deanery_id")
+    private java.util.UUID homeDeaneryId;
+
+    @Column(name = "home_deanery_approved_by", length = 100)
+    private String homeDeaneryApprovedBy;
+
+    @Column(name = "home_deanery_approved_at")
+    private OffsetDateTime homeDeaneryApprovedAt;
+
     // Trạng thái duyệt đăng ký: khóa giáo hạt do giáo hạt duyệt, khóa giáo phận do giáo phận duyệt.
     @Enumerated(EnumType.STRING)
     private WorkflowApprovalStatus approvalStatus;

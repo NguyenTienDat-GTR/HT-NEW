@@ -203,6 +203,8 @@ public class CourseParticipationService {
         List<CourseParticipation> createdParticipations = new ArrayList<>();
         Map<UUID, String> exceptionReasons = normalizeExceptionReasons(request.getExceptionReasonsByLeaderId());
         List<UUID> registrationLeaderIds = normalizeLeaderIds(request.getLeaderIds(), exceptionReasons);
+        Map<UUID, String> offTargetReasons = normalizeTexts(request.getOffTargetReasonsByLeaderId(), MAX_OFF_TARGET_REASON, "Lí do gửi ngoài đợt");
+        Map<UUID, String> notes = normalizeTexts(request.getNotesByLeaderId(), MAX_REGISTRATION_NOTE, "Ghi chú");
         LevelOrder levelOrder = leaderLevelService.order(trainingWorkflowSupport.dioceseIdOf(course));
         for (UUID leaderId : registrationLeaderIds) {
             Leader leader = leaderRepository.findByIdWithParish(leaderId)
@@ -234,24 +236,19 @@ public class CourseParticipationService {
                 throw commonValidationHelper.validationError("Huynh Trưởng " + buildFullName(leader) + " có cấp độ cao hơn cấp độ đạt được gần nhất của loại khóa nên không thể đưa vào danh sách ngoại lệ");
             }
             String exceptionReason = exception ? exceptionReasons.get(leaderId) : null;
+            // Ngoài đợt của khóa giáo phận: bắt buộc lí do riêng cho từng hồ sơ và luôn duyệt thủ công.
+            String offTargetReason = null;
+            if (trainingWorkflowSupport.isOffTarget(course, leader)) {
+                offTargetReason = offTargetReasons.get(leaderId);
+                if (offTargetReason == null) {
+                    throw commonValidationHelper.validationError("Huynh Trưởng " + buildFullName(leader)
+                            + " thuộc giáo hạt ngoài đợt của khóa, hãy nhập lí do riêng cho hồ sơ này");
+                }
+            }
 
-            CourseParticipation participation = new CourseParticipation();
-            participation.setLeader(leader);
-            participation.setCourse(course);
-            participation.setRegistrationDate(LocalDate.now());
-            participation.setParticipationStatus(ParticipationStatus.REGISTERED);
-            participation.setResult(CourseResult.UNCOMPLETED);
-            participation.setReview(null);
-            participation.setEligible(eligible);
-            participation.setExceptionReason(commonValidationHelper.normalizeOptionalText(exceptionReason));
-            participation.setParishSubmittedAt(submittedAt);
-            participation.setCertificateApprovalStatus(WorkflowApprovalStatus.NOT_REQUIRED);
-            participation.setCreatedAt(submittedAt);
-            participation.setUpdatedAt(submittedAt);
-            participation.setCreatedBy(actor);
-            participation.setUpdatedBy(actor);
-            participation.setStatus(Boolean.TRUE);
-            participation.setApprovalStatus(WorkflowApprovalStatus.PENDING);
+            CourseParticipation participation = newPendingParticipation(leader, course, eligible, exceptionReason, actor, submittedAt);
+            participation.setOffTargetReason(offTargetReason);
+            participation.setRegistrationNote(notes.get(leaderId));
             courseParticipationRepository.save(participation);
             createdParticipations.add(participation);
         }
@@ -261,6 +258,15 @@ public class CourseParticipationService {
             notifyParishManagersOfDeanerySubmission(createdParticipations, senderName, senderId, course, actor);
         }
 
+        announceSubmission(course, createdParticipations, senderType, senderId, senderName, actor);
+        return buildBatchResponse(course, senderType, senderId, senderName, createdParticipations, previewParishSubmissionAutoApprovedCount(course, createdParticipations));
+    }
+
+    // Báo cho người duyệt của đơn vị sở hữu khóa có danh sách đăng ký mới và phát sự kiện tự duyệt (hồ sơ ngoại lệ / ngoài đợt / liên giáo hạt không được tự duyệt).
+    public void announceSubmission(TrainingCourse course, List<CourseParticipation> createdParticipations, UnitType senderType, UUID senderId,
+                                   String senderName, String actor) {
+        boolean deaneryManaged = trainingWorkflowSupport.isDeaneryManaged(course);
+        String courseCode = course.getCourseCode();
         // Người nhận: tài khoản duyệt của đơn vị sở hữu khóa (giáo hạt với khóa giáo hạt, giáo phận với khóa giáo phận).
         UnitType recipientScopeType = deaneryManaged ? UnitType.DEANERY : UnitType.DIOCESE;
         UUID recipientScopeId = deaneryManaged ? course.getDeanery().getId() : course.getDiocese().getId();
@@ -291,8 +297,6 @@ public class CourseParticipationService {
                 recipientScopeId,
                 recipientPermission
         );
-
-        return buildBatchResponse(course, senderType, senderId, senderName, createdParticipations, previewParishSubmissionAutoApprovedCount(course, createdParticipations));
     }
 
     // Danh sách huynh trưởng trong phạm vi tài khoản để lập danh sách đăng ký (eligible=true) hoặc ngoại lệ (eligible=false).
@@ -344,7 +348,7 @@ public class CourseParticipationService {
                 .filter(leader -> !excluded.contains(leader.getId()))
                 .filter(leader -> matchesKeyword(leader, keyword))
                 .filter(leader -> !courseParticipationRepository.existsByLeaderIdAndCourseCode(leader.getId(), courseCode))
-                .map(leader -> toCandidateResponse(leader, isEligible(leader, course)))
+                .map(leader -> toCandidateResponse(leader, isEligible(leader, course), trainingWorkflowSupport.isOffTarget(course, leader)))
                 .filter(candidate -> candidate.getEligible() == eligibleOnly)
                 // Lọc theo cấp huynh trưởng hiện tại (mã cấp; huynh trưởng chưa có cấp tính là NONE).
                 .filter(candidate -> matchesLevelFilter(levelFilter, candidate.getLeaderLevel()))
@@ -401,7 +405,7 @@ public class CourseParticipationService {
         return haystack.contains(keyword);
     }
 
-    private RegistrationCandidateResponse toCandidateResponse(Leader leader, boolean eligible) {
+    private RegistrationCandidateResponse toCandidateResponse(Leader leader, boolean eligible, boolean offTarget) {
         Parish parish = leader.getParish();
         Deanery deanery = parish == null ? null : parish.getDeanery();
         return RegistrationCandidateResponse.builder()
@@ -417,6 +421,7 @@ public class CourseParticipationService {
                 .deaneryId(deanery == null ? null : deanery.getId())
                 .deaneryName(deanery == null ? null : deanery.getName())
                 .eligible(eligible)
+                .offTarget(offTarget)
                 .build();
     }
 
@@ -622,6 +627,30 @@ public class CourseParticipationService {
         return toResponse(participation);
     }
 
+    // Sửa ghi chú đăng ký: người duyệt đúng đơn vị sở hữu khóa (mọi hồ sơ của khóa) hoặc người đã gửi hồ sơ khi hồ sơ còn chờ duyệt.
+    // Khóa bị vô hiệu hóa hoặc đã kết thúc thì chỉ xem.
+    @Transactional
+    public CourseParticipationResponse updateRegistrationNote(String participationId, TrainingRegistrationNoteRequest request, Authentication authentication) {
+        CourseParticipation participation = courseParticipationRepository.findByIdWithLeaderAndCourse(participationId)
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy đăng ký khóa huấn luyện " + participationId));
+        courseActivityGuard.requireActive(participation.getCourse());
+        courseActivityGuard.requireNotEnded(participation.getCourse());
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người sửa ghi chú");
+        boolean sender = actor.equals(participation.getCreatedBy())
+                && (participation.getApprovalStatus() == WorkflowApprovalStatus.PENDING || participation.getApprovalStatus() == WorkflowApprovalStatus.SUBMITTED);
+        if (!sender && !canApproveCourse(participation.getCourse(), authentication)) {
+            throw commonValidationHelper.forbidden("Không có quyền sửa ghi chú của hồ sơ này");
+        }
+        String note = request == null || request.getNote() == null || request.getNote().isBlank() ? null : request.getNote().trim();
+        if (note != null && note.length() > MAX_REGISTRATION_NOTE) {
+            throw commonValidationHelper.validationError("Ghi chú tối đa " + MAX_REGISTRATION_NOTE + " ký tự");
+        }
+        participation.setRegistrationNote(note);
+        participation.setUpdatedAt(OffsetDateTime.now());
+        participation.setUpdatedBy(actor);
+        return toResponse(participation);
+    }
+
     private List<ScoreComponentTemplate> requireScoreComponents(CourseParticipation participation) {
         if (participation.getCourse() == null || participation.getCourse().getCourseType() == null) {
             throw commonValidationHelper.validationError("Khóa huấn luyện chưa có loại khóa");
@@ -712,7 +741,7 @@ public class CourseParticipationService {
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy khóa huấn luyện " + courseCode));
     }
 
-    private void requireRegistrationWindowOpen(TrainingCourse course) {
+    public void requireRegistrationWindowOpen(TrainingCourse course) {
         OffsetDateTime now = OffsetDateTime.now();
         if (course.getRegistrationStartAt() == null || course.getRegistrationEndAt() == null) {
             throw commonValidationHelper.validationError("Khóa huấn luyện chưa cấu hình thời gian nhận đăng ký");
@@ -728,7 +757,7 @@ public class CourseParticipationService {
         }
     }
 
-    private void requireActiveRegistrationData(TrainingCourse course) {
+    public void requireActiveRegistrationData(TrainingCourse course) {
         if (!Boolean.TRUE.equals(course.getStatus())) {
             throw commonValidationHelper.validationError("Khóa huấn luyện đã ngừng hoạt động");
         }
@@ -816,6 +845,51 @@ public class CourseParticipationService {
         }
     }
 
+    public static final int MAX_OFF_TARGET_REASON = 500;
+    public static final int MAX_REGISTRATION_NOTE = 1000;
+
+    // Hồ sơ chờ duyệt mới (dùng chung cho gửi đăng ký và liên giáo hạt); người gọi tự lưu và gắn các trường riêng.
+    public CourseParticipation newPendingParticipation(Leader leader, TrainingCourse course, boolean eligible, String exceptionReason,
+                                                       String actor, OffsetDateTime submittedAt) {
+        CourseParticipation participation = new CourseParticipation();
+        participation.setLeader(leader);
+        participation.setCourse(course);
+        participation.setRegistrationDate(LocalDate.now());
+        participation.setParticipationStatus(ParticipationStatus.REGISTERED);
+        participation.setResult(CourseResult.UNCOMPLETED);
+        participation.setReview(null);
+        participation.setEligible(eligible);
+        participation.setExceptionReason(commonValidationHelper.normalizeOptionalText(exceptionReason));
+        participation.setParishSubmittedAt(submittedAt);
+        participation.setCertificateApprovalStatus(WorkflowApprovalStatus.NOT_REQUIRED);
+        participation.setCreatedAt(submittedAt);
+        participation.setUpdatedAt(submittedAt);
+        participation.setCreatedBy(actor);
+        participation.setUpdatedBy(actor);
+        participation.setStatus(Boolean.TRUE);
+        participation.setApprovalStatus(WorkflowApprovalStatus.PENDING);
+        return participation;
+    }
+
+    // Văn bản tùy chọn theo hồ sơ: bỏ khóa null và giá trị trống, cắt khoảng trắng, quá độ dài thì báo lỗi.
+    public Map<UUID, String> normalizeTexts(Map<UUID, String> source, int maxLength, String label) {
+        Map<UUID, String> normalized = new LinkedHashMap<>();
+        if (source == null) {
+            return normalized;
+        }
+        source.forEach((leaderId, text) -> {
+            if (leaderId == null || text == null || text.isBlank()) {
+                return;
+            }
+            String trimmed = text.trim();
+            if (trimmed.length() > maxLength) {
+                throw commonValidationHelper.validationError(label + " tối đa " + maxLength + " ký tự");
+            }
+            normalized.put(leaderId, trimmed);
+        });
+        return normalized;
+    }
+
     private Map<UUID, String> normalizeExceptionReasons(Map<UUID, String> exceptionReasonsByLeaderId) {
         Map<UUID, String> normalized = new LinkedHashMap<>();
         if (exceptionReasonsByLeaderId == null) {
@@ -858,12 +932,17 @@ public class CourseParticipationService {
         return chosen.isEmpty() ? eligible : chosen;
     }
 
+    // Hồ sơ gửi ngoài đợt hoặc liên giáo hạt luôn duyệt thủ công, kể cả khi đủ điều kiện và khóa bật tự duyệt.
+    public static boolean requiresManualApproval(CourseParticipation participation) {
+        return participation.getOffTargetReason() != null || participation.getCrossDeaneryReason() != null;
+    }
+
     private int previewParishSubmissionAutoApprovedCount(TrainingCourse course, List<CourseParticipation> participations) {
         if (!trainingWorkflowSupport.shouldAutoApproveAfterSubmission(course.getCourseType())
                 || !Boolean.TRUE.equals(course.getAutoApproveEligible())) {
             return 0;
         }
-        return (int) participations.stream().filter(participation -> Boolean.TRUE.equals(participation.getEligible())).count();
+        return (int) participations.stream().filter(participation -> Boolean.TRUE.equals(participation.getEligible()) && !requiresManualApproval(participation)).count();
     }
 
     private TrainingRegistrationBatchResponse buildBatchResponse(
@@ -1033,6 +1112,15 @@ public class CourseParticipationService {
                 .scoreNote(showScores ? participation.getScoreNote() : null)
                 .eligible(participation.getEligible())
                 .exceptionReason(participation.getExceptionReason())
+                .registrationNote(participation.getRegistrationNote())
+                .offTarget(participation.getOffTargetReason() != null)
+                .offTargetReason(participation.getOffTargetReason())
+                .crossDeanery(participation.getCrossDeaneryReason() != null)
+                .crossDeaneryReason(participation.getCrossDeaneryReason())
+                .homeDeaneryName(participation.getHomeDeaneryId() == null ? null
+                        : deaneryRepository.findById(participation.getHomeDeaneryId()).map(Deanery::getName).orElse(null))
+                .homeDeaneryApprovedBy(auditActorNameResolver.resolve(participation.getHomeDeaneryApprovedBy()))
+                .homeDeaneryApprovedAt(participation.getHomeDeaneryApprovedAt())
                 .leaderLevel(participation.getLeader() == null ? null : participation.getLeader().getLeaderLevel())
                 .courseResultingLevel(participation.getCourse() == null ? null : trainingWorkflowSupport.certificateLevelFor(participation.getCourse()).orElse(null))
                 .targetLevel(participation.getTargetLevel())

@@ -46,6 +46,9 @@ public class TrainingCourseCreateRequest {
     // Tài khoản nhận danh sách đăng ký; phải có quyền duyệt danh sách đăng ký thuộc phạm vi của khóa.
     private List<String> recipientUsernames;
 
+    // Giáo hạt mà khóa giáo phận dành cho (một đợt); null/rỗng = mở cho tất cả. Chỉ áp dụng cho khóa giáo phận.
+    private List<java.util.UUID> targetDeaneryIds;
+
     // null = giữ nguyên (khi sửa) hoặc tắt (khi tạo).
     private Boolean autoApproveEligible;
 

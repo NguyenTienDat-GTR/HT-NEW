@@ -171,6 +171,17 @@ public class CourseParticipationController {
         return apiResponse.success("Duyệt đăng ký cấp giáo phận thành công", courseParticipationService.dioceseApprove(id, request, authentication));
     }
 
+    // Ghi chú của người gửi đăng ký: người duyệt đúng đơn vị sở hữu khóa hoặc người gửi khi hồ sơ còn chờ duyệt (kiểm tra chi tiết ở service).
+    @PatchMapping("/participations/{id}/registration-note")
+    @PreAuthorize("@courseParticipationAccessEvaluator.canRead(authentication)")
+    public apiResponse<CourseParticipationResponse> updateRegistrationNote(
+            @PathVariable String id,
+            @Valid @RequestBody phucuong.ht.modules.training.courseParticipation.model.request.TrainingRegistrationNoteRequest request,
+            Authentication authentication
+    ) {
+        return apiResponse.success("Cập nhật ghi chú thành công", courseParticipationService.updateRegistrationNote(id, request, authentication));
+    }
+
     @PatchMapping("/participations/{id}/score-note")
     @PreAuthorize("@courseParticipationAccessEvaluator.canScore(authentication, #id)")
     public apiResponse<CourseParticipationResponse> updateScoreNote(

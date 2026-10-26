@@ -65,6 +65,10 @@ public class TrainingRegistrationAutoApprovalConsumer {
             if (!Boolean.TRUE.equals(participation.getEligible())) {
                 continue;
             }
+            // Hồ sơ gửi ngoài đợt hoặc liên giáo hạt luôn chờ duyệt thủ công.
+            if (CourseParticipationService.requiresManualApproval(participation)) {
+                continue;
+            }
             // Khóa đã bị vô hiệu hóa thì không tự duyệt.
             if (participation.getCourse() != null && Boolean.FALSE.equals(participation.getCourse().getStatus())) {
                 continue;
@@ -104,7 +108,7 @@ public class TrainingRegistrationAutoApprovalConsumer {
         String summary = String.valueOf(message.getPayload().get("senderUnitName"))
                 + " có " + approvedCount + "/" + totalCount + " hồ sơ đăng ký khóa " + courseLabel + " được hệ thống tự động duyệt";
         if (pendingCount > 0) {
-            summary += "; còn " + pendingCount + " hồ sơ ngoại lệ chờ duyệt thủ công";
+            summary += "; còn " + pendingCount + " hồ sơ (ngoại lệ, ngoài đợt hoặc liên giáo hạt) chờ duyệt thủ công";
         }
         trainingNotificationService.notifyUsers(recipients, TrainingNotificationCommand.builder()
                 .eventType("training.registration.auto_approved")

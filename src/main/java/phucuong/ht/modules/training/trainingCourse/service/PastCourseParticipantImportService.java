@@ -66,6 +66,9 @@ public class PastCourseParticipantImportService {
     public static final String COL_REVIEW = "Nhận xét";
     public static final String COL_EXCEPTION_REASON = "Lí do ngoại lệ";
     public static final String COL_TEAM = "Tên đội";
+    // Ghi chú đăng ký của hồ sơ (tùy chọn, có thể bỏ trống hoặc không có cột).
+    public static final String COL_NOTE = "Ghi chú";
+    private static final int MAX_NOTE = 1000;
     private static final int MAX_TEAM_NAME = 150;
 
     private static final BigDecimal MAX_SCORE = new BigDecimal("1000");
@@ -92,7 +95,7 @@ public class PastCourseParticipantImportService {
 
     // leader: huynh trưởng đã có hồ sơ; newLeader: thông tin để tạo mới (đúng một trong hai khác null).
     private record Parsed(ExcelRowData row, Leader leader, LeaderImportService.NewLeader newLeader, CourseResult result, BigDecimal score, String review,
-                          boolean exception, String exceptionReason, String teamName) {
+                          boolean exception, String exceptionReason, String teamName, String note) {
     }
 
     @Caching(evict = {
@@ -224,6 +227,7 @@ public class PastCourseParticipantImportService {
                 participation.setTeamName(item.teamName());
                 directlyApproved.add(participation);
             }
+            participation.setRegistrationNote(item.note());
             participation.setStatus(Boolean.TRUE);
             participation.setCreatedAt(now);
             participation.setUpdatedAt(now);
@@ -403,6 +407,10 @@ public class PastCourseParticipantImportService {
                     row.error(errors, COL_REVIEW, "Nhận xét tối đa 2000 ký tự");
                 }
             }
+            String note = row.text(COL_NOTE);
+            if (note != null && note.length() > MAX_NOTE) {
+                row.error(errors, COL_NOTE, "Ghi chú tối đa " + MAX_NOTE + " ký tự");
+            }
             String exceptionReason = null;
             String teamName = null;
             if (withTeam) {
@@ -430,7 +438,7 @@ public class PastCourseParticipantImportService {
                 }
             }
             if (errorCount(errors) == before && (leader != null || newLeader != null) && (!past || courseResult != null)) {
-                result.add(new Parsed(row, leader, newLeader, courseResult, score, review, exceptionRow, exceptionReason, teamName));
+                result.add(new Parsed(row, leader, newLeader, courseResult, score, review, exceptionRow, exceptionReason, teamName, note));
             }
         }
         return result;

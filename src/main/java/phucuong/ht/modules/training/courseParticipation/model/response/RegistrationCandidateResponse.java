@@ -22,4 +22,6 @@ public class RegistrationCandidateResponse {
     private String deaneryName;
     // true = đủ điều kiện theo loại khóa và số năm hoạt động của khóa.
     private Boolean eligible;
+    // true = giáo hạt của huynh trưởng nằm ngoài các giáo hạt mà khóa dành cho: gửi phải kèm lí do riêng và duyệt thủ công.
+    private Boolean offTarget;
 }

@@ -130,6 +130,7 @@ public class TrainingCourseService {
         course.setPassingScore(request.getPassingScore());
         requirePassingScoreWithinLimit(course);
         applyRecipients(course, request.getRecipientUsernames());
+        applyTargetDeaneries(course, request.getTargetDeaneryIds());
         TrainingCourseStatusSupport.refresh(course, now);
         trainingCourseRepository.save(course);
         return toResponse(trainingCourseRepository.findByCodeWithType(course.getCourseCode()).orElse(course));
@@ -318,6 +319,7 @@ public class TrainingCourseService {
         if (request.getRecipientUsernames() != null) {
             applyRecipients(existing, request.getRecipientUsernames());
         }
+        applyTargetDeaneries(existing, request.getTargetDeaneryIds());
         return toResponse(existing, courseParticipationRepository.existsByCourseCode(courseCode));
     }
 
@@ -648,6 +650,42 @@ public class TrainingCourseService {
         }
     }
 
+    // Giáo hạt mà khóa giáo phận dành cho: null = giữ nguyên, danh sách (kể cả rỗng) = thay thế. Chỉ khóa giáo phận; mỗi giáo hạt phải
+    // đang hoạt động và thuộc giáo phận của khóa. Khóa giáo hạt luôn không có danh sách này.
+    private void applyTargetDeaneries(TrainingCourse course, List<UUID> requested) {
+        if (trainingWorkflowSupport.isDeaneryManaged(course)) {
+            if (requested != null && !requested.isEmpty()) {
+                throw commonValidationHelper.validationError("Chỉ khóa giáo phận mới chọn được giáo hạt mà khóa dành cho");
+            }
+            course.getTargetDeaneryIds().clear();
+            return;
+        }
+        if (requested == null) {
+            return;
+        }
+        UUID dioceseId = course.getDiocese() == null ? null : course.getDiocese().getId();
+        java.util.Set<UUID> ids = new java.util.LinkedHashSet<>(requested.stream().filter(java.util.Objects::nonNull).toList());
+        for (UUID deaneryId : ids) {
+            Deanery deanery = deaneryRepository.findById(deaneryId)
+                    .orElseThrow(() -> commonValidationHelper.validationError("Không tìm thấy giáo hạt " + deaneryId));
+            if (deanery.getDiocese() == null || dioceseId == null || !dioceseId.equals(deanery.getDiocese().getId())) {
+                throw commonValidationHelper.validationError("Giáo hạt " + deanery.getName() + " không thuộc giáo phận tổ chức khóa");
+            }
+            if (!Boolean.TRUE.equals(deanery.getStatus())) {
+                throw commonValidationHelper.validationError("Giáo hạt " + deanery.getName() + " đang ngưng hoạt động");
+            }
+        }
+        course.getTargetDeaneryIds().clear();
+        course.getTargetDeaneryIds().addAll(ids);
+    }
+
+    private List<TrainingCourseResponse.TargetDeanery> targetDeaneriesOf(TrainingCourse course) {
+        return course.getTargetDeaneryIds().stream()
+                .map(id -> new TrainingCourseResponse.TargetDeanery(id, deaneryRepository.findById(id).map(Deanery::getName).orElse(null)))
+                .sorted(java.util.Comparator.comparing(item -> item.name() == null ? "" : item.name(), String::compareToIgnoreCase))
+                .toList();
+    }
+
     // Người nhận phải có quyền duyệt danh sách đăng ký trong đúng phạm vi sở hữu của khóa.
     private void applyRecipients(TrainingCourse course, List<String> requested) {
         List<String> usernames = requested == null ? List.<String>of() : requested.stream()
@@ -835,6 +873,8 @@ public class TrainingCourseService {
                 .registrationStatus(course.getRegistrationStatus())
                 .organizingStatus(course.getOrganizingStatus())
                 .recipientUsernames(List.copyOf(course.getRecipientUsernames()))
+                .targetDeaneryIds(List.copyOf(course.getTargetDeaneryIds()))
+                .targetDeaneries(targetDeaneriesOf(course))
                 .createdBy(course.getCreatedBy())
                 .createdByName(auditActorNameResolver.resolve(course.getCreatedBy()))
                 .updatedBy(course.getUpdatedBy())
