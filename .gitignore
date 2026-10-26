@@ -39,3 +39,7 @@ out/
 .idea/
 
 .env
+
+# Env production tao tren may local (khong commit)
+.env.*
+!.env.example

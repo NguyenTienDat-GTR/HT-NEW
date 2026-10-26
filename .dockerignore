@@ -1,0 +1,14 @@
+.git
+.github
+.gradle
+.idea
+.agents
+.codex
+build
+uploads
+*.iml
+.env
+.env.*
+compose*.yaml
+project.md
+HELP.md

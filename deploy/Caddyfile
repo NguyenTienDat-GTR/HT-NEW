@@ -1,0 +1,6 @@
+# Caddy tu xin va gia han chung chi HTTPS (Let's Encrypt) cho API_DOMAIN.
+# Yeu cau: ban ghi DNS cua API_DOMAIN da tro ve IP server, cong 80 va 443 da mo.
+{$API_DOMAIN} {
+	encode gzip
+	reverse_proxy app:{$SERVER_PORT}
+}
