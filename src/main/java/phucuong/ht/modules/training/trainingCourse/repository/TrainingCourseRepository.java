@@ -111,6 +111,29 @@ public class TrainingCourseRepository extends BaseRepo<TrainingCourse, String> {
                 .getResultList();
     }
 
+    // Khóa thường đã kết thúc (đã chốt kết quả chung) và còn bật thuộc một loại khóa: nguồn sao chép danh sách tham dự.
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<TrainingCourse> findFinishedByCourseTypeCode(String courseTypeCode) {
+        return entityManager.createQuery(
+                        """
+                                select tc
+                                from TrainingCourse tc
+                                left join fetch tc.courseType
+                                left join fetch tc.diocese
+                                left join fetch tc.deanery dn
+                                left join fetch dn.diocese
+                                where tc.courseType.typeCode = :typeCode
+                                  and tc.status = true
+                                  and tc.pastCourse = false
+                                  and tc.finishedAt is not null
+                                order by tc.finishedAt desc, tc.courseName
+                                """,
+                        TrainingCourse.class
+                )
+                .setParameter("typeCode", courseTypeCode)
+                .getResultList();
+    }
+
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public boolean existsByCourseTypeCode(String courseTypeCode) {
         Long count = entityManager.createQuery(

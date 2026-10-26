@@ -37,6 +37,23 @@ public class TrainingDecisionNotifier {
         workflowDecisionNotifier.notifyDecisions(decision, entries, actor);
     }
 
+    // Hồ sơ sao chép từ khóa tiên quyết: người nhận là người gửi đăng ký hồ sơ gốc (submitterById theo mã hồ sơ mới) thay cho người sao chép.
+    public void notifyRegistrations(Decision decision, List<CourseParticipation> participations, Map<String, String> notesById, String actor,
+                                    Map<String, String> submitterById) {
+        if (participations == null || participations.isEmpty()) {
+            return;
+        }
+        List<Entry> entries = new ArrayList<>();
+        for (CourseParticipation participation : participations) {
+            String note = notesById == null ? null : notesById.get(participation.getId());
+            Entry entry = entryOf(participation, null, note);
+            String submitter = submitterById == null ? null : submitterById.get(participation.getId());
+            entries.add(new Entry(submitter, entry.parishId(), entry.parishName(), entry.courseCode(), entry.courseName(),
+                    entry.leaderName(), entry.documentCode(), entry.note(), entry.leaderId()));
+        }
+        workflowDecisionNotifier.notifyDecisions(decision, entries, actor);
+    }
+
     public void notifyCertificates(Decision decision, List<Certificate> certificates, Map<String, String> notesByCode, String actor) {
         if (certificates == null || certificates.isEmpty()) {
             return;
