@@ -32,15 +32,17 @@ public class AuthCookieService {
         response.addHeader("Set-Cookie", buildCookie(
                 authProperties.getCookie().getAccessTokenName(),
                 "",
-                0
+                0L
         ).toString());
     }
 
     public void writeRefreshCookie(HttpServletResponse response, AuthTokenResponse tokens) {
+        // Không ghi nhớ đăng nhập: cookie phiên (không Max-Age) nên đóng trình duyệt là mất.
+        Long maxAgeMs = tokens.isRememberMe() ? Long.valueOf(tokens.getRefreshTokenExpiresInMs()) : null;
         response.addHeader("Set-Cookie", buildCookie(
                 authProperties.getCookie().getRefreshTokenName(),
                 tokens.getRefreshToken(),
-                tokens.getRefreshTokenExpiresInMs()
+                maxAgeMs
         ).toString());
     }
 
@@ -48,7 +50,7 @@ public class AuthCookieService {
         response.addHeader("Set-Cookie", buildCookie(
                 authProperties.getCookie().getRefreshTokenName(),
                 "",
-                0
+                0L
         ).toString());
     }
 
@@ -73,13 +75,15 @@ public class AuthCookieService {
         return null;
     }
 
-    private ResponseCookie buildCookie(String name, String value, long maxAgeMs) {
-        return ResponseCookie.from(name, value)
+    private ResponseCookie buildCookie(String name, String value, Long maxAgeMs) {
+        ResponseCookie.ResponseCookieBuilder builder = ResponseCookie.from(name, value)
                 .httpOnly(true)
                 .secure(authProperties.getCookie().isSecure())
                 .sameSite(authProperties.getCookie().getSameSite())
-                .path(authProperties.getCookie().getPath())
-                .maxAge(maxAgeMs / 1000)
-                .build();
+                .path(authProperties.getCookie().getPath());
+        if (maxAgeMs != null) {
+            builder.maxAge(maxAgeMs / 1000);
+        }
+        return builder.build();
     }
 }

@@ -80,6 +80,38 @@ class AuthControllerSecurityIntegrationTest {
     }
 
     @Test
+    void loginWithoutRememberMeShouldIssueSessionOnlyRefreshCookie() throws Exception {
+        LoginRequest request = new LoginRequest();
+        request.setUsername("superadminpc");
+        request.setPassword("htgppc2026");
+        when(authService.login(any(LoginRequest.class), anyString())).thenReturn(tokenResponse(false, 43_200_000L));
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(cookie().maxAge("refreshToken", -1))
+                .andExpect(cookie().httpOnly("refreshToken", true))
+                .andExpect(cookie().exists("accessToken"));
+    }
+
+    @Test
+    void loginWithRememberMeShouldIssuePersistentRefreshCookie() throws Exception {
+        LoginRequest request = new LoginRequest();
+        request.setUsername("superadminpc");
+        request.setPassword("htgppc2026");
+        request.setRememberMe(true);
+        when(authService.login(any(LoginRequest.class), anyString())).thenReturn(tokenResponse(true, 604_800_000L));
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(cookie().maxAge("refreshToken", 604_800))
+                .andExpect(cookie().httpOnly("refreshToken", true));
+    }
+
+    @Test
     void shouldRejectMeEndpointWithoutToken() throws Exception {
         mockMvc.perform(get("/api/auth/me"))
                 .andExpect(status().isUnauthorized())
@@ -187,6 +219,22 @@ class AuthControllerSecurityIntegrationTest {
         mockMvc.perform(get("/swagger-ui/swagger-initializer.js"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON));
+    }
+
+    private AuthTokenResponse tokenResponse(boolean rememberMe, long refreshExpiresInMs) {
+        return AuthTokenResponse.builder()
+                .accessToken("access-token")
+                .refreshToken("refresh-token")
+                .tokenType("Bearer")
+                .accessTokenExpiresInMs(900000L)
+                .refreshTokenExpiresInMs(refreshExpiresInMs)
+                .rememberMe(rememberMe)
+                .user(AuthenticatedUserResponse.builder()
+                        .username("superadminpc")
+                        .roles(List.of("SUPER_ADMIN"))
+                        .permissions(List.of())
+                        .build())
+                .build();
     }
 
     private AuthTokenResponse sampleTokenResponse() {

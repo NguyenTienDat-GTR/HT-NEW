@@ -48,4 +48,8 @@ public class Account extends BaseModel {
 
     @Column(name = "must_change_password", nullable = false)
     private Boolean mustChangePassword = Boolean.FALSE;
+
+    /** Hạn dùng của mật khẩu tạm do admin đặt lại; null = mật khẩu không có hạn (tài khoản mới tạo, mật khẩu thường). */
+    @Column(name = "temporary_password_expires_at")
+    private java.time.OffsetDateTime temporaryPasswordExpiresAt;
 }

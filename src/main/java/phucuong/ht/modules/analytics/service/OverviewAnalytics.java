@@ -174,12 +174,13 @@ class OverviewAnalytics {
     List<WorkQueueItemResponse> workQueue(AnalyticsContext ctx) {
         // Giáo xứ không duyệt hay chấm điểm: việc của họ là đăng ký khóa đang mở.
         if (ctx.scope.type() == AnalyticsScopeType.PARISH) return List.of();
-        String participations = PARTICIPATION_FROM + " where " + ctx.leaders(false) + " and " + PARTICIPATION_VALID;
+        // Chỉ tính khóa thuộc phạm vi của tài khoản: hồ sơ huynh trưởng của đơn vị mình ở khóa do cấp khác tổ chức thì cấp đó xử lý.
+        String participations = PARTICIPATION_FROM + " where " + ctx.leaders(false) + " and " + PARTICIPATION_VALID + ctx.courseFilters();
         long pendingRegistrations = repository.scalar("select count(*)" + participations + " and cp.approval_status in ('PENDING', 'SUBMITTED')", ctx.params);
         // Hồ sơ bị từ chối duyệt (kể cả bị xóa khỏi danh sách tham dự) chờ duyệt lại; khóa đã kết thúc thì không còn xử lý.
         long rejectedRegistrations = repository.scalar("select count(*)" + participations + " and cp.approval_status = 'REJECTED' and (c.end_date is null or c.end_date >= current_date)", ctx.params);
         long pendingScoring = repository.scalar("select count(*)" + participations + " and " + ATTENDED + " and cp.total_score is null and c.score_locked = false", ctx.params);
-        long pendingCertificates = repository.scalar("select count(*)" + CERTIFICATE_FROM + " where " + ctx.leaders(false) + " and " + CERTIFICATE_VALID + " and ce.approval_status in ('PENDING', 'SUBMITTED')", ctx.params);
+        long pendingCertificates = repository.scalar("select count(*)" + CERTIFICATE_FROM + " where " + ctx.leaders(false) + " and " + CERTIFICATE_VALID + ctx.courseFilters() + " and ce.approval_status in ('PENDING', 'SUBMITTED')", ctx.params);
         String organized = ctx.organizedCourses();
         long closing = "1=0".equals(organized) ? 0 : repository.scalar("select count(*) from training_course c where c.status = true and " + organized
                 + " and c.registration_status = 'OPEN' and c.registration_end_at between now() and now() + interval '" + CLOSING_DAYS + " days'", ctx.params);

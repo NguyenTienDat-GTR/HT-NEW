@@ -97,7 +97,7 @@ public class PasswordChangeService {
         }
 
         return PasswordOtpSendResponse.builder()
-                .email(email)
+                .email(EmailMasker.mask(email))
                 .expiresInSeconds(OTP_TTL.toSeconds())
                 .resendAfterSeconds(RESEND_COOLDOWN.toSeconds())
                 .build();
@@ -164,6 +164,7 @@ public class PasswordChangeService {
 
         account.setPassword(passwordEncoder.encode(request.getNewPassword()));
         account.setMustChangePassword(Boolean.FALSE);
+        account.setTemporaryPasswordExpiresAt(null);
         account.setUpdatedAt(OffsetDateTime.now());
         account.setUpdatedBy(username);
         boolean tokenConsumed = false;

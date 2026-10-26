@@ -10,6 +10,7 @@ import phucuong.ht.common.dto.apiResponse;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.modules.system.model.request.AccountCreateRequest;
+import phucuong.ht.modules.system.model.response.AccountPasswordResetResponse;
 import phucuong.ht.modules.system.model.response.AccountResponse;
 import phucuong.ht.modules.system.service.AccountManagementService;
 
@@ -59,6 +60,16 @@ public class AccountController {
             + " || @securityUtils.hasAuthority(authentication, 'system.account.manage.parish')")
     public apiResponse<AccountResponse> findById(@PathVariable String username, Authentication authentication) {
         return apiResponse.success("Lấy thông tin tài khoản thành công", service.findById(username, authentication));
+    }
+
+    @PostMapping("/{username}/reset-password")
+    @PreAuthorize("@securityUtils.hasAuthority(authentication, 'system.account.reset_password.all')"
+            + " || @securityUtils.hasAuthority(authentication, 'system.account.reset_password.diocese')"
+            + " || @securityUtils.hasAuthority(authentication, 'system.account.reset_password.deanery')"
+            + " || @securityUtils.hasAuthority(authentication, 'system.account.reset_password.parish')")
+    public apiResponse<AccountPasswordResetResponse> resetPassword(@PathVariable String username, Authentication authentication) {
+        AccountPasswordResetResponse response = service.resetPassword(username, authentication);
+        return apiResponse.success("Đã gửi mật khẩu tạm tới " + response.getMaskedEmail(), response);
     }
 
     @PatchMapping("/{username}/toggle-status")

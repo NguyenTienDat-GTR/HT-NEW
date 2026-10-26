@@ -14,5 +14,6 @@ public class AuthTokenResponse {
     private final String tokenType;
     private final long accessTokenExpiresInMs;
     private final long refreshTokenExpiresInMs;
+    private final boolean rememberMe;
     private final AuthenticatedUserResponse user;
 }

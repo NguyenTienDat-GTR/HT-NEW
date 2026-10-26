@@ -23,6 +23,7 @@ public class PasswordOtpStore {
     private static final String COOLDOWN_KEY = "auth:pwd-otp-cooldown:";
     private static final String OLD_PASSWORD_FAIL_KEY = "auth:pwd-old-fail:";
     private static final String CHANGE_TOKEN_KEY = "auth:pwd-change:";
+    private static final String SEND_COUNT_KEY = "auth:pwd-otp-sends:";
     private static final String FIELD_HASH = "hash";
     private static final String FIELD_ATTEMPTS = "attempts";
 
@@ -92,6 +93,25 @@ public class PasswordOtpStore {
 
     public void clearCooldown(String username) {
         redis.delete(COOLDOWN_KEY + username);
+    }
+
+    /** Ghi nhận một lần gửi OTP trong khung thời gian; trả về tổng số lần đã gửi trong khung. */
+    public long recordSend(String username, Duration window) {
+        String key = SEND_COUNT_KEY + username;
+        Long sends = redis.opsForValue().increment(key);
+        if (sends != null && sends == 1) {
+            redis.expire(key, window);
+        }
+        return sends == null ? 0 : sends;
+    }
+
+    /** Hoàn lại một lượt gửi (khi gửi email thất bại để không phạt người dùng). */
+    public void undoSend(String username) {
+        String key = SEND_COUNT_KEY + username;
+        Long sends = redis.opsForValue().decrement(key);
+        if (sends != null && sends <= 0) {
+            redis.delete(key);
+        }
     }
 
     public long oldPasswordFailures(String username) {

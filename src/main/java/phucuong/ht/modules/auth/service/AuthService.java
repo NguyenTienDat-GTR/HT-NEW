@@ -30,6 +30,8 @@ import phucuong.ht.modules.system.model.entity.Account;
 import phucuong.ht.modules.system.model.entity.AccountRole;
 import phucuong.ht.modules.system.model.entity.Role;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
@@ -91,7 +93,7 @@ public class AuthService {
         return BootstrapSuperAdminResponse.builder()
                 .username(username)
                 .roleCode(role.getRoleCode())
-                .tokens(issueNewSessionTokens(principal, "bootstrap"))
+                .tokens(issueNewSessionTokens(principal, "bootstrap", false))
                 .build();
     }
 
@@ -101,7 +103,21 @@ public class AuthService {
         );
         SecurityContextHolder.getContext().setAuthentication(authentication);
         AuthUserDetails principal = (AuthUserDetails) authentication.getPrincipal();
-        return issueNewSessionTokens(principal, normalizeIpAddress(ipAddress));
+        rejectExpiredTemporaryPassword(principal.getUsername());
+        return issueNewSessionTokens(principal, normalizeIpAddress(ipAddress), request.isRememberMeEnabled());
+    }
+
+    /** Mật khẩu tạm do admin đặt lại chỉ dùng được trong thời gian ngắn; quá hạn thì không cho đăng nhập. */
+    private void rejectExpiredTemporaryPassword(String username) {
+        accountRepository.findById(username).ifPresent(account -> {
+            OffsetDateTime expiresAt = account.getTemporaryPasswordExpiresAt();
+            if (Boolean.TRUE.equals(account.getMustChangePassword())
+                    && expiresAt != null
+                    && expiresAt.isBefore(OffsetDateTime.now())) {
+                throw new ApiException(HttpStatus.UNAUTHORIZED, errorCode.AUTHENTICATION_FAILED,
+                        "Mật khẩu tạm thời đã hết hạn, vui lòng dùng chức năng Quên mật khẩu hoặc liên hệ quản trị viên");
+            }
+        });
     }
 
     public AuthTokenResponse refresh(String refreshToken) {
@@ -186,6 +202,7 @@ public class AuthService {
         }
         account.setPassword(passwordEncoder.encode(request.getNewPassword()));
         account.setMustChangePassword(Boolean.FALSE);
+        account.setTemporaryPasswordExpiresAt(null);
         account.setUpdatedAt(OffsetDateTime.now());
         account.setUpdatedBy(principal.getUsername());
         accountRepository.save(account);
@@ -196,7 +213,7 @@ public class AuthService {
         return currentUser(authentication);
     }
 
-    private AuthTokenResponse issueNewSessionTokens(AuthUserDetails principal, String ipAddress) {
+    private AuthTokenResponse issueNewSessionTokens(AuthUserDetails principal, String ipAddress, boolean rememberMe) {
         String accessTokenJti = UUID.randomUUID().toString();
         String refreshTokenJti = UUID.randomUUID().toString();
         TokenSessionState sessionState = redisTokenSessionService.createSession(
@@ -204,11 +221,13 @@ public class AuthService {
                 ipAddress,
                 accessTokenJti,
                 refreshTokenJti,
-                "pending"
+                "pending",
+                rememberMe
         );
 
+        Instant refreshExpiresAt = sessionState.getExpiresAt();
         String accessToken = jwtUtils.generateAccessToken(principal, sessionState.getSessionId(), accessTokenJti);
-        String refreshToken = jwtUtils.generateRefreshToken(principal, sessionState.getSessionId(), refreshTokenJti);
+        String refreshToken = jwtUtils.generateRefreshToken(principal, sessionState.getSessionId(), refreshTokenJti, refreshExpiresAt);
         redisTokenSessionService.rotateSession(
                 sessionState.getSessionId(),
                 principal.getUsername(),
@@ -216,7 +235,7 @@ public class AuthService {
                 refreshTokenJti,
                 refreshToken
         );
-        return buildTokenResponse(principal, accessToken, refreshToken);
+        return buildTokenResponse(principal, accessToken, refreshToken, refreshExpiresAt, rememberMe);
     }
 
     private AuthTokenResponse rotateSessionTokens(
@@ -224,10 +243,16 @@ public class AuthService {
             jwtUtils.TokenClaims previousRefreshClaims,
             String previousRefreshToken
     ) {
+        TokenSessionState currentSession = redisTokenSessionService.findActiveSession(previousRefreshClaims.sessionId());
+        if (currentSession == null) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, errorCode.INVALID_TOKEN, "Phiên đăng nhập không còn hiệu lực");
+        }
+        boolean rememberMe = redisTokenSessionService.isRememberMe(currentSession);
+        Instant refreshExpiresAt = redisTokenSessionService.nextExpiry(currentSession);
         String accessTokenJti = UUID.randomUUID().toString();
         String refreshTokenJti = UUID.randomUUID().toString();
         String accessToken = jwtUtils.generateAccessToken(principal, previousRefreshClaims.sessionId(), accessTokenJti);
-        String refreshToken = jwtUtils.generateRefreshToken(principal, previousRefreshClaims.sessionId(), refreshTokenJti);
+        String refreshToken = jwtUtils.generateRefreshToken(principal, previousRefreshClaims.sessionId(), refreshTokenJti, refreshExpiresAt);
         redisTokenSessionService.rotateRefreshSession(
                 previousRefreshClaims.sessionId(),
                 principal.getUsername(),
@@ -237,16 +262,23 @@ public class AuthService {
                 refreshTokenJti,
                 refreshToken
         );
-        return buildTokenResponse(principal, accessToken, refreshToken);
+        return buildTokenResponse(principal, accessToken, refreshToken, refreshExpiresAt, rememberMe);
     }
 
-    private AuthTokenResponse buildTokenResponse(AuthUserDetails principal, String accessToken, String refreshToken) {
+    private AuthTokenResponse buildTokenResponse(
+            AuthUserDetails principal,
+            String accessToken,
+            String refreshToken,
+            Instant refreshExpiresAt,
+            boolean rememberMe
+    ) {
         return AuthTokenResponse.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .tokenType("Bearer")
                 .accessTokenExpiresInMs(jwtUtils.getAccessTokenExpirationMs())
-                .refreshTokenExpiresInMs(jwtUtils.getRefreshTokenExpirationMs())
+                .refreshTokenExpiresInMs(Math.max(0L, Duration.between(Instant.now(), refreshExpiresAt).toMillis()))
+                .rememberMe(rememberMe)
                 .user(toUserResponse(principal))
                 .build();
     }

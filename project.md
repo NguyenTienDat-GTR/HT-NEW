@@ -1455,3 +1455,37 @@ Ma trận endpoint (`endpoint-contract-matrix.psv`) hiện có 124 route.
 - **Vai trò hệ thống ADMIN_DIOCESE / ADMIN_DEANERY / ADMIN_PARISH chỉ SUPER_ADMIN được phân quyền hoặc thu hồi** (`SystemAdminAuthorizationHelper.requireRolePermissionRoleAccess`); admin giáo phận / giáo hạt không còn phân quyền cho vai trò admin cấp dưới. Cấp trên vẫn phân quyền được cho **từng tài khoản** mang các vai trò này (phân quyền tài khoản, không đổi).
 - `GET /api/system/accounts/permission-targets?search=` tìm theo tên đăng nhập, tên thánh / họ tên huynh trưởng, vai trò, giáo xứ, giáo hạt; `AccountResponse` có thêm `leaderHolyName`.
 - FE: ô chọn tài khoản rộng hết nhóm (`FormFieldSpec.wide`), mỗi tài khoản hiện vai trò, huynh trưởng (tên thánh + họ tên), giáo xứ, giáo hạt; danh sách tick quyền (phân quyền / thu hồi, vai trò / tài khoản) có bộ lọc phân hệ, đối tượng, thao tác, phạm vi và tìm không dấu.
+
+
+## Ghi nhớ đăng nhập, quên mật khẩu, admin đặt lại mật khẩu (nhánh `feature/remember-me-forgot-reset-password`)
+
+### Ghi nhớ đăng nhập
+- `POST /api/auth/login` nhận thêm `rememberMe` (mặc định `false`). Phản hồi có `rememberMe`.
+- Phiên Redis (`TokenSessionState`) lưu `rememberMe` và `absoluteExpiresAt`. Hạn phiên = `min(bây giờ + idle, absoluteExpiresAt)`, gia hạn trượt mỗi lần refresh nhưng không bao giờ vượt hạn tuyệt đối:
+  - Không ghi nhớ: idle 8 giờ, tuyệt đối 12 giờ, cookie `refreshToken` là cookie phiên (không `Max-Age`, đóng trình duyệt là mất).
+  - Có ghi nhớ: idle 7 ngày, tuyệt đối 30 ngày, cookie lưu 30 ngày tính theo thời gian còn lại của phiên.
+  - Cookie `accessToken` luôn có `Max-Age` bằng hạn access token (15 phút) để SSR hoạt động như cũ.
+- Cấu hình: `app.security.jwt.session-idle-ms`, `session-absolute-ms`, `remember-me-idle-ms`, `remember-me-absolute-ms` (env `JWT_SESSION_IDLE_MS`, `JWT_SESSION_ABSOLUTE_MS`, `JWT_REMEMBER_ME_IDLE_MS`, `JWT_REMEMBER_ME_ABSOLUTE_MS`; có mặc định trong code). `refresh-token-expiration-ms` chỉ còn là giá trị dự phòng cho `jwtUtils.generateRefreshToken` 3 tham số.
+- Phiên tạo trước khi nâng cấp (thiếu `rememberMe`/`absoluteExpiresAt`) được coi là có ghi nhớ, hạn tuyệt đối tính từ `issuedAt` + 30 ngày.
+- Refresh vẫn xoay vòng token bằng Lua compare-and-set; refresh một phiên đã hết hạn tuyệt đối trả 401 `INVALID_TOKEN`.
+- Đổi mật khẩu, quên mật khẩu, admin đặt lại mật khẩu đều thu hồi các phiên (đổi mật khẩu khi đang đăng nhập giữ phiên hiện tại).
+
+### Quên mật khẩu (công khai, `/api/auth/forgot-password`)
+- `POST /otp {username}`: gửi OTP 6 số tới email Huynh Trưởng gắn với tài khoản (ưu tiên) hoặc email của tài khoản (`AccountEmailResolver`). Trả `maskedEmail` dạng `ng***@g***.com` (`EmailMasker`).
+- `POST /otp/verify {username, otp}`: trả `resetToken` dùng một lần, sống 10 phút.
+- `POST /reset {username, resetToken, newPassword, confirmPassword}`: đặt mật khẩu mới (8–72 ký tự, khác mật khẩu hiện tại), xóa cờ `mustChangePassword` và hạn mật khẩu tạm, thu hồi mọi phiên, gửi email thông báo sau khi commit (lỗi gửi thông báo chỉ ghi log).
+- Quy tắc nghiệp vụ: OTP hạn 5 phút, chỉ lưu hash trong Redis, sai 5 lần thì hủy; chờ 60 giây giữa hai lần gửi; tối đa 5 mã/giờ/tài khoản; giới hạn 20 yêu cầu/15 phút/IP (tier rate-limit `forgot`).
+- Tài khoản không tồn tại, bị khóa hoặc không có email cùng trả một thông báo 400 chung để không dò được tài khoản.
+- Rollback: gửi OTP lỗi thì khôi phục OTP cũ, bỏ thời gian chờ, hoàn lại lượt gửi và trả 503. Bước đặt lại mật khẩu chạy trong transaction; lỗi thu hồi phiên thì DB rollback và reset token được trả lại.
+- OTP/token của luồng này dùng tiền tố khóa `forgot:` nên không đè luồng đổi mật khẩu khi đang đăng nhập.
+- `POST /api/auth/password/otp` (đổi mật khẩu khi đang đăng nhập) giờ cũng chỉ trả email đã che.
+
+### Admin đặt lại mật khẩu
+- `POST /api/system/accounts/{username}/reset-password` (không body). Quyền riêng `system.account.reset_password.{all,diocese,deanery,parish}` (migration `V103`), mặc định gán cho mọi vai trò đang có `system.account.manage.<cùng phạm vi>`; có thể cấp riêng qua phân quyền.
+- Kiểm tra: `AccountManagementAuthorizationHelper.requireCanResetPassword` (không tự đặt lại mình, không đặt lại SUPER_ADMIN, đúng phạm vi giáo phận/giáo hạt/giáo xứ, vai trò đích không cao hơn người thao tác; SUPER_ADMIN cần quyền `.all` và chỉ với tài khoản do super-admin tạo) cộng `requireOwnedByActorScope` giống thao tác khóa/mở tài khoản. Tài khoản bị khóa hoặc thuộc đơn vị bị khóa không đặt lại được.
+- Mật khẩu tạm do `TemporaryPasswordGenerator`: đúng 8 chữ cái hoa/thường (bỏ `I l O o`), có ít nhất 1 hoa và 1 thường, không số/ký tự đặc biệt. Chỉ gửi qua email (Huynh Trưởng ưu tiên, sau đó email tài khoản), không bao giờ trả qua API; phản hồi chỉ có `maskedEmail` và `expiresAt`.
+- `account.temporary_password_expires_at` = bây giờ + 10 phút và `must_change_password = true`. Đăng nhập bằng mật khẩu tạm quá hạn trả 401 "Mật khẩu tạm thời đã hết hạn"; đăng nhập đúng hạn bị buộc đổi mật khẩu như lần đăng nhập đầu. Đổi mật khẩu hoặc quên mật khẩu xóa hạn này. Tài khoản tạo mới giữ `NULL` (không hết hạn) như cũ.
+- Thứ tự trong transaction: ghi DB + flush, gửi email, rồi mới thu hồi mọi phiên. Gửi email lỗi thì DB rollback, mật khẩu cũ giữ nguyên và phiên đang đăng nhập không bị ảnh hưởng.
+
+### Test liên quan
+`ForgotPasswordServiceTest`, `EmailMaskerTest`, `TemporaryPasswordGeneratorTest`, `AuthServiceTest` (hạn mật khẩu tạm, rememberMe), `RedisTokenSessionServiceTest` (hạn trượt/tuyệt đối), `AccountManagementServiceTest` + `AccountManagementAuthorizationHelperTest` (đặt lại mật khẩu), `AccountPasswordResetIntegrationTest` (rollback trên DB thật), `ForgotPasswordControllerSecurityIntegrationTest`, `AuthControllerSecurityIntegrationTest` (cookie phiên / cookie lưu), `EndpointContractMatrixTest`.
