@@ -285,3 +285,5 @@ GET /api/training/courses/{courseCode}/attendance/participants|200|401|403|400|4
 GET /api/training/courses/{courseCode}/badges/configs|200|401|403|N/A: course code is an opaque string|404|N/A: read-only endpoint does not mutate state
 POST /api/training/courses/{courseCode}/attendance/lookup|200|401|403|400|404|409
 GET /api/training/courses/{courseCode}/attendance/participants/{participationId}|200|401|403|N/A: both identifiers are opaque strings checked as not found|404|N/A: read-only endpoint does not mutate state
+POST /api/training/attendance/scan|200|401|403|400|404|409
+POST /api/training/attendance/lookup|200|401|403|400|404|409

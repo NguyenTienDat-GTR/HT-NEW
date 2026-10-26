@@ -91,7 +91,7 @@ class CourseAttendanceServiceTest {
 
     @Test
     void lookupReturnsReadyWithoutWritingAnything() {
-        ScanResult result = service.lookup("KH-1", tokens.tokenFor("p-ann"));
+        ScanResult result = service.lookup("KH-1", tokens.tokenFor("KH-1", "p-ann"));
         assertEquals(ScanStatus.READY, result.status());
         assertEquals("Nguyễn An", result.fullName());
         assertNull(ann.getCheckedInAt());
@@ -102,7 +102,7 @@ class CourseAttendanceServiceTest {
     void lookupReportsAlreadyCheckedInWithTheFirstTime() {
         OffsetDateTime first = OffsetDateTime.now().minusMinutes(5);
         ann.setCheckedInAt(first);
-        ScanResult result = service.lookup("KH-1", tokens.tokenFor("p-ann"));
+        ScanResult result = service.lookup("KH-1", tokens.tokenFor("KH-1", "p-ann"));
         assertEquals(ScanStatus.ALREADY_CHECKED_IN, result.status());
         assertEquals(first, result.checkedInAt());
         verify(repository, never()).save(any());
@@ -110,17 +110,17 @@ class CourseAttendanceServiceTest {
 
     @Test
     void lookupAppliesTheSameGatesAsScan() {
-        assertEquals(400, failure(() -> service.lookup("KH-1", "HTATT1.p-ann.AAAAAAAAAAAAAAAAAAAAAA")).getStatus().value());
+        assertEquals(400, failure(() -> service.lookup("KH-1", "HTATT2.KH-1.p-ann.AAAAAAAAAAAAAAAAAAAAAA")).getStatus().value());
         ann.setApprovalStatus(WorkflowApprovalStatus.REJECTED);
-        assertEquals(409, failure(() -> service.lookup("KH-1", tokens.tokenFor("p-ann"))).getStatus().value());
+        assertEquals(409, failure(() -> service.lookup("KH-1", tokens.tokenFor("KH-1", "p-ann"))).getStatus().value());
         ann.setApprovalStatus(WorkflowApprovalStatus.APPROVED);
         course.setAttendanceEnabled(false);
-        assertEquals(409, failure(() -> service.lookup("KH-1", tokens.tokenFor("p-ann"))).getStatus().value());
+        assertEquals(409, failure(() -> service.lookup("KH-1", tokens.tokenFor("KH-1", "p-ann"))).getStatus().value());
     }
 
     @Test
     void firstScanChecksTheParticipantIn() {
-        ScanResult result = service.scan("KH-1", tokens.tokenFor("p-ann"), scanner);
+        ScanResult result = service.scan("KH-1", tokens.tokenFor("KH-1", "p-ann"), scanner);
 
         assertEquals(ScanStatus.CHECKED_IN, result.status());
         assertEquals("p-ann", result.participationId());
@@ -141,7 +141,7 @@ class CourseAttendanceServiceTest {
         ann.setCheckedInAt(first);
         ann.setCheckedInBy("someone");
 
-        ScanResult result = service.scan("KH-1", tokens.tokenFor("p-ann"), scanner);
+        ScanResult result = service.scan("KH-1", tokens.tokenFor("KH-1", "p-ann"), scanner);
 
         assertEquals(ScanStatus.ALREADY_CHECKED_IN, result.status());
         assertEquals(first, result.checkedInAt());
@@ -151,7 +151,7 @@ class CourseAttendanceServiceTest {
 
     @Test
     void forgedOrMalformedTokensAreRejectedBeforeAnyLookup() {
-        for (String bad : new String[]{"HTATT1.p-ann.AAAAAAAAAAAAAAAAAAAAAA", "p-ann", "https://x/certificates/CODE", "   ", "HTATT1.p-ann"}) {
+        for (String bad : new String[]{"HTATT2.KH-1.p-ann.AAAAAAAAAAAAAAAAAAAAAA", "p-ann", "https://x/certificates/CODE", "   ", "HTATT2.p-ann"}) {
             ApiException error = failure(() -> service.scan("KH-1", bad, scanner));
             assertEquals(400, error.getStatus().value(), bad);
             assertTrue(error.getMessage().contains("Mã QR không hợp lệ"), bad);
@@ -163,14 +163,14 @@ class CourseAttendanceServiceTest {
 
     @Test
     void tokenSignedWithAnotherSecretIsRejected() {
-        String foreign = new AttendanceTokenService("another-secret-0123456789-abcdef").tokenFor("p-ann");
+        String foreign = new AttendanceTokenService("another-secret-0123456789-abcdef").tokenFor("KH-1", "p-ann");
         assertEquals(400, failure(() -> service.scan("KH-1", foreign, scanner)).getStatus().value());
         assertNull(ann.getCheckedInAt());
     }
 
     @Test
     void validTokenOfAnUnknownParticipationIsNotFound() {
-        ApiException error = failure(() -> service.scan("KH-1", tokens.tokenFor("ghost"), scanner));
+        ApiException error = failure(() -> service.scan("KH-1", tokens.tokenFor("KH-1", "ghost"), scanner));
         assertEquals(404, error.getStatus().value());
     }
 
@@ -180,7 +180,7 @@ class CourseAttendanceServiceTest {
         CourseParticipation foreign = participation("p-foreign", "Bình", "b@x.vn", other);
         when(repository.findByIdWithLeaderAndCourse("p-foreign")).thenReturn(Optional.of(foreign));
 
-        ApiException error = failure(() -> service.scan("KH-1", tokens.tokenFor("p-foreign"), scanner));
+        ApiException error = failure(() -> service.scan("KH-1", tokens.tokenFor("KH-1", "p-foreign"), scanner));
 
         assertEquals(400, error.getStatus().value());
         assertTrue(error.getMessage().contains("khóa huấn luyện khác"));
@@ -188,10 +188,47 @@ class CourseAttendanceServiceTest {
     }
 
     @Test
+    void tokenOfAnotherCourseThanTheScanPageIsRejected() {
+        assertEquals(400, failure(() -> service.scan("KH-1", tokens.tokenFor("KH-2", "p-ann"), scanner)).getStatus().value());
+        assertNull(ann.getCheckedInAt());
+    }
+
+    @Test
+    void scanWithoutChoosingACourseTakesTheCourseFromTheToken() {
+        String token = tokens.tokenFor("KH-1", "p-ann");
+        assertEquals("KH-1", service.courseCodeOf(token));
+        assertEquals(ScanStatus.READY, service.lookup(token).status());
+        assertEquals(ScanStatus.CHECKED_IN, service.scan(token, scanner).status());
+        assertEquals(ScanStatus.ALREADY_CHECKED_IN, service.scan(token, scanner).status());
+    }
+
+    @Test
+    void headerScanReportsTheCourseState() {
+        String token = tokens.tokenFor("KH-1", "p-ann");
+        course.setAttendanceEnabled(false);
+        assertTrue(failure(() -> service.lookup(token)).getMessage().contains("chưa bật điểm danh"));
+        course.setAttendanceEnabled(true);
+        course.setStartDate(LocalDate.now().minusDays(5));
+        course.setEndDate(LocalDate.now().minusDays(1));
+        assertTrue(failure(() -> service.lookup(token)).getMessage().contains("đã kết thúc"));
+        course.setEndDate(LocalDate.now().plusDays(1));
+        course.setStatus(Boolean.FALSE);
+        assertTrue(failure(() -> service.lookup(token)).getMessage().contains("vô hiệu hóa"));
+    }
+
+    @Test
+    void legacyTokenAsksForANewOne() {
+        ApiException error = failure(() -> service.lookup("HTATT1.p-ann.AAAAAAAAAAAAAAAAAAAAAA"));
+        assertEquals(400, error.getStatus().value());
+        assertTrue(error.getMessage().contains("phiên bản cũ"));
+        assertEquals(400, failure(() -> service.courseCodeOf("HTATT1.p-ann.AAAAAAAAAAAAAAAAAAAAAA")).getStatus().value());
+    }
+
+    @Test
     void participantRemovedFromTheListCannotCheckIn() {
         ann.setApprovalStatus(WorkflowApprovalStatus.REJECTED);
         ann.setParticipationStatus(ParticipationStatus.REJECTED);
-        ApiException error = failure(() -> service.scan("KH-1", tokens.tokenFor("p-ann"), scanner));
+        ApiException error = failure(() -> service.scan("KH-1", tokens.tokenFor("KH-1", "p-ann"), scanner));
         assertEquals(409, error.getStatus().value());
         assertNull(ann.getCheckedInAt());
     }
@@ -199,19 +236,19 @@ class CourseAttendanceServiceTest {
     @Test
     void pendingParticipantCannotCheckIn() {
         ann.setApprovalStatus(WorkflowApprovalStatus.PENDING);
-        assertEquals(409, failure(() -> service.scan("KH-1", tokens.tokenFor("p-ann"), scanner)).getStatus().value());
+        assertEquals(409, failure(() -> service.scan("KH-1", tokens.tokenFor("KH-1", "p-ann"), scanner)).getStatus().value());
     }
 
     @Test
     void disabledParticipantRecordCannotCheckIn() {
         ann.setStatus(Boolean.FALSE);
-        assertEquals(409, failure(() -> service.scan("KH-1", tokens.tokenFor("p-ann"), scanner)).getStatus().value());
+        assertEquals(409, failure(() -> service.scan("KH-1", tokens.tokenFor("KH-1", "p-ann"), scanner)).getStatus().value());
     }
 
     @Test
     void scanIsRefusedWhenAttendanceIsNotEnabled() {
         course.setAttendanceEnabled(false);
-        ApiException error = failure(() -> service.scan("KH-1", tokens.tokenFor("p-ann"), scanner));
+        ApiException error = failure(() -> service.scan("KH-1", tokens.tokenFor("KH-1", "p-ann"), scanner));
         assertEquals(409, error.getStatus().value());
         assertTrue(error.getMessage().contains("chưa bật điểm danh"));
         verify(repository, never()).save(any());
@@ -220,24 +257,24 @@ class CourseAttendanceServiceTest {
     @Test
     void scanIsRefusedWhenAttendanceFlagIsNull() {
         course.setAttendanceEnabled(null);
-        assertEquals(409, failure(() -> service.scan("KH-1", tokens.tokenFor("p-ann"), scanner)).getStatus().value());
+        assertEquals(409, failure(() -> service.scan("KH-1", tokens.tokenFor("KH-1", "p-ann"), scanner)).getStatus().value());
     }
 
     @Test
     void scanIsRefusedOnDisabledEndedOrFinishedCourses() {
         course.setStatus(Boolean.FALSE);
-        assertEquals(409, failure(() -> service.scan("KH-1", tokens.tokenFor("p-ann"), scanner)).getStatus().value());
+        assertEquals(409, failure(() -> service.scan("KH-1", tokens.tokenFor("KH-1", "p-ann"), scanner)).getStatus().value());
 
         course.setStatus(Boolean.TRUE);
         course.setEndDate(LocalDate.now().minusDays(1));
         course.setStartDate(LocalDate.now().minusDays(5));
-        ApiException ended = failure(() -> service.scan("KH-1", tokens.tokenFor("p-ann"), scanner));
+        ApiException ended = failure(() -> service.scan("KH-1", tokens.tokenFor("KH-1", "p-ann"), scanner));
         assertEquals(409, ended.getStatus().value());
         assertTrue(ended.getMessage().contains("đã kết thúc"));
 
         course.setEndDate(LocalDate.now().plusDays(3));
         course.setFinishedAt(OffsetDateTime.now());
-        assertEquals(409, failure(() -> service.scan("KH-1", tokens.tokenFor("p-ann"), scanner)).getStatus().value());
+        assertEquals(409, failure(() -> service.scan("KH-1", tokens.tokenFor("KH-1", "p-ann"), scanner)).getStatus().value());
         assertNull(ann.getCheckedInAt());
     }
 
@@ -245,7 +282,7 @@ class CourseAttendanceServiceTest {
     void scanWorksOnTheLastDayOfTheCourse() {
         course.setStartDate(LocalDate.now().minusDays(3));
         course.setEndDate(LocalDate.now());
-        assertEquals(ScanStatus.CHECKED_IN, service.scan("KH-1", tokens.tokenFor("p-ann"), scanner).status());
+        assertEquals(ScanStatus.CHECKED_IN, service.scan("KH-1", tokens.tokenFor("KH-1", "p-ann"), scanner).status());
     }
 
     @Test
@@ -259,7 +296,7 @@ class CourseAttendanceServiceTest {
     @Test
     void scanWithoutIdentifiableScannerIsForbidden() {
         Authentication anonymous = new UsernamePasswordAuthenticationToken(" ", null, List.of());
-        assertEquals(403, failure(() -> service.scan("KH-1", tokens.tokenFor("p-ann"), anonymous)).getStatus().value());
+        assertEquals(403, failure(() -> service.scan("KH-1", tokens.tokenFor("KH-1", "p-ann"), anonymous)).getStatus().value());
         assertNull(ann.getCheckedInAt());
     }
 

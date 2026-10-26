@@ -482,7 +482,7 @@ class AttendeeBadgeAttendanceInvitationIntegrationTest {
     @Order(10)
     void scanningRequiresAttendanceToBeEnabled() throws Exception {
         setFlags(COURSE, false, false);
-        scan(COURSE, tokenService.tokenFor(PARTICIPATION.get("an")))
+        scan(COURSE, tokenService.tokenFor(COURSE, PARTICIPATION.get("an")))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isConflict());
         assertNull(jdbc.queryForObject("select checked_in_at from course_participation where id = ?", java.time.OffsetDateTime.class, PARTICIPATION.get("an")));
     }
@@ -491,7 +491,7 @@ class AttendeeBadgeAttendanceInvitationIntegrationTest {
     @Order(11)
     void scanChecksInOnceAndPersists() throws Exception {
         setFlags(COURSE, true, false);
-        String token = tokenService.tokenFor(PARTICIPATION.get("an"));
+        String token = tokenService.tokenFor(COURSE, PARTICIPATION.get("an"));
 
         MvcResult first = scan(COURSE, token).andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk()).andReturn();
         String body = first.getResponse().getContentAsString();
@@ -511,7 +511,7 @@ class AttendeeBadgeAttendanceInvitationIntegrationTest {
     @Test
     @Order(116)
     void scanPermissionIsSeparateFromApprovalAndScopedToTheCourseUnit() throws Exception {
-        String token = tokenService.tokenFor(PARTICIPATION.get("binh"));
+        String token = tokenService.tokenFor(COURSE, PARTICIPATION.get("binh"));
         String body = "{\"token\":\"" + token + "\"}";
         var forbidden = org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isForbidden();
         Authentication approveOnly = principal(ADMIN, "training.participation.approve.deanery", "training.participation.read.deanery");
@@ -556,7 +556,7 @@ class AttendeeBadgeAttendanceInvitationIntegrationTest {
     @Order(115)
     void lookupDoesNotCheckInAndScanDoes() throws Exception {
         setFlags(COURSE, true, false);
-        String token = tokenService.tokenFor(PARTICIPATION.get("binh"));
+        String token = tokenService.tokenFor(COURSE, PARTICIPATION.get("binh"));
         MvcResult r = mockMvc.perform(post("/api/training/courses/" + COURSE + "/attendance/lookup").with(authentication(deaneryAdmin()))
                 .contentType(MediaType.APPLICATION_JSON).content("{\"token\":\"" + token + "\"}")).andReturn();
         assertEquals(200, r.getResponse().getStatus());
@@ -576,12 +576,12 @@ class AttendeeBadgeAttendanceInvitationIntegrationTest {
         scan(COURSE, "https://example.com/certificates/ABC")
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isBadRequest());
         // Mã hợp lệ của khóa khác.
-        scan(COURSE, tokenService.tokenFor(PARTICIPATION.get("an2")))
+        scan(COURSE, tokenService.tokenFor(COURSE, PARTICIPATION.get("an2")))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isBadRequest());
         // Hồ sơ chờ duyệt / bị từ chối không điểm danh được.
-        scan(COURSE, tokenService.tokenFor(PARTICIPATION.get("giang")))
+        scan(COURSE, tokenService.tokenFor(COURSE, PARTICIPATION.get("giang")))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isConflict());
-        scan(COURSE, tokenService.tokenFor(PARTICIPATION.get("hanh")))
+        scan(COURSE, tokenService.tokenFor(COURSE, PARTICIPATION.get("hanh")))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isConflict());
         mockMvc.perform(post("/api/training/courses/" + COURSE + "/attendance/scan").with(authentication(deaneryAdmin()))
                         .contentType(MediaType.APPLICATION_JSON).content("{\"token\":\"\"}"))

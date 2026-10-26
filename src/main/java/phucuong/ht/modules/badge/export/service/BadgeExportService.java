@@ -116,7 +116,7 @@ public class BadgeExportService {
             List<BadgePdfRenderer.Side> backs = new ArrayList<>();
             for (CourseParticipation participation : chunk) {
                 Map<String, String> values = buildValues(course, participation);
-                BitMatrix qr = needsQr(config, includeBack) ? tokenService.matrixFor(participation.getId()) : null;
+                BitMatrix qr = needsQr(config, includeBack) ? tokenService.matrixFor(course.getCourseCode(), participation.getId()) : null;
                 fronts.add(side(frontBackground, config.getFrontLayout(), values, qr));
                 if (includeBack) {
                     backs.add(side(backBackground, config.getBackLayout(), values, qr));
