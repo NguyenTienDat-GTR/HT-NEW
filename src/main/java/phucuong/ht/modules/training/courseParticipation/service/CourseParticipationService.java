@@ -521,32 +521,40 @@ public class CourseParticipationService {
         Set<String> applicableComponentIds = new HashSet<>();
         BigDecimal weightedSum = BigDecimal.ZERO;
         BigDecimal coefficientSum = BigDecimal.ZERO;
+        // Cho phép lưu riêng từng cột điểm: thành phần không gửi lên thì giữ nguyên điểm đã lưu (nếu có).
+        boolean allComponentsScored = true;
         for (ScoreComponentTemplate component : components) {
-            ComponentScoreRequest componentRequest = requestedScores.remove(component.getId());
-            if (componentRequest == null) {
-                throw commonValidationHelper.validationError("Thiếu điểm cho thành phần bắt buộc " + component.getName());
-            }
-            if (componentRequest.getScore().compareTo(component.getMaxScore()) > 0) {
-                throw commonValidationHelper.validationError("Điểm vượt quá điểm tối đa của thành phần " + component.getName());
-            }
-
             applicableComponentIds.add(component.getId());
+            ComponentScoreRequest componentRequest = requestedScores.remove(component.getId());
             CourseParticipationComponentScore persistedScore = existingScores.get(component.getId());
-            if (persistedScore == null) {
-                persistedScore = new CourseParticipationComponentScore();
-                persistedScore.setParticipation(participation);
-                persistedScore.setComponent(component);
-                persistedScore.setCreatedAt(now);
-                persistedScore.setCreatedBy(actor);
-                participation.getComponentScores().add(persistedScore);
+            BigDecimal effectiveScore;
+            if (componentRequest == null) {
+                effectiveScore = persistedScore == null ? null : persistedScore.getScore();
+            } else {
+                if (componentRequest.getScore().compareTo(component.getMaxScore()) > 0) {
+                    throw commonValidationHelper.validationError("Điểm vượt quá điểm tối đa của thành phần " + component.getName());
+                }
+                if (persistedScore == null) {
+                    persistedScore = new CourseParticipationComponentScore();
+                    persistedScore.setParticipation(participation);
+                    persistedScore.setComponent(component);
+                    persistedScore.setCreatedAt(now);
+                    persistedScore.setCreatedBy(actor);
+                    participation.getComponentScores().add(persistedScore);
+                }
+                persistedScore.setScore(componentRequest.getScore());
+                persistedScore.setNote(commonValidationHelper.normalizeOptionalText(componentRequest.getNote()));
+                persistedScore.setStatus(Boolean.TRUE);
+                persistedScore.setUpdatedAt(now);
+                persistedScore.setUpdatedBy(actor);
+                effectiveScore = componentRequest.getScore();
             }
-            persistedScore.setScore(componentRequest.getScore());
-            persistedScore.setNote(commonValidationHelper.normalizeOptionalText(componentRequest.getNote()));
-            persistedScore.setStatus(Boolean.TRUE);
-            persistedScore.setUpdatedAt(now);
-            persistedScore.setUpdatedBy(actor);
+            if (effectiveScore == null) {
+                allComponentsScored = false;
+                continue;
+            }
             if (Boolean.TRUE.equals(component.getIncludeInFinal())) {
-                weightedSum = weightedSum.add(componentRequest.getScore().multiply(component.getCoefficient()));
+                weightedSum = weightedSum.add(effectiveScore.multiply(component.getCoefficient()));
                 coefficientSum = coefficientSum.add(component.getCoefficient());
             }
         }
@@ -555,6 +563,17 @@ public class CourseParticipationService {
         }
         // Thành phần không còn áp dụng cho khóa thì bỏ dòng điểm cũ.
         participation.getComponentScores().removeIf(item -> item.getComponent() == null || !applicableComponentIds.contains(item.getComponent().getId()));
+        if (!allComponentsScored) {
+            // Mới nhập một phần các cột điểm: chỉ lưu điểm đã nhập, chưa tính tổng kết/kết quả/chứng nhận.
+            participation.setReview(request.getReview());
+            if (request.getScoreNote() != null) {
+                participation.setScoreNote(commonValidationHelper.normalizeOptionalText(request.getScoreNote()));
+            }
+            participation.setUpdatedAt(now);
+            participation.setUpdatedBy(actor);
+            publishEvent("training.score.updated", "courseParticipation", participationId, actor, Map.of("partial", true));
+            return toResponse(participation);
+        }
         if (coefficientSum.signum() <= 0) {
             throw commonValidationHelper.validationError("Loại khóa chưa có thành phần điểm nào được tính vào điểm tổng kết");
         }
