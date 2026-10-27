@@ -1512,3 +1512,9 @@ Ma trận endpoint (`endpoint-contract-matrix.psv`) hiện có 124 route.
 - `AttendanceTokenService`: token đổi sang `HTATT2.<mã khóa>.<mã hồ sơ>.<chữ ký>` (HMAC phủ cả mã khóa); `verify` trả `Verified(courseCode, participationId)`; mã `HTATT1` cũ bị từ chối với thông báo xuất lại thẻ / gửi lại email. Thẻ tham dự và email thông tin tham dự tạo mã mới.
 - Thêm `POST /api/training/attendance/lookup|scan` (`AttendanceScanController`): khóa lấy từ mã QR, quyền kiểm tra bằng `canScanAttendance` theo khóa đó. Endpoint theo khóa vẫn giữ và báo lỗi nếu mã thuộc khóa khác.
 - Thông báo khi khóa không điểm danh được nêu rõ tên khóa: vô hiệu hóa / đã kết thúc / chưa bật điểm danh. `ScanResult` có thêm `courseCode`, `courseName`.
+
+## 2026-10-27 Loại khóa huấn luyện đi riêng theo giáo phận (nhánh `feature/course-type-per-diocese`)
+
+- Migration `V105__course_type_per_diocese.sql`: `training_course_type.diocese_id` (bắt buộc). Danh mục hiện có được sao chép cho mọi giáo phận (mã UUID mới); khóa huấn luyện, thành phần điểm, khóa tiên quyết và gán cấu hình chứng nhận được chuyển sang bản sao của đúng giáo phận (gán `SYSTEM` áp dụng cho mọi bản sao). Loại khóa gốc dùng chung bị xóa. Giáo phận tạo sau bắt đầu với danh mục rỗng.
+- `CourseTypeDioceseGuard`: tài khoản chỉ xem / dùng / sửa loại khóa của giáo phận mình (super admin không thuộc giáo phận nào thì đọc được tất cả nhưng không tạo được). Áp dụng ở `TrainingCourseTypeService`, tạo/sửa khóa (`TrainingCourseService`), thành phần điểm, cấu hình chứng nhận.
+- Danh sách loại khóa lọc theo `dioceseId`; khóa tiên quyết phải cùng giáo phận; thống kê sử dụng cấp độ và danh sách loại khóa của analytics cũng tính theo giáo phận.

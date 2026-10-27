@@ -10,6 +10,7 @@ import java.time.OffsetDateTime;
 @Builder(toBuilder = true)
 public class TrainingCourseTypeResponse {
     private String typeCode;
+    private java.util.UUID dioceseId;
     private String typeName;
     private UnitType managementUnitType;
     private String requiredCurrentLevel;

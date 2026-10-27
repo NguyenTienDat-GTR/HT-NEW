@@ -5,6 +5,8 @@ import lombok.*;
 import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.common.model.BaseModel;
 
+import java.util.UUID;
+
 @Entity
 @Table(name = "training_course_type")
 @Getter
@@ -18,6 +20,10 @@ public class TrainingCourseType extends BaseModel {
     @Id
     @Column(name = "type_code")
     private String typeCode;
+
+    // Danh mục loại khóa đi riêng theo từng giáo phận.
+    @Column(name = "diocese_id", nullable = false)
+    private UUID dioceseId;
 
     @Column(name = "type_name")
     private String typeName;
