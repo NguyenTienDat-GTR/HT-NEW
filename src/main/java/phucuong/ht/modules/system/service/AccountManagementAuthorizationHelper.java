@@ -40,14 +40,15 @@ public class AccountManagementAuthorizationHelper {
     public void requireCanCreate(Authentication authentication, Account target, Role targetRole) {
         if (hasRole(authentication, SUPER_ADMIN)) {
             String targetRoleCode = targetRole.getRoleCode();
-            boolean creatingSuperAdmin = SUPER_ADMIN.equals(targetRoleCode)
-                    && target.getLeader() == null
+            boolean unitless = target.getLeader() == null
                     && target.getDiocese() == null
                     && target.getDeanery() == null
                     && target.getParish() == null;
+            boolean creatingSuperAdmin = SUPER_ADMIN.equals(targetRoleCode) && unitless;
             boolean creatingDioceseAdmin = ADMIN_DIOCESE.equals(targetRoleCode) && target.getDiocese() != null;
-            if (!creatingSuperAdmin && !creatingDioceseAdmin) {
-                throw validation.forbidden("SUPER_ADMIN chỉ ược tạo tài khoản SUPER_ADMIN hoặc ADMIN_DIOCESE hợp lệ");
+            boolean creatingSystemWideRole = isSystemWideCustomRole(targetRole) && unitless;
+            if (!creatingSuperAdmin && !creatingDioceseAdmin && !creatingSystemWideRole) {
+                throw validation.forbidden("SUPER_ADMIN chỉ được tạo tài khoản SUPER_ADMIN, ADMIN_DIOCESE hoặc vai trò toàn hệ thống do super-admin tạo");
             }
             return;
         }
@@ -57,6 +58,16 @@ public class AccountManagementAuthorizationHelper {
         if (actorOrder == null || order(targetRole) <= actorOrder) {
             throw validation.forbidden("Quản trị viên chỉ được tạo tài khoản có vai trò thấp hơn mình");
         }
+    }
+
+    /**
+     * Vai trò toàn hệ thống mà SUPER_ADMIN được cấp tài khoản: vai trò tự tạo (không phải vai trò hệ thống như
+     * ADMIN_DEANERY / ADMIN_PARISH) và do super-admin tạo, tức không thuộc riêng một giáo phận nào.
+     */
+    public static boolean isSystemWideCustomRole(Role role) {
+        return role != null
+                && !Boolean.TRUE.equals(role.getIsSystem())
+                && ManagementOwnership.isSuperAdminOwned(role.getCreatedBy());
     }
 
     public void requireCanManage(Authentication authentication, Account target) {

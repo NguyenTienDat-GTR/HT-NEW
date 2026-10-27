@@ -1513,6 +1513,14 @@ Ma trận endpoint (`endpoint-contract-matrix.psv`) hiện có 124 route.
 - Thêm `POST /api/training/attendance/lookup|scan` (`AttendanceScanController`): khóa lấy từ mã QR, quyền kiểm tra bằng `canScanAttendance` theo khóa đó. Endpoint theo khóa vẫn giữ và báo lỗi nếu mã thuộc khóa khác.
 - Thông báo khi khóa không điểm danh được nêu rõ tên khóa: vô hiệu hóa / đã kết thúc / chưa bật điểm danh. `ScanResult` có thêm `courseCode`, `courseName`.
 
+## 2026-10-27 SUPER_ADMIN cấp tài khoản vai trò toàn hệ thống, sửa email hồ sơ (nhánh `feature/superadmin-create-accounts`)
+
+- `POST /api/system/accounts` khi người tạo là SUPER_ADMIN: ngoài SUPER_ADMIN và ADMIN_DIOCESE, được cấp tài khoản cho vai trò toàn hệ thống = vai trò không phải vai trò hệ thống (`isSystem=false`) và do super-admin tạo (`AccountManagementAuthorizationHelper.isSystemWideCustomRole`). Không cấp được cho ADMIN_DEANERY, ADMIN_PARISH hay vai trò do các giáo phận tạo.
+- Cách tạo giống ADMIN_DIOCESE không gắn Huynh Trưởng: bắt buộc `credentialEmail`, không gửi `leaderId`/`dioceseId`, username sinh từ phần trước `@` (thêm hậu tố số nếu trùng), email lưu ở `account.email`, mật khẩu tạm gửi qua email. Email không duy nhất nên được trùng với tài khoản khác (kể cả ADMIN_DIOCESE).
+- Danh sách tài khoản của SUPER_ADMIN hiển thị thêm các tài khoản không gắn Huynh Trưởng/đơn vị có vai trò toàn hệ thống.
+- `AccountResponse.email`: chỉ điền khi người xem là SUPER_ADMIN (danh sách, chi tiết, tạo, khóa/mở).
+- `PUT /api/auth/me/email` (`MyEmailService`): tài khoản không gắn Huynh Trưởng tự đổi `account.email`, bắt buộc `currentPassword`; dùng chung bộ đếm sai mật khẩu với đổi mật khẩu (5 lần / 15 phút). Tài khoản gắn Huynh Trưởng bị từ chối vì dùng email Huynh Trưởng.
+
 ## 2026-10-27 Loại khóa huấn luyện đi riêng theo giáo phận (nhánh `feature/course-type-per-diocese`)
 
 - Migration `V105__course_type_per_diocese.sql`: `training_course_type.diocese_id` (bắt buộc). Danh mục hiện có được sao chép cho mọi giáo phận (mã UUID mới); khóa huấn luyện, thành phần điểm, khóa tiên quyết và gán cấu hình chứng nhận được chuyển sang bản sao của đúng giáo phận (gán `SYSTEM` áp dụng cho mọi bản sao). Loại khóa gốc dùng chung bị xóa. Giáo phận tạo sau bắt đầu với danh mục rỗng.

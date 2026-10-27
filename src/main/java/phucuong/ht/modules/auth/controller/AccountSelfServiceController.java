@@ -7,11 +7,15 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import phucuong.ht.common.dto.apiResponse;
 import phucuong.ht.common.utils.jwtUtils;
+import phucuong.ht.modules.auth.model.request.EmailUpdateRequest;
+import phucuong.ht.modules.auth.model.response.EmailUpdateResponse;
+import phucuong.ht.modules.auth.service.MyEmailService;
 import phucuong.ht.modules.auth.model.request.PasswordChangeConfirmRequest;
 import phucuong.ht.modules.auth.model.request.PasswordOtpSendRequest;
 import phucuong.ht.modules.auth.model.request.PasswordOtpVerifyRequest;
@@ -35,6 +39,7 @@ import phucuong.ht.common.repository.BaseSearchRequest;
 public class AccountSelfServiceController {
 
     private final MyProfileService myProfileService;
+    private final MyEmailService myEmailService;
     private final MyPermissionService myPermissionService;
     private final PasswordChangeService passwordChangeService;
     private final AuthCookieService authCookieService;
@@ -43,6 +48,11 @@ public class AccountSelfServiceController {
     @GetMapping("/me/profile")
     public apiResponse<MyProfileResponse> profile(Authentication authentication) {
         return apiResponse.success("Lấy hồ sơ cá nhân thành công", myProfileService.currentProfile(authentication));
+    }
+
+    @PutMapping("/me/email")
+    public apiResponse<EmailUpdateResponse> updateEmail(@Valid @RequestBody EmailUpdateRequest request, Authentication authentication) {
+        return apiResponse.success("Cập nhật email thành công", myEmailService.update(request, authentication));
     }
 
     @GetMapping("/me/permissions")

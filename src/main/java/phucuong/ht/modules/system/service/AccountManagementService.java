@@ -87,6 +87,11 @@ public class AccountManagementService {
                 .orElseThrow(() -> validation.validationError("Vai trò chính phải nằm trong danh sách vai trò đã chọn"));
         boolean superAdminRole = SUPER_ADMIN.equals(primaryRole.getRoleCode());
         boolean dioceseAdmin = ADMIN_DIOCESE.equals(primaryRole.getRoleCode());
+        // SUPER_ADMIN tạo tài khoản cho vai trò toàn hệ thống do super-admin tạo, theo cách của tài khoản không gắn Huynh Trưởng.
+        boolean systemWideRole = !superAdminRole && !dioceseAdmin && isSuperAdmin(authentication);
+        if (systemWideRole) {
+            requireSystemWideRoles(roles);
+        }
         if ((superAdminRole || dioceseAdmin) && roles.size() != 1) {
             throw validation.validationError("Tài khoản SUPER_ADMIN hoặc ADMIN_DIOCESE chỉ được gán một vai trò");
         }
@@ -131,6 +136,15 @@ public class AccountManagementService {
                 usernameBase = normalize(diocese.getName()) + "admin";
                 account.setEmail(recipientEmail);
             }
+        } else if (systemWideRole) {
+            if (request.getLeaderId() != null || request.getDioceseId() != null) {
+                throw validation.validationError("Tài khoản vai trò toàn hệ thống không gắn Huynh Trưởng hoặc giáo phận");
+            }
+            recipientEmail = requireCredentialEmail(request.getCredentialEmail());
+            recipientName = primaryRole.getRoleName() == null || primaryRole.getRoleName().isBlank()
+                    ? primaryRole.getRoleCode() : primaryRole.getRoleName();
+            usernameBase = usernameBaseFromEmail(recipientEmail);
+            account.setEmail(recipientEmail);
         } else {
             if (request.getDioceseId() != null || request.getCredentialEmail() != null) {
                 throw validation.validationError("Tài khoản không phải ADMIN_DIOCESE không dùng dioceseId hoặc credentialEmail");
@@ -161,7 +175,7 @@ public class AccountManagementService {
         assignInitialRoles(saved, roles, primaryRoleCode, actor);
         accountRoleRepository.flush();
         // Lỗi ràng buộc DB lộ ra ở các lần flush trên, trước khi email được gửi đi.
-        AccountResponse response = response(saved);
+        AccountResponse response = response(saved, authentication);
         mailService.sendInitialCredentials(recipientEmail, recipientName, username, rawPassword);
         return response;
     }
@@ -171,7 +185,7 @@ public class AccountManagementService {
         BaseSearchRequest searchRequest = request == null ? new BaseSearchRequest() : request;
         List<AccountResponse> manageable = accountRepository.findAll().stream()
                 .filter(account -> isVisibleInAccountList(authentication, account))
-                .map(this::response)
+                .map(account -> response(account, authentication))
                 .filter(response -> matchesAccountFilters(response, searchRequest))
                 .toList();
         return page(searchRequest, manageable);
@@ -192,7 +206,7 @@ public class AccountManagementService {
     public AccountResponse findById(String username, Authentication authentication) {
         Account account = require(username);
         authorizationHelper.requireCanRead(authentication, account);
-        return response(account);
+        return response(account, authentication);
     }
 
     @Transactional
@@ -206,7 +220,7 @@ public class AccountManagementService {
         account.setUpdatedAt(OffsetDateTime.now());
         account.setUpdatedBy(validation.requireAuditActor(authentication, "Không xác định được người đổi trạng thái tài khoản"));
         redisTokenSessionService.revokeAllSessions(account.getUsername());
-        return response(account);
+        return response(account, authentication);
     }
 
     /**
@@ -287,6 +301,15 @@ public class AccountManagementService {
     private Diocese requireDioceseForUpdate(UUID id) {
         if (id == null) throw validation.validationError("dioceseId là bắt buộc với ADMIN_DIOCESE");
         return dioceseRepository.findByIdForUpdate(id).orElseThrow(() -> validation.notFound("Không tìm thấy giáo phận"));
+    }
+
+    private void requireSystemWideRoles(List<Role> roles) {
+        for (Role role : roles) {
+            if (!AccountManagementAuthorizationHelper.isSystemWideCustomRole(role)) {
+                throw validation.validationError("Vai trò " + role.getRoleCode()
+                        + " không thuộc quyền toàn hệ thống nên SUPER_ADMIN không được cấp tài khoản cho vai trò này");
+            }
+        }
     }
 
     private List<String> normalizeCreateRoleCodes(AccountCreateRequest request) {
@@ -392,6 +415,12 @@ public class AccountManagementService {
         }
     }
 
+    /** Email liên hệ chỉ trả về cho SUPER_ADMIN; các cấp khác không thấy. */
+    private AccountResponse response(Account account, Authentication authentication) {
+        AccountResponse base = response(account);
+        return isSuperAdmin(authentication) ? base.withEmail(emailResolver.resolve(account)) : base;
+    }
+
     private AccountResponse response(Account account) {
         Leader leader = account.getLeader();
         List<AccountRole> activeRoles = activeRoleAssignments(account.getUsername());
@@ -438,8 +467,14 @@ public class AccountManagementService {
 
     private boolean isVisibleInAccountList(Authentication authentication, Account account) {
         if (isSuperAdmin(authentication)) {
-            List<String> roles = accountRoleRepository.findActiveRoleCodesByUsername(account.getUsername());
-            return roles.stream().anyMatch(SUPER_ADMIN_ACCOUNT_LIST_ROLES::contains);
+            if (accountRoleRepository.findActiveRoleCodesByUsername(account.getUsername()).stream()
+                    .anyMatch(SUPER_ADMIN_ACCOUNT_LIST_ROLES::contains)) {
+                return true;
+            }
+            boolean unitless = account.getLeader() == null && account.getDiocese() == null
+                    && account.getDeanery() == null && account.getParish() == null;
+            return unitless && accountRoleRepository.findActiveByUsername(account.getUsername()).stream()
+                    .anyMatch(accountRole -> AccountManagementAuthorizationHelper.isSystemWideCustomRole(accountRole.getRole()));
         }
         return authorizationHelper.canRead(authentication, account);
     }
