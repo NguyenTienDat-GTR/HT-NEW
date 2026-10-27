@@ -96,6 +96,15 @@ public class LeaderLevelService {
         return names;
     }
 
+    // Mã cấp -> tên cấp để xuất Excel: dùng danh mục của giáo phận người xuất; tài khoản không thuộc giáo phận nào (super admin)
+    // thì gộp mọi giáo phận như allLevelNames().
+    @Transactional(readOnly = true)
+    public Map<String, String> levelNamesFor(Authentication authentication) {
+        return activeDioceseId(authentication)
+                .map(dioceseId -> order(dioceseId).names())
+                .orElseGet(this::allLevelNames);
+    }
+
     // Giáo phận đang hoạt động của tài khoản (tài khoản giáo phận / giáo hạt / giáo xứ / huynh trưởng đều có).
     @Transactional(readOnly = true)
     public Optional<UUID> activeDioceseId(Authentication authentication) {

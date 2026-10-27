@@ -78,7 +78,7 @@ public class ExcelJobHandlers {
                     ExcelExportSupport.collectAll(request, page -> parishService.findAll(page, authentication), progress));
             case EXPORT_LEADERS -> TrainingExcelExports.leaders(
                     ExcelExportSupport.collectAll(request, page -> leaderService.findAll(page, authentication), progress),
-                    leaderLevelService.allLevelNames());
+                    leaderLevelService.levelNamesFor(authentication));
             case EXPORT_COURSES -> TrainingExcelExports.courses(
                     ExcelExportSupport.collectAll(request, page -> trainingCourseService.findAll(page, authentication), progress));
             case EXPORT_PARTICIPATIONS -> TrainingExcelExports.participations(
