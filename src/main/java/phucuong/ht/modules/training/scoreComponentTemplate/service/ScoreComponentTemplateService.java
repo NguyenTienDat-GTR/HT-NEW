@@ -14,6 +14,7 @@ import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.modules.deanery.repository.DeaneryRepository;
 import phucuong.ht.modules.diocese.repository.DioceseRepository;
 import phucuong.ht.modules.training.courseType.repository.TrainingCourseTypeRepository;
+import phucuong.ht.modules.training.courseType.security.CourseTypeDioceseGuard;
 import phucuong.ht.modules.training.scoreComponentTemplate.model.entity.ScoreComponentTemplate;
 import phucuong.ht.modules.training.scoreComponentTemplate.model.request.ScoreComponentTemplateCreateRequest;
 import phucuong.ht.modules.training.scoreComponentTemplate.model.request.ScoreComponentTemplateUpdateRequest;
@@ -36,6 +37,7 @@ public class ScoreComponentTemplateService {
     private final DioceseRepository dioceseRepository;
     private final DeaneryRepository deaneryRepository;
     private final TrainingCourseTypeRepository trainingCourseTypeRepository;
+    private final CourseTypeDioceseGuard courseTypeDioceseGuard;
     private final AccountScopeValidationHelper accountScopeValidationHelper;
     private final CommonValidationHelper commonValidationHelper;
     private final phucuong.ht.common.utils.AuditActorNameResolver auditActorNameResolver;
@@ -53,6 +55,7 @@ public class ScoreComponentTemplateService {
         phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType courseType = trainingCourseTypeRepository
                 .findByCodeWithPrerequisite(request.getCourseTypeCode().trim())
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy loại khóa " + request.getCourseTypeCode()));
+        courseTypeDioceseGuard.requireSameDiocese(courseType, authentication);
         component.setUnitType(courseType.getManagementUnitType());
         component.setCourseType(courseType);
         component.setCoefficient(request.getCoefficient());

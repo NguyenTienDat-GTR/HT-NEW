@@ -34,6 +34,7 @@ import phucuong.ht.modules.leaderLevel.service.LeaderLevelService;
 import phucuong.ht.modules.training.courseParticipation.repository.CourseParticipationRepository;
 import phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType;
 import phucuong.ht.modules.training.courseType.repository.TrainingCourseTypeRepository;
+import phucuong.ht.modules.training.courseType.security.CourseTypeDioceseGuard;
 import phucuong.ht.modules.training.enums.WorkflowApprovalStatus;
 import phucuong.ht.modules.training.trainingCourse.model.entity.TrainingCourse;
 
@@ -72,6 +73,7 @@ public class CertificateConfigService {
     private final CertificateConfigScopeResolver scopeResolver;
     private final CertificateRepository certificateRepository;
     private final TrainingCourseTypeRepository courseTypeRepository;
+    private final CourseTypeDioceseGuard courseTypeDioceseGuard;
     private final CertificatePdfRenderer pdfRenderer;
     private final CommonValidationHelper validationHelper;
     private final securityUtils securityUtils;
@@ -91,8 +93,8 @@ public class CertificateConfigService {
 
     // Loại khóa có yêu cầu chứng nhận, cho ô chọn phạm vi (độc lập với quyền đọc loại khóa).
     @Transactional(readOnly = true)
-    public List<CertifiedCourseTypeResponse> certifiedCourseTypes() {
-        return courseTypeRepository.findCertifiedTypes().stream()
+    public List<CertifiedCourseTypeResponse> certifiedCourseTypes(Authentication authentication) {
+        return courseTypeRepository.findCertifiedTypes(courseTypeDioceseGuard.actorDioceseId(authentication).orElse(null)).stream()
                 .map(type -> new CertifiedCourseTypeResponse(type.getTypeCode(), type.getTypeName()))
                 .toList();
     }
@@ -102,7 +104,7 @@ public class CertificateConfigService {
     @Transactional(readOnly = true)
     public List<CertificateConfigResponse> options(Authentication authentication) {
         ActorScope actor = scopeResolver.resolve(authentication);
-        Map<UUID, List<CertifiedCourseTypeResponse>> usage = usageByConfig(actor);
+        Map<UUID, List<CertifiedCourseTypeResponse>> usage = usageByConfig(actor, authentication);
         return visibleConfigs(actor).stream()
                 .map(config -> toSummary(config, actor, usage.getOrDefault(config.getId(), List.of())))
                 .toList();
@@ -115,7 +117,7 @@ public class CertificateConfigService {
         CertificateConfig config = configRepository.findById(id)
                 .filter(c -> actor.canSee(c.getScopeKey()))
                 .orElseThrow(() -> validationHelper.notFound("Không tìm thấy cấu hình chứng nhận"));
-        return toResponse(config, actor, usageByConfig(actor).getOrDefault(id, List.of()));
+        return toResponse(config, actor, usageByConfig(actor, authentication).getOrDefault(id, List.of()));
     }
 
     // Tìm kiếm / lọc / sắp xếp / phân trang thư viện cấu hình (dạng gọn, không kèm ảnh nền / bố cục).
@@ -126,7 +128,7 @@ public class CertificateConfigService {
     @Transactional(readOnly = true)
     public Page<CertificateConfigResponse> search(BaseSearchRequest request, Authentication authentication) {
         ActorScope actor = scopeResolver.resolve(authentication);
-        Map<UUID, List<CertifiedCourseTypeResponse>> usage = usageByConfig(actor);
+        Map<UUID, List<CertifiedCourseTypeResponse>> usage = usageByConfig(actor, authentication);
         Map<String, Object> filters = request.getFilters() == null ? Map.of() : request.getFilters();
         String keyword = foldText(request.getSearch());
         String scope = filterText(filters, "scope");
@@ -246,7 +248,7 @@ public class CertificateConfigService {
             config.setName(uniqueName(config.getScopeKey(), request.getName(), config.getName()));
         }
         applyContent(config, request, now, audit);
-        return toResponse(configRepository.merge(config), actor, usageByConfig(actor).getOrDefault(id, List.of()));
+        return toResponse(configRepository.merge(config), actor, usageByConfig(actor, authentication).getOrDefault(id, List.of()));
     }
 
     // Đặt cấu hình làm cấu hình chung của phạm vi chứa nó; cấu hình chung cũ trở thành cấu hình thường.
@@ -271,7 +273,7 @@ public class CertificateConfigService {
             config.setUpdatedBy(audit);
             config = configRepository.merge(config);
         }
-        return toResponse(config, actor, usageByConfig(actor).getOrDefault(id, List.of()));
+        return toResponse(config, actor, usageByConfig(actor, authentication).getOrDefault(id, List.of()));
     }
 
     // Xóa cấu hình. Không xóa được cấu hình chung (phải chọn cấu hình khác làm chung trước).
@@ -295,6 +297,7 @@ public class CertificateConfigService {
         String typeCode = normalize(request.getCourseTypeCode());
         TrainingCourseType type = courseTypeRepository.findByCodeWithPrerequisite(typeCode)
                 .orElseThrow(() -> validationHelper.notFound("Không tìm thấy loại khóa: " + typeCode));
+        courseTypeDioceseGuard.requireSameDiocese(type, authentication);
         if (type.getResultingLevel() == null || "NONE".equals(type.getResultingLevel())) {
             throw validationHelper.conflict("Loại khóa này không có yêu cầu chứng nhận nên không cấu hình được");
         }
@@ -419,7 +422,7 @@ public class CertificateConfigService {
     }
 
     // Các loại khóa có yêu cầu chứng nhận đang dùng từng cấu hình (theo cùng quy tắc resolve), tính theo phạm vi người xem.
-    private Map<UUID, List<CertifiedCourseTypeResponse>> usageByConfig(ActorScope actor) {
+    private Map<UUID, List<CertifiedCourseTypeResponse>> usageByConfig(ActorScope actor, Authentication authentication) {
         List<String> chain = chainOf(actor);
         Map<String, Map<String, UUID>> assigned = new HashMap<>();
         for (CertificateConfigAssignment a : assignmentRepository.findByScopeKeys(chain)) {
@@ -433,7 +436,7 @@ public class CertificateConfigService {
         }
 
         Map<UUID, List<CertifiedCourseTypeResponse>> usage = new LinkedHashMap<>();
-        for (TrainingCourseType type : courseTypeRepository.findCertifiedTypes()) {
+        for (TrainingCourseType type : courseTypeRepository.findCertifiedTypes(courseTypeDioceseGuard.actorDioceseId(authentication).orElse(null))) {
             UUID effective = null;
             for (String scopeKey : chain) {
                 UUID configId = assigned.getOrDefault(scopeKey, Map.of()).get(type.getTypeCode());

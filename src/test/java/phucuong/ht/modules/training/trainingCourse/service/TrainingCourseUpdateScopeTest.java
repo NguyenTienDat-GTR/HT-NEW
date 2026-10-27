@@ -251,6 +251,7 @@ class TrainingCourseUpdateScopeTest {
         return new TrainingCourseService(
                 trainingCourseRepository,
                 trainingCourseTypeRepository,
+                org.mockito.Mockito.mock(phucuong.ht.modules.training.courseType.security.CourseTypeDioceseGuard.class),
                 courseParticipationRepository,
                 dioceseRepository,
                 deaneryRepository,

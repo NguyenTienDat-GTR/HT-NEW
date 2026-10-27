@@ -194,7 +194,7 @@ class AttendeeBadgeAttendanceInvitationIntegrationTest {
         jdbc.update("insert into account (username, created_at, deanery_id) values (?, now(), ?)", ADMIN, deaneryId);
         jdbc.update("insert into account (username, created_at, deanery_id) values (?, now(), ?)", OTHER_ADMIN, otherDeaneryId);
 
-        jdbc.update("insert into training_course_type (type_code, type_name, management_unit_type, created_at) values ('DU_TRUONG_IT', 'Dự trưởng', 'DEANERY', now())");
+        jdbc.update("insert into training_course_type (type_code, type_name, management_unit_type, diocese_id, created_at) values ('DU_TRUONG_IT', 'Dự trưởng', 'DEANERY', ?, now())", dioceseId);
         for (String code : new String[]{COURSE, OTHER_COURSE}) {
             jdbc.update("insert into training_course (course_code, course_name, host_year, location, start_date, end_date, course_type_code, diocese_id, deanery_id, passing_score, created_at) "
                     + "values (?, ?, 2026, 'Nhà thờ Bà Lụa', ?, ?, 'DU_TRUONG_IT', ?, ?, 5, now())",

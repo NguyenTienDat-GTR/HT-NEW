@@ -40,8 +40,9 @@ public class TrainingCourseTypeRepository extends BaseRepo<TrainingCourseType, S
     }
 
     // Loại khóa có yêu cầu chứng nhận: có cấp độ đạt được (resultingLevel khác null/NONE), đang hoạt động.
+    // dioceseId != null chỉ lấy danh mục của giáo phận đó; null (super admin) lấy của mọi giáo phận.
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
-    public List<TrainingCourseType> findCertifiedTypes() {
+    public List<TrainingCourseType> findCertifiedTypes(java.util.UUID dioceseId) {
         return entityManager.createQuery(
                         """
                                 select ct
@@ -49,11 +50,13 @@ public class TrainingCourseTypeRepository extends BaseRepo<TrainingCourseType, S
                                 where ct.resultingLevel is not null
                                   and ct.resultingLevel <> :none
                                   and ct.status = true
+                                  and (:dioceseId is null or ct.dioceseId = :dioceseId)
                                 order by ct.typeName
                                 """,
                         TrainingCourseType.class
                 )
                 .setParameter("none", "NONE")
+                .setParameter("dioceseId", dioceseId)
                 .getResultList();
     }
 

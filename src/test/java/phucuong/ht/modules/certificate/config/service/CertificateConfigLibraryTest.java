@@ -60,7 +60,7 @@ class CertificateConfigLibraryTest {
         CertificateConfigScopeResolver scopeResolver = new CertificateConfigScopeResolver(securityUtils, accountRepository, validationHelper);
         service = new CertificateConfigService(
                 configRepository, assignmentRepository, scopeResolver, mock(CertificateRepository.class),
-                courseTypeRepository, null, validationHelper, securityUtils,
+                courseTypeRepository, org.mockito.Mockito.mock(phucuong.ht.modules.training.courseType.security.CourseTypeDioceseGuard.class), null, validationHelper, securityUtils,
                 mock(phucuong.ht.modules.leaderLevel.service.LeaderLevelService.class),
                 mock(phucuong.ht.modules.training.courseParticipation.repository.CourseParticipationRepository.class),
                 new CertificateQrService(Runnable::run, "http://localhost:3000"));
@@ -262,7 +262,7 @@ class CertificateConfigLibraryTest {
         TrainingCourseType t2 = new TrainingCourseType();
         t2.setTypeCode("T2");
         t2.setTypeName("Khóa 2");
-        when(courseTypeRepository.findCertifiedTypes()).thenReturn(List.of(t1, t2));
+        when(courseTypeRepository.findCertifiedTypes(org.mockito.ArgumentMatchers.any())).thenReturn(List.of(t1, t2));
 
         List<CertificateConfigResponse> result = service.options(superAdmin);
 
@@ -290,7 +290,7 @@ class CertificateConfigLibraryTest {
         TrainingCourseType t1 = new TrainingCourseType();
         t1.setTypeCode("T1");
         t1.setTypeName("Khóa Huynh trưởng I");
-        when(courseTypeRepository.findCertifiedTypes()).thenReturn(List.of(t1));
+        when(courseTypeRepository.findCertifiedTypes(org.mockito.ArgumentMatchers.any())).thenReturn(List.of(t1));
 
         var request = new phucuong.ht.common.repository.BaseSearchRequest();
         request.setSearch("du truong");
