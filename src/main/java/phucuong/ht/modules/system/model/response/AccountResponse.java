@@ -8,7 +8,7 @@ import java.util.UUID;
 import java.util.List;
 
 @Getter
-@Builder
+@Builder(toBuilder = true)
 public class AccountResponse {
     private String username;
     private UUID leaderId;
@@ -34,4 +34,10 @@ public class AccountResponse {
     private OffsetDateTime updatedAt;
     private String updatedBy;
     private String updatedByName;
+    /** Email liên hệ/nhận thông tin; chỉ có giá trị khi người xem là SUPER_ADMIN. */
+    private String email;
+
+    public AccountResponse withEmail(String email) {
+        return toBuilder().email(email).build();
+    }
 }

@@ -259,6 +259,75 @@ class AccountManagementServiceTest {
         assertEquals("target-user", response.get(0).getUsername());
     }
 
+    @Test
+    void superAdminCreatesSystemWideRoleAccountFromCredentialEmailEvenWhenEmailIsShared() {
+        Role custom = customRole("QUAN_TRI_NOI_DUNG", "super-admin");
+        AccountCreateRequest request = new AccountCreateRequest();
+        request.setRoleCode(custom.getRoleCode());
+        request.setCredentialEmail("admin@phucuong.vn");
+        Authentication superAdmin = authentication("superadminpc", List.of("SUPER_ADMIN"), List.of());
+        when(validation.normalizeOptionalText(custom.getRoleCode())).thenReturn(custom.getRoleCode());
+        when(roleRepository.findByRoleCodeAndStatusTrue(custom.getRoleCode())).thenReturn(Optional.of(custom));
+        when(validation.normalizeRequiredText("admin@phucuong.vn")).thenReturn("admin@phucuong.vn");
+        when(validation.requireAuditActor(any(), anyString())).thenReturn("super-admin");
+        when(passwordEncoder.encode(anyString())).thenReturn("bcrypt-hash");
+        when(accountRepository.saveAndFlush(any(Account.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        // Tên đăng nhập "admin" đã có (email trùng với tài khoản khác) nên sinh hậu tố, không báo trùng email.
+        when(accountRepository.existsByUsername("admin")).thenReturn(true);
+        when(accountRepository.existsByUsername("admin2")).thenReturn(false);
+
+        var response = service.create(request, superAdmin);
+
+        assertEquals("admin2", response.getUsername());
+        ArgumentCaptor<Account> saved = ArgumentCaptor.forClass(Account.class);
+        verify(accountRepository).saveAndFlush(saved.capture());
+        assertEquals("admin@phucuong.vn", saved.getValue().getEmail());
+        assertNull(saved.getValue().getLeader());
+        assertNull(saved.getValue().getDiocese());
+        verify(mailService).sendInitialCredentials(
+                org.mockito.ArgumentMatchers.eq("admin@phucuong.vn"), anyString(),
+                org.mockito.ArgumentMatchers.eq("admin2"), anyString());
+    }
+
+    @Test
+    void superAdminCannotCreateAccountForDeaneryParishOrDioceseOwnedRole() {
+        Authentication superAdmin = authentication("superadminpc", List.of("SUPER_ADMIN"), List.of());
+        when(validation.validationError(anyString())).thenAnswer(invocation ->
+                new ApiException(org.springframework.http.HttpStatus.BAD_REQUEST,
+                        phucuong.ht.common.exception.errorCode.VALIDATION_ERROR, invocation.getArgument(0)));
+        for (Role blocked : List.of(systemRole("ADMIN_DEANERY"), systemRole("ADMIN_PARISH"), customRole("LD_TRUONG", "phucuongadmin"))) {
+            AccountCreateRequest request = new AccountCreateRequest();
+            request.setRoleCode(blocked.getRoleCode());
+            request.setCredentialEmail("x@phucuong.vn");
+            when(validation.normalizeOptionalText(blocked.getRoleCode())).thenReturn(blocked.getRoleCode());
+            when(roleRepository.findByRoleCodeAndStatusTrue(blocked.getRoleCode())).thenReturn(Optional.of(blocked));
+
+            assertThrows(ApiException.class, () -> service.create(request, superAdmin));
+        }
+    }
+
+    @Test
+    void onlySuperAdminOwnedNonSystemRolesCountAsSystemWide() {
+        assertTrue(AccountManagementAuthorizationHelper.isSystemWideCustomRole(customRole("A", "super-admin")));
+        assertTrue(!AccountManagementAuthorizationHelper.isSystemWideCustomRole(customRole("B", "phucuongadmin")));
+        assertTrue(!AccountManagementAuthorizationHelper.isSystemWideCustomRole(systemRole("ADMIN_PARISH")));
+        assertTrue(!AccountManagementAuthorizationHelper.isSystemWideCustomRole(null));
+    }
+
+    private Role customRole(String code, String createdBy) {
+        Role role = role(code);
+        role.setIsSystem(false);
+        role.setCreatedBy(createdBy);
+        return role;
+    }
+
+    private Role systemRole(String code) {
+        Role role = role(code);
+        role.setIsSystem(true);
+        role.setCreatedBy("SYSTEM");
+        return role;
+    }
+
     private void stubCreate(Diocese diocese, Role role) {
         when(validation.normalizeOptionalText(role.getRoleCode())).thenReturn(role.getRoleCode());
         when(roleRepository.findByRoleCodeAndStatusTrue(role.getRoleCode())).thenReturn(Optional.of(role));
