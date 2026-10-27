@@ -43,6 +43,7 @@ import phucuong.ht.modules.training.TrainingWorkflowSupport;
 import phucuong.ht.modules.training.courseParticipation.repository.CourseParticipationRepository;
 import phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType;
 import phucuong.ht.modules.training.courseType.repository.TrainingCourseTypeRepository;
+import phucuong.ht.modules.training.courseType.security.CourseTypeDioceseGuard;
 import phucuong.ht.modules.training.trainingCourse.model.entity.TrainingCourse;
 import phucuong.ht.modules.training.trainingCourse.model.request.TrainingCourseCreateRequest;
 import phucuong.ht.modules.training.trainingCourse.model.request.TrainingCourseUpdateRequest;
@@ -71,6 +72,7 @@ public class TrainingCourseService {
 
     private final TrainingCourseRepository trainingCourseRepository;
     private final TrainingCourseTypeRepository trainingCourseTypeRepository;
+    private final CourseTypeDioceseGuard courseTypeDioceseGuard;
     private final CourseParticipationRepository courseParticipationRepository;
     private final DioceseRepository dioceseRepository;
     private final DeaneryRepository deaneryRepository;
@@ -100,7 +102,7 @@ public class TrainingCourseService {
     @EvictCaches.Analytics
     @Transactional
     public TrainingCourseResponse create(TrainingCourseCreateRequest request, Authentication authentication) {
-        TrainingCourseType courseType = resolveCourseType(request.getCourseTypeCode());
+        TrainingCourseType courseType = resolveCourseType(request.getCourseTypeCode(), authentication);
         String auditActor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tạo khóa huấn luyện");
         OffsetDateTime now = OffsetDateTime.now();
 
@@ -248,7 +250,7 @@ public class TrainingCourseService {
         boolean typeChanging = request.getCourseTypeCode() != null
                 && !request.getCourseTypeCode().isBlank()
                 && !request.getCourseTypeCode().trim().equals(currentType.getTypeCode());
-        TrainingCourseType targetType = typeChanging ? resolveCourseType(request.getCourseTypeCode()) : currentType;
+        TrainingCourseType targetType = typeChanging ? resolveCourseType(request.getCourseTypeCode(), authentication) : currentType;
 
         requireUpdateScope(authentication, existing, targetType);
 
@@ -407,12 +409,14 @@ public class TrainingCourseService {
         return candidate;
     }
 
-    private TrainingCourseType resolveCourseType(String courseTypeCode) {
+    private TrainingCourseType resolveCourseType(String courseTypeCode, Authentication authentication) {
         if (courseTypeCode == null || courseTypeCode.isBlank()) {
             throw commonValidationHelper.validationError("courseTypeCode là bắt buộc");
         }
         TrainingCourseType courseType = trainingCourseTypeRepository.findByCodeWithPrerequisite(courseTypeCode.trim())
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy loại khóa huấn luyện: " + courseTypeCode));
+        // Loại khóa đi riêng theo giáo phận: khóa chỉ dùng loại khóa của giáo phận người thao tác.
+        courseTypeDioceseGuard.requireSameDiocese(courseType, authentication);
         if (!Boolean.TRUE.equals(courseType.getStatus())) {
             throw commonValidationHelper.validationError("Loại khóa huấn luyện đang bị tạm ngưng: " + courseType.getTypeCode());
         }
@@ -582,7 +586,7 @@ public class TrainingCourseService {
     // Tài khoản trong phạm vi hiện tại có quyền duyệt danh sách đăng ký của loại khóa được chọn.
     @Transactional(readOnly = true)
     public List<CourseRecipientCandidateResponse> recipientCandidates(String courseTypeCode, Authentication authentication) {
-        TrainingCourseType courseType = resolveCourseType(courseTypeCode);
+        TrainingCourseType courseType = resolveCourseType(courseTypeCode, authentication);
         boolean deanery = trainingWorkflowSupport.isDeaneryManaged(courseType);
         UUID scopeId = deanery
                 ? accountScopeValidationHelper.requireActiveDeaneryId(authentication, TrainingCourseAccessEvaluator.CREATE_DEANERY)
@@ -605,7 +609,7 @@ public class TrainingCourseService {
 
     @Transactional(readOnly = true)
     public CoursePassingScoreLimitResponse passingScoreLimit(String courseTypeCode, Authentication authentication) {
-        TrainingCourseType courseType = resolveCourseType(courseTypeCode);
+        TrainingCourseType courseType = resolveCourseType(courseTypeCode, authentication);
         boolean deanery = trainingWorkflowSupport.isDeaneryManaged(courseType);
         UUID dioceseId = null;
         UUID deaneryId = null;

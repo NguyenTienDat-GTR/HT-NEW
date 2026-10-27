@@ -140,7 +140,14 @@ class RecordsAnalytics {
         List<AnalyticsFilterOptionsResponse.Option> parishes = new ArrayList<>();
         for (Object[] r : repository.rows("select p.id::text, p.name, d.id::text" + units + " order by p.name", ctx.params)) parishes.add(option(r[0], r[1], r[2]));
         List<AnalyticsFilterOptionsResponse.Option> types = new ArrayList<>();
-        for (Object[] r : repository.rows("select type_code, type_name from training_course_type where status = true order by type_name", ctx.params)) types.add(option(r[0], r[1], null));
+        // Loại khóa đi riêng theo giáo phận: chỉ lấy danh mục của giáo phận trong phạm vi (super admin xem mọi giáo phận).
+        String typeScope = switch (ctx.scope.type()) {
+            case ALL -> "";
+            case DIOCESE -> " and diocese_id = :dioceseId";
+            case DEANERY -> " and diocese_id = (select d.diocese_id from deanery d where d.id = :deaneryId)";
+            case PARISH -> " and diocese_id = (select d.diocese_id from parish p join deanery d on d.id = p.deanery_id where p.id = :parishId)";
+        };
+        for (Object[] r : repository.rows("select type_code, type_name from training_course_type where status = true" + typeScope + " order by type_name", ctx.params)) types.add(option(r[0], r[1], null));
         List<AnalyticsFilterOptionsResponse.Option> levels = new ArrayList<>();
         // Cấp bậc khai báo theo từng giáo phận (cùng mã ở nhiều giáo phận): chỉ lấy giáo phận trong phạm vi, mỗi mã một lần.
         String levelScope = switch (ctx.scope.type()) {

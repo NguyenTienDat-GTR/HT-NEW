@@ -69,7 +69,7 @@ public class LeaderLevelRepository {
     }
 
     // Số nơi dùng từng cấp trong giáo phận: huynh trưởng, lịch sử cấp bậc và hồ sơ tham dự của giáo phận đó;
-    // loại khóa là danh mục dùng chung nên tính theo mã trên toàn hệ thống.
+    // loại khóa cũng là danh mục riêng của giáo phận đó.
     @Transactional(readOnly = true)
     @SuppressWarnings("unchecked")
     public Map<String, Usage> usageByCode(UUID dioceseId) {
@@ -79,7 +79,8 @@ public class LeaderLevelRepository {
                           join parish p on p.id = x.parish_id join deanery de on de.id = p.deanery_id
                          where de.diocese_id = :dioceseId and x.leader_level = lv.level_code),
                        (select count(*) from training_course_type t
-                         where t.required_current_level = lv.level_code or t.resulting_level = lv.level_code),
+                         where t.diocese_id = :dioceseId
+                           and (t.required_current_level = lv.level_code or t.resulting_level = lv.level_code)),
                        (select count(*) from rank_history r
                           join leader x on x.id = r.leader_id
                           join parish p on p.id = x.parish_id join deanery de on de.id = p.deanery_id

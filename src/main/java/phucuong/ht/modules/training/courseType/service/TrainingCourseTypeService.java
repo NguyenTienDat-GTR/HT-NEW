@@ -13,6 +13,7 @@ import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType;
+import phucuong.ht.modules.training.courseType.security.CourseTypeDioceseGuard;
 import phucuong.ht.modules.training.courseType.security.TrainingCourseTypeAccessEvaluator;
 import phucuong.ht.modules.training.courseType.model.request.TrainingCourseTypeCreateRequest;
 import phucuong.ht.modules.training.courseType.model.request.TrainingCourseTypeUpdateRequest;
@@ -32,6 +33,7 @@ public class TrainingCourseTypeService {
     private final TrainingCourseRepository trainingCourseRepository;
     private final CommonValidationHelper commonValidationHelper;
     private final LeaderLevelService leaderLevelService;
+    private final CourseTypeDioceseGuard dioceseGuard;
     private final phucuong.ht.common.utils.AuditActorNameResolver auditActorNameResolver;
 
     @EvictCaches.Courses
@@ -40,6 +42,7 @@ public class TrainingCourseTypeService {
     @Transactional
     public TrainingCourseTypeResponse create(TrainingCourseTypeCreateRequest request, Authentication authentication) {
         requireManagementUnitType(request.getManagementUnitType());
+        UUID dioceseId = dioceseGuard.requireActorDioceseId(authentication);
         String typeCode = generateUniqueTypeCode();
 
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tạo loại khóa huấn luyện");
@@ -47,6 +50,7 @@ public class TrainingCourseTypeService {
 
         TrainingCourseType courseType = new TrainingCourseType();
         courseType.setTypeCode(typeCode);
+        courseType.setDioceseId(dioceseId);
         courseType.setTypeName(normalizeText(request.getTypeName()));
         courseType.setManagementUnitType(request.getManagementUnitType());
         courseType.setRequiredCurrentLevel(leaderLevelService.requireExistingOrNull(request.getRequiredCurrentLevel(), "Cấp yêu cầu", actorDioceseId(authentication)));
@@ -56,7 +60,7 @@ public class TrainingCourseTypeService {
         courseType.setResultingLevel(leaderLevelService.requireExistingOrNull(request.getResultingLevel(), "Cấp độ đạt được", actorDioceseId(authentication)));
         courseType.setCertificateShortCode(normalizeText(request.getCertificateShortCode()));
         requireShortCodeForCertified(courseType);
-        courseType.setPrerequisiteType(resolvePrerequisite(typeCode, request.getPrerequisiteTypeCode()));
+        courseType.setPrerequisiteType(resolvePrerequisite(typeCode, request.getPrerequisiteTypeCode(), dioceseId));
         courseType.setStatus(Boolean.TRUE);
         courseType.setCreatedAt(now);
         courseType.setUpdatedAt(now);
@@ -81,7 +85,8 @@ public class TrainingCourseTypeService {
         BaseSearchRequest source = request == null ? new BaseSearchRequest() : request;
         boolean diocese = hasAuthority(authentication, TrainingCourseTypeAccessEvaluator.READ_DIOCESE);
         boolean deanery = hasAuthority(authentication, TrainingCourseTypeAccessEvaluator.READ_DEANERY);
-        if (diocese == deanery) {
+        java.util.Optional<UUID> actorDiocese = dioceseGuard.actorDioceseId(authentication);
+        if (diocese == deanery && actorDiocese.isEmpty()) {
             return source;
         }
         BaseSearchRequest copy = new BaseSearchRequest();
@@ -93,7 +98,11 @@ public class TrainingCourseTypeService {
         copy.setStatus(source.getStatus());
         copy.setSortBy(source.getSortBy());
         copy.setSortDirection(source.getSortDirection());
-        copy.getFilters().put("managementUnitType", deanery ? UnitType.DEANERY : UnitType.DIOCESE);
+        if (diocese != deanery) {
+            copy.getFilters().put("managementUnitType", deanery ? UnitType.DEANERY : UnitType.DIOCESE);
+        }
+        // Danh mục loại khóa đi riêng theo giáo phận: chỉ thấy loại khóa của giáo phận mình.
+        actorDiocese.ifPresent(id -> copy.getFilters().put("dioceseId", id));
         return copy;
     }
 
@@ -104,6 +113,7 @@ public class TrainingCourseTypeService {
 
     public TrainingCourseTypeResponse findById(String typeCode, Authentication authentication) {
         TrainingCourseType courseType = requireType(typeCode);
+        dioceseGuard.requireSameDiocese(courseType, authentication);
         return toResponse(courseType).toBuilder()
                 .createdByName(auditActorNameResolver.resolve(courseType.getCreatedBy()))
                 .updatedByName(auditActorNameResolver.resolve(courseType.getUpdatedBy()))
@@ -116,6 +126,7 @@ public class TrainingCourseTypeService {
     @Transactional
     public TrainingCourseTypeResponse update(String typeCode, TrainingCourseTypeUpdateRequest request, Authentication authentication) {
         TrainingCourseType courseType = requireType(typeCode);
+        dioceseGuard.requireSameDiocese(courseType, authentication);
 
         if (request.getManagementUnitType() != null && request.getManagementUnitType() != courseType.getManagementUnitType()) {
             requireManagementUnitType(request.getManagementUnitType());
@@ -150,7 +161,7 @@ public class TrainingCourseTypeService {
         if (Boolean.TRUE.equals(request.getClearPrerequisite())) {
             courseType.setPrerequisiteType(null);
         } else if (request.getPrerequisiteTypeCode() != null && !request.getPrerequisiteTypeCode().isBlank()) {
-            courseType.setPrerequisiteType(resolvePrerequisite(typeCode, request.getPrerequisiteTypeCode()));
+            courseType.setPrerequisiteType(resolvePrerequisite(typeCode, request.getPrerequisiteTypeCode(), courseType.getDioceseId()));
         }
 
         requireShortCodeForCertified(courseType);
@@ -166,6 +177,7 @@ public class TrainingCourseTypeService {
     public TrainingCourseTypeResponse toggleStatus(String typeCode, StatusToggleRequest request, Authentication authentication) {
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái loại khóa huấn luyện");
+        dioceseGuard.requireSameDiocese(requireType(typeCode), authentication);
         trainingCourseTypeRepository.toggleStatus(typeCode, actor);
         return findById(typeCode, authentication);
     }
@@ -201,7 +213,7 @@ public class TrainingCourseTypeService {
         return candidate;
     }
 
-    private TrainingCourseType resolvePrerequisite(String typeCode, String prerequisiteTypeCode) {
+    private TrainingCourseType resolvePrerequisite(String typeCode, String prerequisiteTypeCode, UUID dioceseId) {
         if (prerequisiteTypeCode == null || prerequisiteTypeCode.isBlank()) {
             return null;
         }
@@ -209,8 +221,12 @@ public class TrainingCourseTypeService {
         if (normalized.equals(typeCode)) {
             throw commonValidationHelper.validationError("Loại khóa không thể là khóa tiên quyết của chính nó");
         }
-        return trainingCourseTypeRepository.findByCodeWithPrerequisite(normalized)
+        TrainingCourseType prerequisite = trainingCourseTypeRepository.findByCodeWithPrerequisite(normalized)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy loại khóa tiên quyết: " + normalized));
+        if (dioceseId != null && !dioceseId.equals(prerequisite.getDioceseId())) {
+            throw commonValidationHelper.validationError("Khóa tiên quyết phải thuộc cùng giáo phận");
+        }
+        return prerequisite;
     }
 
     private TrainingCourseType requireType(String typeCode) {
@@ -234,6 +250,7 @@ public class TrainingCourseTypeService {
         return TrainingCourseTypeResponse.builder()
                 .typeCode(courseType.getTypeCode())
                 .typeName(courseType.getTypeName())
+                .dioceseId(courseType.getDioceseId())
                 .managementUnitType(courseType.getManagementUnitType())
                 .requiredCurrentLevel(courseType.getRequiredCurrentLevel())
                 .requiredMinAge(courseType.getRequiredMinAge())

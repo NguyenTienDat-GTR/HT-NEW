@@ -64,8 +64,8 @@ public class CertificateConfigController {
 
     @GetMapping("/config/course-types")
     @PreAuthorize("@certificateConfigAccessEvaluator.canRead(authentication)")
-    public apiResponse<List<CertifiedCourseTypeResponse>> courseTypes() {
-        return apiResponse.success("Lấy danh sách loại khóa có yêu cầu chứng nhận thành công", service.certifiedCourseTypes());
+    public apiResponse<List<CertifiedCourseTypeResponse>> courseTypes(Authentication authentication) {
+        return apiResponse.success("Lấy danh sách loại khóa có yêu cầu chứng nhận thành công", service.certifiedCourseTypes(authentication));
     }
 
     @GetMapping("/config/resolve")
