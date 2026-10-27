@@ -14,7 +14,7 @@ import java.util.Map;
 final class AnalyticsContext {
     static final String TZ = "'Asia/Ho_Chi_Minh'";
     static final String UNITS_JOIN = " join parish p on p.id = l.parish_id join deanery d on d.id = p.deanery_id join diocese di on di.id = d.diocese_id ";
-    static final String LEVEL_JOIN = " left join leader_level ll on ll.level_code = l.leader_level ";
+    static final String LEVEL_JOIN = " left join leader_level ll on ll.level_code = l.leader_level and ll.diocese_id = di.id ";
     static final String LEADER_FROM = " from leader l" + UNITS_JOIN + LEVEL_JOIN;
     static final String PARTICIPATION_FROM = " from course_participation cp join training_course c on c.course_code = cp.course_id"
             + " left join training_course_type ct on ct.type_code = c.course_type_code join leader l on l.id = cp.leader_id" + UNITS_JOIN + LEVEL_JOIN;

@@ -162,7 +162,7 @@ class PeopleAnalytics {
     /** Thăng cấp trong kỳ theo cấp bậc đạt được (bỏ các lượt đã hoàn tác). */
     private List<AnalyticsResponse.Breakdown> promotionLevels(AnalyticsContext ctx) {
         String sql = "select rh.new_level, max(nl.level_name), count(*) from rank_history rh join leader l on l.id = rh.leader_id" + UNITS_JOIN
-                + " left join leader_level nl on nl.level_code = rh.new_level where " + ctx.leaders(false)
+                + " left join leader_level nl on nl.level_code = rh.new_level and nl.diocese_id = di.id where " + ctx.leaders(false)
                 + " and rh.status = true and coalesce(rh.reverted, false) = false and rh.promotion_date between :curFrom and :curTo group by 1 order by count(*) desc";
         List<AnalyticsResponse.Breakdown> result = new ArrayList<>();
         for (Object[] r : repository.rows(sql, ctx.params)) result.add(breakdown("promotionLevel", String.valueOf(r[0]), r[1] == null ? null : String.valueOf(r[1]), Map.of("count", num(r[2]))));
