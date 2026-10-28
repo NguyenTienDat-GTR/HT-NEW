@@ -51,6 +51,23 @@ class ParishAccessEvaluatorTest {
     }
 
     @Test
+    void canCreateShouldAllowDioceseScopedPermissionAndRejectSuperAdmin() {
+        Authentication dioceseAdmin = authentication(
+                "admin-diocese",
+                List.of("ADMIN_DIOCESE"),
+                List.of(ParishAccessEvaluator.CREATE_DIOCESE)
+        );
+        Authentication superAdmin = authentication(
+                "superadmin",
+                List.of("SUPER_ADMIN"),
+                List.of(ParishAccessEvaluator.CREATE_DIOCESE)
+        );
+
+        assertTrue(parishAccessEvaluator.canCreate(dioceseAdmin));
+        assertFalse(parishAccessEvaluator.canCreate(superAdmin));
+    }
+
+    @Test
     void canReadShouldAllowDeaneryScopedPermissionForMatchingParish() {
         UUID parishId = UUID.randomUUID();
         UUID deaneryId = UUID.randomUUID();

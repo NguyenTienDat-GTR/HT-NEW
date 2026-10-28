@@ -41,6 +41,16 @@ public class ParishRepository extends BaseRepo<Parish, UUID> {
         return count == null ? 0 : count.intValue();
     }
 
+    // Giáo phận của giáo xứ, tra bằng truy vấn để không phụ thuộc vào proxy lazy ngoài phiên.
+    public Optional<UUID> findDioceseIdById(UUID parishId) {
+        return entityManager.createQuery(
+                        "select p.deanery.diocese.id from Parish p where p.id = :id", UUID.class)
+                .setParameter("id", parishId)
+                .getResultList()
+                .stream()
+                .findFirst();
+    }
+
     public boolean existsByNameAndDeaneryId(String name, UUID deaneryId) {
         Long count = entityManager.createQuery(
                         """

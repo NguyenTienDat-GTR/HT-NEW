@@ -689,7 +689,7 @@ Parish authorization behavior:
 - seeded diocese-scoped admins use `organization.parish.read.diocese` to list parishes inside their own diocese
 - seeded deanery-scoped admins use `organization.parish.read.deanery`, `organization.parish.create.deanery`, and `organization.parish.toggle.deanery` for direct-child parishes inside their own deanery
 - parish-scoped admins use `organization.parish.read.parish` and `organization.parish.update.parish`
-- seeded diocese-scoped admins cannot create, update, delete, or toggle parishes because parish is a grandchild unit for diocese scope
+- diocese-scoped admins can create a parish in a deanery of their own diocese when granted `organization.parish.create.diocese` (`ParishScopeHelper.enforceCreateScope` checks the deanery's diocese); they still cannot update or delete parishes (toggle follows `toggle.diocese`)
 - seeded deanery-scoped admins cannot update or delete parishes
 - parish-scoped admins can read, update, and list only their own parish
 - parish-scoped admins cannot create or delete parishes
@@ -1526,3 +1526,8 @@ Ma trận endpoint (`endpoint-contract-matrix.psv`) hiện có 124 route.
 - Migration `V105__course_type_per_diocese.sql`: `training_course_type.diocese_id` (bắt buộc). Danh mục hiện có được sao chép cho mọi giáo phận (mã UUID mới); khóa huấn luyện, thành phần điểm, khóa tiên quyết và gán cấu hình chứng nhận được chuyển sang bản sao của đúng giáo phận (gán `SYSTEM` áp dụng cho mọi bản sao). Loại khóa gốc dùng chung bị xóa. Giáo phận tạo sau bắt đầu với danh mục rỗng.
 - `CourseTypeDioceseGuard`: tài khoản chỉ xem / dùng / sửa loại khóa của giáo phận mình (super admin không thuộc giáo phận nào thì đọc được tất cả nhưng không tạo được). Áp dụng ở `TrainingCourseTypeService`, tạo/sửa khóa (`TrainingCourseService`), thành phần điểm, cấu hình chứng nhận.
 - Danh sách loại khóa lọc theo `dioceseId`; khóa tiên quyết phải cùng giáo phận; thống kê sử dụng cấp độ và danh sách loại khóa của analytics cũng tính theo giáo phận.
+
+## 2026-10-28 Sửa lỗi tạo huynh trưởng và cho admin giáo phận tạo giáo xứ (nhánh `fix/leader-create-diocese-parish-create`)
+
+- `LeaderService.create` không còn đọc `parish.getDeanery().getDiocese()` qua proxy lazy ngoài phiên (gây `LazyInitializationException` → 500). Giáo phận của giáo xứ lấy bằng `ParishRepository.findDioceseIdById` (qua `LeaderValidationHelper.findDioceseIdOfParish`).
+- `POST /api/parishes`: `ParishAccessEvaluator.canCreate` chấp nhận thêm `organization.parish.create.diocese`; `ParishScopeHelper.enforceCreateScope` chỉ cho tạo trong giáo hạt thuộc giáo phận của tài khoản (ngoài phạm vi → 403). SUPER_ADMIN vẫn không tạo được. Test: `ParishAccessEvaluatorTest.canCreateShouldAllowDioceseScopedPermissionAndRejectSuperAdmin`.

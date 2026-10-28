@@ -38,6 +38,7 @@ public class ParishAccessEvaluator {
             return false;
         }
         return hasAuthority(authentication, CREATE_ALL)
+                || hasAuthority(authentication, CREATE_DIOCESE)
                 || hasAuthority(authentication, CREATE_DEANERY);
     }
 

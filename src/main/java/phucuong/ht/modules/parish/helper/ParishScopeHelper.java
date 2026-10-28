@@ -8,6 +8,7 @@ import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.modules.auth.repository.AccountRepository;
 import phucuong.ht.modules.deanery.model.entity.Deanery;
+import phucuong.ht.modules.deanery.repository.DeaneryRepository;
 import phucuong.ht.modules.parish.model.entity.Parish;
 import phucuong.ht.modules.parish.model.request.ParishCreateRequest;
 import phucuong.ht.modules.parish.security.ParishAccessEvaluator;
@@ -21,9 +22,20 @@ public class ParishScopeHelper {
     private final securityUtils securityUtils;
     private final AccountRepository accountRepository;
     private final CommonValidationHelper commonValidationHelper;
+    private final DeaneryRepository deaneryRepository;
 
     public void enforceCreateScope(ParishCreateRequest request, Authentication authentication) {
         if (securityUtils.hasAuthority(authentication, ParishAccessEvaluator.CREATE_ALL)) {
+            return;
+        }
+
+        if (securityUtils.hasAuthority(authentication, ParishAccessEvaluator.CREATE_DIOCESE)) {
+            UUID activeDioceseId = getRequiredActiveDioceseId(authentication, ParishAccessEvaluator.CREATE_DIOCESE);
+            UUID targetDioceseId = request.getDeaneryId() == null ? null
+                    : deaneryRepository.findDioceseIdByDeaneryId(request.getDeaneryId()).orElse(null);
+            if (!activeDioceseId.equals(targetDioceseId)) {
+                throw commonValidationHelper.forbidden("Không thể tạo giáo xứ ngoài phạm vi giáo phận hiện tại");
+            }
             return;
         }
 
