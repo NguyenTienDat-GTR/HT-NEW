@@ -292,3 +292,4 @@ POST /api/training/courses/{courseCode}/attendance/lookup|200|401|403|400|404|40
 GET /api/training/courses/{courseCode}/attendance/participants/{participationId}|200|401|403|N/A: both identifiers are opaque strings checked as not found|404|N/A: read-only endpoint does not mutate state
 POST /api/training/attendance/scan|200|401|403|400|404|409
 POST /api/training/attendance/lookup|200|401|403|400|404|409
+GET /api/search/quick|200|401|N/A: any authenticated account may search; results are filtered per permission and scope|400|N/A: search endpoint has no individual resource lookup|N/A: read-only search does not mutate state
