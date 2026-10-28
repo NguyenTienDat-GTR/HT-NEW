@@ -55,7 +55,7 @@ public class ParishValidationHelper {
     public void validateCreateInput(ParishCreateRequest request) {
         organizationUnitValidationHelper.normalizeCreateInput(request);
         if (request != null) {
-            request.setChapterName(commonValidationHelper.normalizeRequiredText(request.getChapterName()));
+            request.setChapterName(commonValidationHelper.normalizeOptionalText(request.getChapterName()));
         }
     }
 

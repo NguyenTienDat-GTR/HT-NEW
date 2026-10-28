@@ -73,6 +73,7 @@ class CrossDeaneryServiceTest {
     private AccountScopeValidationHelper scope;
     private CrossDeaneryService service;
     private final Authentication authentication = mock(Authentication.class);
+    private phucuong.ht.modules.auth.repository.AccountRepository accountRepository;
 
     private final Diocese diocese = diocese();
     private final Deanery courseDeanery = deanery("Giáo hạt A", diocese);
@@ -97,6 +98,7 @@ class CrossDeaneryServiceTest {
         notificationService = mock(TrainingNotificationService.class);
         TrainingNotificationRecipientResolver resolver = mock(TrainingNotificationRecipientResolver.class);
         AuditActorNameResolver names = mock(AuditActorNameResolver.class);
+        accountRepository = mock(phucuong.ht.modules.auth.repository.AccountRepository.class);
 
         when(validation.validationError(anyString())).thenAnswer(inv -> new ApiException(HttpStatus.BAD_REQUEST, errorCode.VALIDATION_ERROR, inv.getArgument(0)));
         when(validation.forbidden(anyString())).thenAnswer(inv -> new ApiException(HttpStatus.FORBIDDEN, errorCode.ACCESS_DENIED, inv.getArgument(0)));
@@ -147,7 +149,7 @@ class CrossDeaneryServiceTest {
 
         service = new CrossDeaneryService(requestRepository, courseRepository, participationRepository, participationService, leaderRepository,
                 parishRepository, deaneryRepository, new TrainingWorkflowSupport(), mock(CourseActivityGuard.class), validation, scope, security,
-                mock(LeaderLevelService.class), resolver, notificationService, names);
+                mock(LeaderLevelService.class), resolver, notificationService, names, accountRepository);
     }
 
     private CreateRequest request(String reason) {
@@ -208,6 +210,20 @@ class CrossDeaneryServiceTest {
         when(participationRepository.existsByLeaderIdAndCourseCode(leader.getId(), "KH-A")).thenReturn(true);
         ApiException error = assertThrows(ApiException.class, () -> service.create("KH-A", request("lý do"), authentication));
         assertEquals(HttpStatus.CONFLICT, error.getStatus());
+    }
+
+    @Test
+    void decisionNotificationGoesToUsernameOfLeaderLinkedRequester() {
+        asApprover();
+        CrossDeaneryRequest request = pendingRequest();
+        UUID requesterLeaderId = UUID.randomUUID();
+        request.setCreatedBy(requesterLeaderId.toString());
+        when(requestRepository.findByIdWithDetails("req-1")).thenReturn(Optional.of(request));
+        when(accountRepository.findActiveUsernamesByLeaderId(requesterLeaderId)).thenReturn(List.of("parish-admin"));
+
+        service.decide("req-1", new DecisionRequest(true, null, List.of()), authentication);
+
+        verify(notificationService).notifyUsers(eq(List.of("parish-admin")), any());
     }
 
     @Test

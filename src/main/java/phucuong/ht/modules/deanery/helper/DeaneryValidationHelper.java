@@ -48,7 +48,7 @@ public class DeaneryValidationHelper {
     public void validateCreateInput(DeaneryCreateRequest request) {
         organizationUnitValidationHelper.normalizeCreateInput(request);
         if (request != null) {
-            request.setAssociationName(commonValidationHelper.normalizeRequiredText(request.getAssociationName()));
+            request.setAssociationName(commonValidationHelper.normalizeOptionalText(request.getAssociationName()));
         }
     }
 

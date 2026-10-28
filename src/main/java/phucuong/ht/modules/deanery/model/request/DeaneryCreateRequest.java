@@ -1,6 +1,5 @@
 package phucuong.ht.modules.deanery.model.request;
 
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
@@ -15,6 +14,6 @@ public class DeaneryCreateRequest extends OrganizationUnitCreateRequest {
     @NotNull(message = "ID giáo phận là bắt buộc")
     private UUID dioceseId;
 
-    @NotBlank(message = "Tên hiệp đoàn là bắt buộc")
+    // Không bắt buộc: nhiều giáo hạt chưa thành lập hiệp đoàn.
     private String associationName;
 }

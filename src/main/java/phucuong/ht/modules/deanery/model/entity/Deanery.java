@@ -23,6 +23,6 @@ public class Deanery extends OrganizationUnit {
     @JoinColumn(name = "diocese_id", nullable = false)
     private Diocese diocese;
 
-    @Column(name = "association_name", nullable = false)
+    @Column(name = "association_name")
     private String associationName;
 }
