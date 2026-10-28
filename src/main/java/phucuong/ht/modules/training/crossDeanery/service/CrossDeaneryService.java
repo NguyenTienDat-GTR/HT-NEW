@@ -39,6 +39,7 @@ import phucuong.ht.modules.training.crossDeanery.model.CrossDeaneryModels.Reques
 import phucuong.ht.modules.training.crossDeanery.model.CrossDeaneryStatus;
 import phucuong.ht.modules.training.crossDeanery.model.entity.CrossDeaneryRequest;
 import phucuong.ht.modules.training.crossDeanery.model.entity.CrossDeaneryRequestItem;
+import phucuong.ht.modules.training.crossDeanery.repository.CrossDeaneryCourseAccessRepository;
 import phucuong.ht.modules.training.crossDeanery.repository.CrossDeaneryRequestRepository;
 import phucuong.ht.modules.training.trainingCourse.model.entity.TrainingCourse;
 import phucuong.ht.modules.training.trainingCourse.repository.TrainingCourseRepository;
@@ -67,6 +68,7 @@ public class CrossDeaneryService {
     public static final String EVENT_REQUESTED = "training.cross_deanery.requested";
     public static final String EVENT_APPROVED = "training.cross_deanery.approved";
     public static final String EVENT_REJECTED = "training.cross_deanery.rejected";
+    public static final String EVENT_CANCELLED = "training.cross_deanery.cancelled";
     private static final int MAX_REASON = 500;
     private static final int MAX_NOTE = 1000;
 
@@ -87,6 +89,8 @@ public class CrossDeaneryService {
     private final TrainingNotificationService trainingNotificationService;
     private final AuditActorNameResolver auditActorNameResolver;
     private final phucuong.ht.modules.auth.repository.AccountRepository accountRepository;
+    private final CrossDeaneryCourseAccessRepository accessRepository;
+    private final CrossDeaneryCourseInfoBuilder courseInfoBuilder;
     @Autowired(required = false)
     private UnitOperationalStatusService unitOperationalStatusService;
     @Autowired(required = false)
@@ -354,6 +358,7 @@ public class CrossDeaneryService {
         request.setDecidedAt(now);
         request.setUpdatedAt(now);
         request.setUpdatedBy(actor);
+        notifyHomeDeaneryOfCancel(request, actor);
         return toResponse(request, authentication, new Names());
     }
 
@@ -426,6 +431,29 @@ public class CrossDeaneryService {
                 .build());
     }
 
+    // Giáo xứ thu hồi yêu cầu: báo cho giáo hạt nhà để không còn phải xử lý yêu cầu đó.
+    private void notifyHomeDeaneryOfCancel(CrossDeaneryRequest request, String actor) {
+        List<String> recipients = notificationRecipientResolver.resolveRecipients(null,
+                CourseParticipationAccessEvaluator.CROSS_APPROVE_DEANERY, UnitType.DEANERY, request.getHomeDeaneryId());
+        if (recipients.isEmpty()) {
+            return;
+        }
+        TrainingCourse course = request.getCourse();
+        String sender = request.getParishId() == null ? "Giáo hạt" : parishRepository.findById(request.getParishId()).map(Parish::getName).orElse("Giáo xứ");
+        trainingNotificationService.notifyUsers(recipients, TrainingNotificationCommand.builder()
+                .eventType(EVENT_CANCELLED)
+                .title("Yêu cầu gửi liên giáo hạt đã được thu hồi")
+                .message(sender + " đã thu hồi yêu cầu gửi " + request.getItems().size() + " hồ sơ sang khóa " + courseLabel(course) + ".")
+                .senderUnitType(request.getParishId() == null ? UnitType.DEANERY : UnitType.PARISH)
+                .senderUnitId(request.getParishId() == null ? request.getHomeDeaneryId() : request.getParishId())
+                .courseCode(course.getCourseCode())
+                .totalCount(request.getItems().size())
+                .approvedCount(0)
+                .pendingCount(0)
+                .actor(actor)
+                .build());
+    }
+
     private List<String> usernamesOfActor(String actor) {
         if (actor == null || actor.isBlank()) {
             return List.of();
@@ -465,6 +493,13 @@ public class CrossDeaneryService {
         UUID homeDiocese = sender.home().getDiocese() == null ? null : sender.home().getDiocese().getId();
         if (courseDiocese == null || !courseDiocese.equals(homeDiocese)) {
             throw commonValidationHelper.forbidden("Chỉ gửi được cho khóa của giáo hạt cùng giáo phận");
+        }
+        // Chỉ gửi được khi giáo hạt tổ chức mở liên giáo hạt và giáo hạt nhà đã cho phép khóa này.
+        if (!Boolean.TRUE.equals(course.getOpenToOtherDeaneries())) {
+            throw commonValidationHelper.forbidden("Khóa này không mở đăng ký cho giáo hạt khác");
+        }
+        if (!accessRepository.isAllowed(courseCode, sender.home().getId())) {
+            throw commonValidationHelper.forbidden("Giáo hạt của bạn chưa cho phép gửi hồ sơ sang khóa này");
         }
         courseActivityGuard.requireActive(course);
         courseActivityGuard.requireNotEnded(course);
@@ -552,7 +587,7 @@ public class CrossDeaneryService {
                 request.getRequesterType().name(), effectiveStatus(request), request.getDecisionNote(),
                 auditActorNameResolver.resolve(request.getDecidedBy()), request.getDecidedAt(),
                 auditActorNameResolver.resolve(request.getCreatedBy()), request.getCreatedAt(),
-                canDecide(request, authentication), canCancel(request, authentication, actor), items);
+                canDecide(request, authentication), canCancel(request, authentication, actor), items, courseInfoBuilder.build(course));
     }
 
     private String cleanText(String value, int max, String label) {

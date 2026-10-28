@@ -282,6 +282,8 @@ GET /api/training/cross-deanery/requests|200|401|403|400|N/A: list endpoint does
 GET /api/training/cross-deanery/requests/{id}|200|401|403|N/A: id is an opaque string|404|N/A: read-only endpoint does not mutate state
 POST /api/training/cross-deanery/requests/{id}/decision|200|401|403|400|404|409
 DELETE /api/training/cross-deanery/requests/{id}|200|401|403|N/A: id is an opaque string|404|409
+GET /api/training/cross-deanery/course-invitations|200|401|403|N/A: list endpoint has no request parameters|N/A: list endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+POST /api/training/cross-deanery/course-invitations/{courseCode}/decision|200|401|403|400|404|409
 PATCH /api/training/participations/{id}/registration-note|200|401|403|400|404|409
 GET /api/training/courses/participants/import-template|200|401|403|N/A: template download has no request parameters|N/A: template download does not resolve a resource|N/A: read-only endpoint does not mutate state
 GET /api/training/courses/{courseCode}/attendance/participants|200|401|403|400|404|N/A: read-only endpoint does not mutate state

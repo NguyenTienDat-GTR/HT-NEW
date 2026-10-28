@@ -42,6 +42,9 @@ public class TrainingCourseUpdateRequest {
     // Giáo hạt mà khóa giáo phận dành cho (một đợt): null = giữ nguyên; danh sách (kể cả rỗng = mở cho tất cả) = thay thế.
     private List<java.util.UUID> targetDeaneryIds;
 
+    // Khóa giáo hạt mở đăng ký cho các giáo hạt khác cùng giáo phận (chờ từng giáo hạt cho phép); null = giữ nguyên.
+    private Boolean openToOtherDeaneries;
+
     // null = giữ nguyên (khi sửa) hoặc tắt (khi tạo).
     private Boolean autoApproveEligible;
 

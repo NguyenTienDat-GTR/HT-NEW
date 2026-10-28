@@ -139,6 +139,15 @@ public class ParishRepository extends BaseRepo<Parish, UUID> {
                 .getResultList();
     }
 
+    // Mã các giáo xứ đang hoạt động của một giáo hạt.
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<UUID> findActiveIdsByDeaneryId(UUID deaneryId) {
+        return entityManager.createQuery(
+                        "select p.id from Parish p where p.deanery.id = :deaneryId and p.status = true", UUID.class)
+                .setParameter("deaneryId", deaneryId)
+                .getResultList();
+    }
+
     public Optional<UUID> findDeaneryIdByParishId(UUID parishId) {
         List<UUID> results = entityManager.createQuery(
                         """

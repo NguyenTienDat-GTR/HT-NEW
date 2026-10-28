@@ -36,6 +36,7 @@ import phucuong.ht.modules.training.crossDeanery.model.CrossDeaneryModels.Reques
 import phucuong.ht.modules.training.crossDeanery.model.CrossDeaneryStatus;
 import phucuong.ht.modules.training.crossDeanery.model.entity.CrossDeaneryRequest;
 import phucuong.ht.modules.training.crossDeanery.model.entity.CrossDeaneryRequestItem;
+import phucuong.ht.modules.training.crossDeanery.repository.CrossDeaneryCourseAccessRepository;
 import phucuong.ht.modules.training.crossDeanery.repository.CrossDeaneryRequestRepository;
 import phucuong.ht.modules.training.enums.WorkflowApprovalStatus;
 import phucuong.ht.modules.training.trainingCourse.model.entity.TrainingCourse;
@@ -74,6 +75,7 @@ class CrossDeaneryServiceTest {
     private CrossDeaneryService service;
     private final Authentication authentication = mock(Authentication.class);
     private phucuong.ht.modules.auth.repository.AccountRepository accountRepository;
+    private CrossDeaneryCourseAccessRepository accessRepository;
 
     private final Diocese diocese = diocese();
     private final Deanery courseDeanery = deanery("Giáo hạt A", diocese);
@@ -99,6 +101,8 @@ class CrossDeaneryServiceTest {
         TrainingNotificationRecipientResolver resolver = mock(TrainingNotificationRecipientResolver.class);
         AuditActorNameResolver names = mock(AuditActorNameResolver.class);
         accountRepository = mock(phucuong.ht.modules.auth.repository.AccountRepository.class);
+        accessRepository = mock(CrossDeaneryCourseAccessRepository.class);
+        when(accessRepository.isAllowed(any(), any())).thenReturn(true);
 
         when(validation.validationError(anyString())).thenAnswer(inv -> new ApiException(HttpStatus.BAD_REQUEST, errorCode.VALIDATION_ERROR, inv.getArgument(0)));
         when(validation.forbidden(anyString())).thenAnswer(inv -> new ApiException(HttpStatus.FORBIDDEN, errorCode.ACCESS_DENIED, inv.getArgument(0)));
@@ -120,6 +124,7 @@ class CrossDeaneryServiceTest {
         course.setCourseType(type);
         course.setDeanery(courseDeanery);
         course.setStatus(Boolean.TRUE);
+        course.setOpenToOtherDeaneries(Boolean.TRUE);
         course.setRegistrationEndAt(OffsetDateTime.now().plusDays(3));
         when(courseRepository.findByCodeWithType("KH-A")).thenReturn(Optional.of(course));
 
@@ -149,7 +154,7 @@ class CrossDeaneryServiceTest {
 
         service = new CrossDeaneryService(requestRepository, courseRepository, participationRepository, participationService, leaderRepository,
                 parishRepository, deaneryRepository, new TrainingWorkflowSupport(), mock(CourseActivityGuard.class), validation, scope, security,
-                mock(LeaderLevelService.class), resolver, notificationService, names, accountRepository);
+                mock(LeaderLevelService.class), resolver, notificationService, names, accountRepository, accessRepository, mock(CrossDeaneryCourseInfoBuilder.class));
     }
 
     private CreateRequest request(String reason) {

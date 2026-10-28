@@ -21,6 +21,22 @@ public final class CrossDeaneryModels {
                              LocalDate startDate, LocalDate endDate, OffsetDateTime registrationEndAt) {
     }
 
+    // Thông tin khóa huấn luyện để giáo hạt nhà xem khi cho phép khóa / duyệt yêu cầu liên giáo hạt.
+    public record CourseInfo(String courseTypeName, String location, LocalDate startDate, LocalDate endDate,
+                             OffsetDateTime registrationStartAt, OffsetDateTime registrationEndAt, String additionalNotes,
+                             List<String> requirements) {
+    }
+
+    // Khóa giáo hạt khác đang mở liên giáo hạt, kèm quyết định của giáo hạt nhà: decision = PENDING (chưa quyết định) / ALLOWED / DENIED.
+    public record CourseInvitation(String courseCode, String courseName, UUID hostDeaneryId, String hostDeaneryName, CourseInfo course,
+                                   String decision, String decisionNote, String decidedByName, OffsetDateTime decidedAt,
+                                   boolean registrationClosed, boolean canDecide) {
+    }
+
+    // allowed = true: cho phép giáo xứ trong giáo hạt gửi hồ sơ sang khóa; false: từ chối (bắt buộc note).
+    public record AccessDecisionRequest(boolean allowed, @Size(max = 500, message = "Ghi chú tối đa 500 ký tự") String note) {
+    }
+
     // Huynh trưởng có thể gửi: eligible = đủ điều kiện của khóa đích (không đủ thì gửi dạng ngoại lệ kèm lí do);
     // blockedReason khác null = không gửi được (đã có hồ sơ, đang chờ đồng ý, cấp độ vượt mức ngoại lệ...).
     public record Candidate(UUID leaderId, String holyName, String fullName, String leaderLevel, UUID parishId, String parishName,
@@ -52,7 +68,7 @@ public final class CrossDeaneryModels {
                                   UUID homeDeaneryId, String homeDeaneryName, UUID parishId, String parishName, String requesterType,
                                   CrossDeaneryStatus requestStatus, String decisionNote, String decidedByName, OffsetDateTime decidedAt,
                                   String createdByName, OffsetDateTime createdAt, boolean canDecide, boolean canCancel,
-                                  List<ItemResponse> items) {
+                                  List<ItemResponse> items, CourseInfo course) {
     }
 
     public record SubmitResult(RequestResponse request, int createdParticipations) {

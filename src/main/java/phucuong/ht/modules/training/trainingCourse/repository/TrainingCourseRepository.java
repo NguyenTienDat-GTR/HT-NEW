@@ -93,7 +93,8 @@ public class TrainingCourseRepository extends BaseRepo<TrainingCourse, String> {
         return query.getResultList();
     }
 
-    // Khóa giáo hạt đang mở đăng ký của các giáo hạt KHÁC trong cùng giáo phận (đích của hồ sơ liên giáo hạt).
+    // Khóa giáo hạt đang mở đăng ký của các giáo hạt KHÁC trong cùng giáo phận, đã bật mở liên giáo hạt và được giáo hạt của người gửi
+    // cho phép (đích của hồ sơ liên giáo hạt).
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public List<TrainingCourse> findOpenDeaneryCoursesOfOtherDeaneries(UUID dioceseId, UUID excludeDeaneryId) {
         return entityManager.createQuery(
@@ -104,7 +105,38 @@ public class TrainingCourseRepository extends BaseRepo<TrainingCourse, String> {
                                 join fetch tc.deanery d
                                 where tc.status = true
                                   and tc.pastCourse = false
+                                  and tc.openToOtherDeaneries = true
                                   and tc.registrationStatus = phucuong.ht.modules.training.enums.CourseRegistrationStatus.OPEN
+                                  and ct.managementUnitType = phucuong.ht.common.enums.UnitType.DEANERY
+                                  and d.diocese.id = :dioceseId
+                                  and d.id <> :excludeDeaneryId
+                                  and exists (
+                                      select 1 from CrossDeaneryCourseAccess a
+                                      where a.courseCode = tc.courseCode and a.deaneryId = :excludeDeaneryId
+                                        and a.decision = phucuong.ht.modules.training.crossDeanery.model.CrossDeaneryAccessDecision.ALLOWED
+                                  )
+                                order by tc.startDate desc, tc.courseName
+                                """,
+                        TrainingCourse.class
+                )
+                .setParameter("dioceseId", dioceseId)
+                .setParameter("excludeDeaneryId", excludeDeaneryId)
+                .getResultList();
+    }
+
+    // Khóa giáo hạt của các giáo hạt KHÁC trong giáo phận đang mở liên giáo hạt và chưa kết thúc đăng ký: giáo hạt nhà xem để cho phép / từ chối.
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<TrainingCourse> findCoursesOpenToDeanery(UUID dioceseId, UUID excludeDeaneryId) {
+        return entityManager.createQuery(
+                        """
+                                select tc
+                                from TrainingCourse tc
+                                join fetch tc.courseType ct
+                                join fetch tc.deanery d
+                                where tc.status = true
+                                  and tc.pastCourse = false
+                                  and tc.openToOtherDeaneries = true
+                                  and tc.registrationStatus <> phucuong.ht.modules.training.enums.CourseRegistrationStatus.ENDED
                                   and ct.managementUnitType = phucuong.ht.common.enums.UnitType.DEANERY
                                   and d.diocese.id = :dioceseId
                                   and d.id <> :excludeDeaneryId
