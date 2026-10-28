@@ -232,7 +232,8 @@ public class WorkflowDecisionNotifier {
                 select distinct a.username
                 from account a
                 join account_role ar on ar.username = a.username
-                where a.parish_id = cast(:value as uuid)
+                where (a.parish_id = cast(:value as uuid)
+                       or (a.parish_id is null and a.leader_id in (select l.id from leader l where l.parish_id = cast(:value as uuid))))
                   and a.status = true
                   and ar.status = true
                   and ar.role_code = '%s'

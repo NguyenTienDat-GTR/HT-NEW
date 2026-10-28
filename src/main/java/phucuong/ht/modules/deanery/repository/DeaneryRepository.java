@@ -134,7 +134,7 @@ public class DeaneryRepository extends BaseRepo<Deanery, UUID> {
         return countByDeaneryIds(ids, """
                 select p.deanery.id, count(p)
                 from Parish p
-                where p.deanery.id in :ids
+                where p.deanery.id in :ids and p.unitType = phucuong.ht.modules.parish.model.enums.ParishUnitType.PARISH
                 group by p.deanery.id
                 """);
     }

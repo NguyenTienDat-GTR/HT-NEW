@@ -8,6 +8,7 @@ import phucuong.ht.common.validation.OrganizationUnitValidationHelper;
 import phucuong.ht.modules.deanery.model.entity.Deanery;
 import phucuong.ht.modules.deanery.repository.DeaneryRepository;
 import phucuong.ht.modules.parish.model.entity.Parish;
+import phucuong.ht.modules.parish.model.enums.ParishUnitType;
 import phucuong.ht.modules.parish.model.request.ParishCreateRequest;
 import phucuong.ht.modules.parish.model.request.ParishUpdateRequest;
 import phucuong.ht.modules.parish.repository.ParishRepository;
@@ -56,6 +57,31 @@ public class ParishValidationHelper {
         if (request != null) {
             request.setChapterName(commonValidationHelper.normalizeRequiredText(request.getChapterName()));
         }
+    }
+
+    /**
+     * Giáo họ / giáo điểm phải có giáo xứ cha (loại PARISH) cùng giáo hạt; giáo xứ thì không có cha.
+     * Trả về giáo xứ cha, hoặc null nếu là giáo xứ.
+     */
+    public Parish resolveParent(ParishCreateRequest request, ParishUnitType unitType, UUID deaneryId) {
+        if (unitType == ParishUnitType.PARISH) {
+            if (request.getParentParishId() != null) {
+                throw commonValidationHelper.validationError("Giáo xứ không thuộc giáo xứ nào khác");
+            }
+            return null;
+        }
+        if (request.getParentParishId() == null) {
+            throw commonValidationHelper.validationError(unitType.getLabel() + " phải thuộc một giáo xứ");
+        }
+        Parish parent = parishRepository.findByIdWithDeaneryAndDiocese(request.getParentParishId())
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy giáo xứ: " + request.getParentParishId()));
+        if (parent.getUnitType() != ParishUnitType.PARISH) {
+            throw commonValidationHelper.validationError("Giáo xứ cha phải là giáo xứ, không phải giáo họ hoặc giáo điểm");
+        }
+        if (parent.getDeanery() == null || !parent.getDeanery().getId().equals(deaneryId)) {
+            throw commonValidationHelper.validationError(unitType.getLabel() + " phải cùng giáo hạt với giáo xứ cha");
+        }
+        return parent;
     }
 
     public void validateUpdateInput(ParishUpdateRequest request) {

@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
 import phucuong.ht.common.model.request.OrganizationUnitCreateRequest;
+import phucuong.ht.modules.parish.model.enums.ParishUnitType;
 
 import java.util.UUID;
 
@@ -17,4 +18,9 @@ public class ParishCreateRequest extends OrganizationUnitCreateRequest {
 
     @NotBlank
     private String chapterName;
+
+    // Mặc định là giáo xứ. Giáo họ / giáo điểm bắt buộc có parentParishId (giáo xứ cha cùng giáo hạt).
+    private ParishUnitType unitType;
+
+    private UUID parentParishId;
 }

@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import phucuong.ht.common.model.OrganizationUnit;
 import phucuong.ht.modules.deanery.model.entity.Deanery;
+import phucuong.ht.modules.parish.model.enums.ParishUnitType;
 
 @Entity
 @Table(
@@ -25,4 +26,14 @@ public class Parish extends OrganizationUnit {
 
     @Column(name = "chapter_name", nullable = false)
     private String chapterName;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "unit_type", nullable = false, length = 20)
+    private ParishUnitType unitType = ParishUnitType.PARISH;
+
+    // Chỉ có với giáo họ / giáo điểm: giáo xứ cha.
+    @EqualsAndHashCode.Exclude
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_parish_id")
+    private Parish parentParish;
 }

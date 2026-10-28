@@ -87,6 +87,8 @@ GET /api/parishes/{id}|200|401|403|400|404|N/A: read-only endpoint does not muta
 GET /api/parishes/{id}/status-history|200|401|403|400|404|N/A: read-only endpoint does not mutate state
 GET /api/parishes/{id}/toggle-impact|200|401|403|400|404|N/A: read-only endpoint does not mutate state
 PUT /api/parishes/{id}|200|401|403|400|404|409
+PATCH /api/parishes/{id}/promote|200|401|403|400|404|N/A: promotion has no uniqueness conflict
+PATCH /api/parishes/{id}/parent|200|401|403|400|404|N/A: parent change has no uniqueness conflict
 PATCH /api/parishes/{id}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict
 
 # Positions

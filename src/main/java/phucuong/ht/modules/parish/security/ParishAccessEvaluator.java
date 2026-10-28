@@ -42,6 +42,16 @@ public class ParishAccessEvaluator {
                 || hasAuthority(authentication, CREATE_DEANERY);
     }
 
+    // Đổi giáo xứ cha của giáo họ / giáo điểm: người có quyền tạo giáo xứ trong đúng phạm vi giáo hạt / giáo phận của đơn vị đó.
+    public boolean canChangeParent(Authentication authentication, UUID parishId) {
+        if (hasRole(authentication, "SUPER_ADMIN")) {
+            return false;
+        }
+        return hasAuthority(authentication, CREATE_ALL)
+                || hasDioceseScopedAccess(authentication, parishId, CREATE_DIOCESE)
+                || hasDeaneryScopedAccess(authentication, parishId, CREATE_DEANERY);
+    }
+
     public boolean canList(Authentication authentication) {
         return hasAuthority(authentication, READ_ALL)
                 || hasAuthority(authentication, READ_DIOCESE)

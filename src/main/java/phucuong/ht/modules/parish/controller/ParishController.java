@@ -12,6 +12,7 @@ import phucuong.ht.common.dto.apiResponse;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.modules.parish.model.request.ParishCreateRequest;
+import phucuong.ht.modules.parish.model.request.ParishParentChangeRequest;
 import phucuong.ht.modules.parish.model.request.ParishUpdateRequest;
 import phucuong.ht.modules.parish.model.response.ParishResponse;
 import phucuong.ht.modules.parish.service.ParishService;
@@ -65,7 +66,25 @@ public class ParishController {
     ) {
         return apiResponse.success("Cập nhật giáo xứ thành công", parishService.update(id, request, authentication));
     }
-@PatchMapping("/{id}/toggle-status")
+    // Đổi giáo xứ cha của giáo họ / giáo điểm: admin giáo hạt / giáo phận trong phạm vi (cùng quyền tạo giáo xứ).
+    @PatchMapping("/{id}/parent")
+    @PreAuthorize("@parishAccessEvaluator.canChangeParent(authentication, #id)")
+    public apiResponse<ParishResponse> changeParent(
+            @PathVariable UUID id,
+            @Valid @RequestBody ParishParentChangeRequest request,
+            Authentication authentication
+    ) {
+        return apiResponse.success("Đổi giáo xứ cha thành công", parishService.changeParent(id, request, authentication));
+    }
+
+    // Nâng giáo họ / giáo điểm thành giáo xứ độc lập: cùng quyền với đổi giáo xứ cha.
+    @PatchMapping("/{id}/promote")
+    @PreAuthorize("@parishAccessEvaluator.canChangeParent(authentication, #id)")
+    public apiResponse<ParishResponse> promoteToParish(@PathVariable UUID id, Authentication authentication) {
+        return apiResponse.success("Chuyển thành giáo xứ thành công", parishService.promoteToParish(id, authentication));
+    }
+
+    @PatchMapping("/{id}/toggle-status")
     @PreAuthorize("@parishAccessEvaluator.canToggle(authentication, #id)")
     public apiResponse<ParishResponse> toggleStatus(
             @PathVariable UUID id,

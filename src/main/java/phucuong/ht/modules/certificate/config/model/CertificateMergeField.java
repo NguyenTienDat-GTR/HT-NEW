@@ -13,7 +13,7 @@ public enum CertificateMergeField {
     LEADER_FULL_NAME("leaderFullName", "Tên thánh, họ và tên", "Huynh trưởng"),
     LEADER_BIRTH_DATE("leaderBirthDate", "Ngày sinh", "Huynh trưởng"),
     LEADER_GENDER("leaderGender", "Giới tính", "Huynh trưởng"),
-    LEADER_PARISH_NAME("leaderParishName", "Giáo xứ", "Huynh trưởng"),
+    LEADER_PARISH_NAME("leaderParishName", "Giáo xứ / giáo họ / giáo điểm", "Huynh trưởng"),
     LEADER_DEANERY_NAME("leaderDeaneryName", "Giáo hạt", "Huynh trưởng"),
     LEADER_DIOCESE_NAME("leaderDioceseName", "Giáo phận", "Huynh trưởng"),
     LEADER_LEVEL("leaderLevel", "Cấp hiện tại", "Huynh trưởng"),

@@ -65,7 +65,7 @@ public final class ImportTemplates {
                 "4. Giới tính chỉ nhận: Nam hoặc Nữ (chọn từ danh sách).",
                 "5. Email và Số điện thoại không được trùng với huynh trưởng đã có trong hệ thống hoặc trùng giữa các dòng trong file. Số điện thoại gồm 10 chữ số và bắt đầu bằng 0 (cột đã để định dạng Text để không mất số 0 đầu).",
                 "6. Cấp độ: chọn từ danh sách (sheet \"" + LOOKUP_SHEET + "\") hoặc nhập tên / mã cấp độ trong danh mục của giáo phận. Để trống nghĩa là \"Chưa có cấp\".",
-                "7. Giáo hạt và Giáo xứ phải ĐÃ CÓ trong hệ thống (nhập đúng tên) và giáo xứ phải thuộc đúng giáo hạt đã nhập; nếu chưa có, dòng đó báo lỗi (hệ thống không tự tạo giáo hạt / giáo xứ).",
+                "7. Giáo hạt và Giáo xứ (cột Giáo xứ cũng nhận tên giáo họ / giáo điểm) phải ĐÃ CÓ trong hệ thống (nhập đúng tên) và giáo xứ phải thuộc đúng giáo hạt đã nhập; nếu chưa có, dòng đó báo lỗi (hệ thống không tự tạo giáo hạt / giáo xứ).",
                 "8. Chỉ nhập được huynh trưởng cho giáo xứ trong phạm vi tài khoản của bạn. Chỉ cần một dòng lỗi thì toàn bộ file không được lưu; hệ thống báo rõ sheet, dòng, cột bị lỗi ở khay tác vụ để bạn sửa rồi import lại.",
                 "9. Mỗi lần import tối đa 5.000 dòng.");
         return build(LEADERS_SHEET, "Hướng dẫn import hồ sơ huynh trưởng", columns, samples, guide, levelNames);
@@ -97,7 +97,7 @@ public final class ImportTemplates {
                 "4. Huynh trưởng được tìm theo Email và Số điện thoại (hai thông tin này là duy nhất, nếu khớp hai huynh trưởng khác nhau thì báo lỗi). Không dùng mã định danh (UUID).",
                 "5. Huynh trưởng ĐÃ CÓ HỒ SƠ: hệ thống chỉ thêm huynh trưởng đó vào khóa, KHÔNG tạo mới và KHÔNG sửa hồ sơ (thông tin trong dòng chỉ để kiểm tra đủ dữ liệu). Huynh trưởng CHƯA CÓ HỒ SƠ: hệ thống tạo hồ sơ từ chính dòng này rồi thêm vào khóa.",
                 "6. Ngày sinh theo dạng dd/MM/yyyy; Giới tính chọn Nam hoặc Nữ; Số điện thoại gồm 10 chữ số và bắt đầu bằng 0; Cấp độ chọn từ sheet \"" + LOOKUP_SHEET + "\" (để trống là Chưa có cấp).",
-                "7. Giáo hạt và Giáo xứ phải ĐÃ CÓ trong hệ thống, giáo xứ phải thuộc đúng giáo hạt đã nhập và thuộc giáo phận (khóa giáo phận) hoặc giáo hạt (khóa giáo hạt) của khóa; giáo xứ phải đang hoạt động. Huynh trưởng đã có hồ sơ cũng phải thuộc giáo phận / giáo hạt của khóa.",
+                "7. Giáo hạt và Giáo xứ (cột Giáo xứ cũng nhận tên giáo họ / giáo điểm) phải ĐÃ CÓ trong hệ thống, giáo xứ phải thuộc đúng giáo hạt đã nhập và thuộc giáo phận (khóa giáo phận) hoặc giáo hạt (khóa giáo hạt) của khóa; giáo xứ phải đang hoạt động. Huynh trưởng đã có hồ sơ cũng phải thuộc giáo phận / giáo hạt của khóa.",
                 "8. Kết quả: Đạt hoặc Không đạt (chọn từ danh sách). Tổng điểm từ 0 đến 1000.",
                 "9. Một huynh trưởng chỉ xuất hiện một lần trong file và một lần trong khóa; huynh trưởng đã có trong danh sách tham dự của khóa sẽ báo lỗi.",
                 "10. Nếu khóa có \"Cấp độ đạt được\", học viên Đạt sẽ tự chuyển sang tab \"Duyệt chứng nhận\". Khi duyệt phải chọn ngày duyệt; sau khi duyệt, cấp độ được ghi vào lịch sử cấp độ (cấp hiện tại chỉ tăng nếu cấp mới cao hơn).",
@@ -133,7 +133,7 @@ public final class ImportTemplates {
                 "4. Huynh trưởng được tìm theo Email và Số điện thoại (hai thông tin này là duy nhất, nếu khớp hai huynh trưởng khác nhau thì báo lỗi). Không dùng mã định danh (UUID).",
                 "5. Huynh trưởng ĐÃ CÓ HỒ SƠ: hệ thống chỉ thêm huynh trưởng đó vào khóa, KHÔNG tạo mới và KHÔNG sửa hồ sơ. Huynh trưởng CHƯA CÓ HỒ SƠ (ở cả hai sheet): hệ thống tạo hồ sơ từ chính dòng này rồi thêm vào khóa.",
                 "6. Ngày sinh theo dạng dd/MM/yyyy; Giới tính chọn Nam hoặc Nữ; Số điện thoại gồm 10 chữ số và bắt đầu bằng 0; Cấp độ chọn từ sheet \"" + LOOKUP_SHEET + "\" (để trống là Chưa có cấp).",
-                "7. Giáo hạt và Giáo xứ phải ĐÃ CÓ trong hệ thống, giáo xứ phải thuộc đúng giáo hạt đã nhập và thuộc giáo phận (khóa giáo phận) hoặc giáo hạt (khóa giáo hạt) của khóa; giáo xứ phải đang hoạt động.",
+                "7. Giáo hạt và Giáo xứ (cột Giáo xứ cũng nhận tên giáo họ / giáo điểm) phải ĐÃ CÓ trong hệ thống, giáo xứ phải thuộc đúng giáo hạt đã nhập và thuộc giáo phận (khóa giáo phận) hoặc giáo hạt (khóa giáo hạt) của khóa; giáo xứ phải đang hoạt động.",
                 "8. Sheet \"" + PARTICIPANTS_SHEET + "\": huynh trưởng được đưa thẳng vào danh sách tham dự (đã duyệt), không qua đăng ký và duyệt đăng ký; nếu huynh trưởng không đủ điều kiện của khóa thì báo lỗi, hãy chuyển sang sheet \"" + EXCEPTION_SHEET + "\".",
                 "9. Sheet \"" + EXCEPTION_SHEET + "\": huynh trưởng được đưa vào danh sách CHỜ DUYỆT đăng ký và gắn cờ ngoại lệ kèm lí do; người duyệt xử lý ở tab \"Duyệt đăng ký\". Huynh trưởng đã đủ điều kiện hoặc có cấp độ cao hơn cấp độ đạt được gần nhất của loại khóa thì báo lỗi.",
                 "10. Một huynh trưởng chỉ xuất hiện một lần trong cả file; huynh trưởng đã có hồ sơ đăng ký / tham dự của khóa sẽ báo lỗi. Điểm được chấm sau ở tab \"Chấm điểm\".",
@@ -167,7 +167,7 @@ public final class ImportTemplates {
                 "4. Huynh trưởng được tìm theo Email và Số điện thoại (hai thông tin này là duy nhất, nếu khớp hai huynh trưởng khác nhau thì báo lỗi). Huynh trưởng ĐÃ CÓ HỒ SƠ chỉ được thêm vào khóa (hồ sơ không bị sửa); CHƯA CÓ HỒ SƠ thì được tạo mới từ chính dòng này.",
                 "5. Hồ sơ được import mặc định là ĐÃ DUYỆT đăng ký: vào thẳng danh sách tham dự của khóa và gắn vào đội theo cột Tên đội. Hệ thống không kiểm tra điều kiện tham dự của khóa ở bước này.",
                 "6. Ngày sinh theo dạng dd/MM/yyyy; Giới tính chọn Nam hoặc Nữ; Số điện thoại gồm 10 chữ số và bắt đầu bằng 0; Cấp độ chọn từ sheet \"" + LOOKUP_SHEET + "\" (để trống là Chưa có cấp).",
-                "7. Giáo hạt và Giáo xứ phải ĐÃ CÓ trong hệ thống, giáo xứ phải thuộc đúng giáo hạt đã nhập và thuộc giáo phận (khóa giáo phận) hoặc giáo hạt (khóa giáo hạt) của khóa; giáo xứ phải đang hoạt động.",
+                "7. Giáo hạt và Giáo xứ (cột Giáo xứ cũng nhận tên giáo họ / giáo điểm) phải ĐÃ CÓ trong hệ thống, giáo xứ phải thuộc đúng giáo hạt đã nhập và thuộc giáo phận (khóa giáo phận) hoặc giáo hạt (khóa giáo hạt) của khóa; giáo xứ phải đang hoạt động.",
                 "8. Một huynh trưởng chỉ xuất hiện một lần trong cả file; huynh trưởng đã có hồ sơ đăng ký / tham dự của khóa sẽ báo lỗi.",
                 "9. Chỉ cần một dòng lỗi thì toàn bộ file không được lưu (kể cả huynh trưởng mới); lỗi được báo rõ sheet, dòng, cột ở khay tác vụ để sửa rồi import lại. Mỗi lần import tối đa 5.000 dòng.",
                 "10. Cột \"Ghi chú\" là TÙY CHỌN (có thể bỏ trống, tối đa 1.000 ký tự): ghi chú của hồ sơ đăng ký, hiển thị ở danh sách tham dự và sửa được sau khi import.");

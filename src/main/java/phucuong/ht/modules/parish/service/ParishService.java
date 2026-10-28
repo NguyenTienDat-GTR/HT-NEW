@@ -29,7 +29,9 @@ import phucuong.ht.modules.deanery.model.entity.Deanery;
 import phucuong.ht.modules.parish.helper.ParishScopeHelper;
 import phucuong.ht.modules.parish.helper.ParishValidationHelper;
 import phucuong.ht.modules.parish.model.entity.Parish;
+import phucuong.ht.modules.parish.model.enums.ParishUnitType;
 import phucuong.ht.modules.parish.model.request.ParishCreateRequest;
+import phucuong.ht.modules.parish.model.request.ParishParentChangeRequest;
 import phucuong.ht.modules.parish.model.request.ParishUpdateRequest;
 import phucuong.ht.modules.parish.model.response.ParishResponse;
 import phucuong.ht.modules.parish.repository.ParishRepository;
@@ -88,7 +90,14 @@ public class ParishService {
             Deanery deanery = parishValidationHelper.requireExistingDeanery(request.getDeaneryId());
             requireUnitOperational(UnitType.DEANERY, deanery.getId());
             parishValidationHelper.validateCreateNameUniqueness(request.getName(), deanery.getId());
+            ParishUnitType unitType = request.getUnitType() == null ? ParishUnitType.PARISH : request.getUnitType();
+            Parish parent = parishValidationHelper.resolveParent(request, unitType, deanery.getId());
+            if (parent != null) {
+                requireUnitOperational(UnitType.PARISH, parent.getId());
+            }
             Parish parish = new Parish();
+            parish.setUnitType(unitType);
+            parish.setParentParish(parent);
             parish.setDeanery(deanery);
             parish.setName(request.getName());
             parish.setPatronSaintDay(request.getPatronSaintDay());
@@ -176,6 +185,56 @@ public class ParishService {
         } catch (DataIntegrityViolationException exception) {
             throw new ApiException(HttpStatus.CONFLICT, errorCode.CONFLICT, "Dữ liệu giáo xứ bị trùng hoặc xung đột với dữ liệu hiện có");
         }
+    }
+
+    // Đổi giáo xứ cha của giáo họ / giáo điểm (cùng giáo hạt). Huynh trưởng và tài khoản vẫn gắn vào chính giáo họ / giáo điểm.
+    @EvictCaches.Analytics
+    @EvictCaches.Leaders
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DEANERY_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DEANERY_DETAIL, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.PARISH_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.PARISH_DETAIL, allEntries = true)
+    })
+    public ParishResponse changeParent(UUID id, ParishParentChangeRequest request, Authentication authentication) {
+        Parish existing = parishValidationHelper.requireExistingParishWithDeaneryAndDiocese(id);
+        if (existing.getUnitType() == ParishUnitType.PARISH) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, errorCode.VALIDATION_ERROR, "Chỉ đổi giáo xứ cha cho giáo họ hoặc giáo điểm");
+        }
+        requireUnitOperational(UnitType.PARISH, id);
+        String auditActor = parishValidationHelper.getRequiredAuditActor(authentication);
+        ParishCreateRequest probe = new ParishCreateRequest();
+        probe.setParentParishId(request.getParentParishId());
+        Parish parent = parishValidationHelper.resolveParent(probe, existing.getUnitType(), existing.getDeanery().getId());
+        if (existing.getParentParish() == null || !existing.getParentParish().getId().equals(parent.getId())) {
+            requireUnitOperational(UnitType.PARISH, parent.getId());
+            parishRepository.updateParent(id, parent.getId(), auditActor);
+        }
+        return toParishResponse(parishValidationHelper.requireExistingParishWithDeaneryAndDiocese(id));
+    }
+
+    // Nâng giáo họ / giáo điểm thành giáo xứ độc lập (không còn giáo xứ cha). Huynh trưởng, tài khoản, hồ sơ giữ nguyên.
+    @EvictCaches.Analytics
+    @EvictCaches.Leaders
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DEANERY_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DEANERY_DETAIL, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.PARISH_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.PARISH_DETAIL, allEntries = true)
+    })
+    public ParishResponse promoteToParish(UUID id, Authentication authentication) {
+        Parish existing = parishValidationHelper.requireExistingParishWithDeaneryAndDiocese(id);
+        if (existing.getUnitType() == ParishUnitType.PARISH) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, errorCode.VALIDATION_ERROR, "Đơn vị này đã là giáo xứ");
+        }
+        requireUnitOperational(UnitType.PARISH, id);
+        String auditActor = parishValidationHelper.getRequiredAuditActor(authentication);
+        parishRepository.promoteToParish(id, auditActor);
+        return toParishResponse(parishValidationHelper.requireExistingParishWithDeaneryAndDiocese(id));
     }
 
     @Transactional
@@ -277,11 +336,12 @@ public class ParishService {
         Map<UUID, Parish> parishById = parishRepository.findAllByIdsWithDeaneryAndDiocese(parishIds).stream()
                 .collect(Collectors.toMap(Parish::getId, Function.identity()));
         Map<UUID, Long> leaderCounts = parishRepository.countLeadersByParishIds(parishIds);
+        Map<UUID, Long> subUnitCounts = parishRepository.countSubUnitsByParentIds(parishIds);
 
         List<ParishResponse> hydratedContent = parishIds.stream()
                 .map(parishById::get)
                 .filter(java.util.Objects::nonNull)
-                .map(parish -> toParishResponse(parish, leaderCounts.getOrDefault(parish.getId(), 0L)))
+                .map(parish -> toParishResponse(parish, leaderCounts.getOrDefault(parish.getId(), 0L), subUnitCounts.getOrDefault(parish.getId(), 0L)))
                 .toList();
 
         return new PageImpl<>(hydratedContent, page.getPageable(), page.getTotalElements());
@@ -289,10 +349,13 @@ public class ParishService {
 
     private ParishResponse toParishResponse(Parish parish) {
         UUID id = parish.getId();
-        return toParishResponse(parish, id == null ? 0L : parishRepository.countLeadersByParishIds(List.of(id)).getOrDefault(id, 0L));
+        return toParishResponse(parish,
+                id == null ? 0L : parishRepository.countLeadersByParishIds(List.of(id)).getOrDefault(id, 0L),
+                id == null ? 0L : parishRepository.countSubUnitsByParentIds(List.of(id)).getOrDefault(id, 0L));
     }
 
-    private ParishResponse toParishResponse(Parish parish, long leaderCount) {
+    private ParishResponse toParishResponse(Parish parish, long leaderCount, long subUnitCount) {
+        Parish parent = parish.getParentParish();
         return ParishResponse.builder()
                 .id(parish.getId())
                 .createdAt(parish.getCreatedAt())
@@ -314,6 +377,11 @@ public class ParishService {
                 .dioceseId(parish.getDeanery() == null || parish.getDeanery().getDiocese() == null ? null : parish.getDeanery().getDiocese().getId())
                 .dioceseName(parish.getDeanery() == null || parish.getDeanery().getDiocese() == null ? null : parish.getDeanery().getDiocese().getName())
                 .chapterName(parish.getChapterName())
+                .unitType(parish.getUnitType())
+                .unitTypeLabel(parish.getUnitType() == null ? null : parish.getUnitType().getLabel())
+                .parentParishId(parent == null ? null : parent.getId())
+                .parentParishName(parent == null ? null : parent.getName())
+                .subUnitCount(subUnitCount)
                 .leaderCount(leaderCount)
                 .build();
     }

@@ -2,6 +2,7 @@ package phucuong.ht.modules.parish.model.response;
 
 import lombok.Builder;
 import lombok.Getter;
+import phucuong.ht.modules.parish.model.enums.ParishUnitType;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -32,5 +33,11 @@ public class ParishResponse {
     private UUID dioceseId;
     private String dioceseName;
     private String chapterName;
+    private ParishUnitType unitType;
+    private String unitTypeLabel;
+    private UUID parentParishId;
+    private String parentParishName;
+    // Số giáo họ / giáo điểm trực thuộc (chỉ có ý nghĩa với giáo xứ).
+    private Long subUnitCount;
     private Long leaderCount;
 }
