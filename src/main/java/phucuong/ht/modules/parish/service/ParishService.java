@@ -31,6 +31,7 @@ import phucuong.ht.modules.parish.helper.ParishValidationHelper;
 import phucuong.ht.modules.parish.model.entity.Parish;
 import phucuong.ht.modules.parish.model.enums.ParishUnitType;
 import phucuong.ht.modules.parish.model.request.ParishCreateRequest;
+import phucuong.ht.modules.parish.model.request.ParishParentChangeRequest;
 import phucuong.ht.modules.parish.model.request.ParishUpdateRequest;
 import phucuong.ht.modules.parish.model.response.ParishResponse;
 import phucuong.ht.modules.parish.repository.ParishRepository;
@@ -186,6 +187,34 @@ public class ParishService {
         }
     }
 
+    // Đổi giáo xứ cha của giáo họ / giáo điểm (cùng giáo hạt). Huynh trưởng và tài khoản vẫn gắn vào chính giáo họ / giáo điểm.
+    @EvictCaches.Analytics
+    @EvictCaches.Leaders
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DEANERY_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DEANERY_DETAIL, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.PARISH_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.PARISH_DETAIL, allEntries = true)
+    })
+    public ParishResponse changeParent(UUID id, ParishParentChangeRequest request, Authentication authentication) {
+        Parish existing = parishValidationHelper.requireExistingParishWithDeaneryAndDiocese(id);
+        if (existing.getUnitType() == ParishUnitType.PARISH) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, errorCode.VALIDATION_ERROR, "Chỉ đổi giáo xứ cha cho giáo họ hoặc giáo điểm");
+        }
+        requireUnitOperational(UnitType.PARISH, id);
+        String auditActor = parishValidationHelper.getRequiredAuditActor(authentication);
+        ParishCreateRequest probe = new ParishCreateRequest();
+        probe.setParentParishId(request.getParentParishId());
+        Parish parent = parishValidationHelper.resolveParent(probe, existing.getUnitType(), existing.getDeanery().getId());
+        if (existing.getParentParish() == null || !existing.getParentParish().getId().equals(parent.getId())) {
+            requireUnitOperational(UnitType.PARISH, parent.getId());
+            parishRepository.updateParent(id, parent.getId(), auditActor);
+        }
+        return toParishResponse(parishValidationHelper.requireExistingParishWithDeaneryAndDiocese(id));
+    }
+
     @Transactional
     @EvictCaches.Analytics
     @EvictCaches.Leaders
@@ -313,7 +342,6 @@ public class ParishService {
                 .updatedBy(parish.getUpdatedBy())
                 .status(parish.getStatus())
                 .effectiveStatus(Boolean.TRUE.equals(parish.getStatus())
-                        && (parent == null || Boolean.TRUE.equals(parent.getStatus()))
                         && parish.getDeanery() != null && Boolean.TRUE.equals(parish.getDeanery().getStatus())
                         && parish.getDeanery().getDiocese() != null && Boolean.TRUE.equals(parish.getDeanery().getDiocese().getStatus()))
                 .name(parish.getName())

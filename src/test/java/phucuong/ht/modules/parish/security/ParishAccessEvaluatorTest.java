@@ -68,6 +68,24 @@ class ParishAccessEvaluatorTest {
     }
 
     @Test
+    void canChangeParentShouldAllowCreatorsInScopeOnly() {
+        UUID subUnitId = UUID.randomUUID();
+        UUID dioceseId = UUID.randomUUID();
+        UUID deaneryId = UUID.randomUUID();
+        Authentication dioceseAdmin = authentication("admin-dio", List.of("ADMIN_DIOCESE"), List.of(ParishAccessEvaluator.CREATE_DIOCESE));
+        Authentication deaneryAdmin = authentication("admin-dea", List.of("ADMIN_DEANERY"), List.of(ParishAccessEvaluator.CREATE_DEANERY));
+        Authentication parishAdmin = authentication("admin-parish", List.of("ADMIN_PARISH"), List.of(ParishAccessEvaluator.READ_PARISH));
+        when(accountRepository.findActiveDioceseIdByUsername("admin-dio")).thenReturn(Optional.of(dioceseId));
+        when(parishRepository.findDioceseIdByParishId(subUnitId)).thenReturn(Optional.of(dioceseId));
+        when(accountRepository.findActiveDeaneryIdByUsername("admin-dea")).thenReturn(Optional.of(deaneryId));
+        when(parishRepository.findDeaneryIdByParishId(subUnitId)).thenReturn(Optional.of(UUID.randomUUID()));
+
+        assertTrue(parishAccessEvaluator.canChangeParent(dioceseAdmin, subUnitId));
+        assertFalse(parishAccessEvaluator.canChangeParent(deaneryAdmin, subUnitId));
+        assertFalse(parishAccessEvaluator.canChangeParent(parishAdmin, subUnitId));
+    }
+
+    @Test
     void canReadShouldAllowDeaneryScopedPermissionForMatchingParish() {
         UUID parishId = UUID.randomUUID();
         UUID deaneryId = UUID.randomUUID();

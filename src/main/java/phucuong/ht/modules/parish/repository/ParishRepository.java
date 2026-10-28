@@ -169,6 +169,21 @@ public class ParishRepository extends BaseRepo<Parish, UUID> {
         return results.stream().findFirst();
     }
 
+    @Transactional
+    public void updateParent(UUID id, UUID parentParishId, String actor) {
+        entityManager.createQuery(
+                        """
+                                update Parish p
+                                set p.parentParish.id = :parentId, p.updatedAt = :now, p.updatedBy = :actor
+                                where p.id = :id
+                                """)
+                .setParameter("parentId", parentParishId)
+                .setParameter("now", java.time.OffsetDateTime.now())
+                .setParameter("actor", actor)
+                .setParameter("id", id)
+                .executeUpdate();
+    }
+
     /** Số giáo họ / giáo điểm trực thuộc từng giáo xứ. */
     public Map<UUID, Long> countSubUnitsByParentIds(List<UUID> ids) {
         if (ids == null || ids.isEmpty()) {
