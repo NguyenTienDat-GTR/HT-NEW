@@ -38,7 +38,7 @@ class EndpointContractMatrixTest {
 
     private static final String CONTROLLER_BASE_PACKAGE = "phucuong.ht.modules";
     private static final int EXPECTED_CONTROLLER_COUNT = 36;
-    private static final int EXPECTED_ROUTE_COUNT = 243;
+    private static final int EXPECTED_ROUTE_COUNT = 244;
     private static final String MATRIX_RESOURCE = "endpoint-contract-matrix.psv";
     private static final Pattern ROUTE_KEY = Pattern.compile("^(GET|POST|PUT|PATCH|DELETE) /\\S+$");
 

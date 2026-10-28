@@ -77,6 +77,13 @@ public class ParishController {
         return apiResponse.success("Đổi giáo xứ cha thành công", parishService.changeParent(id, request, authentication));
     }
 
+    // Nâng giáo họ / giáo điểm thành giáo xứ độc lập: cùng quyền với đổi giáo xứ cha.
+    @PatchMapping("/{id}/promote")
+    @PreAuthorize("@parishAccessEvaluator.canChangeParent(authentication, #id)")
+    public apiResponse<ParishResponse> promoteToParish(@PathVariable UUID id, Authentication authentication) {
+        return apiResponse.success("Chuyển thành giáo xứ thành công", parishService.promoteToParish(id, authentication));
+    }
+
     @PatchMapping("/{id}/toggle-status")
     @PreAuthorize("@parishAccessEvaluator.canToggle(authentication, #id)")
     public apiResponse<ParishResponse> toggleStatus(

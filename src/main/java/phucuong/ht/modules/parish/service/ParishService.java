@@ -215,6 +215,28 @@ public class ParishService {
         return toParishResponse(parishValidationHelper.requireExistingParishWithDeaneryAndDiocese(id));
     }
 
+    // Nâng giáo họ / giáo điểm thành giáo xứ độc lập (không còn giáo xứ cha). Huynh trưởng, tài khoản, hồ sơ giữ nguyên.
+    @EvictCaches.Analytics
+    @EvictCaches.Leaders
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DEANERY_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DEANERY_DETAIL, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.PARISH_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.PARISH_DETAIL, allEntries = true)
+    })
+    public ParishResponse promoteToParish(UUID id, Authentication authentication) {
+        Parish existing = parishValidationHelper.requireExistingParishWithDeaneryAndDiocese(id);
+        if (existing.getUnitType() == ParishUnitType.PARISH) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, errorCode.VALIDATION_ERROR, "Đơn vị này đã là giáo xứ");
+        }
+        requireUnitOperational(UnitType.PARISH, id);
+        String auditActor = parishValidationHelper.getRequiredAuditActor(authentication);
+        parishRepository.promoteToParish(id, auditActor);
+        return toParishResponse(parishValidationHelper.requireExistingParishWithDeaneryAndDiocese(id));
+    }
+
     @Transactional
     @EvictCaches.Analytics
     @EvictCaches.Leaders

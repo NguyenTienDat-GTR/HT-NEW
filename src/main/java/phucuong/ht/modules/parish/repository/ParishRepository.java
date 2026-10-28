@@ -184,6 +184,21 @@ public class ParishRepository extends BaseRepo<Parish, UUID> {
                 .executeUpdate();
     }
 
+    @Transactional
+    public void promoteToParish(UUID id, String actor) {
+        entityManager.createQuery(
+                        """
+                                update Parish p
+                                set p.unitType = phucuong.ht.modules.parish.model.enums.ParishUnitType.PARISH,
+                                    p.parentParish = null, p.updatedAt = :now, p.updatedBy = :actor
+                                where p.id = :id
+                                """)
+                .setParameter("now", java.time.OffsetDateTime.now())
+                .setParameter("actor", actor)
+                .setParameter("id", id)
+                .executeUpdate();
+    }
+
     /** Số giáo họ / giáo điểm trực thuộc từng giáo xứ. */
     public Map<UUID, Long> countSubUnitsByParentIds(List<UUID> ids) {
         if (ids == null || ids.isEmpty()) {
