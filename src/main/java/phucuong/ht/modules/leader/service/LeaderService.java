@@ -85,7 +85,7 @@ public class LeaderService {
             leader.setImageUrl(request.getImageUrl());
             leader.setGender(request.getGender());
             leader.setLeaderLevel(java.util.Objects.requireNonNullElse(leaderLevelService.requireExistingOrNull(request.getLeaderLevel(), "Cấp độ",
-                    parish.getDeanery() == null || parish.getDeanery().getDiocese() == null ? null : parish.getDeanery().getDiocese().getId()), "NONE"));
+                    leaderValidationHelper.findDioceseIdOfParish(parish.getId())), "NONE"));
             leader.setParish(parish);
             leader.setStatus(Boolean.TRUE);
             OffsetDateTime now = OffsetDateTime.now();

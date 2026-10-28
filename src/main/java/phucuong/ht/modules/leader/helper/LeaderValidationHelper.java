@@ -46,6 +46,10 @@ public class LeaderValidationHelper {
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy giáo xứ: " + parishId));
     }
 
+    public UUID findDioceseIdOfParish(UUID parishId) {
+        return parishRepository.findDioceseIdById(parishId).orElse(null);
+    }
+
     public void validateCreateInput(LeaderCreateRequest request) {
         if (request == null) {
             return;
