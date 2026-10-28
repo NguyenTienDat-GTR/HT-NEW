@@ -29,6 +29,7 @@ import phucuong.ht.modules.deanery.model.entity.Deanery;
 import phucuong.ht.modules.parish.helper.ParishScopeHelper;
 import phucuong.ht.modules.parish.helper.ParishValidationHelper;
 import phucuong.ht.modules.parish.model.entity.Parish;
+import phucuong.ht.modules.parish.model.enums.ParishUnitType;
 import phucuong.ht.modules.parish.model.request.ParishCreateRequest;
 import phucuong.ht.modules.parish.model.request.ParishUpdateRequest;
 import phucuong.ht.modules.parish.model.response.ParishResponse;
@@ -88,7 +89,14 @@ public class ParishService {
             Deanery deanery = parishValidationHelper.requireExistingDeanery(request.getDeaneryId());
             requireUnitOperational(UnitType.DEANERY, deanery.getId());
             parishValidationHelper.validateCreateNameUniqueness(request.getName(), deanery.getId());
+            ParishUnitType unitType = request.getUnitType() == null ? ParishUnitType.PARISH : request.getUnitType();
+            Parish parent = parishValidationHelper.resolveParent(request, unitType, deanery.getId());
+            if (parent != null) {
+                requireUnitOperational(UnitType.PARISH, parent.getId());
+            }
             Parish parish = new Parish();
+            parish.setUnitType(unitType);
+            parish.setParentParish(parent);
             parish.setDeanery(deanery);
             parish.setName(request.getName());
             parish.setPatronSaintDay(request.getPatronSaintDay());
@@ -277,11 +285,12 @@ public class ParishService {
         Map<UUID, Parish> parishById = parishRepository.findAllByIdsWithDeaneryAndDiocese(parishIds).stream()
                 .collect(Collectors.toMap(Parish::getId, Function.identity()));
         Map<UUID, Long> leaderCounts = parishRepository.countLeadersByParishIds(parishIds);
+        Map<UUID, Long> subUnitCounts = parishRepository.countSubUnitsByParentIds(parishIds);
 
         List<ParishResponse> hydratedContent = parishIds.stream()
                 .map(parishById::get)
                 .filter(java.util.Objects::nonNull)
-                .map(parish -> toParishResponse(parish, leaderCounts.getOrDefault(parish.getId(), 0L)))
+                .map(parish -> toParishResponse(parish, leaderCounts.getOrDefault(parish.getId(), 0L), subUnitCounts.getOrDefault(parish.getId(), 0L)))
                 .toList();
 
         return new PageImpl<>(hydratedContent, page.getPageable(), page.getTotalElements());
@@ -289,10 +298,13 @@ public class ParishService {
 
     private ParishResponse toParishResponse(Parish parish) {
         UUID id = parish.getId();
-        return toParishResponse(parish, id == null ? 0L : parishRepository.countLeadersByParishIds(List.of(id)).getOrDefault(id, 0L));
+        return toParishResponse(parish,
+                id == null ? 0L : parishRepository.countLeadersByParishIds(List.of(id)).getOrDefault(id, 0L),
+                id == null ? 0L : parishRepository.countSubUnitsByParentIds(List.of(id)).getOrDefault(id, 0L));
     }
 
-    private ParishResponse toParishResponse(Parish parish, long leaderCount) {
+    private ParishResponse toParishResponse(Parish parish, long leaderCount, long subUnitCount) {
+        Parish parent = parish.getParentParish();
         return ParishResponse.builder()
                 .id(parish.getId())
                 .createdAt(parish.getCreatedAt())
@@ -301,6 +313,7 @@ public class ParishService {
                 .updatedBy(parish.getUpdatedBy())
                 .status(parish.getStatus())
                 .effectiveStatus(Boolean.TRUE.equals(parish.getStatus())
+                        && (parent == null || Boolean.TRUE.equals(parent.getStatus()))
                         && parish.getDeanery() != null && Boolean.TRUE.equals(parish.getDeanery().getStatus())
                         && parish.getDeanery().getDiocese() != null && Boolean.TRUE.equals(parish.getDeanery().getDiocese().getStatus()))
                 .name(parish.getName())
@@ -314,6 +327,11 @@ public class ParishService {
                 .dioceseId(parish.getDeanery() == null || parish.getDeanery().getDiocese() == null ? null : parish.getDeanery().getDiocese().getId())
                 .dioceseName(parish.getDeanery() == null || parish.getDeanery().getDiocese() == null ? null : parish.getDeanery().getDiocese().getName())
                 .chapterName(parish.getChapterName())
+                .unitType(parish.getUnitType())
+                .unitTypeLabel(parish.getUnitType() == null ? null : parish.getUnitType().getLabel())
+                .parentParishId(parent == null ? null : parent.getId())
+                .parentParishName(parent == null ? null : parent.getName())
+                .subUnitCount(subUnitCount)
                 .leaderCount(leaderCount)
                 .build();
     }

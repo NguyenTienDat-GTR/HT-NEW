@@ -25,7 +25,7 @@ public class ParishRepository extends BaseRepo<Parish, UUID> {
         return parish;
     }
 
-    // Số giáo xứ đang hoạt động (bản thân, giáo hạt và giáo phận cha đều bật) của giáo hạt.
+    // Số đơn vị cơ sở (giáo xứ, giáo họ, giáo điểm) đang hoạt động (bản thân, giáo hạt và giáo phận cha đều bật) của giáo hạt.
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public int countActiveByDeaneryId(UUID deaneryId) {
         Long count = entityManager.createQuery(
@@ -92,6 +92,7 @@ public class ParishRepository extends BaseRepo<Parish, UUID> {
                                 from Parish p
                                 join fetch p.deanery de
                                 join fetch de.diocese d
+                                left join fetch p.parentParish pp
                                 where p.id = :id
                                 """,
                         Parish.class
@@ -114,6 +115,7 @@ public class ParishRepository extends BaseRepo<Parish, UUID> {
                                 from Parish p
                                 join fetch p.deanery de
                                 join fetch de.diocese d
+                                left join fetch p.parentParish pp
                                 where p.id in :ids
                                 """,
                         Parish.class
@@ -165,6 +167,29 @@ public class ParishRepository extends BaseRepo<Parish, UUID> {
                 .setMaxResults(1)
                 .getResultList();
         return results.stream().findFirst();
+    }
+
+    /** Số giáo họ / giáo điểm trực thuộc từng giáo xứ. */
+    public Map<UUID, Long> countSubUnitsByParentIds(List<UUID> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return Map.of();
+        }
+        List<Object[]> rows = entityManager.createQuery(
+                        """
+                                select p.parentParish.id, count(p)
+                                from Parish p
+                                where p.parentParish.id in :ids
+                                group by p.parentParish.id
+                                """,
+                        Object[].class
+                )
+                .setParameter("ids", ids)
+                .getResultList();
+        Map<UUID, Long> counts = new HashMap<>();
+        for (Object[] row : rows) {
+            counts.put((UUID) row[0], (Long) row[1]);
+        }
+        return counts;
     }
 
     public Map<UUID, Long> countLeadersByParishIds(List<UUID> ids) {

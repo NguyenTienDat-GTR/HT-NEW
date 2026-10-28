@@ -39,7 +39,8 @@ public class UnitStatusAuditService {
             case DIOCESE -> scalar("select count(1) from parish p join deanery de on de.id = p.deanery_id "
                     + "where de.diocese_id = :unitId and p.status = true", unitId);
             case DEANERY -> scalar("select count(1) from parish where deanery_id = :unitId and status = true", unitId);
-            case PARISH -> 0;
+            // Giáo họ / giáo điểm trực thuộc giáo xứ cũng bị đóng băng khi giáo xứ cha bị tắt.
+            case PARISH -> scalar("select count(1) from parish where parent_parish_id = :unitId and status = true", unitId);
         };
         long accounts = unitOperationalStatusService.findActiveUsernamesInSubtree(unitType, unitId).size();
         String leaderCond = leaderCondition(unitType);
@@ -146,7 +147,7 @@ public class UnitStatusAuditService {
         return switch (unitType) {
             case DIOCESE -> "l.parish_id in (select p.id from parish p join deanery de on de.id = p.deanery_id where de.diocese_id = :unitId)";
             case DEANERY -> "l.parish_id in (select p.id from parish p where p.deanery_id = :unitId)";
-            case PARISH -> "l.parish_id = :unitId";
+            case PARISH -> "(l.parish_id = :unitId or l.parish_id in (select p.id from parish p where p.parent_parish_id = :unitId))";
         };
     }
 

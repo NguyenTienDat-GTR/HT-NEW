@@ -36,8 +36,8 @@ class OverviewAnalytics {
         Map<String, Object> none = Map.of();
         kpis.add(count("totalDioceses", repository.scalar(dioceses, none), null, null));
         kpis.add(count("totalDeaneries", repository.scalar(deaneries, none), null, null));
-        kpis.add(count("totalParishes", repository.scalar(includeInactive ? "select count(*) from parish"
-                : "select count(*) from parish p where p.status = true and p.deanery_id in (select d.id from deanery d join diocese di on di.id = d.diocese_id where d.status = true and di.status = true)", none), null, null));
+        kpis.add(count("totalParishes", repository.scalar(includeInactive ? "select count(*) from parish where unit_type = 'PARISH'"
+                : "select count(*) from parish p where p.unit_type = 'PARISH' and p.status = true and p.deanery_id in (select d.id from deanery d join diocese di on di.id = d.diocese_id where d.status = true and di.status = true)", none), null, null));
         kpis.add(count("totalLeaders", repository.scalar(includeInactive ? "select count(*) from leader"
                 : "select count(*) from leader l where l.parish_id in (select p.id from parish p join deanery d on d.id = p.deanery_id join diocese di on di.id = d.diocese_id where p.status = true and d.status = true and di.status = true)", none), null, null));
         return AnalyticsResponse.builder().kpis(kpis).build();

@@ -53,7 +53,7 @@ public class DioceseRepository extends BaseRepo<Diocese, UUID> {
         return countByDioceseIds(ids, """
                 select p.deanery.diocese.id, count(p)
                 from Parish p
-                where p.deanery.diocese.id in :ids
+                where p.deanery.diocese.id in :ids and p.unitType = phucuong.ht.modules.parish.model.enums.ParishUnitType.PARISH
                 group by p.deanery.diocese.id
                 """);
     }

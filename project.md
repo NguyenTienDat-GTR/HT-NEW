@@ -1531,3 +1531,14 @@ Ma trận endpoint (`endpoint-contract-matrix.psv`) hiện có 124 route.
 
 - `LeaderService.create` không còn đọc `parish.getDeanery().getDiocese()` qua proxy lazy ngoài phiên (gây `LazyInitializationException` → 500). Giáo phận của giáo xứ lấy bằng `ParishRepository.findDioceseIdById` (qua `LeaderValidationHelper.findDioceseIdOfParish`).
 - `POST /api/parishes`: `ParishAccessEvaluator.canCreate` chấp nhận thêm `organization.parish.create.diocese`; `ParishScopeHelper.enforceCreateScope` chỉ cho tạo trong giáo hạt thuộc giáo phận của tài khoản (ngoài phạm vi → 403). SUPER_ADMIN vẫn không tạo được. Test: `ParishAccessEvaluatorTest.canCreateShouldAllowDioceseScopedPermissionAndRejectSuperAdmin`.
+
+## 2026-10-28 Giáo họ / giáo điểm (nhánh `feature/parish-sub-units`, migration `V106`)
+
+- Giáo họ (`GIAO_HO`) và giáo điểm (`GIAO_DIEM`) là **dòng trong bảng `parish`** với `unit_type` (mặc định `PARISH`) và `parent_parish_id` (giáo xứ cha, bắt buộc với họ/điểm, cấm với giáo xứ; CHECK ở DB). `deanery_id` của họ/điểm bằng giáo hạt của giáo xứ cha. Không có controller/route/quyền mới: dùng `/api/parishes` và quyền `organization.parish.*`.
+- Huynh trưởng và tài khoản gắn `parish_id` vào chính giáo họ/điểm nên toàn bộ phạm vi `*.parish` (danh sách, đăng ký, chứng nhận, ban điều hành, thông báo, thống kê) tự áp dụng cho họ/điểm; **admin giáo xứ cha không có quyền trên giáo họ/điểm của nó**, admin giáo họ dùng vai trò ADMIN_PARISH trong phạm vi giáo họ. Giáo hạt/giáo phận vẫn thấy vì cùng chuỗi `deanery`.
+- `ParishCreateRequest.unitType` + `parentParishId` (đổi loại/cha sau khi tạo không hỗ trợ, `ParishUpdateRequest` không có hai trường này). `ParishValidationHelper.resolveParent`: cha phải là giáo xứ (`PARISH`) cùng giáo hạt; họ/điểm không làm cha. Chỉ tài khoản có quyền tạo giáo xứ ở cấp giáo hạt/giáo phận tạo được (admin giáo xứ không có `create.parish`).
+- `ParishResponse` thêm `unitType`, `unitTypeLabel`, `parentParishId`, `parentParishName`, `subUnitCount`. `effectiveStatus` tắt khi giáo xứ cha bị tắt; `UnitOperationalStatusService` (khóa tài khoản, `isUnitOperational`, kiểm tra cha) và `UnitStatusAuditService.impact` (đếm họ/điểm, huynh trưởng) tính cả họ/điểm của giáo xứ cha.
+- `parishCount` ở giáo hạt/giáo phận và KPI `totalParishes` của Superadmin chỉ đếm `PARISH`. Phân tích theo đơn vị cơ sở vẫn liệt kê cả họ/điểm.
+- Trường trộn thẻ/chứng nhận `leaderParishName` đổi nhãn thành "Giáo xứ / giáo họ / giáo điểm" (giá trị là tên đơn vị của huynh trưởng nên hiển thị đúng giáo họ). Cột "Giáo xứ" trong file import vẫn nhận tên giáo họ/điểm; export có thêm cột Loại, Thuộc giáo xứ.
+- `WorkflowDecisionNotifier.findParishAdmins` khớp cả tài khoản có phạm vi qua huynh trưởng (`leader.parish`), không chỉ `account.parish_id`.
+- Test: `ParishValidationHelperSubUnitTest`.

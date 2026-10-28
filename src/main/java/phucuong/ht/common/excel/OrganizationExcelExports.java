@@ -51,7 +51,9 @@ public final class OrganizationExcelExports {
 
     public static byte[] parishes(List<ParishResponse> rows) {
         return ExcelExportWriter.write("Giáo xứ", List.of(
-                ExcelColumn.<ParishResponse>of("Tên giáo xứ", 32, ParishResponse::getName),
+                ExcelColumn.<ParishResponse>of("Tên đơn vị", 32, ParishResponse::getName),
+                ExcelColumn.<ParishResponse>of("Loại", 14, ParishResponse::getUnitTypeLabel),
+                ExcelColumn.<ParishResponse>of("Thuộc giáo xứ", 28, ParishResponse::getParentParishName),
                 ExcelColumn.<ParishResponse>of("Giáo hạt", 28, ParishResponse::getDeaneryName),
                 ExcelColumn.<ParishResponse>of("Giáo phận", 28, ParishResponse::getDioceseName),
                 ExcelColumn.<ParishResponse>of("Cha chánh xứ", 28, ParishResponse::getChaplain),

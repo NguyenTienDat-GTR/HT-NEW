@@ -26,7 +26,7 @@ public final class TrainingExcelExports {
                 ExcelColumn.<LeaderResponse>of("Số điện thoại", 16, LeaderResponse::getPhoneNumber),
                 ExcelColumn.<LeaderResponse>of("Cấp độ", 24, row -> row.getLeaderLevel() == null ? "" : levelNames.getOrDefault(row.getLeaderLevel(), row.getLeaderLevel())),
                 ExcelColumn.<LeaderResponse>of("Giáo hạt", 28, LeaderResponse::getDeaneryName),
-                ExcelColumn.<LeaderResponse>of("Giáo xứ", 28, LeaderResponse::getParishName),
+                ExcelColumn.<LeaderResponse>of("Giáo xứ / giáo họ / giáo điểm", 30, LeaderResponse::getParishName),
                 ExcelColumn.<LeaderResponse>of("Trạng thái", 16, row -> ExcelLabels.status(row.getStatus())),
                 ExcelColumn.<LeaderResponse>of("Ngày tạo", 18, LeaderResponse::getCreatedAt),
                 ExcelColumn.<LeaderResponse>of("Người tạo", 22, LeaderResponse::getCreatedByName)
@@ -62,7 +62,7 @@ public final class TrainingExcelExports {
         return ExcelExportWriter.write("Hồ sơ tham dự", List.of(
                 ExcelColumn.<CourseParticipationResponse>of("Tên thánh", 16, CourseParticipationResponse::getLeaderHolyName),
                 ExcelColumn.<CourseParticipationResponse>of("Họ và tên", 28, CourseParticipationResponse::getLeaderFullName),
-                ExcelColumn.<CourseParticipationResponse>of("Giáo xứ", 26, CourseParticipationResponse::getParishName),
+                ExcelColumn.<CourseParticipationResponse>of("Giáo xứ / giáo họ / giáo điểm", 30, CourseParticipationResponse::getParishName),
                 ExcelColumn.<CourseParticipationResponse>of("Giáo hạt", 26, CourseParticipationResponse::getDeaneryName),
                 ExcelColumn.<CourseParticipationResponse>of("Khóa huấn luyện", 36, CourseParticipationResponse::getCourseName),
                 ExcelColumn.<CourseParticipationResponse>of("Ngày đăng ký", 14, CourseParticipationResponse::getRegistrationDate),
@@ -93,7 +93,7 @@ public final class TrainingExcelExports {
                 ExcelColumn.<CourseParticipationResponse>of("Họ và tên", 28, CourseParticipationResponse::getLeaderFullName),
                 ExcelColumn.<CourseParticipationResponse>of("Email", 32, CourseParticipationResponse::getLeaderEmail),
                 ExcelColumn.<CourseParticipationResponse>of("Số điện thoại", 16, CourseParticipationResponse::getLeaderPhone),
-                ExcelColumn.<CourseParticipationResponse>of("Giáo xứ", 26, CourseParticipationResponse::getParishName),
+                ExcelColumn.<CourseParticipationResponse>of("Giáo xứ / giáo họ / giáo điểm", 30, CourseParticipationResponse::getParishName),
                 ExcelColumn.<CourseParticipationResponse>of("Giáo hạt", 26, CourseParticipationResponse::getDeaneryName),
                 ExcelColumn.<CourseParticipationResponse>of("Đội", 20, CourseParticipationResponse::getTeamName),
                 ExcelColumn.<CourseParticipationResponse>of("Ghi chú", 30, CourseParticipationResponse::getRegistrationNote)
