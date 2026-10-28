@@ -66,6 +66,7 @@ public class TrainingCourseResponse {
     // Giáo hạt mà khóa giáo phận dành cho (rỗng = mở cho tất cả).
     private List<UUID> targetDeaneryIds;
     private List<TargetDeanery> targetDeaneries;
+    private Boolean openToOtherDeaneries;
     private String createdBy;
     private String updatedBy;
     private BigDecimal passingScore;

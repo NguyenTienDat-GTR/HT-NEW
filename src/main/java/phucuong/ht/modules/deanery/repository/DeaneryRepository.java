@@ -42,6 +42,17 @@ public class DeaneryRepository extends BaseRepo<Deanery, UUID> {
         return count == null ? 0 : count.intValue();
     }
 
+    // Mã các giáo hạt đang hoạt động của giáo phận, trừ một giáo hạt (thường là giáo hạt tổ chức khóa).
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<UUID> findActiveIdsByDioceseIdExcluding(UUID dioceseId, UUID excludeDeaneryId) {
+        return entityManager.createQuery(
+                        "select de.id from Deanery de where de.diocese.id = :dioceseId and de.id <> :excludeId and de.status = true",
+                        UUID.class)
+                .setParameter("dioceseId", dioceseId)
+                .setParameter("excludeId", excludeDeaneryId)
+                .getResultList();
+    }
+
     public boolean existsByNameAndDioceseId(String name, UUID dioceseId) {
         Long count = entityManager.createQuery(
                         """

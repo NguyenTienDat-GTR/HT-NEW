@@ -13,12 +13,15 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import phucuong.ht.common.dto.apiResponse;
+import phucuong.ht.modules.training.crossDeanery.model.CrossDeaneryModels.AccessDecisionRequest;
 import phucuong.ht.modules.training.crossDeanery.model.CrossDeaneryModels.Candidate;
+import phucuong.ht.modules.training.crossDeanery.model.CrossDeaneryModels.CourseInvitation;
 import phucuong.ht.modules.training.crossDeanery.model.CrossDeaneryModels.CreateRequest;
 import phucuong.ht.modules.training.crossDeanery.model.CrossDeaneryModels.DecisionRequest;
 import phucuong.ht.modules.training.crossDeanery.model.CrossDeaneryModels.OpenCourse;
 import phucuong.ht.modules.training.crossDeanery.model.CrossDeaneryModels.RequestResponse;
 import phucuong.ht.modules.training.crossDeanery.model.CrossDeaneryStatus;
+import phucuong.ht.modules.training.crossDeanery.service.CrossDeaneryAccessService;
 import phucuong.ht.modules.training.crossDeanery.service.CrossDeaneryService;
 
 import java.util.List;
@@ -30,6 +33,22 @@ import java.util.List;
 public class CrossDeaneryController {
 
     private final CrossDeaneryService crossDeaneryService;
+    private final CrossDeaneryAccessService crossDeaneryAccessService;
+
+    // Khóa của giáo hạt khác đang mở liên giáo hạt: giáo hạt nhà xem thông tin khóa và quyết định cho giáo xứ gửi hay không.
+    @GetMapping("/course-invitations")
+    @PreAuthorize("@courseParticipationAccessEvaluator.canApproveCrossDeanery(authentication)")
+    public apiResponse<List<CourseInvitation>> courseInvitations(Authentication authentication) {
+        return apiResponse.success("Lấy danh sách khóa mở liên giáo hạt thành công", crossDeaneryAccessService.list(authentication));
+    }
+
+    @PostMapping("/course-invitations/{courseCode}/decision")
+    @PreAuthorize("@courseParticipationAccessEvaluator.canApproveCrossDeanery(authentication)")
+    public apiResponse<CourseInvitation> decideInvitation(@PathVariable String courseCode, @Valid @RequestBody AccessDecisionRequest request,
+                                                          Authentication authentication) {
+        return apiResponse.success(request.allowed() ? "Đã cho phép giáo xứ gửi hồ sơ sang khóa" : "Đã từ chối cho giáo xứ gửi hồ sơ sang khóa",
+                crossDeaneryAccessService.decide(courseCode, request, authentication));
+    }
 
     @GetMapping("/courses")
     @PreAuthorize("@courseParticipationAccessEvaluator.canSubmitCrossDeanery(authentication)")

@@ -94,6 +94,8 @@ public class TrainingCourseService {
     private final phucuong.ht.common.utils.AuditActorNameResolver auditActorNameResolver;
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private phucuong.ht.modules.training.TrainingDecisionNotifier trainingDecisionNotifier;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private phucuong.ht.modules.training.crossDeanery.service.CrossDeaneryAccessService crossDeaneryAccessService;
 
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_LIST, allEntries = true),
@@ -133,8 +135,12 @@ public class TrainingCourseService {
         requirePassingScoreWithinLimit(course);
         applyRecipients(course, request.getRecipientUsernames());
         applyTargetDeaneries(course, request.getTargetDeaneryIds());
+        applyOpenToOtherDeaneries(course, request.getOpenToOtherDeaneries());
         TrainingCourseStatusSupport.refresh(course, now);
         trainingCourseRepository.save(course);
+        if (Boolean.TRUE.equals(course.getOpenToOtherDeaneries()) && crossDeaneryAccessService != null) {
+            crossDeaneryAccessService.notifyCourseOpened(course, auditActor);
+        }
         return toResponse(trainingCourseRepository.findByCodeWithType(course.getCourseCode()).orElse(course));
     }
 
@@ -322,6 +328,11 @@ public class TrainingCourseService {
             applyRecipients(existing, request.getRecipientUsernames());
         }
         applyTargetDeaneries(existing, request.getTargetDeaneryIds());
+        boolean wasOpen = Boolean.TRUE.equals(existing.getOpenToOtherDeaneries());
+        applyOpenToOtherDeaneries(existing, request.getOpenToOtherDeaneries());
+        if (!wasOpen && Boolean.TRUE.equals(existing.getOpenToOtherDeaneries()) && crossDeaneryAccessService != null) {
+            crossDeaneryAccessService.notifyCourseOpened(existing, existing.getUpdatedBy());
+        }
         return toResponse(existing, courseParticipationRepository.existsByCourseCode(courseCode));
     }
 
@@ -683,6 +694,20 @@ public class TrainingCourseService {
         course.getTargetDeaneryIds().addAll(ids);
     }
 
+    // Mở khóa cho các giáo hạt khác: chỉ khóa giáo hạt. null = giữ nguyên; tắt thì giáo xứ các giáo hạt khác không gửi mới được nữa.
+    private void applyOpenToOtherDeaneries(TrainingCourse course, Boolean requested) {
+        if (!trainingWorkflowSupport.isDeaneryManaged(course)) {
+            if (Boolean.TRUE.equals(requested)) {
+                throw commonValidationHelper.validationError("Chỉ khóa giáo hạt mới mở đăng ký cho giáo hạt khác");
+            }
+            course.setOpenToOtherDeaneries(Boolean.FALSE);
+            return;
+        }
+        if (requested != null) {
+            course.setOpenToOtherDeaneries(requested);
+        }
+    }
+
     private List<TrainingCourseResponse.TargetDeanery> targetDeaneriesOf(TrainingCourse course) {
         return course.getTargetDeaneryIds().stream()
                 .map(id -> new TrainingCourseResponse.TargetDeanery(id, deaneryRepository.findById(id).map(Deanery::getName).orElse(null)))
@@ -879,6 +904,7 @@ public class TrainingCourseService {
                 .recipientUsernames(List.copyOf(course.getRecipientUsernames()))
                 .targetDeaneryIds(List.copyOf(course.getTargetDeaneryIds()))
                 .targetDeaneries(targetDeaneriesOf(course))
+                .openToOtherDeaneries(Boolean.TRUE.equals(course.getOpenToOtherDeaneries()))
                 .createdBy(course.getCreatedBy())
                 .createdByName(auditActorNameResolver.resolve(course.getCreatedBy()))
                 .updatedBy(course.getUpdatedBy())

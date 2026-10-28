@@ -90,6 +90,10 @@ public class TrainingCourse extends BaseModel {
     @Column(name = "score_locked", nullable = false)
     private Boolean scoreLocked = Boolean.FALSE;
 
+    // Khóa giáo hạt mở cho các giáo hạt khác cùng giáo phận: giáo hạt khác phải cho phép thì giáo xứ của họ mới gửi hồ sơ liên giáo hạt được.
+    @Column(name = "open_to_other_deaneries", nullable = false)
+    private Boolean openToOtherDeaneries = Boolean.FALSE;
+
     // Bật thì hệ thống tự duyệt các hồ sơ hợp lệ (không phải ngoại lệ) ngay sau khi giáo xứ gửi danh sách.
     @Column(name = "auto_approve_eligible", nullable = false)
     private Boolean autoApproveEligible = Boolean.FALSE;
