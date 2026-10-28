@@ -24,7 +24,7 @@ public class Parish extends OrganizationUnit {
     @JoinColumn(name = "deanery_id", nullable = false)
     private Deanery deanery;
 
-    @Column(name = "chapter_name", nullable = false)
+    @Column(name = "chapter_name")
     private String chapterName;
 
     @Enumerated(EnumType.STRING)

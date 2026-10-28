@@ -86,6 +86,7 @@ public class CrossDeaneryService {
     private final TrainingNotificationRecipientResolver notificationRecipientResolver;
     private final TrainingNotificationService trainingNotificationService;
     private final AuditActorNameResolver auditActorNameResolver;
+    private final phucuong.ht.modules.auth.repository.AccountRepository accountRepository;
     @Autowired(required = false)
     private UnitOperationalStatusService unitOperationalStatusService;
     @Autowired(required = false)
@@ -396,14 +397,13 @@ public class CrossDeaneryService {
 
     private void notifyRequesterOfDecision(CrossDeaneryRequest request, TrainingCourse course, String actor, int approved, int total) {
         Set<String> recipients = new LinkedHashSet<>();
-        if (request.getCreatedBy() != null) {
-            recipients.add(request.getCreatedBy());
-        }
+        // createdBy / actor lưu mã huynh trưởng (UUID) với tài khoản gắn huynh trưởng: đổi về tên đăng nhập trước khi gửi thông báo.
+        recipients.addAll(usernamesOfActor(request.getCreatedBy()));
         if (request.getParishId() != null) {
             recipients.addAll(notificationRecipientResolver.resolveRecipients(null, CourseParticipationAccessEvaluator.READ_PARISH,
                     UnitType.PARISH, request.getParishId()));
         }
-        recipients.remove(actor);
+        recipients.removeAll(usernamesOfActor(actor));
         if (recipients.isEmpty()) {
             return;
         }
@@ -424,6 +424,17 @@ public class CrossDeaneryService {
                 .pendingCount(0)
                 .actor(actor)
                 .build());
+    }
+
+    private List<String> usernamesOfActor(String actor) {
+        if (actor == null || actor.isBlank()) {
+            return List.of();
+        }
+        try {
+            return accountRepository.findActiveUsernamesByLeaderId(UUID.fromString(actor));
+        } catch (IllegalArgumentException notALeaderId) {
+            return List.of(actor);
+        }
     }
 
     private Sender resolveSender(Authentication authentication) {

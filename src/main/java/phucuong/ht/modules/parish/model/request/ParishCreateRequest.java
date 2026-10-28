@@ -1,6 +1,5 @@
 package phucuong.ht.modules.parish.model.request;
 
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
@@ -16,7 +15,7 @@ public class ParishCreateRequest extends OrganizationUnitCreateRequest {
     @NotNull
     private UUID deaneryId;
 
-    @NotBlank
+    // Không bắt buộc: nhiều giáo xứ chưa thành lập xứ đoàn.
     private String chapterName;
 
     // Mặc định là giáo xứ. Giáo họ / giáo điểm bắt buộc có parentParishId (giáo xứ cha cùng giáo hạt).

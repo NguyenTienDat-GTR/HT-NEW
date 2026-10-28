@@ -103,6 +103,9 @@ public interface AccountRepository extends JpaRepository<Account, String> {
 
     boolean existsByLeaderId(UUID leaderId);
 
+    @Query("select a.username from Account a where a.leader.id = :leaderId and a.status = true")
+    java.util.List<String> findActiveUsernamesByLeaderId(@Param("leaderId") UUID leaderId);
+
     @Query("""
             select count(a) > 0
             from Account a

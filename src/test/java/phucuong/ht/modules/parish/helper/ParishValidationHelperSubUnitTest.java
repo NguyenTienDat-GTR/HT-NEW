@@ -42,6 +42,17 @@ class ParishValidationHelperSubUnitTest {
     }
 
     @Test
+    void chapterNameIsOptionalAndBlankBecomesNull() {
+        ParishCreateRequest request = new ParishCreateRequest();
+        request.setName("Giáo xứ A");
+        request.setChapterName("   ");
+
+        helper.validateCreateInput(request);
+
+        assertNull(request.getChapterName());
+    }
+
+    @Test
     void parishHasNoParentAndRejectsParentId() {
         ParishCreateRequest request = new ParishCreateRequest();
         assertNull(helper.resolveParent(request, ParishUnitType.PARISH, UUID.randomUUID()));

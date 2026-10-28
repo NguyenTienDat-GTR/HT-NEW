@@ -92,6 +92,17 @@ class DeaneryValidationHelperTest {
         assertNull(request.getPhoneNumber());
     }
 
+    @Test
+    void validateCreateInputShouldAllowBlankAssociationName() {
+        DeaneryCreateRequest request = new DeaneryCreateRequest();
+        request.setName("Thủ Dầu Một");
+        request.setAssociationName("   ");
+
+        helper.validateCreateInput(request);
+
+        assertNull(request.getAssociationName());
+    }
+
     private Diocese diocese(UUID dioceseId) {
         Diocese diocese = new Diocese();
         diocese.setId(dioceseId);
