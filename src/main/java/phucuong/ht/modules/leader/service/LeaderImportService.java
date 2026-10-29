@@ -10,6 +10,10 @@ import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.common.excel.ExcelRowData;
 import phucuong.ht.common.excel.ExcelSheetData;
 import phucuong.ht.common.excel.ExcelWorkbookReader;
+import phucuong.ht.common.excel.AvatarImportCollector;
+import phucuong.ht.common.excel.AvatarPlan;
+import phucuong.ht.common.excel.AvatarWarning;
+import phucuong.ht.common.excel.AvatarZip;
 import phucuong.ht.common.excel.ImportErrors;
 import phucuong.ht.common.excel.ImportSummary;
 import phucuong.ht.common.excel.job.JobProgress;
@@ -57,6 +61,7 @@ public class LeaderImportService {
     public static final String COL_LEVEL = "Cấp độ";
     public static final String COL_DEANERY = "Giáo hạt";
     public static final String COL_PARISH = "Giáo xứ";
+    public static final String COL_AVATAR_FILE = "Tên file ảnh";
 
     private static final Pattern EMAIL = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
     private static final Pattern PHONE = Pattern.compile("^0\\d{9}$");
@@ -71,7 +76,7 @@ public class LeaderImportService {
     private UnitOperationalStatusService unitOperationalStatusService;
 
     private record Row(ExcelRowData source, String holyName, String fullName, LocalDate birthDate, LeaderGender gender,
-                       String email, String phone, String level, Parish parish) {
+                       String email, String phone, String level, Parish parish, String avatarFileName) {
     }
 
     @EvictCaches.Analytics
@@ -87,6 +92,10 @@ public class LeaderImportService {
     })
     @Transactional
     public ImportSummary importLeaders(java.nio.file.Path file, Authentication authentication, JobProgress progress) {
+        return importLeaders(file, authentication, progress, null);
+    }
+
+    public ImportSummary importLeaders(java.nio.file.Path file, Authentication authentication, JobProgress progress, AvatarZip images) {
         String actor = leaderValidationHelper.getRequiredAuditActor(authentication);
         List<Row> rows;
         try (ExcelWorkbookReader reader = ExcelWorkbookReader.open(file)) {
@@ -103,16 +112,20 @@ public class LeaderImportService {
         progress.report(0, rows.size());
 
         OffsetDateTime now = OffsetDateTime.now();
+        List<AvatarPlan> avatarPlan = new ArrayList<>();
+        List<AvatarWarning> avatarWarnings = new ArrayList<>();
         int written = 0;
         for (Row item : rows) {
-            leaderRepository.save(buildLeader(new NewLeader(item.holyName(), item.fullName(), item.birthDate(), item.gender(), item.email(),
+            Leader leader = leaderRepository.save(buildLeader(new NewLeader(item.holyName(), item.fullName(), item.birthDate(), item.gender(), item.email(),
                     item.phone(), item.level(), item.parish()), actor, now));
+            AvatarImportCollector.collect(images, avatarPlan, avatarWarnings, item.source().number(), leader.getId(), item.fullName(),
+                    item.avatarFileName(), item.parish().getDeanery().getDiocese().getId());
             written++;
             if (written % 200 == 0) {
                 progress.report(written, rows.size());
             }
         }
-        return new ImportSummary(rows.size(), "Đã import " + rows.size() + " huynh trưởng");
+        return new ImportSummary(rows.size(), "Đã import " + rows.size() + " huynh trưởng", avatarPlan, avatarWarnings);
     }
 
     private List<Row> parse(ExcelSheetData sheet, Authentication authentication, ImportErrors errors) {
@@ -160,6 +173,10 @@ public class LeaderImportService {
                 row.error(errors, COL_BIRTH_DATE, "Ngày sinh không được sau ngày hiện tại");
             }
             LeaderGender gender = parseGender(row, errors);
+            String avatarFileName = row.text(COL_AVATAR_FILE);
+            if (avatarFileName != null && avatarFileName.length() > 255) {
+                row.error(errors, COL_AVATAR_FILE, "Tên file ảnh tối đa 255 ký tự");
+            }
 
             String email = row.requiredText(errors, COL_EMAIL);
             if (email != null) {
@@ -197,7 +214,7 @@ public class LeaderImportService {
             }
 
             if (errors.count() == before && parish != null) {
-                result.add(new Row(row, holyName, fullName, birthDate, gender, email, phone, level, parish));
+                result.add(new Row(row, holyName, fullName, birthDate, gender, email, phone, level, parish, avatarFileName));
             }
         }
         return result;

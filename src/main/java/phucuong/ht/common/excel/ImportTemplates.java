@@ -54,20 +54,22 @@ public final class ImportTemplates {
                 new Column(LeaderImportService.COL_PHONE, true, 16, Kind.TEXT),
                 new Column(LeaderImportService.COL_LEVEL, false, 26, Kind.LEVEL),
                 new Column(LeaderImportService.COL_DEANERY, true, 22, Kind.GENERAL),
-                new Column(LeaderImportService.COL_PARISH, true, 22, Kind.GENERAL));
+                new Column(LeaderImportService.COL_PARISH, true, 22, Kind.GENERAL),
+                new Column(LeaderImportService.COL_AVATAR_FILE, false, 28, Kind.GENERAL));
         List<List<Object>> samples = List.of(
-                List.of("Phêrô", "Nguyễn Văn An", LocalDate.of(1995, 3, 7), "Nam", "nguyen.van.an@example.com", "0901234567", "", "Tên giáo hạt", "Tên giáo xứ"),
-                List.of("Maria", "Trần Thị Bình", LocalDate.of(1998, 11, 21), "Nữ", "tran.thi.binh@example.com", "0912345678", "", "Tên giáo hạt", "Tên giáo xứ"));
+                List.of("Phêrô", "Nguyễn Văn An", LocalDate.of(1995, 3, 7), "Nam", "nguyen.van.an@example.com", "0901234567", "", "Tên giáo hạt", "Tên giáo xứ", "nguyen-van-an.jpg"),
+                List.of("Maria", "Trần Thị Bình", LocalDate.of(1998, 11, 21), "Nữ", "tran.thi.binh@example.com", "0912345678", "", "Tên giáo hạt", "Tên giáo xứ", ""));
         List<String> guide = List.of(
                 "1. Điền dữ liệu ở sheet \"" + LEADERS_SHEET + "\" (sheet đầu tiên), từ dòng 2. Xóa các dòng ví dụ trước khi import. Tên cột có thể có hoặc không có dấu *, thứ tự cột không quan trọng.",
-                "2. Tất cả các cột đều bắt buộc (tiêu đề màu đỏ), TRỪ cột Cấp độ: Tên thánh, Họ và tên, Ngày sinh, Giới tính, Email, Số điện thoại, Giáo hạt, Giáo xứ.",
+                "2. Tất cả các cột đều bắt buộc (tiêu đề màu đỏ), TRỪ cột Cấp độ và Tên file ảnh: Tên thánh, Họ và tên, Ngày sinh, Giới tính, Email, Số điện thoại, Giáo hạt, Giáo xứ.",
                 "3. Ngày sinh theo dạng dd/MM/yyyy (ví dụ 07/03/1995), không được sau ngày hiện tại.",
                 "4. Giới tính chỉ nhận: Nam hoặc Nữ (chọn từ danh sách).",
                 "5. Email và Số điện thoại không được trùng với huynh trưởng đã có trong hệ thống hoặc trùng giữa các dòng trong file. Số điện thoại gồm 10 chữ số và bắt đầu bằng 0 (cột đã để định dạng Text để không mất số 0 đầu).",
                 "6. Cấp độ: chọn từ danh sách (sheet \"" + LOOKUP_SHEET + "\") hoặc nhập tên / mã cấp độ trong danh mục của giáo phận. Để trống nghĩa là \"Chưa có cấp\".",
                 "7. Giáo hạt và Giáo xứ (cột Giáo xứ cũng nhận tên giáo họ / giáo điểm) phải ĐÃ CÓ trong hệ thống (nhập đúng tên) và giáo xứ phải thuộc đúng giáo hạt đã nhập; nếu chưa có, dòng đó báo lỗi (hệ thống không tự tạo giáo hạt / giáo xứ).",
                 "8. Chỉ nhập được huynh trưởng cho giáo xứ trong phạm vi tài khoản của bạn. Chỉ cần một dòng lỗi thì toàn bộ file không được lưu; hệ thống báo rõ sheet, dòng, cột bị lỗi ở khay tác vụ để bạn sửa rồi import lại.",
-                "9. Mỗi lần import tối đa 5.000 dòng.");
+                "9. Mỗi lần import tối đa 5.000 dòng.",
+                "10. Ảnh là TÙY CHỌN: đặt ảnh JPG/PNG/WEBP (tối đa 5MB/ảnh) vào một file ZIP và ghi đúng tên ở cột \"Tên file ảnh\". Ảnh dọc tỉ lệ 2:3, tối thiểu khoảng 480x720, một người ở giữa, nhìn thẳng, rõ mặt và đủ sáng; ảnh sẽ được cắt giữa nếu chưa đúng tỉ lệ.");
         return build(LEADERS_SHEET, "Hướng dẫn import hồ sơ huynh trưởng", columns, samples, guide, levelNames);
     }
 
@@ -86,14 +88,15 @@ public final class ImportTemplates {
                 new Column(LeaderImportService.COL_LEVEL, false, 24, Kind.LEVEL),
                 new Column(LeaderImportService.COL_DEANERY, true, 20, Kind.GENERAL),
                 new Column(LeaderImportService.COL_PARISH, true, 20, Kind.GENERAL),
-                new Column(PastCourseParticipantImportService.COL_NOTE, false, 30, Kind.GENERAL));
+                new Column(PastCourseParticipantImportService.COL_NOTE, false, 30, Kind.GENERAL),
+                new Column(LeaderImportService.COL_AVATAR_FILE, false, 28, Kind.GENERAL));
         List<List<Object>> samples = List.of(
-                List.of("nguyen.van.an@example.com", "0901234567", 8.5, "Đạt", "Hoàn thành tốt khóa huấn luyện", "Phêrô", "Nguyễn Văn An", LocalDate.of(1995, 3, 7), "Nam", "", "Tên giáo hạt", "Tên giáo xứ", "Ghi chú tùy chọn"),
-                List.of("tran.thi.binh@example.com", "0912345678", 5, "Không đạt", "", "Maria", "Trần Thị Bình", LocalDate.of(1998, 11, 21), "Nữ", "", "Tên giáo hạt", "Tên giáo xứ", ""));
+                List.of("nguyen.van.an@example.com", "0901234567", 8.5, "Đạt", "Hoàn thành tốt khóa huấn luyện", "Phêrô", "Nguyễn Văn An", LocalDate.of(1995, 3, 7), "Nam", "", "Tên giáo hạt", "Tên giáo xứ", "Ghi chú tùy chọn", "nguyen-van-an.jpg"),
+                List.of("tran.thi.binh@example.com", "0912345678", 5, "Không đạt", "", "Maria", "Trần Thị Bình", LocalDate.of(1998, 11, 21), "Nữ", "", "Tên giáo hạt", "Tên giáo xứ", "", ""));
         List<String> guide = List.of(
                 "1. Chỉ dùng cho khóa huấn luyện quá khứ (tạo bằng nút \"Tạo khóa quá khứ\"). Mở chi tiết khóa, vào tab \"Danh sách tham dự\" và bấm \"Import Excel\".",
                 "2. Điền dữ liệu ở sheet \"" + PARTICIPANTS_SHEET + "\" (sheet đầu tiên), từ dòng 2. Xóa các dòng ví dụ trước khi import.",
-                "3. MỌI DÒNG đều phải nhập đủ tất cả các cột (tiêu đề màu đỏ), chỉ được để trống cột Nhận xét và Cấp độ: Email, Số điện thoại, Tổng điểm, Kết quả, Tên thánh, Họ và tên, Ngày sinh, Giới tính, Giáo hạt, Giáo xứ.",
+                "3. MỌI DÒNG đều phải nhập đủ tất cả các cột (tiêu đề màu đỏ), chỉ được để trống cột Nhận xét, Cấp độ, Ghi chú và Tên file ảnh: Email, Số điện thoại, Tổng điểm, Kết quả, Tên thánh, Họ và tên, Ngày sinh, Giới tính, Giáo hạt, Giáo xứ.",
                 "4. Huynh trưởng được tìm theo Email và Số điện thoại (hai thông tin này là duy nhất, nếu khớp hai huynh trưởng khác nhau thì báo lỗi). Không dùng mã định danh (UUID).",
                 "5. Huynh trưởng ĐÃ CÓ HỒ SƠ: hệ thống chỉ thêm huynh trưởng đó vào khóa, KHÔNG tạo mới và KHÔNG sửa hồ sơ (thông tin trong dòng chỉ để kiểm tra đủ dữ liệu). Huynh trưởng CHƯA CÓ HỒ SƠ: hệ thống tạo hồ sơ từ chính dòng này rồi thêm vào khóa.",
                 "6. Ngày sinh theo dạng dd/MM/yyyy; Giới tính chọn Nam hoặc Nữ; Số điện thoại gồm 10 chữ số và bắt đầu bằng 0; Cấp độ chọn từ sheet \"" + LOOKUP_SHEET + "\" (để trống là Chưa có cấp).",
@@ -102,7 +105,8 @@ public final class ImportTemplates {
                 "9. Một huynh trưởng chỉ xuất hiện một lần trong file và một lần trong khóa; huynh trưởng đã có trong danh sách tham dự của khóa sẽ báo lỗi.",
                 "10. Nếu khóa có \"Cấp độ đạt được\", học viên Đạt sẽ tự chuyển sang tab \"Duyệt chứng nhận\". Khi duyệt phải chọn ngày duyệt; sau khi duyệt, cấp độ được ghi vào lịch sử cấp độ (cấp hiện tại chỉ tăng nếu cấp mới cao hơn).",
                 "11. Chỉ cần một dòng lỗi thì toàn bộ file không được lưu (kể cả huynh trưởng mới); lỗi được báo rõ sheet, dòng, cột ở khay tác vụ để sửa rồi import lại. Mỗi lần import tối đa 5.000 dòng.",
-                "12. Cột \"Ghi chú\" là TÙY CHỌN (có thể bỏ trống, tối đa 1.000 ký tự): ghi chú của hồ sơ đăng ký, hiển thị ở danh sách tham dự và sửa được sau khi import.");
+                "12. Cột \"Ghi chú\" là TÙY CHỌN (có thể bỏ trống, tối đa 1.000 ký tự): ghi chú của hồ sơ đăng ký, hiển thị ở danh sách tham dự và sửa được sau khi import.",
+                "13. Ảnh là TÙY CHỌN: đặt ảnh JPG/PNG/WEBP (tối đa 5MB/ảnh) vào một file ZIP và ghi đúng tên ở cột \"Tên file ảnh\". Ảnh dọc tỉ lệ 2:3, tối thiểu khoảng 480x720, một người ở giữa, nhìn thẳng, rõ mặt và đủ sáng; hồ sơ đã có ảnh sẽ giữ ảnh cũ.");
         return build(PARTICIPANTS_SHEET, "Hướng dẫn import danh sách tham dự khóa huấn luyện quá khứ", columns, samples, guide, levelNames);
     }
 

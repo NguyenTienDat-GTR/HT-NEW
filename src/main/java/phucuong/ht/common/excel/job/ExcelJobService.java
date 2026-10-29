@@ -18,6 +18,7 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 import phucuong.ht.common.excel.ImportError;
+import phucuong.ht.common.excel.AvatarWarning;
 import phucuong.ht.common.exception.errorCode;
 import phucuong.ht.common.idempotency.IdempotencyService;
 import phucuong.ht.common.repository.BaseSearchRequest;
@@ -47,6 +48,7 @@ public class ExcelJobService {
 
     public static final int RETENTION_DAYS = 3;
     private static final long MAX_UPLOAD_BYTES = 20L * 1024 * 1024;
+    private static final long MAX_IMAGES_BYTES = 50L * 1024 * 1024;
 
     private final ExcelJobRepository repository;
     private final ObjectMapper objectMapper;
@@ -70,30 +72,39 @@ public class ExcelJobService {
         params.put("sortBy", request.getSortBy());
         params.put("sortDirection", request.getSortDirection());
         String paramsJson = toJson(params);
-        return create(kind, "", key, owner, IdempotencyService.sha256(kind.name() + "|" + paramsJson), paramsJson, null, authentication);
+        return create(kind, "", key, owner, IdempotencyService.sha256(kind.name() + "|" + paramsJson), paramsJson, null, null, authentication);
     }
 
     public ExcelJobResponse createImport(ExcelJobKind kind, String target, MultipartFile file, String idempotencyKey, Authentication authentication) {
+        return createImport(kind, target, file, null, idempotencyKey, authentication);
+    }
+
+    public ExcelJobResponse createImport(ExcelJobKind kind, String target, MultipartFile file, MultipartFile images,
+                                         String idempotencyKey, Authentication authentication) {
         String key = IdempotencyService.requireValidKey(idempotencyKey);
         String owner = owner(authentication);
         byte[] content = readUpload(file);
-        String hash = IdempotencyService.sha256(kind.name() + "|" + target + "|" + IdempotencyService.sha256(content));
+        byte[] imageContent = readImages(images);
+        String imageHash = imageContent == null ? "" : IdempotencyService.sha256(imageContent);
+        String hash = IdempotencyService.sha256(kind.name() + "|" + target + "|" + IdempotencyService.sha256(content) + "|" + imageHash);
         // Lưu file ra đĩa trước (request kết thúc là file upload tạm bị xóa); xóa lại nếu job không được tạo mới.
         Path input = writeFile("inputs", UUID.randomUUID() + ".xlsx", content);
+        Path imagesPath = imageContent == null ? null : writeFile("inputs", UUID.randomUUID() + ".zip", imageContent);
         boolean keep = false;
         try {
-            ExcelJobResponse response = create(kind, target, key, owner, hash, null, input, authentication);
+            ExcelJobResponse response = create(kind, target, key, owner, hash, null, input, imagesPath, authentication);
             keep = !response.replayed();
             return response;
         } finally {
             if (!keep) {
                 deleteQuietly(input.toString());
+                deleteQuietly(imagesPath == null ? null : imagesPath.toString());
             }
         }
     }
 
     private ExcelJobResponse create(ExcelJobKind kind, String target, String key, String owner, String hash, String paramsJson,
-                                    Path input, Authentication authentication) {
+                                    Path input, Path images, Authentication authentication) {
         // Cùng key: trả lại job cũ (nếu nội dung khác thì từ chối).
         Optional<ExcelJobRepository.Row> existing = repository.findByKey(owner, kind, key);
         if (existing.isPresent()) {
@@ -119,8 +130,9 @@ public class ExcelJobService {
         try {
             String principalJson = toJson(principal);
             String inputPath = input == null ? null : input.toString();
+            String imagesPath = images == null ? null : images.toString();
             id = new TransactionTemplate(transactionManager).execute(status ->
-                    repository.insert(owner, kind, target, key, hash, paramsJson, principalJson, inputPath, warning));
+                    repository.insert(owner, kind, target, key, hash, paramsJson, principalJson, inputPath, imagesPath, warning));
         } catch (DataIntegrityViolationException exception) {
             // Request cùng key đang tạo job cùng lúc (đụng unique index "một job đang chạy"): trả lại job đó.
             Optional<ExcelJobRepository.Row> sameKey = repository.findByKey(owner, kind, key);
@@ -218,6 +230,7 @@ public class ExcelJobService {
         for (ExcelJobRepository.Expired expired : repository.deleteExpired(RETENTION_DAYS)) {
             deleteQuietly(expired.inputPath());
             deleteQuietly(expired.outputPath());
+            deleteQuietly(expired.imagesPath());
         }
     }
 
@@ -270,6 +283,24 @@ public class ExcelJobService {
         }
     }
 
+    private byte[] readImages(MultipartFile images) {
+        if (images == null || images.isEmpty()) {
+            return null;
+        }
+        String name = images.getOriginalFilename() == null ? "" : images.getOriginalFilename().toLowerCase(Locale.ROOT);
+        if (!name.endsWith(".zip")) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, errorCode.VALIDATION_ERROR, "File ảnh phải có định dạng .zip");
+        }
+        if (images.getSize() > MAX_IMAGES_BYTES) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, errorCode.VALIDATION_ERROR, "File ZIP ảnh vượt quá 50MB");
+        }
+        try {
+            return images.getBytes();
+        } catch (IOException exception) {
+            throw new UncheckedIOException("Không đọc được file ZIP ảnh tải lên", exception);
+        }
+    }
+
     private String owner(Authentication authentication) {
         String username = securityUtils.currentUsername(authentication);
         if (username == null || username.isBlank()) {
@@ -290,6 +321,10 @@ public class ExcelJobService {
         List<ImportError> errors = null;
         Integer created = null;
         String resultMessage = null;
+        Integer avatarProcessed = null;
+        Integer avatarTotal = null;
+        Integer avatarSucceeded = null;
+        List<AvatarWarning> avatarWarnings = null;
         if (row.resultJson() != null) {
             try {
                 JsonNode node = objectMapper.readTree(row.resultJson());
@@ -303,13 +338,21 @@ public class ExcelJobService {
                 if (node.has("message")) {
                     resultMessage = node.get("message").asText();
                 }
+                if (node.has("avatarProcessed")) {
+                    avatarProcessed = node.get("avatarProcessed").asInt();
+                    avatarTotal = node.path("avatarTotal").asInt();
+                    avatarSucceeded = node.path("avatarSucceeded").asInt();
+                    avatarWarnings = objectMapper.convertValue(node.path("avatarWarnings"), new TypeReference<List<AvatarWarning>>() {
+                    });
+                }
             } catch (JsonProcessingException ignored) {
                 // kết quả không đọc được: bỏ qua phần chi tiết
             }
         }
         boolean downloadable = "SUCCEEDED".equals(row.status()) && row.outputPath() != null && Files.isRegularFile(Path.of(row.outputPath()));
         return new ExcelJobResponse(row.id(), row.kind(), row.kind().label(), row.kind().isImport(), row.target().isEmpty() ? null : row.target(),
-                row.status(), row.processed(), row.total(), row.warning(), row.errorMessage(), errors, created, resultMessage, downloadable,
+                row.status(), row.processed(), row.total(), row.avatarStatus(), avatarProcessed, avatarTotal, avatarSucceeded, avatarWarnings,
+                row.warning(), row.errorMessage(), errors, created, resultMessage, downloadable,
                 downloadable ? row.outputName() : null, row.createdAt(), row.finishedAt(),
                 row.createdAt() == null ? null : row.createdAt().plusDays(RETENTION_DAYS), false);
     }

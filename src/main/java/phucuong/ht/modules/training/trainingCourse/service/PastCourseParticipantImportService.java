@@ -11,6 +11,10 @@ import phucuong.ht.common.excel.ExcelSheetData;
 import phucuong.ht.common.excel.ExcelWorkbookReader;
 import phucuong.ht.common.excel.ImportErrors;
 import phucuong.ht.common.excel.ImportSummary;
+import phucuong.ht.common.excel.AvatarImportCollector;
+import phucuong.ht.common.excel.AvatarPlan;
+import phucuong.ht.common.excel.AvatarWarning;
+import phucuong.ht.common.excel.AvatarZip;
 import phucuong.ht.common.excel.ImportTemplates;
 import phucuong.ht.common.excel.job.JobProgress;
 import phucuong.ht.common.validation.CommonValidationHelper;
@@ -95,7 +99,7 @@ public class PastCourseParticipantImportService {
 
     // leader: huynh trưởng đã có hồ sơ; newLeader: thông tin để tạo mới (đúng một trong hai khác null).
     private record Parsed(ExcelRowData row, Leader leader, LeaderImportService.NewLeader newLeader, CourseResult result, BigDecimal score, String review,
-                          boolean exception, String exceptionReason, String teamName, String note) {
+                          boolean exception, String exceptionReason, String teamName, String note, String avatarFileName) {
     }
 
     @Caching(evict = {
@@ -108,7 +112,12 @@ public class PastCourseParticipantImportService {
     @EvictCaches.Leaders
     @Transactional
     public ImportSummary importParticipants(String courseCode, java.nio.file.Path file, Authentication authentication, JobProgress progress) {
-        return importParticipants(courseCode, file, authentication, progress, false);
+        return importParticipants(courseCode, file, authentication, progress, false, null);
+    }
+
+    public ImportSummary importParticipants(String courseCode, java.nio.file.Path file, Authentication authentication,
+                                            JobProgress progress, AvatarZip images) {
+        return importParticipants(courseCode, file, authentication, progress, false, images);
     }
 
     /**
@@ -125,6 +134,11 @@ public class PastCourseParticipantImportService {
     @EvictCaches.Leaders
     @Transactional
     public ImportSummary importParticipants(String courseCode, java.nio.file.Path file, Authentication authentication, JobProgress progress, boolean withTeam) {
+        return importParticipants(courseCode, file, authentication, progress, withTeam, null);
+    }
+
+    private ImportSummary importParticipants(String courseCode, java.nio.file.Path file, Authentication authentication,
+                                             JobProgress progress, boolean withTeam, AvatarZip images) {
         TrainingCourse course = trainingCourseRepository.findByCodeWithType(courseCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy khóa huấn luyện " + courseCode));
         boolean past = course.isPast();
@@ -172,6 +186,8 @@ public class PastCourseParticipantImportService {
         int created = 0;
         int newLeaders = 0;
         int exceptions = 0;
+        List<AvatarPlan> avatarPlan = new ArrayList<>();
+        List<AvatarWarning> avatarWarnings = new ArrayList<>();
         // Khóa thường: hồ sơ vào thẳng danh sách tham dự coi như vừa được duyệt (khóa bật tự gửi email sẽ gửi thông tin tham dự).
         List<CourseParticipation> directlyApproved = new java.util.ArrayList<>();
         for (Parsed item : parsed) {
@@ -180,6 +196,16 @@ public class PastCourseParticipantImportService {
                 // Huynh trưởng chưa có hồ sơ: tạo ngay trong cùng transaction (lỗi ở bất kỳ dòng nào thì rollback cả hồ sơ lẫn danh sách tham dự).
                 leader = leaderRepository.save(leaderImportService.buildLeader(item.newLeader(), actor, now));
                 newLeaders++;
+            }
+            if (past && item.avatarFileName() != null) {
+                if (item.leader() != null && item.leader().getImageAssetId() != null) {
+                    avatarWarnings.add(new AvatarWarning(item.row().number(), item.row().text(LeaderImportService.COL_FULL_NAME),
+                            item.avatarFileName(), "Hồ sơ đã có ảnh, giữ ảnh cũ"));
+                } else {
+                    AvatarImportCollector.collect(images, avatarPlan, avatarWarnings, item.row().number(), leader.getId(),
+                            item.row().text(LeaderImportService.COL_FULL_NAME), item.avatarFileName(),
+                            leader.getParish().getDeanery().getDiocese().getId());
+                }
             }
             CourseParticipation participation = new CourseParticipation();
             participation.setLeader(leader);
@@ -250,7 +276,7 @@ public class PastCourseParticipantImportService {
                 : "Đã import " + created + " học viên vào khóa \"" + course.getCourseName() + "\""
                 + (exceptions > 0 ? ", trong đó " + exceptions + " hồ sơ ngoại lệ chờ duyệt đăng ký" : "")
                 + (newLeaders > 0 ? ", trong đó tạo mới " + newLeaders + " hồ sơ huynh trưởng" : "");
-        return new ImportSummary(created, message);
+        return new ImportSummary(created, message, avatarPlan, avatarWarnings);
     }
 
     // Xóa một học viên khỏi khóa quá khứ (sửa nhầm khi import). Học viên đã có chứng nhận được duyệt thì phải thu hồi trước.
@@ -411,6 +437,10 @@ public class PastCourseParticipantImportService {
             if (note != null && note.length() > MAX_NOTE) {
                 row.error(errors, COL_NOTE, "Ghi chú tối đa " + MAX_NOTE + " ký tự");
             }
+            String avatarFileName = past ? row.text(LeaderImportService.COL_AVATAR_FILE) : null;
+            if (avatarFileName != null && avatarFileName.length() > 255) {
+                row.error(errors, LeaderImportService.COL_AVATAR_FILE, "Tên file ảnh tối đa 255 ký tự");
+            }
             String exceptionReason = null;
             String teamName = null;
             if (withTeam) {
@@ -438,7 +468,7 @@ public class PastCourseParticipantImportService {
                 }
             }
             if (errorCount(errors) == before && (leader != null || newLeader != null) && (!past || courseResult != null)) {
-                result.add(new Parsed(row, leader, newLeader, courseResult, score, review, exceptionRow, exceptionReason, teamName, note));
+                result.add(new Parsed(row, leader, newLeader, courseResult, score, review, exceptionRow, exceptionReason, teamName, note, avatarFileName));
             }
         }
         return result;

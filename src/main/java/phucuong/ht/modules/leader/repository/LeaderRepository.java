@@ -33,6 +33,23 @@ public class LeaderRepository extends BaseRepo<Leader, UUID> {
                 .executeUpdate();
     }
 
+    /** Chỉ gắn ảnh khi hồ sơ vẫn chưa có ảnh; dùng để không ghi đè ảnh người dùng vừa cập nhật. */
+    @Transactional
+    public int setImageAssetIfAbsent(UUID id, UUID assetId) {
+        return entityManager.createQuery(
+                        "update Leader l set l.imageAssetId = :assetId, l.legacyImageData = null where l.id = :id and l.imageAssetId is null")
+                .setParameter("assetId", assetId)
+                .setParameter("id", id)
+                .executeUpdate();
+    }
+
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public boolean hasImageAsset(UUID id) {
+        return entityManager.createQuery("select count(l) from Leader l where l.id = :id and l.imageAssetId is not null", Long.class)
+                .setParameter("id", id)
+                .getSingleResult() > 0;
+    }
+
     public boolean existsByEmail(String email) {
         Long count = entityManager.createQuery(
                         """

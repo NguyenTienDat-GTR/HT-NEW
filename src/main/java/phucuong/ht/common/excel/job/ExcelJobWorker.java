@@ -18,11 +18,13 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 import phucuong.ht.common.excel.ImportSummary;
+import phucuong.ht.common.excel.AvatarZip;
 import phucuong.ht.common.excel.ImportValidationException;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.config.CacheNames;
 import phucuong.ht.modules.auth.exception.ApiException;
 import phucuong.ht.modules.training.CourseScoreVisibility;
+import phucuong.ht.modules.media.config.MediaProperties;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -68,6 +70,8 @@ public class ExcelJobWorker {
     private final ExcelJobHandlers handlers;
     private final ObjectMapper objectMapper;
     private final CacheManager cacheManager;
+    private final ExcelAvatarProcessor avatarProcessor;
+    private final MediaProperties mediaProperties;
     private final TransactionTemplate runTx;
     private final TransactionTemplate shortTx;
     private final Semaphore permits = new Semaphore(WORKERS);
@@ -86,11 +90,14 @@ public class ExcelJobWorker {
     private String baseDir;
 
     public ExcelJobWorker(ExcelJobRepository repository, ExcelJobHandlers handlers, ObjectMapper objectMapper,
-                          CacheManager cacheManager, PlatformTransactionManager transactionManager) {
+                          CacheManager cacheManager, PlatformTransactionManager transactionManager,
+                          ExcelAvatarProcessor avatarProcessor, MediaProperties mediaProperties) {
         this.repository = repository;
         this.handlers = handlers;
         this.objectMapper = objectMapper;
         this.cacheManager = cacheManager;
+        this.avatarProcessor = avatarProcessor;
+        this.mediaProperties = mediaProperties;
         this.runTx = new TransactionTemplate(transactionManager);
         // Ghi trạng thái / tiến độ luôn ở transaction riêng, độc lập với transaction nhập dữ liệu đang mở.
         this.shortTx = new TransactionTemplate(transactionManager);
@@ -115,7 +122,36 @@ public class ExcelJobWorker {
         } catch (RuntimeException exception) {
             log.warn("Không khôi phục được job Excel quá hạn lease", exception);
         }
+        pollAvatars();
         poll();
+    }
+
+    private void pollAvatars() {
+        while (permits.tryAcquire()) {
+            Optional<ExcelJobRepository.Row> claimed;
+            try {
+                claimed = shortTx.execute(status -> repository.claimNextAvatar(LEASE_SECONDS));
+            } catch (RuntimeException exception) {
+                permits.release();
+                log.warn("Không nhận được job xử lý ảnh Excel", exception);
+                return;
+            }
+            if (claimed == null || claimed.isEmpty()) {
+                permits.release();
+                return;
+            }
+            ExcelJobRepository.Row row = claimed.get();
+            jobExecutor.execute(() -> {
+                try {
+                    avatarProcessor.process(row, LEASE_SECONDS);
+                } catch (RuntimeException exception) {
+                    // Giữ RUNNING; khi hết lease vòng quét sẽ nhận lại.
+                    log.error("Xử lý ảnh của job Excel {} bị gián đoạn", row.id(), exception);
+                } finally {
+                    permits.release();
+                }
+            });
+        }
     }
 
     void poll() {
@@ -168,12 +204,33 @@ public class ExcelJobWorker {
 
     private void runImport(ExcelJobRepository.Row row, Authentication authentication) {
         boolean requeued = false;
+        boolean deleteImages = false;
+        AvatarZip images = null;
         try {
+            if (row.imagesPath() != null) {
+                try {
+                    images = new AvatarZip(Path.of(row.imagesPath()), mediaProperties.getMaxAvatarBytes());
+                } catch (IOException exception) {
+                    images = AvatarZip.unavailable(mediaProperties.getMaxAvatarBytes(), "Không đọc được ZIP ảnh: " + exception.getMessage());
+                }
+            }
+            AvatarZip importImages = images;
             JobProgress progress = (processed, total) -> shortTx.executeWithoutResult(status -> repository.touch(row.id(), processed, total, LEASE_SECONDS));
             ImportSummary summary = runTx.execute(status -> {
-                ImportSummary result = handlers.runImport(row.kind(), row.target(), Path.of(row.inputPath()), authentication, progress);
-                int updated = repository.markSucceeded(row.id(), json(Map.of("created", result.created(), "message", result.message())),
-                        null, null, result.created(), result.created());
+                ImportSummary result = handlers.runImport(row.kind(), row.target(), Path.of(row.inputPath()), authentication, progress, importImages);
+                boolean avatarRequested = row.imagesPath() != null || !result.avatarPlan().isEmpty() || !result.avatarWarnings().isEmpty();
+                String avatarStatus = avatarRequested ? (result.avatarPlan().isEmpty() ? "DONE" : "PENDING") : null;
+                Map<String, Object> resultJson = new LinkedHashMap<>();
+                resultJson.put("created", result.created());
+                resultJson.put("message", result.message());
+                if (avatarRequested) {
+                    resultJson.put("avatarProcessed", 0);
+                    resultJson.put("avatarTotal", result.avatarPlan().size());
+                    resultJson.put("avatarSucceeded", 0);
+                    resultJson.put("avatarWarnings", result.avatarWarnings());
+                }
+                int updated = repository.markSucceeded(row.id(), json(resultJson), null, null, result.created(), result.created(),
+                        result.avatarPlan().isEmpty() ? null : json(result.avatarPlan()), avatarStatus);
                 if (updated != 1) {
                     // Job không còn ở trạng thái RUNNING (bị thay đổi từ nơi khác): hủy ghi dữ liệu.
                     throw new IllegalStateException("Trạng thái tác vụ đã thay đổi, hủy ghi dữ liệu");
@@ -182,8 +239,14 @@ public class ExcelJobWorker {
             });
             log.info("Job nhập Excel {} hoàn tất: {} dòng", row.id(), summary == null ? 0 : summary.created());
             evictCachesAfterImport();
+            if (summary != null && summary.avatarPlan().isEmpty()) {
+                ExcelJobService.deleteQuietly(row.imagesPath());
+            } else {
+                pollAvatars();
+            }
         } catch (ImportValidationException exception) {
             fail(row, exception.getMessage(), json(Map.of("errors", exception.getErrors())));
+            deleteImages = true;
         } catch (DataIntegrityViolationException exception) {
             // Có thao tác khác vừa tạo dữ liệu trùng (ràng buộc duy nhất của DB chặn). Rollback đã xảy ra; chạy lại một lần để kiểm tra lại
             // toàn file và báo đúng dòng trùng.
@@ -193,15 +256,28 @@ public class ExcelJobWorker {
                 requeued = true;
             } else {
                 fail(row, "Dữ liệu bị trùng do có thao tác khác diễn ra cùng lúc. Vui lòng thử lại", null);
+                deleteImages = true;
             }
         } catch (ApiException exception) {
             fail(row, exception.getMessage(), null);
+            deleteImages = true;
         } catch (RuntimeException exception) {
             log.error("Job nhập Excel {} thất bại", row.id(), exception);
             fail(row, "Lỗi hệ thống khi xử lý file. Vui lòng thử lại hoặc liên hệ quản trị viên", null);
+            deleteImages = true;
         } finally {
+            if (images != null) {
+                try {
+                    images.close();
+                } catch (IOException ignored) {
+                    // file tạm sẽ được dọn sau
+                }
+            }
             if (!requeued) {
                 ExcelJobService.deleteQuietly(row.inputPath());
+            }
+            if (deleteImages) {
+                ExcelJobService.deleteQuietly(row.imagesPath());
             }
         }
     }
@@ -223,7 +299,7 @@ public class ExcelJobWorker {
             String name = handlers.exportFileBase(row.kind(), request) + "-" + LocalDate.now() + ".xlsx";
             Path written = output;
             Integer updated = shortTx.execute(status -> repository.markSucceeded(row.id(),
-                    json(Map.of("message", "Đã xuất file " + name)), written.toString(), name, null, null));
+                    json(Map.of("message", "Đã xuất file " + name)), written.toString(), name, null, null, null, null));
             if (updated == null || updated != 1) {
                 Files.deleteIfExists(output);
             }

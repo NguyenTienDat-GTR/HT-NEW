@@ -1562,3 +1562,10 @@ Ma trận endpoint (`endpoint-contract-matrix.psv`) hiện có 124 route.
 - `V109` tạo extension `pg_trgm`, hàm `immutable_unaccent(text)` (IMMUTABLE, đ thành d) và các index GIN trigram trên đúng biểu thức mà câu truy vấn dùng. Đổi biểu thức tìm kiếm thì phải đổi index tương ứng.
 - Từ khóa tối thiểu 2 ký tự sau khi bỏ dấu (ngắn hơn trả danh sách rỗng), `limit` tối đa 10, từ khóa được thoát `%` `_`.
 - Quyền: mỗi nhóm chỉ chạy khi tài khoản có `*.read.*` tương ứng và luôn lọc theo phạm vi của tài khoản (`findActive*IdByUsername`), không nhận ID từ client. SUPER_ADMIN chỉ thấy giáo phận/giáo hạt/giáo xứ; tài khoản bị khóa đơn vị không xác định được phạm vi nên không có kết quả. Khóa huấn luyện và chứng chỉ chỉ cho quyền cấp giáo phận/giáo hạt (giống danh sách).
+
+## 2026-10-29 Import avatar kèm Excel (nhánh `feature/excel-import-avatar`, migration `V115`)
+
+- Import huynh trưởng và danh sách tham dự khóa quá khứ nhận thêm part `images` là ZIP tùy chọn (tối đa 50MB); hash idempotency gồm cả Excel và ZIP. File mẫu thêm cột tùy chọn `Tên file ảnh` và hướng dẫn ảnh JPG/PNG/WEBP tối đa 5MB.
+- `AvatarZip` chỉ đọc entry trong ZIP, không giải nén ra đĩa; bỏ path traversal, file ẩn/`__MACOSX`, giới hạn 5.000 entry và 300MB sau giải nén, đối chiếu basename không phân biệt hoa thường và hỗ trợ tên không có đuôi. Tên trùng ở nhiều thư mục được báo mơ hồ.
+- Pha transaction chỉ import dữ liệu và lưu `avatar_plan`/cảnh báo cùng trạng thái job. `ExcelAvatarProcessor` chỉ chạy sau commit, tạo asset ACTIVE rồi gắn bằng cập nhật có điều kiện `image_asset_id is null`; hồ sơ đã có ảnh giữ ảnh cũ, asset không gắn được được release.
+- Trạng thái ảnh (`PENDING/RUNNING/DONE`) và lease tách khỏi trạng thái dữ liệu `SUCCEEDED`; lỗi từng ảnh không rollback dữ liệu, được trả rõ dòng, họ tên, tên file và lý do cùng tiến độ `avatarProcessed/avatarTotal/avatarSucceeded`. ZIP được xóa khi pha ảnh hoàn tất hoặc job hết hạn.

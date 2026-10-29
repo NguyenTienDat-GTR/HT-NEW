@@ -6,6 +6,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 import phucuong.ht.common.excel.ExcelExportSupport;
 import phucuong.ht.common.excel.ImportSummary;
+import phucuong.ht.common.excel.AvatarZip;
 import phucuong.ht.common.excel.OrganizationExcelExports;
 import phucuong.ht.common.excel.TrainingExcelExports;
 import phucuong.ht.common.repository.BaseSearchRequest;
@@ -96,10 +97,11 @@ public class ExcelJobHandlers {
         };
     }
 
-    public ImportSummary runImport(ExcelJobKind kind, String target, Path file, Authentication authentication, JobProgress progress) {
+    public ImportSummary runImport(ExcelJobKind kind, String target, Path file, Authentication authentication, JobProgress progress,
+                                   AvatarZip images) {
         return switch (kind) {
-            case IMPORT_LEADERS -> leaderImportService.importLeaders(file, authentication, progress);
-            case IMPORT_PARTICIPANTS -> pastCourseParticipantImportService.importParticipants(target, file, authentication, progress);
+            case IMPORT_LEADERS -> leaderImportService.importLeaders(file, authentication, progress, images);
+            case IMPORT_PARTICIPANTS -> pastCourseParticipantImportService.importParticipants(target, file, authentication, progress, images);
             case IMPORT_TEAM_PARTICIPANTS -> pastCourseParticipantImportService.importParticipants(target, file, authentication, progress, true);
             default -> throw new IllegalArgumentException("Không phải tác vụ nhập: " + kind);
         };

@@ -159,6 +159,41 @@ class ExcelImportExportIntegrationTest {
         return new MockMultipartFile("file", "import.xlsx", ExcelResponses.XLSX.toString(), ExcelExportWriter.write("Dữ liệu", columns, rows));
     }
 
+    private static MockMultipartFile imageZip(String name, byte[] content) {
+        return imageZip(java.util.Map.of(name, content));
+    }
+
+    private static MockMultipartFile imageZip(java.util.Map<String, byte[]> entries) {
+        try {
+            java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream();
+            try (java.util.zip.ZipOutputStream zip = new java.util.zip.ZipOutputStream(output)) {
+                for (var entry : entries.entrySet()) {
+                    zip.putNextEntry(new java.util.zip.ZipEntry(entry.getKey()));
+                    zip.write(entry.getValue());
+                    zip.closeEntry();
+                }
+            }
+            return new MockMultipartFile("images", "images.zip", "application/zip", output.toByteArray());
+        } catch (java.io.IOException exception) {
+            throw new java.io.UncheckedIOException(exception);
+        }
+    }
+
+    private static byte[] validPortrait() {
+        try {
+            java.awt.image.BufferedImage image = new java.awt.image.BufferedImage(60, 90, java.awt.image.BufferedImage.TYPE_INT_RGB);
+            java.awt.Graphics2D graphics = image.createGraphics();
+            graphics.setColor(java.awt.Color.BLUE);
+            graphics.fillRect(0, 0, 60, 90);
+            graphics.dispose();
+            java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream();
+            javax.imageio.ImageIO.write(image, "png", output);
+            return output.toByteArray();
+        } catch (java.io.IOException exception) {
+            throw new java.io.UncheckedIOException(exception);
+        }
+    }
+
     private static final List<String> LEADER_HEADERS =
             List.of("Tên thánh *", "Họ và tên *", "Ngày sinh *", "Giới tính *", "Email *", "Số điện thoại *", "Cấp độ", "Giáo hạt *", "Giáo xứ *");
 
@@ -521,7 +556,8 @@ class ExcelImportExportIntegrationTest {
         long deadline = System.currentTimeMillis() + 60_000;
         while (System.currentTimeMillis() < deadline) {
             var job = excelJobService.get(id, phuCuongAdmin());
-            if (!"QUEUED".equals(job.status()) && !"RUNNING".equals(job.status())) {
+            if (!"QUEUED".equals(job.status()) && !"RUNNING".equals(job.status())
+                    && !"PENDING".equals(job.avatarStatus()) && !"RUNNING".equals(job.avatarStatus())) {
                 return job;
             }
             try {
@@ -1042,6 +1078,77 @@ class ExcelImportExportIntegrationTest {
         assertEquals("APPROVED", approved.getApprovalStatus().name());
         assertEquals("HT_I", levelOf("tdm.moi@example.com"));
         assertEquals(LocalDate.of(2015, 12, 12), approved.getIssueDate());
+    }
+
+    @Test
+    @Order(27)
+    void avatarZipRunsAfterSuccessfulImportAndImageErrorsDoNotRollbackData() {
+        List<String> headers = new java.util.ArrayList<>(LEADER_HEADERS);
+        headers.add("Tên file ảnh");
+        MockMultipartFile file = excel(headers, List.of(
+                new Row("Phêrô", "Avatar Hợp Lệ", "01/01/1990", "Nam", "avatar.valid@example.com", "0966000001", "", "Thủ Dầu Một", "Bà Lụa", "portrait.png"),
+                new Row("Maria", "Không Có Ảnh", "02/02/1991", "Nữ", "avatar.none@example.com", "0966000002", "", "Thủ Dầu Một", "Búng", "")));
+        var job = excelJobService.createImport(phucuong.ht.common.excel.job.ExcelJobKind.IMPORT_LEADERS, "", file,
+                imageZip("folder/portrait.png", validPortrait()), newKey(), phuCuongAdmin());
+        var done = awaitJob(job.id());
+
+        assertEquals("SUCCEEDED", done.status(), done.errorMessage());
+        assertEquals("DONE", done.avatarStatus());
+        assertEquals(1, done.avatarProcessed());
+        assertEquals(1, done.avatarSucceeded());
+        assertEquals(2, countLeaders("avatar.%@example.com"));
+        UUID originalAsset = jdbc.queryForObject("select image_asset_id from leader where email='avatar.valid@example.com'", UUID.class);
+        assertNotNull(originalAsset);
+        assertEquals(null, jdbc.queryForObject("select image_asset_id from leader where email='avatar.none@example.com'", UUID.class));
+
+        // Hồ sơ đã có ảnh: import tham dự vẫn thành công và giữ nguyên ảnh cũ.
+        String course = createPastCourse("Khóa avatar 2014", 2014, null);
+        List<String> participantHeaders = new java.util.ArrayList<>(PARTICIPANT_HEADERS);
+        participantHeaders.add("Tên file ảnh");
+        MockMultipartFile participant = excel(participantHeaders, List.of(
+                new Row("avatar.valid@example.com", "0966000001", "8", "Đạt", "", "Phêrô", "Avatar Hợp Lệ", "01/01/1990", "Nam", "", "Thủ Dầu Một", "Bà Lụa", "replacement.png"),
+                new Row("avatar.participant@example.com", "0966000005", "7", "Đạt", "", "Anna", "Ảnh Từ Khóa", "05/05/1994", "Nữ", "", "Thủ Dầu Một", "Búng", "newcomer.png")));
+        var participantJob = excelJobService.createImport(phucuong.ht.common.excel.job.ExcelJobKind.IMPORT_PARTICIPANTS, course, participant,
+                imageZip(java.util.Map.of("replacement.png", validPortrait(), "newcomer.png", validPortrait())), newKey(), phuCuongAdmin());
+        var participantDone = awaitJob(participantJob.id());
+        assertEquals("SUCCEEDED", participantDone.status(), participantDone.errorMessage());
+        assertTrue(participantDone.avatarWarnings().stream().anyMatch(warning -> warning.row() == 2 && warning.fileName().equals("replacement.png")
+                && warning.reason().contains("giữ ảnh cũ")), participantDone.avatarWarnings().toString());
+        assertEquals(originalAsset, jdbc.queryForObject("select image_asset_id from leader where email='avatar.valid@example.com'", UUID.class));
+        assertNotNull(jdbc.queryForObject("select image_asset_id from leader where email='avatar.participant@example.com'", UUID.class));
+
+        // Ảnh hỏng chỉ tạo cảnh báo; hồ sơ vẫn được lưu và không có avatar.
+        MockMultipartFile brokenFile = excel(headers, List.of(new Row(
+                "Giuse", "Ảnh Bị Hỏng", "03/03/1992", "Nam", "avatar.broken@example.com", "0966000003", "", "Thủ Dầu Một", "Bà Lụa", "broken.jpg")));
+        var brokenJob = excelJobService.createImport(phucuong.ht.common.excel.job.ExcelJobKind.IMPORT_LEADERS, "", brokenFile,
+                imageZip("broken.jpg", new byte[]{1, 2, 3, 4}), newKey(), phuCuongAdmin());
+        var brokenDone = awaitJob(brokenJob.id());
+        assertEquals("SUCCEEDED", brokenDone.status(), brokenDone.errorMessage());
+        assertEquals(1, countLeaders("avatar.broken@example.com"));
+        assertEquals(0, brokenDone.avatarSucceeded());
+        assertTrue(brokenDone.avatarWarnings().stream().anyMatch(warning -> warning.row() == 2
+                && warning.fullName().equals("Ảnh Bị Hỏng") && warning.fileName().equals("broken.jpg")), brokenDone.avatarWarnings().toString());
+
+        // Excel lỗi: transaction rollback và pha cloud không được chạy.
+        int assetsBefore = jdbc.queryForObject("select count(*) from media_asset", Integer.class);
+        MockMultipartFile invalidExcel = excel(headers, List.of(new Row(
+                "", "Excel Sai", "04/04/1993", "Nam", "avatar.excel.bad@example.com", "0966000004", "", "Thủ Dầu Một", "Bà Lụa", "portrait.png")));
+        var invalidJob = excelJobService.createImport(phucuong.ht.common.excel.job.ExcelJobKind.IMPORT_LEADERS, "", invalidExcel,
+                imageZip("portrait.png", validPortrait()), newKey(), phuCuongAdmin());
+        var failed = awaitJob(invalidJob.id());
+        assertEquals("FAILED", failed.status());
+        assertEquals(0, countLeaders("avatar.excel.bad@example.com"));
+        assertEquals(assetsBefore, jdbc.queryForObject("select count(*) from media_asset", Integer.class));
+
+        // Có tên ảnh nhưng không gửi ZIP: dữ liệu vẫn lưu, cảnh báo đúng hồ sơ.
+        MockMultipartFile noZipFile = excel(headers, List.of(new Row(
+                "Luca", "Thiếu File ZIP", "06/06/1995", "Nam", "avatar.nozip@example.com", "0966000006", "", "Thủ Dầu Một", "Bà Lụa", "missing.png")));
+        var noZipJob = excelJobService.createImport(phucuong.ht.common.excel.job.ExcelJobKind.IMPORT_LEADERS, "", noZipFile,
+                null, newKey(), phuCuongAdmin());
+        var noZipDone = awaitJob(noZipJob.id());
+        assertEquals("SUCCEEDED", noZipDone.status(), noZipDone.errorMessage());
+        assertTrue(noZipDone.avatarWarnings().stream().anyMatch(warning -> warning.row() == 2 && warning.fullName().equals("Thiếu File ZIP")
+                && warning.fileName().equals("missing.png") && warning.reason().contains("Không có file ZIP")), noZipDone.avatarWarnings().toString());
     }
 
 }
