@@ -21,7 +21,9 @@ public class CertificateConfigResponse {
     private Boolean editable;
     private String paperSize;
     private String orientation;
+    // URL ảnh nền đã ký (hết hạn sau một thời gian) và id asset để gửi lại khi lưu.
     private String backgroundImage;
+    private java.util.UUID backgroundAssetId;
     private List<CertificateLayoutItem> fieldLayout;
     private Boolean status;
     private OffsetDateTime updatedAt;

@@ -20,7 +20,7 @@ import java.util.UUID;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-@ToString(exclude = {"frontBackground", "backBackground"})
+@ToString(exclude = {"legacyFrontBackground", "legacyBackBackground"})
 @EqualsAndHashCode(callSuper = true)
 public class BadgeConfig extends BaseModel {
 
@@ -69,12 +69,18 @@ public class BadgeConfig extends BaseModel {
     @Column(name = "has_back", nullable = false)
     private Boolean hasBack = Boolean.FALSE;
 
-    // Ảnh nền lưu dạng data URL base64 (giống cấu hình chứng nhận).
+    // Ảnh nền hiện tại nằm ở media_asset (cloud); hai cột base64 cũ chỉ để job chuyển dữ liệu đọc.
+    @Column(name = "front_background_asset_id")
+    private UUID frontBackgroundAssetId;
+
+    @Column(name = "back_background_asset_id")
+    private UUID backBackgroundAssetId;
+
     @Column(name = "front_background", columnDefinition = "text")
-    private String frontBackground;
+    private String legacyFrontBackground;
 
     @Column(name = "back_background", columnDefinition = "text")
-    private String backBackground;
+    private String legacyBackBackground;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "front_layout", columnDefinition = "jsonb")

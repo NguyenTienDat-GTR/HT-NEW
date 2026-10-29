@@ -60,7 +60,8 @@ class BadgeExportServiceTest {
         CommonValidationHelper validationHelper = new CommonValidationHelper(new securityUtils());
         service = new BadgeExportService(configRepository, participantSupport,
                 new AttendanceTokenService("unit-test-attendance-secret-0123456789"),
-                new BadgePdfRenderer(new CertificatePdfRenderer()), validationHelper);
+                new BadgePdfRenderer(new CertificatePdfRenderer()), validationHelper,
+                org.mockito.Mockito.mock(phucuong.ht.modules.media.service.MediaAssetService.class));
 
         diocese = TrainingTestFixtures.diocese("Giáo phận Phú Cường");
         deanery = TrainingTestFixtures.deanery("Giáo hạt Thủ Dầu Một", diocese);
@@ -467,7 +468,7 @@ class BadgeExportServiceTest {
         bare.setFieldKey("leaderName");
         BadgeConfig config = config(deaneryScope(), true, false);
         config.setFrontLayout(new ArrayList<>(List.of(bare)));
-        config.setFrontBackground("data:image/png;base64,not-base64!!");
+        config.setLegacyFrontBackground("data:image/png;base64,not-base64!!");
         givenDefault(config);
         givenParticipants(participants(1, null));
         assertEquals(1, pages(service.export("KH-1", all()).content()));

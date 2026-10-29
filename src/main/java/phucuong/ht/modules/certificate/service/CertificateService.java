@@ -104,7 +104,8 @@ public class CertificateService {
         request.setSortBy("issueDate");
         request.setSortDirection("DESC");
         request.setFilters(new LinkedHashMap<>(Map.of("leader.id", leaderId)));
-        return certificateRepository.findAll(request).getContent().stream().map(this::toResponse).toList();
+        // ArrayList (không phải List bất biến của Stream.toList): danh sách rỗng bất biến đọc lại từ cache Redis bị lỗi giải mã.
+        return new java.util.ArrayList<>(certificateRepository.findAll(request).getContent().stream().map(this::toResponse).toList());
     }
 
     // Các năm cấp có chứng nhận thật trong phạm vi người xem (mới nhất trước), cho bộ lọc năm cấp:

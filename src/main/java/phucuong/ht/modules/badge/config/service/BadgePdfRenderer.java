@@ -30,7 +30,11 @@ public class BadgePdfRenderer {
     private final CertificatePdfRenderer base;
 
     // Nội dung một mặt của một thẻ. background là mảng byte dùng chung giữa các thẻ (so sánh theo tham chiếu) để PDF chỉ nhúng ảnh một lần.
-    public record Side(byte[] background, List<CertificatePdfRenderer.RenderItem> items, List<CertificatePdfRenderer.RenderQr> qrCodes) {
+    public record Side(byte[] background, List<CertificatePdfRenderer.RenderItem> items, List<CertificatePdfRenderer.RenderQr> qrCodes,
+                       List<CertificatePdfRenderer.RenderPhoto> photos) {
+        public Side(byte[] background, List<CertificatePdfRenderer.RenderItem> items, List<CertificatePdfRenderer.RenderQr> qrCodes) {
+            this(background, items, qrCodes, List.of());
+        }
     }
 
     // xMm, yMm: góc trên-trái của thẻ trên trang (mm).
@@ -95,6 +99,15 @@ public class BadgePdfRenderer {
             for (CertificatePdfRenderer.RenderQr qr : side.qrCodes()) {
                 // Không nuốt lỗi QR: thiếu mã QR thì không được xuất PDF.
                 base.drawQr(cs, qr, originX, originY, width, height);
+            }
+        }
+        if (side.photos() != null) {
+            for (CertificatePdfRenderer.RenderPhoto photo : side.photos()) {
+                try {
+                    base.drawPhoto(document, cs, photo, originX, originY, width, height);
+                } catch (Exception e) {
+                    log.warn("Bỏ qua ảnh huynh trưởng trên thẻ do lỗi vẽ: {}", e.toString());
+                }
             }
         }
         if (side.items() != null) {

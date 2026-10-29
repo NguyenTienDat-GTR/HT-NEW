@@ -16,6 +16,10 @@ import phucuong.ht.modules.badge.config.model.response.BadgeConfigResponse;
 import phucuong.ht.modules.badge.config.repository.BadgeConfigRepository;
 import phucuong.ht.modules.certificate.config.model.CertificateLayoutItem;
 import phucuong.ht.modules.certificate.config.security.CertificateConfigScopeResolver;
+import phucuong.ht.modules.media.model.enums.MediaCategory;
+import phucuong.ht.modules.media.service.MediaAssetService;
+import phucuong.ht.modules.media.service.MediaFolderService;
+import phucuong.ht.modules.media.service.MediaUrls;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -47,6 +51,8 @@ class BadgeConfigServiceTest {
     private final Authentication superAdmin = new UsernamePasswordAuthenticationToken(
             "super-admin", null, List.of(() -> "ROLE_SUPER_ADMIN", () -> "training.badge_config.update.diocese"));
 
+    private MediaAssetService mediaAssets;
+
     @BeforeEach
     void setUp() {
         BadgeConfigRepository repository = mock(BadgeConfigRepository.class);
@@ -54,7 +60,16 @@ class BadgeConfigServiceTest {
         securityUtils securityUtils = new securityUtils();
         CommonValidationHelper validationHelper = new CommonValidationHelper(securityUtils);
         CertificateConfigScopeResolver scopeResolver = new CertificateConfigScopeResolver(securityUtils, accountRepository, validationHelper);
-        service = new BadgeConfigService(repository, scopeResolver, validationHelper, securityUtils);
+        mediaAssets = mock(MediaAssetService.class);
+        when(mediaAssets.attach(any(), any(), any(), any())).thenAnswer(invocation -> invocation.getArgument(0));
+        MediaFolderService mediaFolders = mock(MediaFolderService.class);
+        MediaUrls mediaUrls = mock(MediaUrls.class);
+        when(mediaUrls.displayOrLegacy(any(), any(), any())).thenAnswer(invocation -> {
+            UUID assetId = invocation.getArgument(0);
+            return assetId != null ? "url:" + assetId : invocation.getArgument(1);
+        });
+        service = new BadgeConfigService(repository, scopeResolver, validationHelper, securityUtils, mediaAssets, mediaFolders, mediaUrls,
+                mock(phucuong.ht.modules.media.album.BackgroundAlbumService.class));
 
         when(repository.persist(any())).thenAnswer(invocation -> {
             BadgeConfig config = invocation.getArgument(0);
@@ -361,15 +376,18 @@ class BadgeConfigServiceTest {
     }
 
     @Test
-    void rejectsOversizedBackground() {
-        BadgeConfigUpsertRequest request = request("x");
-        request.setFrontBackground("a".repeat(12_000_001));
-        assertTrue(rejected(request).getMessage().contains("Ảnh nền mặt trước quá lớn"));
-
-        BadgeConfigUpsertRequest back = request("x");
-        back.setHasBack(true);
-        back.setBackBackground("a".repeat(12_000_001));
-        assertTrue(rejected(back).getMessage().contains("Ảnh nền mặt sau quá lớn"));
+    void attachesBackgroundsAsAssetsAndReturnsSignedUrls() {
+        UUID front = UUID.randomUUID();
+        UUID back = UUID.randomUUID();
+        BadgeConfigUpsertRequest request = request("nền");
+        request.setHasBack(true);
+        request.setFrontBackgroundAssetId(front);
+        request.setBackBackgroundAssetId(back);
+        BadgeConfigResponse created = service.get(service.create(request, superAdmin).getId(), superAdmin);
+        assertEquals(front, created.getFrontBackgroundAssetId());
+        assertEquals(back, created.getBackBackgroundAssetId());
+        assertEquals("url:" + front, created.getFrontBackground());
+        org.mockito.Mockito.verify(mediaAssets).attach(front, MediaCategory.BADGE_BACKGROUND, null, "super-admin");
     }
 
     @Test
@@ -392,20 +410,23 @@ class BadgeConfigServiceTest {
     void backSideIsDroppedWhenConfigHasNoBack() {
         BadgeConfigUpsertRequest request = request("một mặt");
         request.setHasBack(false);
-        request.setBackBackground("data:image/png;base64,AAAA");
+        request.setBackBackgroundAssetId(UUID.randomUUID());
         request.setBackLayout(List.of(field("teamName", 0.5, 0.5)));
         BadgeConfigResponse created = service.get(service.create(request, superAdmin).getId(), superAdmin);
         assertFalse(created.getHasBack());
         assertNull(created.getBackBackground());
+        assertNull(created.getBackBackgroundAssetId());
         assertTrue(created.getBackLayout().isEmpty());
     }
 
     @Test
     void backSideIsKeptAndSupportsTextAndQr() {
+        UUID frontAsset = UUID.randomUUID();
+        UUID backAsset = UUID.randomUUID();
         BadgeConfigUpsertRequest request = request("hai mặt");
         request.setHasBack(true);
-        request.setFrontBackground("data:image/png;base64,FRONT");
-        request.setBackBackground("data:image/png;base64,BACK");
+        request.setFrontBackgroundAssetId(frontAsset);
+        request.setBackBackgroundAssetId(backAsset);
         CertificateLayoutItem text = new CertificateLayoutItem();
         text.setType("TEXT");
         text.setText("Lưu ý: mang theo thẻ");
@@ -419,16 +440,17 @@ class BadgeConfigServiceTest {
         request.setBackLayout(List.of(text, qr));
         BadgeConfigResponse created = service.get(service.create(request, superAdmin).getId(), superAdmin);
         assertTrue(created.getHasBack());
-        assertEquals("data:image/png;base64,FRONT", created.getFrontBackground());
-        assertEquals("data:image/png;base64,BACK", created.getBackBackground());
+        assertEquals("url:" + frontAsset, created.getFrontBackground());
+        assertEquals("url:" + backAsset, created.getBackBackground());
         assertEquals(2, created.getBackLayout().size());
     }
 
     @Test
     void turningBackOffOnUpdateClearsThePreviousBack() {
         BadgeConfigUpsertRequest request = request("đổi");
+        UUID backAsset = UUID.randomUUID();
         request.setHasBack(true);
-        request.setBackBackground("data:image/png;base64,BACK");
+        request.setBackBackgroundAssetId(backAsset);
         request.setBackLayout(List.of(field("teamName", 0.5, 0.5)));
         UUID id = service.create(request, superAdmin).getId();
 
@@ -438,6 +460,7 @@ class BadgeConfigServiceTest {
         assertFalse(updated.getHasBack());
         assertNull(updated.getBackBackground());
         assertTrue(updated.getBackLayout().isEmpty());
+        org.mockito.Mockito.verify(mediaAssets).release(backAsset);
     }
 
     // ---------- sửa / mặc định / xóa ----------
@@ -612,7 +635,7 @@ class BadgeConfigServiceTest {
     @Test
     void summariesDoNotCarryBackgroundsOrLayouts() {
         BadgeConfigUpsertRequest request = request("nặng");
-        request.setFrontBackground("data:image/png;base64,AAAA");
+        request.setFrontBackgroundAssetId(UUID.randomUUID());
         request.setFrontLayout(List.of(field("holyName", 0.5, 0.5)));
         service.create(request, superAdmin);
         BadgeConfigResponse summary = service.options(superAdmin).get(0);

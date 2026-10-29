@@ -21,6 +21,11 @@ import phucuong.ht.modules.certificate.config.model.response.CertificateFieldCat
 import phucuong.ht.modules.certificate.config.security.CertificateConfigScopeResolver;
 import phucuong.ht.modules.certificate.config.security.CertificateConfigScopeResolver.ActorScope;
 
+import phucuong.ht.modules.media.model.enums.MediaCategory;
+import phucuong.ht.modules.media.service.MediaAssetService;
+import phucuong.ht.modules.media.service.MediaFolderService;
+import phucuong.ht.modules.media.service.MediaUrls;
+
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.Normalizer;
@@ -32,6 +37,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -48,13 +54,16 @@ public class BadgeConfigService {
     private static final int MAX_NAME_LENGTH = 200;
     private static final int MAX_LAYOUT_ITEMS = 100;
     private static final int MAX_TEXT_LENGTH = 500;
-    private static final int MAX_BACKGROUND_LENGTH = 12_000_000;
-    private static final Set<String> ITEM_TYPES = Set.of("FIELD", "TEXT", "QR");
+    private static final Set<String> ITEM_TYPES = Set.of("FIELD", "TEXT", "QR", "PHOTO");
 
     private final BadgeConfigRepository configRepository;
     private final CertificateConfigScopeResolver scopeResolver;
     private final CommonValidationHelper validationHelper;
     private final securityUtils securityUtils;
+    private final MediaAssetService mediaAssetService;
+    private final MediaFolderService mediaFolderService;
+    private final MediaUrls mediaUrls;
+    private final phucuong.ht.modules.media.album.BackgroundAlbumService albumService;
 
     private ActorScope actorOf(Authentication authentication) {
         return scopeResolver.resolve(authentication, BadgeConfigAccessEvaluator.PREFIX, "Bạn không có quyền với cấu hình thẻ tham dự");
@@ -141,7 +150,7 @@ public class BadgeConfigService {
         config.setCreatedAt(now);
         config.setCreatedBy(audit);
         config.setStatus(Boolean.TRUE);
-        applyContent(config, request, now, audit);
+        applyContent(config, request, now, audit, actor);
         return toResponse(configRepository.persist(config), actor);
     }
 
@@ -155,7 +164,7 @@ public class BadgeConfigService {
         if (normalize(request.getName()) != null) {
             config.setName(uniqueName(config.getScopeKey(), request.getName(), config.getName()));
         }
-        applyContent(config, request, now, audit);
+        applyContent(config, request, now, audit, actor);
         return toResponse(configRepository.merge(config), actor);
     }
 
@@ -193,6 +202,8 @@ public class BadgeConfigService {
             throw validationHelper.conflict(
                     "Không thể xóa cấu hình chung. Hãy chọn một cấu hình khác làm cấu hình chung trước khi xóa.");
         }
+        mediaAssetService.release(config.getFrontBackgroundAssetId());
+        mediaAssetService.release(config.getBackBackgroundAssetId());
         configRepository.remove(config.getId());
     }
 
@@ -213,7 +224,7 @@ public class BadgeConfigService {
     }
 
     // Kiểm tra và áp nội dung cấu hình. Mọi sai lệch trả 400 kèm thông báo tiếng Việt cụ thể.
-    void applyContent(BadgeConfig config, BadgeConfigUpsertRequest request, OffsetDateTime now, String audit) {
+    void applyContent(BadgeConfig config, BadgeConfigUpsertRequest request, OffsetDateTime now, String audit, ActorScope actor) {
         String paperSize = normalize(request.getPaperSize()) == null ? "A4" : request.getPaperSize().trim().toUpperCase(Locale.ROOT);
         if (!BadgeSheetLayout.isKnownPaper(paperSize)) {
             throw validationHelper.validationError("Khổ giấy không hợp lệ: " + request.getPaperSize() + " (chọn A3, A4, A5, Letter hoặc Legal)");
@@ -248,10 +259,23 @@ public class BadgeConfigService {
         config.setGapMm(mm(gap));
         config.setCropMarks(request.getCropMarks() == null || request.getCropMarks());
         config.setHasBack(hasBack);
-        config.setFrontBackground(checkBackground(request.getFrontBackground(), "mặt trước"));
+        UUID dioceseId = mediaFolderService.dioceseOfScopeKey(config.getScopeKey());
+        boolean clearFront = Boolean.TRUE.equals(request.getClearFrontBackground());
+        UUID previousFront = config.getFrontBackgroundAssetId();
+        UUID nextFront = swapBackground(previousFront, request.getFrontBackgroundAssetId(), dioceseId, audit, actor);
+        if (!Objects.equals(nextFront, previousFront) || clearFront) {
+            config.setLegacyFrontBackground(null);
+        }
+        config.setFrontBackgroundAssetId(nextFront);
         config.setFrontLayout(checkLayout(request.getFrontLayout(), "mặt trước"));
         // Không có mặt sau thì bỏ hẳn nội dung mặt sau.
-        config.setBackBackground(hasBack ? checkBackground(request.getBackBackground(), "mặt sau") : null);
+        boolean clearBack = Boolean.TRUE.equals(request.getClearBackBackground()) || !hasBack;
+        UUID previousBack = config.getBackBackgroundAssetId();
+        UUID nextBack = swapBackground(previousBack, hasBack ? request.getBackBackgroundAssetId() : null, dioceseId, audit, actor);
+        if (!Objects.equals(nextBack, previousBack) || clearBack) {
+            config.setLegacyBackBackground(null);
+        }
+        config.setBackBackgroundAssetId(nextBack);
         config.setBackLayout(hasBack ? checkLayout(request.getBackLayout(), "mặt sau") : new ArrayList<>());
         config.setUpdatedAt(now);
         config.setUpdatedBy(audit);
@@ -278,14 +302,21 @@ public class BadgeConfigService {
         return value;
     }
 
-    private String checkBackground(String dataUrl, String side) {
-        if (dataUrl == null || dataUrl.isBlank()) {
+    // Trả id asset sau khi gắn / đổi / gỡ ảnh nền: ảnh mới chuyển vào thư mục giáo phận sở hữu cấu hình, ảnh cũ bị gỡ.
+    private UUID swapBackground(UUID current, UUID requested, UUID dioceseId, String audit, ActorScope actor) {
+        if (requested != null && requested.equals(current)) {
+            return current;
+        }
+        if (requested == null && current == null) {
             return null;
         }
-        if (dataUrl.length() > MAX_BACKGROUND_LENGTH) {
-            throw validationHelper.validationError("Ảnh nền " + side + " quá lớn, vui lòng chọn ảnh nhỏ hơn");
+        if (requested != null) {
+            // Ảnh từ album của đơn vị khác (hoặc cấu hình không được xem) không được dùng dù biết mã ảnh.
+            albumService.assertUsable(requested, actor);
         }
-        return dataUrl;
+        UUID next = requested == null ? null : mediaAssetService.attach(requested, MediaCategory.BADGE_BACKGROUND, dioceseId, audit);
+        mediaAssetService.release(current);
+        return next;
     }
 
     private List<CertificateLayoutItem> checkLayout(List<CertificateLayoutItem> layout, String side) {
@@ -345,8 +376,10 @@ public class BadgeConfigService {
 
     BadgeConfigResponse toResponse(BadgeConfig config, ActorScope actor) {
         return summaryBuilder(config, actor)
-                .frontBackground(config.getFrontBackground())
-                .backBackground(config.getBackBackground())
+                .frontBackground(mediaUrls.displayOrLegacy(config.getFrontBackgroundAssetId(), config.getLegacyFrontBackground(), MediaCategory.BADGE_BACKGROUND))
+                .backBackground(mediaUrls.displayOrLegacy(config.getBackBackgroundAssetId(), config.getLegacyBackBackground(), MediaCategory.BADGE_BACKGROUND))
+                .frontBackgroundAssetId(config.getFrontBackgroundAssetId())
+                .backBackgroundAssetId(config.getBackBackgroundAssetId())
                 .frontLayout(config.getFrontLayout())
                 .backLayout(config.getBackLayout())
                 .build();
