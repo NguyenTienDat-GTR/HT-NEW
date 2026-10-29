@@ -70,6 +70,11 @@ public class MediaProperties {
          * cloudinary://API_KEY:API_SECRET@CLOUD_NAME. Trống thì không tạo provider Cloudinary.
          */
         private String url;
+        /**
+         * Bật một lần để đưa các ảnh đã tải lên trước đây (đang nằm ở thư mục gốc Home) vào đúng thư mục giáo phận / loại ảnh.
+         * Chạy khi ứng dụng khởi động xong; chạy lại nhiều lần vẫn an toàn.
+         */
+        private boolean syncFoldersOnStartup = false;
     }
 
     @Getter

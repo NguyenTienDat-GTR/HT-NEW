@@ -34,12 +34,34 @@ public class MediaMaintenanceService {
     private final MediaAssetService assets;
     private final MediaProperties properties;
     private final JdbcTemplate jdbc;
+    private final phucuong.ht.modules.media.storage.MediaStorageRegistry registry;
 
-    public MediaMaintenanceService(MediaAssetRepository repository, MediaAssetService assets, MediaProperties properties, JdbcTemplate jdbc) {
+    public MediaMaintenanceService(MediaAssetRepository repository, MediaAssetService assets, MediaProperties properties, JdbcTemplate jdbc,
+                                   phucuong.ht.modules.media.storage.MediaStorageRegistry registry) {
         this.repository = repository;
         this.assets = assets;
         this.properties = properties;
         this.jdbc = jdbc;
+        this.registry = registry;
+    }
+
+    /** Đặt lại thư mục hiển thị cho mọi ảnh còn dùng (ACTIVE / PENDING) trên nhà cung cấp của chúng. */
+    public int syncFolders() {
+        int touched = 0;
+        for (MediaAsset asset : repository.findAll()) {
+            if (asset.getStatus() == MediaStatus.DELETED) {
+                continue;
+            }
+            try {
+                var provider = registry.require(asset.getProvider());
+                asset.getVariants().forEach(info -> provider.syncFolder(info.key()));
+                touched++;
+            } catch (RuntimeException e) {
+                log.warn("Không đồng bộ thư mục cho ảnh {}: {}", asset.getId(), e.getMessage());
+            }
+        }
+        log.info("Đã đồng bộ thư mục hiển thị cho {} ảnh", touched);
+        return touched;
     }
 
     public void cleanup() {

@@ -36,4 +36,10 @@ class CloudinaryStorageProviderTest {
         assertTrue(url.startsWith("https://res.cloudinary.com/demo-cloud/image/authenticated/s--"), url);
         assertTrue(url.contains("/ht/prod/system/avatars/abc/thumb.jpg"), url);
     }
+
+    @org.junit.jupiter.api.Test
+    void folderIsTheKeyDirectory() {
+        assertEquals("ht/prod/dioceses/phu-cuong-1a2b3c4d/avatars/abc", CloudinaryStorageProvider.folderOf("ht/prod/dioceses/phu-cuong-1a2b3c4d/avatars/abc/thumb.jpg"));
+        assertEquals(null, CloudinaryStorageProvider.folderOf("thumb.jpg"));
+    }
 }

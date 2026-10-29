@@ -51,6 +51,24 @@ public final class MediaJobs {
         }
     }
 
+    /** Chạy một lần khi khởi động (bật bằng app.media.cloudinary.sync-folders-on-startup) để xếp ảnh cũ vào đúng thư mục Cloudinary. */
+    @Component
+    @RequiredArgsConstructor
+    @ConditionalOnProperty(prefix = "app.media.cloudinary", name = "sync-folders-on-startup", havingValue = "true")
+    public static class FolderSyncOnStartup {
+        private static final Logger log = LoggerFactory.getLogger(FolderSyncOnStartup.class);
+        private final MediaMaintenanceService service;
+
+        @org.springframework.context.event.EventListener(org.springframework.boot.context.event.ApplicationReadyEvent.class)
+        public void run() {
+            try {
+                service.syncFolders();
+            } catch (RuntimeException e) {
+                log.error("Đồng bộ thư mục ảnh lỗi", e);
+            }
+        }
+    }
+
     @Component
     @RequiredArgsConstructor
     @ConditionalOnProperty(prefix = "app.media.cleanup", name = "enabled", havingValue = "true", matchIfMissing = true)

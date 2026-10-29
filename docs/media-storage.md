@@ -20,6 +20,11 @@ FE <img src="/backend/api/media/{assetId}/{variant}?sig"> ──▶ BE kiểm tr
 2. Mở URL ảnh phải **đăng nhập** (cookie `accessToken`) **và** chữ ký HMAC hợp lệ. Link ảnh **không có thời hạn** (ảnh luôn hiển thị trong danh sách), nhưng người ngoài có link mà chưa đăng nhập vẫn nhận 401, chữ ký sai nhận 403.
 3. Mỗi ảnh có một URL cố định nên trình duyệt cache được (`Cache-Control: private` + `ETag`/304).
 
+### Thư mục hiển thị trên Cloudinary (dynamic folder mode)
+
+Tài khoản Cloudinary mới dùng "dynamic folder mode": thư mục trong Media Library là `asset_folder`, **không** suy ra từ `public_id`. Vì vậy `CloudinaryStorageProvider` truyền `asset_folder` = thư mục của khóa logic khi tải lên và đặt lại sau khi đổi vị trí (`move`), nên ảnh nằm đúng `…/dioceses/{giáo-phận}/avatars|account-avatars|certificate-backgrounds|badge-backgrounds/{assetId}/`. Tài khoản fixed folder mode không nhận `asset_folder` thì tự bỏ tham số (thư mục đã nằm trong `public_id`).
+Ảnh tải lên trước khi có thay đổi này đang nằm ở thư mục gốc "Home": đặt `CLOUDINARY_SYNC_FOLDERS=true` một lần rồi khởi động lại để đưa chúng vào đúng thư mục (`app.media.cloudinary.sync-folders-on-startup`), xong đặt lại `false`.
+
 ### Thư mục theo giáo phận và loại ảnh
 
 ```

@@ -28,6 +28,10 @@ public interface MediaStorageProvider {
         delete(sourceKey);
     }
 
+    /** Đặt ảnh vào đúng thư mục hiển thị của nhà cung cấp (nơi thư mục tách khỏi khóa, ví dụ Cloudinary "dynamic folders"); mặc định không làm gì. */
+    default void syncFolder(String key) {
+    }
+
     /** Tạo sẵn thư mục (nơi nào không có khái niệm thư mục thì bỏ qua). */
     default void ensureFolder(String prefix) {
     }

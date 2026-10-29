@@ -14,6 +14,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -44,16 +45,33 @@ public class CloudinaryStorageProvider implements MediaStorageProvider {
 
     @Override
     public void put(String key, byte[] data, String contentType) {
+        Map<String, Object> options = new HashMap<>(ObjectUtils.asMap(
+                "public_id", publicId(key),
+                "resource_type", "image",
+                "type", DELIVERY_TYPE,
+                "overwrite", true,
+                "invalidate", true,
+                "unique_filename", false,
+                "use_filename", false));
+        // Tài khoản Cloudinary "dynamic folder mode": thư mục hiển thị trong Media Library là asset_folder, không suy từ public_id
+        // (thiếu tham số này thì mọi ảnh nằm ở thư mục gốc "Home" dù public_id có dấu "/").
+        String folder = folderOf(key);
+        if (folder != null) {
+            options.put("asset_folder", folder);
+        }
         try {
-            cloudinary.uploader().upload(data, ObjectUtils.asMap(
-                    "public_id", publicId(key),
-                    "resource_type", "image",
-                    "type", DELIVERY_TYPE,
-                    "overwrite", true,
-                    "invalidate", true,
-                    "unique_filename", false,
-                    "use_filename", false));
+            cloudinary.uploader().upload(data, options);
         } catch (IOException | RuntimeException e) {
+            if (folder != null && String.valueOf(e.getMessage()).contains("asset_folder")) {
+                // Tài khoản fixed folder mode không nhận asset_folder: thư mục đã nằm trong public_id.
+                options.remove("asset_folder");
+                try {
+                    cloudinary.uploader().upload(data, options);
+                    return;
+                } catch (IOException | RuntimeException retry) {
+                    throw new MediaStorageException("Không tải được ảnh lên Cloudinary", retry);
+                }
+            }
             throw new MediaStorageException("Không tải được ảnh lên Cloudinary", e);
         }
     }
@@ -109,6 +127,24 @@ public class CloudinaryStorageProvider implements MediaStorageProvider {
         } catch (IOException | RuntimeException e) {
             throw new MediaStorageException("Không đổi được vị trí ảnh trên Cloudinary", e);
         }
+        syncFolder(targetKey);
+    }
+
+    /** Đưa asset vào thư mục hiển thị tương ứng với khóa (dynamic folder mode); lỗi chỉ ghi log vì ảnh vẫn dùng được. */
+    @Override
+    public void syncFolder(String key) {
+        String folder = folderOf(key);
+        if (folder == null) {
+            return;
+        }
+        try {
+            cloudinary.api().update(publicId(key), ObjectUtils.asMap(
+                    "resource_type", "image",
+                    "type", DELIVERY_TYPE,
+                    "asset_folder", folder));
+        } catch (Exception e) {
+            log.warn("Không đặt được thư mục hiển thị {} cho ảnh {}: {}", folder, key, e.getMessage());
+        }
     }
 
     @Override
@@ -119,6 +155,12 @@ public class CloudinaryStorageProvider implements MediaStorageProvider {
             // Thư mục tự được tạo khi tải ảnh lên; việc tạo trước chỉ để người quản trị nhìn thấy cấu trúc.
             log.debug("Không tạo sẵn được thư mục Cloudinary {}: {}", prefix, e.getMessage());
         }
+    }
+
+    /** Thư mục chứa khóa: "a/b/c.jpg" → "a/b"; null nếu khóa không có thư mục. */
+    static String folderOf(String key) {
+        int slash = key.lastIndexOf('/');
+        return slash > 0 ? key.substring(0, slash) : null;
     }
 
     static String publicId(String key) {
