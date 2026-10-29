@@ -559,7 +559,7 @@ public class CourseParticipationService {
             }
         }
         if (!requestedScores.isEmpty()) {
-            throw commonValidationHelper.validationError("Điểm thành phần gửi lên có thành phần không thuộc loại khóa của khóa học");
+            throw commonValidationHelper.validationError("Điểm thành phần gửi lên có thành phần không thuộc loại khóa của khóa huấn luyện");
         }
         // Thành phần không còn áp dụng cho khóa thì bỏ dòng điểm cũ.
         participation.getComponentScores().removeIf(item -> item.getComponent() == null || !applicableComponentIds.contains(item.getComponent().getId()));

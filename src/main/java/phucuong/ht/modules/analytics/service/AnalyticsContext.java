@@ -81,7 +81,7 @@ final class AnalyticsContext {
 
     /**
      * Bộ lọc khóa áp lên bảng training_course tên c: luôn giới hạn trong khóa thuộc phạm vi của tài khoản
-     * (giáo phận: khóa giáo phận và các giáo hạt thuộc giáo phận; giáo hạt: khóa do giáo hạt tổ chức), rồi mới tới loại khóa / khóa học client chọn.
+     * (giáo phận: khóa giáo phận và các giáo hạt thuộc giáo phận; giáo hạt: khóa do giáo hạt tổ chức), rồi mới tới loại khóa / khóa huấn luyện client chọn.
      * Giáo xứ không tổ chức khóa nên không giới hạn theo khóa.
      */
     String courseFilters() {

@@ -5,7 +5,10 @@ import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Repository;
 import phucuong.ht.modules.rankHistory.model.entity.RankHistory;
 
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Repository
@@ -35,6 +38,24 @@ public class RankHistoryRepository {
                 )
                 .setParameter("leaderId", leaderId)
                 .getResultList();
+    }
+
+    // Tên khóa theo mã khóa (khóa quá khứ có mã là UUID nên không đọc được nếu hiển thị thẳng).
+    public Map<String, String> findCourseNamesByCodes(Collection<String> courseCodes) {
+        Map<String, String> names = new HashMap<>();
+        if (courseCodes == null || courseCodes.isEmpty()) {
+            return names;
+        }
+        List<Object[]> rows = entityManager.createQuery(
+                        "select tc.courseCode, tc.courseName from TrainingCourse tc where tc.courseCode in :codes",
+                        Object[].class
+                )
+                .setParameter("codes", courseCodes)
+                .getResultList();
+        for (Object[] row : rows) {
+            names.put((String) row[0], (String) row[1]);
+        }
+        return names;
     }
 
     // Năm GẦN NHẤT huynh trưởng đạt được một cấp độ (theo lịch sử cấp độ, bỏ qua lần đã bị hạ cấp).

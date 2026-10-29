@@ -88,7 +88,7 @@ public final class ImportTemplates {
                 new Column(LeaderImportService.COL_PARISH, true, 20, Kind.GENERAL),
                 new Column(PastCourseParticipantImportService.COL_NOTE, false, 30, Kind.GENERAL));
         List<List<Object>> samples = List.of(
-                List.of("nguyen.van.an@example.com", "0901234567", 8.5, "Đạt", "Hoàn thành tốt khóa học", "Phêrô", "Nguyễn Văn An", LocalDate.of(1995, 3, 7), "Nam", "", "Tên giáo hạt", "Tên giáo xứ", "Ghi chú tùy chọn"),
+                List.of("nguyen.van.an@example.com", "0901234567", 8.5, "Đạt", "Hoàn thành tốt khóa huấn luyện", "Phêrô", "Nguyễn Văn An", LocalDate.of(1995, 3, 7), "Nam", "", "Tên giáo hạt", "Tên giáo xứ", "Ghi chú tùy chọn"),
                 List.of("tran.thi.binh@example.com", "0912345678", 5, "Không đạt", "", "Maria", "Trần Thị Bình", LocalDate.of(1998, 11, 21), "Nữ", "", "Tên giáo hạt", "Tên giáo xứ", ""));
         List<String> guide = List.of(
                 "1. Chỉ dùng cho khóa huấn luyện quá khứ (tạo bằng nút \"Tạo khóa quá khứ\"). Mở chi tiết khóa, vào tab \"Danh sách tham dự\" và bấm \"Import Excel\".",

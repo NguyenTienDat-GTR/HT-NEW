@@ -381,7 +381,7 @@ public class CertificateConfigService {
         return actor.usableKeys() == null ? List.of(CertificateConfigScopeResolver.SYSTEM) : actor.usableKeys();
     }
 
-    // Chuỗi phạm vi của một khóa học khi xuất chứng nhận: giáo hạt (nếu khóa do giáo hạt quản lý) -> giáo phận -> hệ thống.
+    // Chuỗi phạm vi của một khóa huấn luyện khi xuất chứng nhận: giáo hạt (nếu khóa do giáo hạt quản lý) -> giáo phận -> hệ thống.
     private List<String> chainOf(TrainingCourse course) {
         List<String> chain = new ArrayList<>();
         if (course == null) {

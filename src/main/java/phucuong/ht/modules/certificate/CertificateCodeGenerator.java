@@ -75,14 +75,14 @@ public class CertificateCodeGenerator {
     // Mã viết tắt lấy từ cấu hình loại khóa; fallback về mã loại khi chưa khai báo.
     public String courseShortCode(TrainingCourseType courseType) {
         if (courseType == null) {
-            throw commonValidationHelper.validationError("Loại khóa học là bắt buộc để tạo mã chứng chỉ");
+            throw commonValidationHelper.validationError("Loại khóa huấn luyện là bắt buộc để tạo mã chứng chỉ");
         }
         String shortCode = courseType.getCertificateShortCode();
         if (shortCode == null || shortCode.isBlank()) {
             shortCode = courseType.getTypeCode();
         }
         if (shortCode == null || shortCode.isBlank()) {
-            throw commonValidationHelper.validationError("Loại khóa học thiếu mã viết tắt để tạo mã chứng chỉ");
+            throw commonValidationHelper.validationError("Loại khóa huấn luyện thiếu mã viết tắt để tạo mã chứng chỉ");
         }
         return normalizeAscii(shortCode).replaceAll("\\s+", "");
     }

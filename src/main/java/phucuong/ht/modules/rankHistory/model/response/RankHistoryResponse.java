@@ -14,6 +14,8 @@ public class RankHistoryResponse {
     private String newLevel;
     private LocalDate promotionDate;
     private String note;
+    private String courseCode;
+    private String courseName;
     private OffsetDateTime createdAt;
     private String createdBy;
     private String createdByName;

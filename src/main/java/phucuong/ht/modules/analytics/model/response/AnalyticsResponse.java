@@ -9,7 +9,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
-/** Chỉ dữ liệu cấu trúc: FE tự ánh xạ key sang nhãn hiển thị; `label` chỉ là tên thực thể lấy từ dữ liệu (giáo hạt, khóa học...). */
+/** Chỉ dữ liệu cấu trúc: FE tự ánh xạ key sang nhãn hiển thị; `label` chỉ là tên thực thể lấy từ dữ liệu (giáo hạt, khóa huấn luyện...). */
 @Getter @Builder(toBuilder = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class AnalyticsResponse {
