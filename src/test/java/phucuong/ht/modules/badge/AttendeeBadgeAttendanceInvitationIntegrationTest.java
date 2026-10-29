@@ -205,7 +205,7 @@ class AttendeeBadgeAttendanceInvitationIntegrationTest {
         for (String code : new String[]{COURSE, OTHER_COURSE}) {
             jdbc.update("insert into training_course (course_code, course_name, host_year, location, start_date, end_date, course_type_code, diocese_id, deanery_id, passing_score, created_at) "
                     + "values (?, ?, 2026, 'Nhà thờ Bà Lụa', ?, ?, 'DU_TRUONG_IT', ?, ?, 5, now())",
-                    code, "Khóa " + code, LocalDate.now().plusDays(3), LocalDate.now().plusDays(7), dioceseId, deaneryId);
+                    code, "Khóa " + code, LocalDate.now().minusDays(1), LocalDate.now().plusDays(7), dioceseId, deaneryId);
         }
 
         UUID an = UUID.randomUUID();
@@ -342,7 +342,7 @@ class AttendeeBadgeAttendanceInvitationIntegrationTest {
         assertEquals("Mang theo thẻ khi điểm danh", loaded.getBackLayout().get(1).getText());
         assertTrue(loaded.getHasBack());
         assertEquals(frontAsset, loaded.getFrontBackgroundAssetId());
-        assertTrue(loaded.getFrontBackground().startsWith("/api/media/" + frontAsset + "/preview?exp="));
+        assertTrue(loaded.getFrontBackground().startsWith("/api/media/" + frontAsset + "/preview?sig="));
         assertEquals(90.0, loaded.getCardWidthMm());
         assertEquals(55.0, loaded.getCardHeightMm());
 
