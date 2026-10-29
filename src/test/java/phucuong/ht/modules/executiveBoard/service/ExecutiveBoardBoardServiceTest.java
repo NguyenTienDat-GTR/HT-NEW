@@ -53,7 +53,7 @@ class ExecutiveBoardBoardServiceTest {
         assignment.setLeader(leader);
         when(assignmentRepository.findCurrentByUnit(UnitType.DEANERY, unitId)).thenReturn(List.of(assignment));
 
-        var seats = new ExecutiveBoardBoardService(assignmentRepository, positionRepository, dioceseRepository, deaneryRepository, parishRepository).findBoard(UnitType.DEANERY, unitId);
+        var seats = new ExecutiveBoardBoardService(assignmentRepository, positionRepository, dioceseRepository, deaneryRepository, parishRepository, org.mockito.Mockito.mock(phucuong.ht.modules.media.service.MediaUrls.class)).findBoard(UnitType.DEANERY, unitId);
 
         assertEquals(3, seats.size());
         assertTrue(seats.get(0).isChaplain());
@@ -78,7 +78,7 @@ class ExecutiveBoardBoardServiceTest {
         assignment.setStartDate(java.time.LocalDate.now().plusDays(30));
         when(assignmentRepository.findCurrentByUnit(UnitType.DEANERY, unitId)).thenReturn(List.of(assignment));
 
-        var seat = new ExecutiveBoardBoardService(assignmentRepository, positionRepository, dioceseRepository, deaneryRepository, parishRepository)
+        var seat = new ExecutiveBoardBoardService(assignmentRepository, positionRepository, dioceseRepository, deaneryRepository, parishRepository, org.mockito.Mockito.mock(phucuong.ht.modules.media.service.MediaUrls.class))
                 .findBoard(UnitType.DEANERY, unitId).get(1);
 
         assertFalse(seat.isAssigned());

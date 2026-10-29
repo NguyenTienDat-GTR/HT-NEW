@@ -23,6 +23,16 @@ public class LeaderRepository extends BaseRepo<Leader, UUID> {
         return leader;
     }
 
+    /** Đặt (hoặc gỡ, khi assetId = null) ảnh đại diện và xóa dữ liệu base64 cũ nếu còn. */
+    @Transactional
+    public void setImageAsset(UUID id, UUID assetId) {
+        entityManager.createQuery(
+                        "update Leader l set l.imageAssetId = :assetId, l.legacyImageData = null where l.id = :id")
+                .setParameter("assetId", assetId)
+                .setParameter("id", id)
+                .executeUpdate();
+    }
+
     public boolean existsByEmail(String email) {
         Long count = entityManager.createQuery(
                         """

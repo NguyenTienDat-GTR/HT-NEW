@@ -21,10 +21,14 @@ import phucuong.ht.modules.leader.helper.LeaderScopeHelper;
 import phucuong.ht.modules.leader.helper.LeaderValidationHelper;
 import phucuong.ht.modules.leader.model.entity.Leader;
 import phucuong.ht.modules.leader.model.request.LeaderCreateRequest;
+import phucuong.ht.modules.leader.model.request.LeaderSelfUpdateRequest;
 import phucuong.ht.modules.leader.model.request.LeaderUpdateRequest;
 import phucuong.ht.modules.leader.model.response.LeaderResponse;
 import phucuong.ht.modules.leader.repository.LeaderRepository;
 import phucuong.ht.modules.leader.security.LeaderAccessEvaluator;
+import phucuong.ht.modules.media.model.enums.MediaCategory;
+import phucuong.ht.modules.media.service.MediaAssetService;
+import phucuong.ht.modules.media.service.MediaUrls;
 import phucuong.ht.modules.parish.model.entity.Parish;
 import phucuong.ht.modules.rankHistory.model.entity.RankHistory;
 import phucuong.ht.modules.rankHistory.model.response.RankHistoryResponse;
@@ -49,6 +53,8 @@ public class LeaderService {
     private final LeaderScopeHelper leaderScopeHelper;
     private final AccountRepository accountRepository;
     private final RankHistoryRepository rankHistoryRepository;
+    private final MediaAssetService mediaAssetService;
+    private final MediaUrls mediaUrls;
     private final phucuong.ht.common.utils.AuditActorNameResolver auditActorNameResolver;
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private phucuong.ht.common.security.UnitOperationalStatusService unitOperationalStatusService;
@@ -82,7 +88,10 @@ public class LeaderService {
             leader.setBirthDate(request.getBirthDate());
             leader.setEmail(request.getEmail());
             leader.setPhoneNumber(request.getPhoneNumber());
-            leader.setImageUrl(request.getImageUrl());
+            if (request.getImageAssetId() != null) {
+                leader.setImageAssetId(mediaAssetService.attach(request.getImageAssetId(), MediaCategory.LEADER_AVATAR,
+                        leaderValidationHelper.findDioceseIdOfParish(parish.getId()), auditActor));
+            }
             leader.setGender(request.getGender());
             leader.setLeaderLevel(java.util.Objects.requireNonNullElse(leaderLevelService.requireExistingOrNull(request.getLeaderLevel(), "Cấp độ",
                     leaderValidationHelper.findDioceseIdOfParish(parish.getId())), "NONE"));
@@ -126,20 +135,48 @@ public class LeaderService {
 
     public List<LeaderResponse> findAccountCandidates(BaseSearchRequest request, Authentication authentication) {
         BaseSearchRequest source = request == null ? new BaseSearchRequest() : request;
+        // Tìm theo cụm từ: mỗi từ phải khớp (không phân biệt hoa thường / dấu) ở tên thánh, họ tên, email, SĐT, giáo xứ hoặc giáo hạt.
+        // Làm ở đây vì cụm "Phêrô Nguyễn Tiến Đạt" trải trên nhiều cột nên tìm theo từng cột của BaseRepo không khớp được.
+        List<String> tokens = searchTokens(source.getSearch());
         int targetSize = Math.max(source.getSize(), 100);
         List<LeaderResponse> candidates = new ArrayList<>();
         int pageIndex = Math.max(source.getPage(), 0);
         Page<LeaderResponse> page;
         do {
             BaseSearchRequest candidateRequest = copyRequest(source);
+            candidateRequest.setSearch(null);
+            candidateRequest.setSearchFields(List.of());
             candidateRequest.setPage(pageIndex++);
             candidateRequest.setSize(targetSize);
             page = findAll(candidateRequest, authentication);
             page.getContent().stream()
-                    .filter(leader -> leader.getId() != null && !accountRepository.existsByLeaderId(leader.getId()))
+                    .filter(leader -> leader.getId() != null && matchesTokens(leader, tokens) && !accountRepository.existsByLeaderId(leader.getId()))
                     .forEach(candidates::add);
         } while (candidates.size() < targetSize && !page.isLast());
         return candidates.stream().limit(targetSize).toList();
+    }
+
+    private static List<String> searchTokens(String search) {
+        if (search == null || search.isBlank()) {
+            return List.of();
+        }
+        return java.util.Arrays.stream(foldText(search).split("\\s+")).filter(token -> !token.isEmpty()).toList();
+    }
+
+    private static boolean matchesTokens(LeaderResponse leader, List<String> tokens) {
+        if (tokens.isEmpty()) {
+            return true;
+        }
+        String haystack = foldText(String.join(" ",
+                Objects.toString(leader.getHolyName(), ""), Objects.toString(leader.getFullName(), ""),
+                Objects.toString(leader.getEmail(), ""), Objects.toString(leader.getPhoneNumber(), ""),
+                Objects.toString(leader.getParishName(), ""), Objects.toString(leader.getDeaneryName(), "")));
+        return tokens.stream().allMatch(haystack::contains);
+    }
+
+    private static String foldText(String value) {
+        return java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}+", "").replace('đ', 'd').replace('Đ', 'D').toLowerCase(java.util.Locale.ROOT);
     }
 
     @Cacheable(cacheNames = CacheNames.LEADER_DETAIL, key = "@cacheScopeKeyHelper.detailKey(#authentication, #id)")
@@ -185,12 +222,106 @@ public class LeaderService {
         // Đóng băng: không sửa hồ sơ trong đơn vị bị khóa; riêng chuyển sang giáo xứ đang hoạt động thì được phép.
         requireParishOperational(transferringParish ? request.getParishId() : currentParishId);
 
+        // Ảnh đại diện: gắn ảnh mới vào thư mục giáo phận (trước khi lưu hồ sơ) rồi mới đổi tham chiếu.
+        UUID oldAssetId = existingLeader.getImageAssetId();
+        UUID requestedAssetId = request.getImageAssetId();
+        // Ảnh đại diện chỉ được thay bằng ảnh khác, không được xóa.
+        if (request.getClearFields() != null
+                && (request.getClearFields().contains("imageUrl") || request.getClearFields().contains("imageAssetId"))) {
+            throw avatarCannotBeRemoved();
+        }
+        UUID newAssetId = null;
+        if (requestedAssetId != null && !requestedAssetId.equals(oldAssetId)) {
+            UUID targetParishId = request.getParishId() != null ? request.getParishId() : currentParishId;
+            newAssetId = mediaAssetService.attach(requestedAssetId, MediaCategory.LEADER_AVATAR,
+                    leaderValidationHelper.findDioceseIdOfParish(targetParishId), auditActor);
+        }
+        // Việc đổi tham chiếu ảnh làm riêng bên dưới, không để BaseRepo sao chép tự động.
+        request.setImageAssetId(null);
+
         try {
             leaderRepository.update(id, request, auditActor);
+            if (newAssetId != null) {
+                leaderRepository.setImageAsset(id, newAssetId);
+                mediaAssetService.release(oldAssetId);
+            }
             return toLeaderResponse(leaderValidationHelper.requireExistingLeaderWithParish(id));
         } catch (DataIntegrityViolationException exception) {
             throw new ApiException(HttpStatus.CONFLICT, errorCode.CONFLICT, "Dữ liệu Huynh Trưởng bị trùng hoặc xung đột với dữ liệu hiện có");
         }
+    }
+
+    /**
+     * Huynh trưởng tự sửa thông tin cá nhân của chính mình (không gồm giáo xứ, giáo hạt, cấp độ).
+     * Email / số điện thoại chỉ kiểm tra trùng khi giá trị thật sự đổi. Đơn vị bị khóa thì không sửa được, như khi quản trị sửa hồ sơ.
+     */
+    @EvictCaches.Analytics
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DEANERY_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DEANERY_DETAIL, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.PARISH_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.PARISH_DETAIL, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.LEADER_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.LEADER_DETAIL, allEntries = true)
+    })
+    public LeaderResponse updateOwnProfile(UUID id, LeaderSelfUpdateRequest request, String auditActor) {
+        Leader existing = leaderValidationHelper.requireExistingLeaderWithParish(id);
+        UUID parishId = existing.getParish() == null ? null : existing.getParish().getId();
+        requireParishOperational(parishId);
+
+        request.setHolyName(requiredIfPresent(request.getHolyName(), "Tên thánh"));
+        request.setEmail(requiredIfPresent(request.getEmail(), "Email"));
+        request.setPhoneNumber(requiredIfPresent(request.getPhoneNumber(), "Số điện thoại"));
+        if (request.getFullName() != null) {
+            LeaderValidationHelper.LeaderNameParts parts = leaderValidationHelper.splitFullName(request.getFullName());
+            request.setFirstName(parts.firstName());
+            request.setLastName(parts.lastName());
+        }
+        // Chỉ kiểm tra trùng khi giá trị đổi so với hiện tại.
+        leaderValidationHelper.validateUpdateEmailUniqueness(id, request.getEmail(), existing.getEmail());
+        leaderValidationHelper.validateUpdatePhoneUniqueness(id, request.getPhoneNumber(), existing.getPhoneNumber());
+
+        UUID oldAssetId = existing.getImageAssetId();
+        UUID requestedAssetId = request.getImageAssetId();
+        if (Boolean.TRUE.equals(request.getClearImage())) {
+            throw avatarCannotBeRemoved();
+        }
+        UUID newAssetId = null;
+        if (requestedAssetId != null && !requestedAssetId.equals(oldAssetId)) {
+            newAssetId = mediaAssetService.attach(requestedAssetId, MediaCategory.LEADER_AVATAR,
+                    leaderValidationHelper.findDioceseIdOfParish(parishId), auditActor);
+        }
+        // Việc đổi tham chiếu ảnh làm riêng bên dưới, không để BaseRepo sao chép tự động.
+        request.setImageAssetId(null);
+
+        try {
+            leaderRepository.update(id, request, auditActor);
+            if (newAssetId != null) {
+                leaderRepository.setImageAsset(id, newAssetId);
+                mediaAssetService.release(oldAssetId);
+            }
+            return toLeaderResponse(leaderValidationHelper.requireExistingLeaderWithParish(id));
+        } catch (DataIntegrityViolationException exception) {
+            throw new ApiException(HttpStatus.CONFLICT, errorCode.CONFLICT, "Email hoặc số điện thoại đã được dùng bởi hồ sơ khác");
+        }
+    }
+
+    private ApiException avatarCannotBeRemoved() {
+        return new ApiException(HttpStatus.BAD_REQUEST, errorCode.VALIDATION_ERROR, "Không thể xóa ảnh đại diện, chỉ có thể thay bằng ảnh khác");
+    }
+
+    // Trường có gửi lên (khác null) thì không được rỗng; trả về giá trị đã cắt khoảng trắng.
+    private String requiredIfPresent(String value, String label) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        if (trimmed.isEmpty()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, errorCode.VALIDATION_ERROR, label + " không được để trống");
+        }
+        return trimmed;
     }
 
     @EvictCaches.Analytics
@@ -289,7 +420,9 @@ public class LeaderService {
                 .birthDate(leader.getBirthDate())
                 .email(leader.getEmail())
                 .phoneNumber(leader.getPhoneNumber())
-                .imageUrl(leader.getImageUrl())
+                .imageUrl(mediaUrls.displayOrLegacy(leader.getImageAssetId(), leader.getLegacyImageData(), MediaCategory.LEADER_AVATAR))
+                .imageThumbUrl(mediaUrls.smallOrLegacy(leader.getImageAssetId(), leader.getLegacyImageData(), MediaCategory.LEADER_AVATAR))
+                .imageAssetId(leader.getImageAssetId())
                 .gender(leader.getGender())
                 .leaderLevel(leader.getLeaderLevel())
                 .deaneryId(leader.getParish() == null || leader.getParish().getDeanery() == null ? null : leader.getParish().getDeanery().getId())

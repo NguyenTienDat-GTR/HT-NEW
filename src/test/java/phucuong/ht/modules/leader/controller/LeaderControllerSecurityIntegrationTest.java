@@ -83,13 +83,14 @@ class LeaderControllerSecurityIntegrationTest {
         createRequest.setFullName("Nguyen An");
         createRequest.setBirthDate(java.time.LocalDate.of(2000, 1, 1));
         createRequest.setEmail("leader@example.com");
-        createRequest.setImageUrl("https://cdn.example.com/leaders/an.jpg");
+        createRequest.setPhoneNumber("0901234567");
+        createRequest.setImageAssetId(UUID.randomUUID());
         createRequest.setGender(LeaderGender.NAM);
         createRequest.setLeaderLevel("HT_XU");
         createRequest.setParishId(parishId);
 
         LeaderUpdateRequest updateRequest = new LeaderUpdateRequest();
-        updateRequest.setImageUrl("https://cdn.example.com/leaders/binh.jpg");
+        updateRequest.setImageAssetId(UUID.randomUUID());
         updateRequest.setGender(LeaderGender.NU);
 
         when(leaderAccessEvaluator.canCreate(any())).thenReturn(true);

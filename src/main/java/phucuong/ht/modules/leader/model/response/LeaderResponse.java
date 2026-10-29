@@ -25,7 +25,10 @@ public class LeaderResponse {
     private LocalDate birthDate;
     private String email;
     private String phoneNumber;
+    // URL ảnh đại diện đã ký (kích thước vừa) và ảnh thu nhỏ cho danh sách; hết hạn sau một thời gian.
     private String imageUrl;
+    private String imageThumbUrl;
+    private UUID imageAssetId;
     private LeaderGender gender;
     private String leaderLevel;
     private UUID deaneryId;

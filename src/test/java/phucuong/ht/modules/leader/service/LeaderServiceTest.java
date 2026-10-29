@@ -28,6 +28,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -50,6 +51,15 @@ class LeaderServiceTest {
     @org.mockito.Mock
     private phucuong.ht.common.utils.AuditActorNameResolver auditActorNameResolver;
 
+    @org.mockito.Mock
+    private phucuong.ht.modules.auth.repository.AccountRepository accountRepository;
+
+    @org.mockito.Mock
+    private phucuong.ht.modules.media.service.MediaAssetService mediaAssetService;
+
+    @org.mockito.Mock
+    private phucuong.ht.modules.media.service.MediaUrls mediaUrls;
+
     @InjectMocks
     private LeaderService leaderService;
 
@@ -61,7 +71,9 @@ class LeaderServiceTest {
         request.setHolyName("Phaolo");
         request.setFullName("Nguyen An");
         request.setEmail("leader@example.com");
-        request.setImageUrl("https://cdn.example.com/leaders/an.jpg");
+        UUID uploadedAssetId = UUID.randomUUID();
+        UUID attachedAssetId = UUID.randomUUID();
+        request.setImageAssetId(uploadedAssetId);
         request.setGender(LeaderGender.NAM);
         request.setLeaderLevel("HT_XU");
         request.setParishId(parishId);
@@ -72,6 +84,8 @@ class LeaderServiceTest {
         when(leaderValidationHelper.getRequiredAuditActor(authentication)).thenReturn("LEADER1");
         when(leaderLevelService.requireExistingOrNull(org.mockito.ArgumentMatchers.eq("HT_XU"), org.mockito.ArgumentMatchers.eq("Cấp độ"), any())).thenReturn("HT_XU");
         when(leaderValidationHelper.requireExistingParish(parishId)).thenReturn(parish);
+        when(mediaAssetService.attach(eq(uploadedAssetId), eq(phucuong.ht.modules.media.model.enums.MediaCategory.LEADER_AVATAR), any(), eq("LEADER1")))
+                .thenReturn(attachedAssetId);
         when(leaderValidationHelper.splitFullName("Nguyen An"))
                 .thenReturn(new LeaderValidationHelper.LeaderNameParts("An", "Nguyen"));
         when(leaderRepository.save(argThat(entity ->
@@ -80,7 +94,7 @@ class LeaderServiceTest {
                         && "HT_XU".equals(entity.getLeaderLevel())
                         && "An".equals(entity.getFirstName())
                         && "Nguyen".equals(entity.getLastName())
-                        && "https://cdn.example.com/leaders/an.jpg".equals(entity.getImageUrl())
+                        && attachedAssetId.equals(entity.getImageAssetId())
                         && parishId.equals(entity.getParish().getId())
                         && "LEADER1".equals(entity.getCreatedBy())
                         && "LEADER1".equals(entity.getUpdatedBy())
@@ -127,6 +141,56 @@ class LeaderServiceTest {
         verify(leaderRepository).findAll(captor.capture());
         assertEquals(parishId, captor.getValue().getFilters().get("parish.id"));
         assertEquals("ignored@example.com", captor.getValue().getFilters().get("email"));
+    }
+
+
+    @Test
+    void accountCandidatesSearchMatchesAcrossHolyNameAndFullNameIgnoringAccents() {
+        UUID parishId = UUID.randomUUID();
+        UUID wantedId = UUID.randomUUID();
+        UUID otherId = UUID.randomUUID();
+        Parish parish = parish(parishId);
+        Leader wanted = leader(wantedId, parish);
+        wanted.setHolyName("Phêrô");
+        wanted.setLastName("Nguyễn Tiến");
+        wanted.setFirstName("Đạt");
+        Leader other = leader(otherId, parish);
+        other.setHolyName("Maria");
+        other.setLastName("Trần");
+        other.setFirstName("Bình");
+        Leader summaryA = new Leader();
+        summaryA.setId(wantedId);
+        Leader summaryB = new Leader();
+        summaryB.setId(otherId);
+        Authentication authentication = authenticationWithPermission(LeaderAccessEvaluator.READ_PARISH);
+
+        when(leaderScopeHelper.getRequiredActiveParishId(authentication, LeaderAccessEvaluator.READ_PARISH)).thenReturn(parishId);
+        when(leaderRepository.findAll(any(BaseSearchRequest.class))).thenReturn(new PageImpl<>(List.of(summaryA, summaryB)));
+        when(leaderRepository.findAllByIdsWithParish(List.of(wantedId, otherId))).thenReturn(List.of(wanted, other));
+
+        BaseSearchRequest request = new BaseSearchRequest();
+        request.setSearch("Phero Nguyen tien DAT".replace("Phero", "Pherô"));
+        List<LeaderResponse> result = leaderService.findAccountCandidates(request, authentication);
+
+        assertEquals(List.of(wantedId), result.stream().map(LeaderResponse::getId).toList());
+        ArgumentCaptor<BaseSearchRequest> captor = ArgumentCaptor.forClass(BaseSearchRequest.class);
+        verify(leaderRepository).findAll(captor.capture());
+        assertEquals(null, captor.getValue().getSearch(), "việc tìm theo cụm từ do service làm, không đẩy xuống từng cột");
+    }
+
+    @Test
+    void accountCandidatesWithoutSearchReturnsEveryoneWithoutAccount() {
+        UUID parishId = UUID.randomUUID();
+        UUID id = UUID.randomUUID();
+        Leader summary = new Leader();
+        summary.setId(id);
+        Authentication authentication = authenticationWithPermission(LeaderAccessEvaluator.READ_PARISH);
+        when(leaderScopeHelper.getRequiredActiveParishId(authentication, LeaderAccessEvaluator.READ_PARISH)).thenReturn(parishId);
+        when(leaderRepository.findAll(any(BaseSearchRequest.class))).thenReturn(new PageImpl<>(List.of(summary)));
+        when(leaderRepository.findAllByIdsWithParish(List.of(id))).thenReturn(List.of(leader(id, parish(parishId))));
+        when(accountRepository.existsByLeaderId(id)).thenReturn(false);
+
+        assertEquals(1, leaderService.findAccountCandidates(new BaseSearchRequest(), authentication).size());
     }
 
     @Test
@@ -179,16 +243,20 @@ class LeaderServiceTest {
         UUID leaderId = UUID.randomUUID();
         LeaderUpdateRequest request = new LeaderUpdateRequest();
         request.setGender(LeaderGender.NU);
-        request.setImageUrl("https://cdn.example.com/leaders/binh.jpg");
+        UUID newAssetId = UUID.randomUUID();
+        request.setImageAssetId(newAssetId);
         Leader existing = leader(leaderId, parish(parishId));
         existing.setEmail("leader@example.com");
         existing.setLeaderLevel("HLV_I");
         Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
         when(leaderValidationHelper.requireExistingLeaderWithParish(leaderId)).thenReturn(existing, existing);
         when(leaderValidationHelper.getRequiredAuditActor(authentication)).thenReturn("LEADER1");
+        when(mediaAssetService.attach(eq(newAssetId), eq(phucuong.ht.modules.media.model.enums.MediaCategory.LEADER_AVATAR), any(), eq("LEADER1")))
+                .thenReturn(newAssetId);
+        when(mediaUrls.displayOrLegacy(any(), any(), any())).thenReturn("signed-url");
         when(leaderRepository.update(leaderId, request, "LEADER1")).thenAnswer(invocation -> {
             existing.setGender(LeaderGender.NU);
-            existing.setImageUrl("https://cdn.example.com/leaders/binh.jpg");
+            existing.setImageAssetId(newAssetId);
             return existing;
         });
 
@@ -198,7 +266,8 @@ class LeaderServiceTest {
         assertEquals(LeaderGender.NU, result.getGender());
         assertEquals(existing.getFirstName(), result.getFirstName());
         assertEquals(existing.getLastName(), result.getLastName());
-        assertEquals("https://cdn.example.com/leaders/binh.jpg", result.getImageUrl());
+        assertEquals("signed-url", result.getImageUrl());
+        verify(leaderRepository).setImageAsset(leaderId, newAssetId);
     }
 
     @Test
@@ -239,7 +308,7 @@ class LeaderServiceTest {
         leader.setLastName("Nguyen");
         leader.setLeaderLevel("HLV_I");
         leader.setGender(LeaderGender.NAM);
-        leader.setImageUrl("https://cdn.example.com/leaders/sample.jpg");
+        leader.setLegacyImageData("data:image/png;base64,AAAA");
         leader.setParish(parish);
         leader.setStatus(true);
         return leader;

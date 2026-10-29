@@ -39,12 +39,13 @@ public class LeaderCreateRequest {
     @Size(max = 100)
     private String email;
 
+    @NotBlank(message = "Số điện thoại là bắt buộc")
     @Pattern(regexp = "^0\\d{9}$", message = "Số điện thoại phải là số điện thoại Việt Nam gồm 10 chữ số và bắt đầu bằng 0")
     @Size(max = 15)
     private String phoneNumber;
 
-    @Size(max = 500)
-    private String imageUrl;
+    // Id ảnh đại diện đã tải lên qua POST /api/media (category LEADER_AVATAR).
+    private UUID imageAssetId;
 
     @NotNull
     private LeaderGender gender;
