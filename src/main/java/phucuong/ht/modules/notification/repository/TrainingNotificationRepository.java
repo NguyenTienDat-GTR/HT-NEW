@@ -30,4 +30,7 @@ public interface TrainingNotificationRepository extends JpaRepository<TrainingNo
     long countByUsernameAndStatusTrueAndReadAtIsNullAndCreatedAtGreaterThanEqual(String username, OffsetDateTime createdAt);
 
     long deleteByCreatedAtBefore(OffsetDateTime createdAt);
+
+    /** Xóa thông báo đã đọc từ trước mốc {@code readAt} (thông báo chưa đọc có read_at null nên không bị xóa). */
+    long deleteByReadAtBefore(OffsetDateTime readAt);
 }

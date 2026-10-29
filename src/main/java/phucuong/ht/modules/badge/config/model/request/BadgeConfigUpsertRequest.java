@@ -5,6 +5,7 @@ import lombok.Setter;
 import phucuong.ht.modules.certificate.config.model.CertificateLayoutItem;
 
 import java.util.List;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -30,8 +31,12 @@ public class BadgeConfigUpsertRequest {
     // Có mặt sau không; không có thì bỏ qua ảnh nền và bố cục mặt sau.
     private Boolean hasBack;
 
-    private String frontBackground;
-    private String backBackground;
+    // Id ảnh nền đã tải lên qua POST /api/media (category BADGE_BACKGROUND). Null = không có ảnh nền.
+    private UUID frontBackgroundAssetId;
+    private UUID backBackgroundAssetId;
+    // true = xóa ảnh nền kể cả ảnh base64 cũ chưa được chuyển lên cloud.
+    private Boolean clearFrontBackground;
+    private Boolean clearBackBackground;
     private List<CertificateLayoutItem> frontLayout;
     private List<CertificateLayoutItem> backLayout;
 }

@@ -7,6 +7,7 @@ import lombok.Getter;
 import lombok.Setter;
 import phucuong.ht.modules.leader.model.enums.LeaderGender;
 
+import java.util.List;
 import java.util.UUID;
 
 @Getter
@@ -24,8 +25,11 @@ public class LeaderUpdateRequest {
     @Size(max = 15)
     private String phoneNumber;
 
-    @Size(max = 500)
-    private String imageUrl;
+    // Id ảnh đại diện mới đã tải lên qua POST /api/media; null = giữ nguyên ảnh hiện tại.
+    private UUID imageAssetId;
+
+    // Danh sách trường cần xóa giá trị (ví dụ "imageUrl" để gỡ ảnh đại diện).
+    private List<String> clearFields;
 
     private LeaderGender gender;
 

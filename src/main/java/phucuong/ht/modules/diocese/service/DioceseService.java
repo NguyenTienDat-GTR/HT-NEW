@@ -67,6 +67,8 @@ public class DioceseService {
     private RbacAuthRefreshNotifier authRefreshNotifier;
     @Autowired(required = false)
     private phucuong.ht.modules.leaderLevel.service.LeaderLevelService leaderLevelService;
+    @Autowired(required = false)
+    private phucuong.ht.modules.media.service.MediaFolderService mediaFolderService;
 
     @EvictCaches.Analytics
     @Caching(evict = {
@@ -95,6 +97,14 @@ public class DioceseService {
             // Mỗi giáo phận có danh mục cấp độ riêng: tạo danh mục mặc định cho giáo phận mới.
             if (leaderLevelService != null) {
                 leaderLevelService.seedDefaults(saved.getId(), auditActor);
+            }
+            // Mỗi giáo phận có thư mục ảnh riêng trên cloud (avatar, nền chứng nhận, nền thẻ); lỗi cloud không chặn việc tạo giáo phận.
+            if (mediaFolderService != null) {
+                try {
+                    mediaFolderService.provisionDiocese(saved.getId());
+                } catch (RuntimeException ignored) {
+                    // Thư mục sẽ được tạo lười khi có ảnh đầu tiên.
+                }
             }
             return toDioceseResponse(saved);
         } catch (DataIntegrityViolationException exception) {

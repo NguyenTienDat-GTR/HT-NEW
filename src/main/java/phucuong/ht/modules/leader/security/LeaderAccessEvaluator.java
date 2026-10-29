@@ -21,6 +21,8 @@ public class LeaderAccessEvaluator {
     public static final String READ_DIOCESE = "organization.leader.read.diocese";
     public static final String READ_DEANERY = "organization.leader.read.deanery";
     public static final String READ_PARISH = "organization.leader.read.parish";
+    public static final String UPDATE_DIOCESE = "organization.leader.update.diocese";
+    public static final String UPDATE_DEANERY = "organization.leader.update.deanery";
     public static final String UPDATE_PARISH = "organization.leader.update.parish";
     public static final String TOGGLE_PARISH = "organization.leader.toggle.parish";
 
@@ -47,7 +49,9 @@ public class LeaderAccessEvaluator {
     }
 
     public boolean canUpdate(Authentication authentication, UUID id) {
-        return hasRole(authentication, "ADMIN_PARISH") && hasParishScopedAccess(authentication, id, UPDATE_PARISH);
+        return (hasRole(authentication, "ADMIN_DIOCESE") && hasDioceseScopedAccess(authentication, id, UPDATE_DIOCESE))
+                || (hasRole(authentication, "ADMIN_DEANERY") && hasDeaneryScopedAccess(authentication, id, UPDATE_DEANERY))
+                || (hasRole(authentication, "ADMIN_PARISH") && hasParishScopedAccess(authentication, id, UPDATE_PARISH));
     }
 
     public boolean canToggle(Authentication authentication, UUID id) {

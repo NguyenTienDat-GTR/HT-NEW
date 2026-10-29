@@ -38,6 +38,12 @@ import phucuong.ht.modules.training.courseType.security.CourseTypeDioceseGuard;
 import phucuong.ht.modules.training.enums.WorkflowApprovalStatus;
 import phucuong.ht.modules.training.trainingCourse.model.entity.TrainingCourse;
 
+import phucuong.ht.modules.media.model.enums.MediaCategory;
+import phucuong.ht.modules.media.service.DataUrls;
+import phucuong.ht.modules.media.service.MediaAssetService;
+import phucuong.ht.modules.media.service.MediaFolderService;
+import phucuong.ht.modules.media.service.MediaUrls;
+
 import java.text.Normalizer;
 import java.time.OffsetDateTime;
 import java.util.Comparator;
@@ -67,6 +73,7 @@ public class CertificateConfigService {
     private static final long QR_TIMEOUT_SECONDS = 120;
 
     private static final String QR_TYPE = "QR";
+    private static final String PHOTO_TYPE = "PHOTO";
 
     private final CertificateConfigRepository configRepository;
     private final CertificateConfigAssignmentRepository assignmentRepository;
@@ -80,6 +87,10 @@ public class CertificateConfigService {
     private final LeaderLevelService leaderLevelService;
     private final CourseParticipationRepository courseParticipationRepository;
     private final CertificateQrService qrService;
+    private final MediaAssetService mediaAssetService;
+    private final MediaFolderService mediaFolderService;
+    private final MediaUrls mediaUrls;
+    private final phucuong.ht.modules.media.album.BackgroundAlbumService albumService;
 
     public record PdfExport(byte[] content, String filename) {
     }
@@ -232,7 +243,7 @@ public class CertificateConfigService {
         config.setCreatedAt(now);
         config.setCreatedBy(audit);
         config.setStatus(Boolean.TRUE);
-        applyContent(config, request, now, audit);
+        applyContent(config, request, now, audit, actor);
 
         return toResponse(configRepository.persist(config), actor, List.of());
     }
@@ -247,7 +258,7 @@ public class CertificateConfigService {
         if (normalize(request.getName()) != null) {
             config.setName(uniqueName(config.getScopeKey(), request.getName(), config.getName()));
         }
-        applyContent(config, request, now, audit);
+        applyContent(config, request, now, audit, actor);
         return toResponse(configRepository.merge(config), actor, usageByConfig(actor, authentication).getOrDefault(id, List.of()));
     }
 
@@ -287,6 +298,7 @@ public class CertificateConfigService {
             throw validationHelper.conflict(
                     "Không thể xóa cấu hình chung. Hãy chọn một cấu hình khác làm cấu hình chung trước khi xóa.");
         }
+        mediaAssetService.release(config.getBackgroundAssetId());
         configRepository.remove(config.getId());
     }
 
@@ -343,10 +355,32 @@ public class CertificateConfigService {
         return config;
     }
 
-    private void applyContent(CertificateConfig config, CertificateConfigUpsertRequest request, OffsetDateTime now, String audit) {
+    // Gắn / đổi / gỡ ảnh nền. Ảnh mới được chuyển vào thư mục cloud của giáo phận sở hữu cấu hình; ảnh cũ bị gỡ.
+    private void applyBackground(CertificateConfig config, CertificateConfigUpsertRequest request, String audit, ActorScope actor) {
+        UUID current = config.getBackgroundAssetId();
+        UUID requested = request.getBackgroundAssetId();
+        boolean clear = Boolean.TRUE.equals(request.getClearBackground());
+        if (requested == null && current == null && !clear) {
+            return;
+        }
+        if (requested != null && requested.equals(current)) {
+            return;
+        }
+        if (requested != null) {
+            // Ảnh từ album của đơn vị khác (hoặc cấu hình không được xem) không được dùng dù biết mã ảnh.
+            albumService.assertUsable(requested, actor);
+        }
+        UUID next = requested == null ? null
+                : mediaAssetService.attach(requested, MediaCategory.CERTIFICATE_BACKGROUND, mediaFolderService.dioceseOfScopeKey(config.getScopeKey()), audit);
+        config.setBackgroundAssetId(next);
+        config.setLegacyBackgroundData(null);
+        mediaAssetService.release(current);
+    }
+
+    private void applyContent(CertificateConfig config, CertificateConfigUpsertRequest request, OffsetDateTime now, String audit, ActorScope actor) {
         config.setPaperSize(request.getPaperSize() == null || request.getPaperSize().isBlank() ? "A4" : request.getPaperSize().trim().toUpperCase());
         config.setOrientation(request.getOrientation() == null || request.getOrientation().isBlank() ? "LANDSCAPE" : request.getOrientation().trim().toUpperCase());
-        config.setBackgroundImage(request.getBackgroundImage());
+        applyBackground(config, request, audit, actor);
         config.setFieldLayout(request.getFieldLayout() == null ? new ArrayList<>() : request.getFieldLayout());
         config.setUpdatedAt(now);
         config.setUpdatedBy(audit);
@@ -485,11 +519,20 @@ public class CertificateConfigService {
                         qrSize(qr), image));
             }
         }
+        // Ảnh huynh trưởng: trả URL ảnh đã ký (người xem bản xem trước đã qua kiểm tra quyền xem chứng nhận).
+        Leader owner = certificate.getLeader();
+        String photoUrl = owner == null ? null : mediaUrls.display(owner.getImageAssetId(), MediaCategory.LEADER_AVATAR);
+        if (photoUrl != null) {
+            for (CertificateLayoutItem photo : photoItems(config.getFieldLayout())) {
+                items.add(new CertificatePreviewResponse.Item(PHOTO_TYPE, "", valueOr(photo.getX(), 0.5), valueOr(photo.getY(), 0.5),
+                        0, null, "center", null, false, false, false, photoSize(photo), photoUrl, photo.photoAspect()));
+            }
+        }
         return CertificatePreviewResponse.builder()
                 .configured(true)
                 .paperSize(config.getPaperSize())
                 .orientation(config.getOrientation())
-                .backgroundImage(config.getBackgroundImage())
+                .backgroundImage(mediaUrls.displayOrLegacy(config.getBackgroundAssetId(), config.getLegacyBackgroundData(), MediaCategory.CERTIFICATE_BACKGROUND))
                 .items(items)
                 .build();
     }
@@ -498,6 +541,8 @@ public class CertificateConfigService {
     public PdfExport exportPdf(List<String> certificateCodes) {
         List<Certificate> certificates = new ArrayList<>();
         List<CertificatePdfRenderer.RenderPage> pages = new ArrayList<>();
+        // Mỗi cấu hình chỉ tải ảnh nền một lần dù xuất nhiều chứng nhận.
+        Map<UUID, byte[]> backgrounds = new HashMap<>();
 
         // Chỉ xuất chứng nhận đã duyệt; báo rõ chứng nhận nào chưa duyệt / bị từ chối để người dùng bỏ ra.
         List<Certificate> loaded = new ArrayList<>();
@@ -560,10 +605,21 @@ public class CertificateConfigService {
                     }
                 }
                 float[] dims = pageDimensions(config.getPaperSize(), config.getOrientation());
+                List<CertificatePdfRenderer.RenderPhoto> photos = new ArrayList<>();
+                List<CertificateLayoutItem> photoItems = photoItems(config.getFieldLayout());
+                if (!photoItems.isEmpty() && certificate.getLeader() != null) {
+                    byte[] photo = mediaAssetService.loadAvatar(certificate.getLeader().getImageAssetId());
+                    if (photo != null) {
+                        for (CertificateLayoutItem item : photoItems) {
+                            photos.add(new CertificatePdfRenderer.RenderPhoto(photo, valueOr(item.getX(), 0.5), valueOr(item.getY(), 0.5), photoSize(item), item.photoAspect()));
+                        }
+                    }
+                }
                 pages.add(new CertificatePdfRenderer.RenderPage(
-                        decodeBackground(config.getBackgroundImage()),
+                        backgrounds.computeIfAbsent(config.getId(), key -> loadBackground(config)),
                         toRenderItems(config.getFieldLayout(), valuesList.get(i)),
                         qrCodes,
+                        photos,
                         dims[0], dims[1]));
                 certificates.add(certificate);
             }
@@ -617,6 +673,19 @@ public class CertificateConfigService {
         return layout.stream().filter(item -> QR_TYPE.equalsIgnoreCase(item.getType())).toList();
     }
 
+    private List<CertificateLayoutItem> photoItems(List<CertificateLayoutItem> layout) {
+        if (layout == null) {
+            return List.of();
+        }
+        return layout.stream().filter(item -> PHOTO_TYPE.equalsIgnoreCase(item.getType())).toList();
+    }
+
+    // Cạnh ảnh huynh trưởng theo tỉ lệ chiều cao trang.
+    private double photoSize(CertificateLayoutItem item) {
+        double size = item.getSize() == null || item.getSize() <= 0 ? 0.25 : item.getSize();
+        return Math.min(0.9, Math.max(0.05, size));
+    }
+
     // Cạnh mã QR theo tỉ lệ chiều cao trang; giới hạn để mã luôn đủ lớn để quét và không tràn trang.
     private double qrSize(CertificateLayoutItem item) {
         double size = item.getSize() == null || item.getSize() <= 0 ? 0.15 : item.getSize();
@@ -649,8 +718,8 @@ public class CertificateConfigService {
             return items;
         }
         for (CertificateLayoutItem item : layout) {
-            if (QR_TYPE.equalsIgnoreCase(item.getType())) {
-                continue; // Mã QR vẽ riêng (xem RenderQr).
+            if (QR_TYPE.equalsIgnoreCase(item.getType()) || PHOTO_TYPE.equalsIgnoreCase(item.getType())) {
+                continue; // Mã QR và ảnh vẽ riêng (xem RenderQr, RenderPhoto).
             }
             String text = "TEXT".equalsIgnoreCase(item.getType())
                     ? item.getText()
@@ -757,25 +826,18 @@ public class CertificateConfigService {
         return name.replaceAll("[\\\\/:*?\"<>|\\r\\n]", " ").trim();
     }
 
-    private byte[] decodeBackground(String dataUrl) {
-        if (dataUrl == null || dataUrl.isBlank()) {
-            return null;
+    // Byte ảnh nền dùng để dựng PDF: biến thể master trên cloud, hoặc ảnh base64 cũ nếu chưa được chuyển.
+    private byte[] loadBackground(CertificateConfig config) {
+        if (config.getBackgroundAssetId() != null) {
+            return mediaAssetService.loadMaster(config.getBackgroundAssetId());
         }
-        String base64 = dataUrl;
-        int comma = dataUrl.indexOf(',');
-        if (dataUrl.startsWith("data:") && comma >= 0) {
-            base64 = dataUrl.substring(comma + 1);
-        }
-        try {
-            return java.util.Base64.getDecoder().decode(base64.trim());
-        } catch (IllegalArgumentException e) {
-            return null;
-        }
+        return DataUrls.decode(config.getLegacyBackgroundData());
     }
 
     private CertificateConfigResponse toResponse(CertificateConfig config, ActorScope actor, List<CertifiedCourseTypeResponse> usedBy) {
         return summaryBuilder(config, actor, usedBy)
-                .backgroundImage(config.getBackgroundImage())
+                .backgroundImage(mediaUrls.displayOrLegacy(config.getBackgroundAssetId(), config.getLegacyBackgroundData(), MediaCategory.CERTIFICATE_BACKGROUND))
+                .backgroundAssetId(config.getBackgroundAssetId())
                 .fieldLayout(config.getFieldLayout())
                 .build();
     }

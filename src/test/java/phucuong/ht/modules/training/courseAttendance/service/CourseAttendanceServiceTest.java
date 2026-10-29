@@ -73,6 +73,8 @@ class CourseAttendanceServiceTest {
         parish = TrainingTestFixtures.parish("Giáo xứ B", deanery);
         course = TrainingTestFixtures.course("KH-1", "Khóa 1", deanery);
         course.setAttendanceEnabled(true);
+        course.setStartDate(LocalDate.now().minusDays(1));
+        course.setEndDate(LocalDate.now().plusDays(3));
         when(participantSupport.requireRegularCourse(eq("KH-1"), any())).thenReturn(course);
 
         ann = participation("p-ann", "An", "an@x.vn", course);
@@ -276,6 +278,32 @@ class CourseAttendanceServiceTest {
         course.setFinishedAt(OffsetDateTime.now());
         assertEquals(409, failure(() -> service.scan("KH-1", tokens.tokenFor("KH-1", "p-ann"), scanner)).getStatus().value());
         assertNull(ann.getCheckedInAt());
+    }
+
+    @Test
+    void scanIsRefusedBeforeTheCourseStartsWithTheStartDate() {
+        course.setStartDate(LocalDate.now().plusDays(2));
+        course.setEndDate(LocalDate.now().plusDays(4));
+        String token = tokens.tokenFor("KH-1", "p-ann");
+        ApiException early = failure(() -> service.lookup(token));
+        assertEquals(409, early.getStatus().value());
+        assertTrue(early.getMessage().contains("chưa diễn ra"));
+        assertTrue(early.getMessage().contains(LocalDate.now().plusDays(2).format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"))));
+        assertEquals(409, failure(() -> service.scan(token, scanner)).getStatus().value());
+        assertEquals(409, failure(() -> service.setCheckedIn("KH-1", "p-ann", true, scanner)).getStatus().value());
+        assertNull(ann.getCheckedInAt());
+    }
+
+    @Test
+    void scanIsRefusedWhileScoreEditingIsLocked() {
+        course.setScoreLocked(Boolean.TRUE);
+        String token = tokens.tokenFor("KH-1", "p-ann");
+        assertTrue(failure(() -> service.lookup(token)).getMessage().contains("khóa chỉnh sửa điểm"));
+        assertEquals(409, failure(() -> service.scan("KH-1", token, scanner)).getStatus().value());
+        assertEquals(409, failure(() -> service.setCheckedIn("KH-1", "p-ann", true, scanner)).getStatus().value());
+        assertNull(ann.getCheckedInAt());
+        course.setScoreLocked(Boolean.FALSE);
+        assertEquals(ScanStatus.CHECKED_IN, service.scan("KH-1", token, scanner).status());
     }
 
     @Test

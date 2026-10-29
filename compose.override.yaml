@@ -63,6 +63,8 @@ services:
       JWT_ACCESS_EXPIRATION: ${JWT_ACCESS_EXPIRATION}
       JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION}
       APP_SECURITY_SWAGGER_PUBLIC_ENABLED: "true"
+      # Dev: DB dùng chung giữa các nhánh, nhánh đang chạy có thể thiếu migration đã áp dụng từ nhánh khác nên không dừng khi Flyway thấy migration "missing/future".
+      SPRING_FLYWAY_IGNORE_MIGRATION_PATTERNS: "*:missing,*:future"
       GRADLE_USER_HOME: /root/.gradle
     volumes:
       - .:/app

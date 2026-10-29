@@ -37,8 +37,20 @@ public class CertificatePdfRenderer {
     public record RenderQr(BitMatrix matrix, double x, double y, double size) {
     }
 
+    // Ảnh huynh trưởng: x,y là tâm (tỉ lệ 0..1), size là chiều CAO ô ảnh theo tỉ lệ chiều cao trang,
+    // aspect = rộng/cao của ô ảnh (4x6 = 2/3, 3x4 = 3/4, hoặc tự do). Ảnh được cắt "cover" cho vừa ô.
+    public record RenderPhoto(byte[] image, double x, double y, double size, double aspect) {
+        public RenderPhoto(byte[] image, double x, double y, double size) {
+            this(image, x, y, size, 2.0 / 3.0);
+        }
+    }
+
     // pageWidth/pageHeight tính bằng điểm (points); <= 0 nghĩa là dùng kích thước ảnh nền (hoặc A4).
-    public record RenderPage(byte[] background, List<RenderItem> items, List<RenderQr> qrCodes, float pageWidth, float pageHeight) {
+    public record RenderPage(byte[] background, List<RenderItem> items, List<RenderQr> qrCodes, List<RenderPhoto> photos,
+                             float pageWidth, float pageHeight) {
+        public RenderPage(byte[] background, List<RenderItem> items, List<RenderQr> qrCodes, float pageWidth, float pageHeight) {
+            this(background, items, qrCodes, List.of(), pageWidth, pageHeight);
+        }
     }
 
     public byte[] renderPdf(List<RenderPage> pages) {
@@ -120,6 +132,16 @@ public class CertificatePdfRenderer {
                     drawQr(cs, qr, width, height);
                 }
             }
+            if (page.photos() != null) {
+                for (RenderPhoto photo : page.photos()) {
+                    try {
+                        drawPhoto(document, cs, photo, 0, 0, width, height);
+                    } catch (Exception e) {
+                        // Ảnh hỏng không làm hỏng cả chứng nhận.
+                        log.warn("Bỏ qua ảnh huynh trưởng do lỗi vẽ: {}", e.toString());
+                    }
+                }
+            }
             if (page.items() != null) {
                 for (RenderItem item : page.items()) {
                     try {
@@ -195,6 +217,37 @@ public class CertificatePdfRenderer {
             cs.addRect(x, underlineY, textWidth, thickness);
             cs.fill();
         }
+    }
+
+    // Vẽ ảnh huynh trưởng trong khung (originX, originY = góc dưới-trái): ô ảnh tâm tại x,y, cao size*chiều cao khung,
+    // rộng theo aspect; ảnh được phóng cho phủ kín ô rồi cắt phần thừa ở giữa (không méo hình).
+    public void drawPhoto(PDDocument document, PDPageContentStream cs, RenderPhoto photo,
+                          float originX, float originY, float pageWidth, float pageHeight) throws Exception {
+        if (photo.image() == null || photo.image().length == 0) {
+            return;
+        }
+        PDImageXObject image = PDImageXObject.createFromByteArray(document, photo.image(), "photo");
+        double sizeRatio = photo.size() > 0 ? photo.size() : 0.25;
+        float boxHeight = (float) sizeRatio * pageHeight;
+        float boxWidth = boxHeight * (float) (photo.aspect() > 0 ? photo.aspect() : 2.0 / 3.0);
+        float left = originX + (float) photo.x() * pageWidth - boxWidth / 2f;
+        float bottom = originY + pageHeight - ((float) photo.y() * pageHeight + boxHeight / 2f);
+
+        float imageRatio = (float) image.getWidth() / image.getHeight();
+        float drawWidth;
+        float drawHeight;
+        if (imageRatio > boxWidth / boxHeight) {
+            drawHeight = boxHeight;
+            drawWidth = boxHeight * imageRatio;
+        } else {
+            drawWidth = boxWidth;
+            drawHeight = boxWidth / imageRatio;
+        }
+        cs.saveGraphicsState();
+        cs.addRect(left, bottom, boxWidth, boxHeight);
+        cs.clip();
+        cs.drawImage(image, left + (boxWidth - drawWidth) / 2f, bottom + (boxHeight - drawHeight) / 2f, drawWidth, drawHeight);
+        cs.restoreGraphicsState();
     }
 
     // Vẽ mã QR dạng vector (sắc nét khi in): nền trắng kèm vùng yên tĩnh rồi các module đen gộp theo từng hàng.

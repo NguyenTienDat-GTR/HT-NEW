@@ -87,7 +87,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
         "app.security.jwt.audience=ht-management-badge-client",
         "spring.mail.host=localhost",
         "spring.mail.port=2525",
-        "management.health.mail.enabled=false"
+        "management.health.mail.enabled=false",
+        "app.media.active-provider=local",
+        "app.media.local.enabled=true",
+        "app.media.local.dir=${java.io.tmpdir}/ht-media-badge-it",
+        "app.media.legacy-migration.enabled=false",
+        "app.media.provider-migration.enabled=false",
+        "app.media.cleanup.enabled=false"
 })
 class AttendeeBadgeAttendanceInvitationIntegrationTest {
 
@@ -131,6 +137,7 @@ class AttendeeBadgeAttendanceInvitationIntegrationTest {
     @Autowired private JdbcTemplate jdbc;
     @Autowired private MockMvc mockMvc;
     @Autowired private BadgeConfigService badgeConfigService;
+    @Autowired private phucuong.ht.modules.media.service.MediaAssetService mediaAssetService;
     @Autowired private BadgeExportService badgeExportService;
     @Autowired private AttendanceTokenService tokenService;
     @Autowired private CourseParticipationService participationService;
@@ -198,7 +205,7 @@ class AttendeeBadgeAttendanceInvitationIntegrationTest {
         for (String code : new String[]{COURSE, OTHER_COURSE}) {
             jdbc.update("insert into training_course (course_code, course_name, host_year, location, start_date, end_date, course_type_code, diocese_id, deanery_id, passing_score, created_at) "
                     + "values (?, ?, 2026, 'Nhà thờ Bà Lụa', ?, ?, 'DU_TRUONG_IT', ?, ?, 5, now())",
-                    code, "Khóa " + code, LocalDate.now().plusDays(3), LocalDate.now().plusDays(7), dioceseId, deaneryId);
+                    code, "Khóa " + code, LocalDate.now().minusDays(1), LocalDate.now().plusDays(7), dioceseId, deaneryId);
         }
 
         UUID an = UUID.randomUUID();
@@ -297,16 +304,31 @@ class AttendeeBadgeAttendanceInvitationIntegrationTest {
         text.setFontSize(0.07);
         text.setAlign("center");
         request.setBackLayout(List.of(field("courseName", 0.5, 0.2), text));
-        request.setFrontBackground("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==");
         return request;
     }
 
     private static UUID deaneryConfigId;
 
+    private static byte[] backgroundPng() {
+        try {
+            java.awt.image.BufferedImage image = new java.awt.image.BufferedImage(120, 80, java.awt.image.BufferedImage.TYPE_INT_RGB);
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            javax.imageio.ImageIO.write(image, "png", out);
+            return out.toByteArray();
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     @Test
     @Order(3)
     void badgeConfigRoundTripsJsonbAndEnforcesUniqueness() {
-        BadgeConfigResponse created = badgeConfigService.create(badgeRequest("Thẻ chuẩn"), deaneryAdmin());
+        // Ảnh nền thật: tải lên qua dịch vụ media (đúng người tải) rồi gắn vào cấu hình khi lưu.
+        UUID frontAsset = mediaAssetService.upload(backgroundPng(), phucuong.ht.modules.media.model.enums.MediaCategory.BADGE_BACKGROUND,
+                new phucuong.ht.common.utils.securityUtils().currentAuditActor(deaneryAdmin())).getId();
+        BadgeConfigUpsertRequest createRequest = badgeRequest("Thẻ chuẩn");
+        createRequest.setFrontBackgroundAssetId(frontAsset);
+        BadgeConfigResponse created = badgeConfigService.create(createRequest, deaneryAdmin());
         deaneryConfigId = created.getId();
         assertEquals("DEANERY", created.getScopeLevel());
         assertTrue(created.getIsDefault());
@@ -319,7 +341,8 @@ class AttendeeBadgeAttendanceInvitationIntegrationTest {
         assertEquals(0.4, loaded.getFrontLayout().get(2).getSize());
         assertEquals("Mang theo thẻ khi điểm danh", loaded.getBackLayout().get(1).getText());
         assertTrue(loaded.getHasBack());
-        assertTrue(loaded.getFrontBackground().startsWith("data:image/png;base64,"));
+        assertEquals(frontAsset, loaded.getFrontBackgroundAssetId());
+        assertTrue(loaded.getFrontBackground().startsWith("/api/media/" + frontAsset + "/preview?sig="));
         assertEquals(90.0, loaded.getCardWidthMm());
         assertEquals(55.0, loaded.getCardHeightMm());
 

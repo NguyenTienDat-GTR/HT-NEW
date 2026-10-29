@@ -58,6 +58,21 @@ public class LeaderScopeHelper {
 
     public void enforceUpdateParishScope(Authentication authentication, Leader existingLeader, UUID requestedParishId) {
         if (requestedParishId == null || existingLeader == null || existingLeader.getParish() == null) return;
+        // Quản trị giáo phận / giáo hạt được chuyển huynh trưởng sang giáo xứ khác nhưng phải còn trong phạm vi của mình.
+        if (securityUtils.hasAuthority(authentication, LeaderAccessEvaluator.UPDATE_DIOCESE)) {
+            UUID actorScopeId = getRequiredActiveDioceseId(authentication, LeaderAccessEvaluator.UPDATE_DIOCESE);
+            UUID targetScopeId = parishRepository.findDioceseIdByParishId(requestedParishId)
+                    .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy giáo xứ"));
+            requireSameScope(actorScopeId, targetScopeId, "giáo phận");
+            return;
+        }
+        if (securityUtils.hasAuthority(authentication, LeaderAccessEvaluator.UPDATE_DEANERY)) {
+            UUID actorScopeId = getRequiredActiveDeaneryId(authentication, LeaderAccessEvaluator.UPDATE_DEANERY);
+            UUID targetScopeId = parishRepository.findDeaneryIdByParishId(requestedParishId)
+                    .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy giáo xứ"));
+            requireSameScope(actorScopeId, targetScopeId, "giáo hạt");
+            return;
+        }
         UUID activeParishId = getRequiredActiveParishId(authentication, LeaderAccessEvaluator.UPDATE_PARISH);
         UUID currentParishId = existingLeader.getParish().getId();
         if (!activeParishId.equals(currentParishId) || !activeParishId.equals(requestedParishId)) {

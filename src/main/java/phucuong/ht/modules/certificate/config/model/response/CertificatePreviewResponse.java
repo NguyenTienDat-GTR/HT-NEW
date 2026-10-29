@@ -21,6 +21,10 @@ public class CertificatePreviewResponse {
     // type = TEXT: phần tử chữ đã điền dữ liệu; type = QR: mã QR chứa mã chứng nhận, image là ảnh SVG (data URL)
     // sinh tại thời điểm xem trước (không lưu), size là cạnh theo tỉ lệ chiều cao trang, x,y là tâm.
     public record Item(String type, String text, double x, double y, double fontSize, String color, String align,
-                       String fontFamily, boolean bold, boolean italic, boolean underline, Double size, String image) {
+                       String fontFamily, boolean bold, boolean italic, boolean underline, Double size, String image, Double aspect) {
+        public Item(String type, String text, double x, double y, double fontSize, String color, String align,
+                    String fontFamily, boolean bold, boolean italic, boolean underline, Double size, String image) {
+            this(type, text, x, y, fontSize, color, align, fontFamily, bold, italic, underline, size, image, null);
+        }
     }
 }

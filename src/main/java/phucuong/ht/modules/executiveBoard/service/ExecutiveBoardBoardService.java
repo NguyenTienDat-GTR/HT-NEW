@@ -19,6 +19,9 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import phucuong.ht.modules.media.model.enums.MediaCategory;
+import phucuong.ht.modules.media.service.MediaUrls;
+
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -34,6 +37,7 @@ public class ExecutiveBoardBoardService {
     private final DioceseRepository dioceseRepository;
     private final DeaneryRepository deaneryRepository;
     private final ParishRepository parishRepository;
+    private final MediaUrls mediaUrls;
 
     /**
      * Ban điều hành của một đơn vị: mỗi chức vụ đang hoạt động cùng cấp là một vị trí.
@@ -105,7 +109,7 @@ public class ExecutiveBoardBoardService {
                         ? leader.getFirstName() : leader.getLastName() + " " + leader.getFirstName())
                 .leaderEmail(leader.getEmail())
                 .leaderPhoneNumber(leader.getPhoneNumber())
-                .leaderImageUrl(leader.getImageUrl())
+                .leaderImageUrl(mediaUrls.smallOrLegacy(leader.getImageAssetId(), leader.getLegacyImageData(), MediaCategory.LEADER_AVATAR))
                 .leaderParishName(leader.getParish() == null ? null : leader.getParish().getName())
                 .leaderDeaneryName(leader.getParish() == null || leader.getParish().getDeanery() == null ? null : leader.getParish().getDeanery().getName())
                 .startDate(assignment.getStartDate())

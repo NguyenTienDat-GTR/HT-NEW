@@ -33,8 +33,11 @@ public class BadgeConfigResponse {
     private Integer rows;
     private Integer cardsPerPage;
     // Chỉ có ở chi tiết, không có ở danh sách gọn.
+    // URL ảnh nền đã ký (hết hạn sau một thời gian) và id asset để gửi lại khi lưu.
     private String frontBackground;
     private String backBackground;
+    private java.util.UUID frontBackgroundAssetId;
+    private java.util.UUID backBackgroundAssetId;
     private List<CertificateLayoutItem> frontLayout;
     private List<CertificateLayoutItem> backLayout;
     private Boolean status;

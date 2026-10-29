@@ -63,7 +63,11 @@ class CertificateConfigLibraryTest {
                 courseTypeRepository, org.mockito.Mockito.mock(phucuong.ht.modules.training.courseType.security.CourseTypeDioceseGuard.class), null, validationHelper, securityUtils,
                 mock(phucuong.ht.modules.leaderLevel.service.LeaderLevelService.class),
                 mock(phucuong.ht.modules.training.courseParticipation.repository.CourseParticipationRepository.class),
-                new CertificateQrService(Runnable::run, "http://localhost:3000"));
+                new CertificateQrService(Runnable::run, "http://localhost:3000"),
+                mock(phucuong.ht.modules.media.service.MediaAssetService.class),
+                mock(phucuong.ht.modules.media.service.MediaFolderService.class),
+                mock(phucuong.ht.modules.media.service.MediaUrls.class),
+                mock(phucuong.ht.modules.media.album.BackgroundAlbumService.class));
 
         when(configRepository.persist(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(configRepository.merge(any())).thenAnswer(invocation -> invocation.getArgument(0));

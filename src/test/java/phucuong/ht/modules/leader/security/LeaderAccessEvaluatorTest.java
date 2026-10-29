@@ -100,6 +100,39 @@ class LeaderAccessEvaluatorTest {
     }
 
     @Test
+    void canUpdateShouldAllowDioceseAdminOnlyInsideOwnDiocese() {
+        UUID leaderId = UUID.randomUUID();
+        UUID dioceseId = UUID.randomUUID();
+        Authentication authentication = authentication("admin-diocese", null, List.of("ADMIN_DIOCESE"), List.of(LeaderAccessEvaluator.UPDATE_DIOCESE));
+        when(accountRepository.findActiveDioceseIdByUsername("admin-diocese")).thenReturn(Optional.of(dioceseId));
+        when(leaderRepository.findDioceseIdByLeaderId(leaderId)).thenReturn(Optional.of(dioceseId));
+        assertTrue(leaderAccessEvaluator.canUpdate(authentication, leaderId));
+
+        when(leaderRepository.findDioceseIdByLeaderId(leaderId)).thenReturn(Optional.of(UUID.randomUUID()));
+        assertFalse(leaderAccessEvaluator.canUpdate(authentication, leaderId));
+    }
+
+    @Test
+    void canUpdateShouldAllowDeaneryAdminOnlyInsideOwnDeanery() {
+        UUID leaderId = UUID.randomUUID();
+        UUID deaneryId = UUID.randomUUID();
+        Authentication authentication = authentication("admin-deanery", null, List.of("ADMIN_DEANERY"), List.of(LeaderAccessEvaluator.UPDATE_DEANERY));
+        when(accountRepository.findActiveDeaneryIdByUsername("admin-deanery")).thenReturn(Optional.of(deaneryId));
+        when(leaderRepository.findDeaneryIdByLeaderId(leaderId)).thenReturn(Optional.of(deaneryId));
+        assertTrue(leaderAccessEvaluator.canUpdate(authentication, leaderId));
+
+        when(leaderRepository.findDeaneryIdByLeaderId(leaderId)).thenReturn(Optional.of(UUID.randomUUID()));
+        assertFalse(leaderAccessEvaluator.canUpdate(authentication, leaderId));
+    }
+
+    @Test
+    void canUpdateShouldDenyWithoutTheScopedPermission() {
+        UUID leaderId = UUID.randomUUID();
+        Authentication authentication = authentication("admin-diocese", null, List.of("ADMIN_DIOCESE"), List.of(LeaderAccessEvaluator.READ_DIOCESE));
+        assertFalse(leaderAccessEvaluator.canUpdate(authentication, leaderId));
+    }
+
+    @Test
     void canListShouldAllowParishScopedAuthority() {
         Authentication authentication = authentication(
                 "admin-parish",

@@ -42,8 +42,13 @@ public class Leader extends BaseModel {
     @Column(name = "phone_number", length = 15)
     private String phoneNumber;
 
+    // Dữ liệu ảnh base64 cũ, chỉ để job chuyển lên cloud đọc; ảnh hiện tại nằm ở media_asset (imageAssetId).
     @Column(name = "image_url")
-    private String imageUrl;
+    @ToString.Exclude
+    private String legacyImageData;
+
+    @Column(name = "image_asset_id")
+    private UUID imageAssetId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "gender", length = 20)

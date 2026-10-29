@@ -5,6 +5,7 @@ import lombok.Setter;
 import phucuong.ht.modules.certificate.config.model.CertificateLayoutItem;
 
 import java.util.List;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -17,8 +18,11 @@ public class CertificateConfigUpsertRequest {
     private String paperSize;
     private String orientation;
 
-    // Ảnh nền dạng data URL base64.
-    private String backgroundImage;
+    // Id ảnh nền đã tải lên qua POST /api/media (category CERTIFICATE_BACKGROUND). Null = không có ảnh nền.
+    private UUID backgroundAssetId;
+
+    // true = xóa ảnh nền kể cả ảnh base64 cũ chưa được chuyển lên cloud.
+    private Boolean clearBackground;
 
     private List<CertificateLayoutItem> fieldLayout;
 }

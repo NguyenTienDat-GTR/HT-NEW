@@ -1,6 +1,7 @@
 package phucuong.ht.modules.auth.repository;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import phucuong.ht.modules.system.model.entity.Account;
@@ -9,6 +10,11 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface AccountRepository extends JpaRepository<Account, String> {
+
+    @Modifying
+    @org.springframework.transaction.annotation.Transactional
+    @Query("update Account a set a.imageAssetId = :assetId where a.username = :username")
+    int setImageAsset(@Param("username") String username, @Param("assetId") UUID assetId);
 
     @Query("""
             select a

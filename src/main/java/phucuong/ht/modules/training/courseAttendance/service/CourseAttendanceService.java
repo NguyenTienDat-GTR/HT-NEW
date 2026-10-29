@@ -24,17 +24,22 @@ import phucuong.ht.modules.training.courseParticipation.model.entity.CourseParti
 import phucuong.ht.modules.training.courseParticipation.repository.CourseParticipationRepository;
 import phucuong.ht.modules.training.courseParticipation.service.CourseParticipantSupport;
 import phucuong.ht.modules.training.trainingCourse.model.entity.TrainingCourse;
+import phucuong.ht.modules.training.trainingCourse.service.TrainingCourseStatusSupport;
 
 import java.text.Normalizer;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
 
-// Điểm danh khóa huấn luyện bằng mã QR của hồ sơ (hoặc thủ công). Chỉ khóa thường có bật điểm danh, còn hoạt động và chưa kết thúc.
+// Điểm danh khóa huấn luyện bằng mã QR của hồ sơ (hoặc thủ công). Chỉ khóa thường có bật điểm danh, còn hoạt động, đã đến ngày bắt đầu, chưa kết thúc và chưa khóa chỉnh sửa điểm.
 // Mỗi hồ sơ điểm danh một lần cho cả khóa; quét lại trả "đã điểm danh" kèm giờ điểm danh đầu tiên, không ghi đè.
 @Service
 @RequiredArgsConstructor
 public class CourseAttendanceService {
+
+    private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     private final CourseParticipantSupport participantSupport;
     private final CourseParticipationRepository courseParticipationRepository;
@@ -260,6 +265,15 @@ public class CourseAttendanceService {
         }
         if (!Boolean.TRUE.equals(course.getAttendanceEnabled())) {
             throw commonValidationHelper.conflict(label + " chưa bật điểm danh");
+        }
+        LocalDate startDate = course.getStartDate();
+        if (startDate == null || TrainingCourseStatusSupport.today().isBefore(startDate)) {
+            throw commonValidationHelper.conflict(label + (startDate == null
+                    ? " chưa có ngày bắt đầu nên chưa thể điểm danh"
+                    : " chưa diễn ra (bắt đầu ngày " + startDate.format(DATE_FORMAT) + ") nên chưa thể điểm danh"));
+        }
+        if (Boolean.TRUE.equals(course.getScoreLocked())) {
+            throw commonValidationHelper.conflict(label + " đã khóa chỉnh sửa điểm nên không thể điểm danh");
         }
         return course;
     }

@@ -44,12 +44,14 @@ public class BadgeExportService {
     private static final int MAX_BADGES = 2000;
     private static final String TYPE_TEXT = "TEXT";
     private static final String TYPE_QR = "QR";
+    private static final String TYPE_PHOTO = "PHOTO";
 
     private final BadgeConfigRepository configRepository;
     private final CourseParticipantSupport participantSupport;
     private final AttendanceTokenService tokenService;
     private final BadgePdfRenderer pdfRenderer;
     private final CommonValidationHelper validationHelper;
+    private final phucuong.ht.modules.media.service.MediaAssetService mediaAssetService;
 
     public record PdfExport(byte[] content, String filename, int badgeCount, int pageCount) {
     }
@@ -105,8 +107,8 @@ public class BadgeExportService {
         BadgeSheetLayout.FlipEdge flipEdge = BadgeSheetLayout.FlipEdge.parse(request.flipEdge());
         boolean mirrorColumns = BadgeSheetLayout.mirrorColumns(grid.paperWidthMm(), grid.paperHeightMm(), flipEdge);
 
-        byte[] frontBackground = decodeBackground(config.getFrontBackground());
-        byte[] backBackground = includeBack ? decodeBackground(config.getBackBackground()) : null;
+        byte[] frontBackground = loadBackground(config.getFrontBackgroundAssetId(), config.getLegacyFrontBackground());
+        byte[] backBackground = includeBack ? loadBackground(config.getBackBackgroundAssetId(), config.getLegacyBackBackground()) : null;
 
         List<BadgePdfRenderer.Sheet> sheets = new ArrayList<>();
         int perPage = grid.perPage();
@@ -117,9 +119,11 @@ public class BadgeExportService {
             for (CourseParticipation participation : chunk) {
                 Map<String, String> values = buildValues(course, participation);
                 BitMatrix qr = needsQr(config, includeBack) ? tokenService.matrixFor(course.getCourseCode(), participation.getId()) : null;
-                fronts.add(side(frontBackground, config.getFrontLayout(), values, qr));
+                byte[] photo = needsPhoto(config, includeBack) ? mediaAssetService.loadAvatar(
+                        participation.getLeader() == null ? null : participation.getLeader().getImageAssetId()) : null;
+                fronts.add(side(frontBackground, config.getFrontLayout(), values, qr, photo));
                 if (includeBack) {
-                    backs.add(side(backBackground, config.getBackLayout(), values, qr));
+                    backs.add(side(backBackground, config.getBackLayout(), values, qr, photo));
                 }
             }
             sheets.add(sheet(grid, config, fronts, false, false));
@@ -148,12 +152,19 @@ public class BadgeExportService {
                 Boolean.TRUE.equals(config.getCropMarks()), placed);
     }
 
-    private BadgePdfRenderer.Side side(byte[] background, List<CertificateLayoutItem> layout, Map<String, String> values, BitMatrix qr) {
+    private BadgePdfRenderer.Side side(byte[] background, List<CertificateLayoutItem> layout, Map<String, String> values, BitMatrix qr, byte[] photo) {
         List<CertificatePdfRenderer.RenderItem> items = new ArrayList<>();
+        List<CertificatePdfRenderer.RenderPhoto> photos = new ArrayList<>();
         List<CertificatePdfRenderer.RenderQr> qrCodes = new ArrayList<>();
         if (layout != null) {
             for (CertificateLayoutItem item : layout) {
                 String type = item.getType() == null ? "" : item.getType().trim().toUpperCase(Locale.ROOT);
+                if (TYPE_PHOTO.equals(type)) {
+                    if (photo != null) {
+                        photos.add(new CertificatePdfRenderer.RenderPhoto(photo, valueOr(item.getX(), 0.5), valueOr(item.getY(), 0.5), photoSize(item), item.photoAspect()));
+                    }
+                    continue;
+                }
                 if (TYPE_QR.equals(type)) {
                     if (qr != null) {
                         qrCodes.add(new CertificatePdfRenderer.RenderQr(qr, valueOr(item.getX(), 0.5), valueOr(item.getY(), 0.5), qrSize(item)));
@@ -169,7 +180,21 @@ public class BadgeExportService {
                         Boolean.TRUE.equals(item.getBold()), Boolean.TRUE.equals(item.getItalic()), Boolean.TRUE.equals(item.getUnderline())));
             }
         }
-        return new BadgePdfRenderer.Side(background, items, qrCodes);
+        return new BadgePdfRenderer.Side(background, items, qrCodes, photos);
+    }
+
+    private boolean needsPhoto(BadgeConfig config, boolean includeBack) {
+        return hasType(config.getFrontLayout(), TYPE_PHOTO) || (includeBack && hasType(config.getBackLayout(), TYPE_PHOTO));
+    }
+
+    private boolean hasType(List<CertificateLayoutItem> layout, String type) {
+        return layout != null && layout.stream().anyMatch(item -> type.equalsIgnoreCase(item.getType()));
+    }
+
+    // Cạnh ảnh huynh trưởng theo tỉ lệ chiều cao thẻ.
+    private double photoSize(CertificateLayoutItem item) {
+        double size = item.getSize() == null || item.getSize() <= 0 ? 0.5 : item.getSize();
+        return Math.min(0.95, Math.max(0.05, size));
     }
 
     // Chỉ sinh mã QR khi mặt nào đó thật sự có phần tử QR.
@@ -278,20 +303,16 @@ public class BadgeExportService {
         return v;
     }
 
+    // Ảnh nền để dựng PDF: biến thể master trên cloud, hoặc ảnh base64 cũ nếu chưa được chuyển.
+    private byte[] loadBackground(java.util.UUID assetId, String legacyDataUrl) {
+        if (assetId != null) {
+            return mediaAssetService.loadMaster(assetId);
+        }
+        return decodeBackground(legacyDataUrl);
+    }
+
     static byte[] decodeBackground(String dataUrl) {
-        if (dataUrl == null || dataUrl.isBlank()) {
-            return null;
-        }
-        String base64 = dataUrl;
-        int comma = dataUrl.indexOf(',');
-        if (dataUrl.startsWith("data:") && comma >= 0) {
-            base64 = dataUrl.substring(comma + 1);
-        }
-        try {
-            return Base64.getDecoder().decode(base64.trim());
-        } catch (IllegalArgumentException e) {
-            return null;
-        }
+        return phucuong.ht.modules.media.service.DataUrls.decode(dataUrl);
     }
 
     private String filename(TrainingCourse course, String teamName, int count) {

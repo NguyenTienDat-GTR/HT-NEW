@@ -45,9 +45,12 @@ public class CertificateConfig extends BaseModel {
     @Column(name = "orientation")
     private String orientation;
 
-    // Ảnh nền chứng nhận lưu dạng data URL base64.
+    // Ảnh nền hiện tại nằm ở media_asset (cloud); cột base64 cũ chỉ để job chuyển dữ liệu đọc.
+    @Column(name = "background_asset_id")
+    private UUID backgroundAssetId;
+
     @Column(name = "background_image", columnDefinition = "text")
-    private String backgroundImage;
+    private String legacyBackgroundData;
 
     // Danh sách phần tử (trường cố định + văn bản tĩnh) đặt trên ảnh nền, lưu JSONB.
     @JdbcTypeCode(SqlTypes.JSON)
