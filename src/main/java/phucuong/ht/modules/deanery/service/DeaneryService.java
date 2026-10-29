@@ -146,6 +146,11 @@ public class DeaneryService {
             @CacheEvict(cacheNames = CacheNames.DEANERY_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.DEANERY_DETAIL, allEntries = true)
     })
+    @EvictCaches.Parishes
+    @EvictCaches.Leaders
+    @EvictCaches.Courses
+    @EvictCaches.Certificates
+    @EvictCaches.ExecutiveAssignments
     public DeaneryResponse update(UUID id, DeaneryUpdateRequest request, Authentication authentication) {
         deaneryValidationHelper.validateUpdateInput(request);
         Deanery existingDeanery = deaneryValidationHelper.requireExistingDeaneryWithDiocese(id);

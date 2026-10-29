@@ -206,6 +206,8 @@ public class LeaderService {
             @CacheEvict(cacheNames = CacheNames.LEADER_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.LEADER_DETAIL, allEntries = true)
     })
+    @EvictCaches.Certificates
+    @EvictCaches.ExecutiveAssignments
     public LeaderResponse update(UUID id, LeaderUpdateRequest request, Authentication authentication) {
         leaderValidationHelper.validateUpdateInput(request);
         Leader existingLeader = leaderValidationHelper.requireExistingLeaderWithParish(id);
@@ -266,6 +268,8 @@ public class LeaderService {
             @CacheEvict(cacheNames = CacheNames.LEADER_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.LEADER_DETAIL, allEntries = true)
     })
+    @EvictCaches.Certificates
+    @EvictCaches.ExecutiveAssignments
     public LeaderResponse updateOwnProfile(UUID id, LeaderSelfUpdateRequest request, String auditActor) {
         Leader existing = leaderValidationHelper.requireExistingLeaderWithParish(id);
         UUID parishId = existing.getParish() == null ? null : existing.getParish().getId();
@@ -343,10 +347,6 @@ public class LeaderService {
         return toLeaderResponse(leaderValidationHelper.requireExistingLeaderWithParish(id));
     }
 
-    @Caching(evict = {
-            @CacheEvict(cacheNames = CacheNames.LEADER_LIST, allEntries = true),
-            @CacheEvict(cacheNames = CacheNames.LEADER_DETAIL, allEntries = true)
-    })
     private void requireParishOperational(UUID parishId) {
         if (unitOperationalStatusService != null && parishId != null) {
             unitOperationalStatusService.requireUnitOperational(phucuong.ht.common.enums.UnitType.PARISH, parishId);

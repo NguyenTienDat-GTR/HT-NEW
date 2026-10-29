@@ -149,6 +149,12 @@ public class DioceseService {
             @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true)
     })
+    @EvictCaches.Deaneries
+    @EvictCaches.Parishes
+    @EvictCaches.Leaders
+    @EvictCaches.Courses
+    @EvictCaches.Certificates
+    @EvictCaches.ExecutiveAssignments
     public DioceseResponse update(UUID id, DioceseUpdateRequest request, Authentication authentication) {
         Diocese existingDiocese = dioceseValidationHelper.requireExistingDiocese(id);
         requireUnitOperational(UnitType.DIOCESE, id);

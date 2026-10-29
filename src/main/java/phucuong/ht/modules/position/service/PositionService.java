@@ -16,6 +16,7 @@ import phucuong.ht.common.utils.AuditActorNameResolver;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.config.CacheNames;
+import phucuong.ht.config.EvictCaches;
 import phucuong.ht.modules.position.model.entity.Position;
 import phucuong.ht.modules.position.model.request.PositionCreateRequest;
 import phucuong.ht.modules.position.model.request.PositionUpdateRequest;
@@ -79,6 +80,7 @@ public class PositionService {
             @CacheEvict(cacheNames = CacheNames.POSITION_DETAIL, allEntries = true)
     })
     @Transactional
+    @EvictCaches.ExecutiveAssignments
     public PositionResponse update(String positionCode, PositionUpdateRequest request, Authentication authentication) {
         Position position = positionRepository.findById(positionCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy chức vụ " + positionCode));
@@ -100,6 +102,7 @@ public class PositionService {
             @CacheEvict(cacheNames = CacheNames.POSITION_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.POSITION_DETAIL, allEntries = true)
     })
+    @EvictCaches.ExecutiveAssignments
     public PositionResponse toggleStatus(String positionCode, StatusToggleRequest request, Authentication authentication) {
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái chức vụ");

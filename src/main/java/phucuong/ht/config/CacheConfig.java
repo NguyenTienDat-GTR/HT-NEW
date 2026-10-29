@@ -66,6 +66,8 @@ public class CacheConfig {
         return RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(baseConfig)
                 .withInitialCacheConfigurations(cacheConfigurations)
+                // Xóa / ghi cache chờ commit: nếu xóa trước khi commit thì một request đọc xen vào sẽ nạp lại dữ liệu cũ cho cả TTL.
+                .transactionAware()
                 .build();
     }
 

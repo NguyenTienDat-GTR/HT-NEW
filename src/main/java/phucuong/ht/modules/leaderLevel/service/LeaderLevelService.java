@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import phucuong.ht.config.EvictCaches;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.modules.auth.repository.AccountRepository;
@@ -226,6 +227,10 @@ public class LeaderLevelService {
     }
 
     @Transactional
+    @EvictCaches.Courses
+    @EvictCaches.Certificates
+    @EvictCaches.Leaders
+    @EvictCaches.Analytics
     public LeaderLevelResponse create(LeaderLevelRequest request, Authentication authentication) {
         UUID dioceseId = requireActorDiocese(authentication);
         String name = validationHelper.normalizeRequiredText(request.getLevelName());
@@ -262,6 +267,10 @@ public class LeaderLevelService {
     }
 
     @Transactional
+    @EvictCaches.Courses
+    @EvictCaches.Certificates
+    @EvictCaches.Leaders
+    @EvictCaches.Analytics
     public LeaderLevelResponse update(String code, LeaderLevelRequest request, Authentication authentication) {
         UUID dioceseId = requireActorDiocese(authentication);
         LeaderLevel level = requireLevel(dioceseId, code);
@@ -281,6 +290,10 @@ public class LeaderLevelService {
     // Sắp xếp lại: danh sách các bậc từ thấp đến cao, mỗi bậc gồm các cấp bằng nhau. Phải gồm đủ và đúng các cấp
     // không phải cấp hệ thống, mỗi cấp một lần và không có bậc rỗng.
     @Transactional
+    @EvictCaches.Courses
+    @EvictCaches.Certificates
+    @EvictCaches.Leaders
+    @EvictCaches.Analytics
     public List<LeaderLevelResponse> reorder(LeaderLevelReorderRequest request, Authentication authentication) {
         UUID dioceseId = requireActorDiocese(authentication);
         List<LeaderLevel> all = repository.findAllOrdered(dioceseId);
@@ -323,6 +336,10 @@ public class LeaderLevelService {
     }
 
     @Transactional
+    @EvictCaches.Courses
+    @EvictCaches.Certificates
+    @EvictCaches.Leaders
+    @EvictCaches.Analytics
     public void delete(String code, Authentication authentication) {
         UUID dioceseId = requireActorDiocese(authentication);
         LeaderLevel level = requireLevel(dioceseId, code);

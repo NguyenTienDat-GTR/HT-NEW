@@ -52,6 +52,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
@@ -124,6 +125,10 @@ class ExcelImportExportIntegrationTest {
     @Autowired private PastTrainingCourseService pastTrainingCourseService;
     @Autowired private PastCourseParticipantImportService participantImportService;
     @Autowired private CertificateService certificateService;
+    @Autowired private phucuong.ht.modules.diocese.service.DioceseService dioceseService;
+    @Autowired private phucuong.ht.modules.deanery.service.DeaneryService deaneryService;
+    @Autowired private phucuong.ht.modules.parish.service.ParishService parishService;
+    @Autowired private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     private record Row(String... cells) {
     }
@@ -1149,6 +1154,163 @@ class ExcelImportExportIntegrationTest {
         assertEquals("SUCCEEDED", noZipDone.status(), noZipDone.errorMessage());
         assertTrue(noZipDone.avatarWarnings().stream().anyMatch(warning -> warning.row() == 2 && warning.fullName().equals("Thiếu File ZIP")
                 && warning.fileName().equals("missing.png") && warning.reason().contains("Không có file ZIP")), noZipDone.avatarWarnings().toString());
+    }
+
+    // ================= Cache: dữ liệu đổi thì FE phải thấy dữ liệu mới =================
+
+    private static Authentication updater() {
+        return admin(USERNAME, "organization.leader.update.diocese", "organization.leader.read.diocese",
+                "organization.leader.create.diocese", "training.course.create_past.diocese");
+    }
+
+    private void putSentinel(String... caches) {
+        for (String name : caches) {
+            cacheManager.getCache(name).put("sentinel", "stale");
+        }
+    }
+
+    private void assertEvicted(String... caches) {
+        for (String name : caches) {
+            assertNull(cacheManager.getCache(name).get("sentinel"), "Cache " + name + " chưa được xóa");
+        }
+    }
+
+    private static final String[] ALL_DEPENDENT_CACHES = {
+            phucuong.ht.config.CacheNames.CERTIFICATE_LIST, phucuong.ht.config.CacheNames.CERTIFICATE_DETAIL,
+            phucuong.ht.config.CacheNames.EXECUTIVE_ASSIGNMENT_LIST, phucuong.ht.config.CacheNames.EXECUTIVE_ASSIGNMENT_DETAIL,
+            phucuong.ht.config.CacheNames.LEADER_LIST, phucuong.ht.config.CacheNames.LEADER_DETAIL,
+            phucuong.ht.config.CacheNames.TRAINING_COURSE_LIST, phucuong.ht.config.CacheNames.TRAINING_COURSE_DETAIL};
+
+    @Test
+    @Order(28)
+    void avatarJobEvictsTheCachedLeaderSoTheNewImageShowsAtOnce() {
+        String email = "cache.avatar@example.com";
+        excelJobService.createImport(phucuong.ht.common.excel.job.ExcelJobKind.IMPORT_LEADERS, "",
+                excel(LEADER_HEADERS, List.of(new Row("Tôma", "Cache Avatar", "09/09/1991", "Nam", email, "0966100001", "", "Thủ Dầu Một", "Bà Lụa"))),
+                newKey(), phuCuongAdmin());
+        awaitIdle();
+        UUID leaderId = jdbc.queryForObject("select id from leader where email = ?", UUID.class, email);
+        // Đọc trước để chi tiết huynh trưởng (chưa có ảnh) nằm trong cache.
+        assertNull(leaderService.findById(leaderId, phuCuongAdmin()).getImageAssetId());
+
+        String course = createPastCourse("Khóa cache avatar 2013", 2013, null);
+        List<String> headers = new java.util.ArrayList<>(PARTICIPANT_HEADERS);
+        headers.add("Tên file ảnh");
+        String[] base = fullRow(email, "Đạt", "7").cells();
+        String[] cells = java.util.Arrays.copyOf(base, base.length + 1);
+        cells[base.length] = "cache.png";
+        var job = excelJobService.createImport(phucuong.ht.common.excel.job.ExcelJobKind.IMPORT_PARTICIPANTS, course,
+                excel(headers, List.of(new Row(cells))), imageZip("cache.png", validPortrait()), newKey(), phuCuongAdmin());
+        var done = awaitJob(job.id());
+
+        assertEquals("DONE", done.avatarStatus());
+        assertEquals(1, done.avatarSucceeded());
+        var fresh = leaderService.findById(leaderId, phuCuongAdmin());
+        assertNotNull(fresh.getImageAssetId(), "Chi tiết huynh trưởng trong cache vẫn là bản cũ chưa có ảnh");
+        assertNotNull(fresh.getImageThumbUrl());
+    }
+
+    @Test
+    @Order(29)
+    void evictionWaitsForTheCommitSoAConcurrentReadCannotReloadStaleData() {
+        var cache = cacheManager.getCache(phucuong.ht.config.CacheNames.LEADER_LIST);
+        cache.put("tx-key", "cu");
+        new org.springframework.transaction.support.TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            cache.evict("tx-key");
+            // Chưa commit: giá trị cũ còn trong cache, bị xóa đúng sau khi commit.
+            assertNotNull(cache.get("tx-key"));
+        });
+        assertNull(cache.get("tx-key"));
+        // Rollback thì không được xóa nhầm cache.
+        cache.put("tx-key", "cu");
+        new org.springframework.transaction.support.TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            cache.evict("tx-key");
+            status.setRollbackOnly();
+        });
+        assertNotNull(cache.get("tx-key"));
+        cache.evict("tx-key");
+    }
+
+    @Test
+    @Order(30)
+    void changingLeaderOrUnitDataEvictsEveryCacheThatEmbedsIt() {
+        UUID leaderId = jdbc.queryForObject("select id from leader where email = 'an@example.com'", UUID.class);
+        UUID deaneryId = jdbc.queryForObject("select id from deanery where name = 'Thủ Dầu Một'", UUID.class);
+        UUID parishId = jdbc.queryForObject("select id from parish where name = 'Bà Lụa'", UUID.class);
+
+        // Đổi thông tin huynh trưởng: chứng nhận và phân công ban điều hành nhúng tên / giáo xứ của người đó.
+        putSentinel(ALL_DEPENDENT_CACHES);
+        phucuong.ht.modules.leader.model.request.LeaderUpdateRequest leaderUpdate = new phucuong.ht.modules.leader.model.request.LeaderUpdateRequest();
+        leaderUpdate.setHolyName("Phêrô");
+        leaderService.update(leaderId, leaderUpdate, updater());
+        assertEvicted(phucuong.ht.config.CacheNames.CERTIFICATE_LIST, phucuong.ht.config.CacheNames.CERTIFICATE_DETAIL,
+                phucuong.ht.config.CacheNames.EXECUTIVE_ASSIGNMENT_LIST, phucuong.ht.config.CacheNames.EXECUTIVE_ASSIGNMENT_DETAIL,
+                phucuong.ht.config.CacheNames.LEADER_LIST, phucuong.ht.config.CacheNames.LEADER_DETAIL);
+
+        // Sửa giáo xứ: tên giáo xứ nằm trong huynh trưởng, chứng nhận và phân công.
+        putSentinel(ALL_DEPENDENT_CACHES);
+        phucuong.ht.modules.parish.model.request.ParishUpdateRequest parishUpdate = new phucuong.ht.modules.parish.model.request.ParishUpdateRequest();
+        parishUpdate.setName("Bà Lụa");
+        parishUpdate.setChapterName("CĐ");
+        parishService.update(parishId, parishUpdate, updater());
+        assertEvicted(phucuong.ht.config.CacheNames.LEADER_LIST, phucuong.ht.config.CacheNames.LEADER_DETAIL,
+                phucuong.ht.config.CacheNames.CERTIFICATE_LIST, phucuong.ht.config.CacheNames.CERTIFICATE_DETAIL,
+                phucuong.ht.config.CacheNames.EXECUTIVE_ASSIGNMENT_LIST, phucuong.ht.config.CacheNames.EXECUTIVE_ASSIGNMENT_DETAIL);
+
+        // Sửa giáo hạt: tên giáo hạt nằm trong giáo xứ, huynh trưởng, khóa, chứng nhận và phân công.
+        putSentinel(ALL_DEPENDENT_CACHES);
+        putSentinel(phucuong.ht.config.CacheNames.PARISH_LIST, phucuong.ht.config.CacheNames.PARISH_DETAIL);
+        phucuong.ht.modules.deanery.model.request.DeaneryUpdateRequest deaneryUpdate = new phucuong.ht.modules.deanery.model.request.DeaneryUpdateRequest();
+        deaneryUpdate.setName("Thủ Dầu Một");
+        deaneryUpdate.setAssociationName("HĐ");
+        deaneryService.update(deaneryId, deaneryUpdate, updater());
+        assertEvicted(ALL_DEPENDENT_CACHES);
+        assertEvicted(phucuong.ht.config.CacheNames.PARISH_LIST, phucuong.ht.config.CacheNames.PARISH_DETAIL);
+
+        // Sửa giáo phận: tên giáo phận nằm trong giáo hạt, giáo xứ, khóa, chứng nhận và phân công.
+        putSentinel(ALL_DEPENDENT_CACHES);
+        putSentinel(phucuong.ht.config.CacheNames.DEANERY_LIST, phucuong.ht.config.CacheNames.DEANERY_DETAIL,
+                phucuong.ht.config.CacheNames.PARISH_LIST, phucuong.ht.config.CacheNames.PARISH_DETAIL);
+        phucuong.ht.modules.diocese.model.request.DioceseUpdateRequest dioceseUpdate = new phucuong.ht.modules.diocese.model.request.DioceseUpdateRequest();
+        dioceseUpdate.setName("Phú Cường");
+        dioceseUpdate.setUnionName("Liên đoàn PC");
+        dioceseService.update(dioceseId, dioceseUpdate, updater());
+        assertEvicted(ALL_DEPENDENT_CACHES);
+        assertEvicted(phucuong.ht.config.CacheNames.DEANERY_LIST, phucuong.ht.config.CacheNames.DEANERY_DETAIL,
+                phucuong.ht.config.CacheNames.PARISH_LIST, phucuong.ht.config.CacheNames.PARISH_DETAIL);
+    }
+
+    @Test
+    @Order(31)
+    void renamingALeaderLevelEvictsCoursesCertificatesLeadersAndAnalytics() {
+        var level = leaderLevelService.list(phuCuongAdmin()).stream().filter(item -> !Boolean.TRUE.equals(item.getIsSystem())).findFirst().orElseThrow();
+        putSentinel(phucuong.ht.config.CacheNames.TRAINING_COURSE_LIST, phucuong.ht.config.CacheNames.TRAINING_COURSE_DETAIL,
+                phucuong.ht.config.CacheNames.CERTIFICATE_LIST, phucuong.ht.config.CacheNames.LEADER_LIST,
+                phucuong.ht.config.CacheNames.ANALYTICS_COURSES, phucuong.ht.config.CacheNames.ANALYTICS_LEADERS);
+        phucuong.ht.modules.leaderLevel.model.request.LeaderLevelRequest request = new phucuong.ht.modules.leaderLevel.model.request.LeaderLevelRequest();
+        request.setLevelCode(level.getLevelCode());
+        request.setLevelName(level.getLevelName());
+        leaderLevelService.update(level.getLevelCode(), request, phuCuongAdmin());
+        assertEvicted(phucuong.ht.config.CacheNames.TRAINING_COURSE_LIST, phucuong.ht.config.CacheNames.TRAINING_COURSE_DETAIL,
+                phucuong.ht.config.CacheNames.CERTIFICATE_LIST, phucuong.ht.config.CacheNames.LEADER_LIST,
+                phucuong.ht.config.CacheNames.ANALYTICS_COURSES, phucuong.ht.config.CacheNames.ANALYTICS_LEADERS);
+    }
+
+    private void awaitIdle() {
+        long end = System.currentTimeMillis() + 20_000;
+        while (System.currentTimeMillis() < end) {
+            Integer open = jdbc.queryForObject("select count(*) from excel_job where status in ('QUEUED','RUNNING') or avatar_status in ('PENDING','RUNNING')", Integer.class);
+            if (open != null && open == 0) {
+                return;
+            }
+            try {
+                Thread.sleep(150);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+        throw new AssertionError("Tác vụ Excel nền chưa xong sau 20 giây");
     }
 
 }

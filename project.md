@@ -1569,3 +1569,12 @@ Ma trận endpoint (`endpoint-contract-matrix.psv`) hiện có 124 route.
 - `AvatarZip` chỉ đọc entry trong ZIP, không giải nén ra đĩa; bỏ path traversal, file ẩn/`__MACOSX`, giới hạn 5.000 entry và 300MB sau giải nén, đối chiếu basename không phân biệt hoa thường và hỗ trợ tên không có đuôi. Tên trùng ở nhiều thư mục được báo mơ hồ.
 - Pha transaction chỉ import dữ liệu và lưu `avatar_plan`/cảnh báo cùng trạng thái job. `ExcelAvatarProcessor` chỉ chạy sau commit, tạo asset ACTIVE rồi gắn bằng cập nhật có điều kiện `image_asset_id is null`; hồ sơ đã có ảnh giữ ảnh cũ, asset không gắn được được release.
 - Trạng thái ảnh (`PENDING/RUNNING/DONE`) và lease tách khỏi trạng thái dữ liệu `SUCCEEDED`; lỗi từng ảnh không rollback dữ liệu, được trả rõ dòng, họ tên, tên file và lý do cùng tiến độ `avatarProcessed/avatarTotal/avatarSucceeded`. ZIP được xóa khi pha ảnh hoàn tất hoặc job hết hạn.
+
+## 2026-10-30 Xóa cache khi dữ liệu liên quan đổi (nhánh `feature/excel-import-avatar`)
+
+- Rà soát mọi nơi ghi dữ liệu mà cache danh sách / chi tiết đang nhúng. Thêm chú thích gộp `EvictCaches.Deaneries`, `Parishes`, `ExecutiveAssignments` (cùng `Courses`, `Certificates`, `Leaders`, `Analytics` đã có).
+- Sửa các chỗ thiếu: `LeaderService.update` / `updateOwnProfile` xóa thêm chứng nhận và phân công ban điều hành (nhúng tên, ngày sinh, giáo xứ); `DeaneryService.update` xóa giáo xứ, huynh trưởng, khóa, chứng nhận, phân công; `DioceseService.update` xóa giáo hạt, giáo xứ, huynh trưởng, khóa, chứng nhận, phân công; `ParishService.update` xóa huynh trưởng, chứng nhận, phân công; `PositionService.update` / `toggleStatus` xóa phân công; `LeaderLevelService` create / update / reorder / delete xóa khóa, chứng nhận, huynh trưởng và thống kê (tên cấp độ nằm trong các response đó).
+- `CacheConfig` bật `transactionAware()`: xóa và ghi cache chờ commit, tránh request đọc xen vào lúc transaction ngoài (như `CertificateIdempotentActions`) chưa commit nạp lại dữ liệu cũ cho cả TTL.
+- `ExcelAvatarProcessor` xóa cache huynh trưởng sau mỗi 25 ảnh gắn xong và luôn xóa ở cuối job (kể cả khi `finishAvatar` không cập nhật được), để danh sách thấy ảnh mới ngay.
+- Bỏ chú thích cache vô hiệu trên phương thức private `LeaderService.requireParishOperational`.
+- Test tích hợp (`ExcelImportExportIntegrationTest`): job ảnh xóa cache huynh trưởng (chi tiết hiện ảnh mới ngay); cache chờ commit và không xóa khi rollback; sửa huynh trưởng / giáo xứ / giáo hạt / giáo phận xóa đủ cache phụ thuộc; sửa cấp độ xóa cache khóa, chứng nhận, huynh trưởng, thống kê.
