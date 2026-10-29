@@ -16,6 +16,7 @@ import phucuong.ht.common.dto.apiResponse;
 import phucuong.ht.common.utils.jwtUtils;
 import phucuong.ht.modules.auth.model.request.EmailUpdateRequest;
 import phucuong.ht.modules.auth.model.response.EmailUpdateResponse;
+import phucuong.ht.modules.auth.model.request.MyAvatarUpdateRequest;
 import phucuong.ht.modules.auth.service.MyEmailService;
 import phucuong.ht.modules.auth.model.request.PasswordChangeConfirmRequest;
 import phucuong.ht.modules.auth.model.request.PasswordOtpSendRequest;
@@ -55,6 +56,11 @@ public class AccountSelfServiceController {
     @PutMapping("/me/profile")
     public apiResponse<MyProfileResponse> updateProfile(@Valid @RequestBody MyProfileUpdateRequest request, Authentication authentication) {
         return apiResponse.success("Cập nhật hồ sơ cá nhân thành công", myProfileService.updateProfile(request, authentication));
+    }
+
+    @PutMapping("/me/avatar")
+    public apiResponse<MyProfileResponse> updateMyAvatar(@Valid @RequestBody MyAvatarUpdateRequest request, Authentication authentication) {
+        return apiResponse.success("Cập nhật ảnh đại diện thành công", myProfileService.updateAvatar(request, authentication));
     }
 
     @PutMapping("/me/email")

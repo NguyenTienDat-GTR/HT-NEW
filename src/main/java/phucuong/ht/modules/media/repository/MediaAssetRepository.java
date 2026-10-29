@@ -40,6 +40,7 @@ public interface MediaAssetRepository extends JpaRepository<MediaAsset, UUID> {
             select a.* from media_asset a
             where a.status = 'ACTIVE' and a.created_at < :before
               and not exists (select 1 from leader l where l.image_asset_id = a.id)
+              and not exists (select 1 from account ac where ac.image_asset_id = a.id)
               and not exists (select 1 from certificate_config c where c.background_asset_id = a.id)
               and not exists (select 1 from badge_config b where b.front_background_asset_id = a.id or b.back_background_asset_id = a.id)
               and not exists (select 1 from background_album_item i where i.asset_id = a.id)

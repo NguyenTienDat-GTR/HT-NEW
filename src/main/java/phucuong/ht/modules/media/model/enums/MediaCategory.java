@@ -11,6 +11,7 @@ import java.util.List;
 public enum MediaCategory {
 
     LEADER_AVATAR("avatars", true, List.of(MediaVariants.THUMB, MediaVariants.MEDIUM), MediaVariants.MEDIUM, MediaVariants.THUMB),
+    ACCOUNT_AVATAR("account-avatars", true, List.of(MediaVariants.THUMB, MediaVariants.MEDIUM), MediaVariants.MEDIUM, MediaVariants.THUMB),
     CERTIFICATE_BACKGROUND("certificate-backgrounds", false, List.of(MediaVariants.MASTER, MediaVariants.PREVIEW), MediaVariants.PREVIEW, MediaVariants.PREVIEW),
     BADGE_BACKGROUND("badge-backgrounds", false, List.of(MediaVariants.MASTER, MediaVariants.PREVIEW), MediaVariants.PREVIEW, MediaVariants.PREVIEW);
 

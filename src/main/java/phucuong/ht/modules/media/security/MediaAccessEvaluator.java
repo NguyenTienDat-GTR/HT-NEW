@@ -26,6 +26,8 @@ public class MediaAccessEvaluator {
             case LEADER_AVATAR -> hasAny(authentication,
                     "organization.leader.create.diocese", "organization.leader.create.deanery",
                     "organization.leader.create.parish", "organization.leader.update.parish");
+            // Mọi tài khoản đã đăng nhập tự đặt ảnh đại diện của mình (việc gắn vào tài khoản do MyProfileService kiểm tra).
+            case ACCOUNT_AVATAR -> true;
             case CERTIFICATE_BACKGROUND -> superAdminOrAny(authentication, "training.certificate_config.");
             case BADGE_BACKGROUND -> superAdminOrAny(authentication, "training.badge_config.");
         };

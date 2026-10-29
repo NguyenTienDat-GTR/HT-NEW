@@ -18,6 +18,10 @@ public class MyProfileResponse {
     /** Email nhận OTP; null nếu tài khoản chưa có email. */
     private final String email;
     private final boolean hasLeader;
+    /** Ảnh đại diện của tài khoản không gắn huynh trưởng (URL đã ký); null nếu chưa có hoặc tài khoản gắn huynh trưởng. */
+    private final String imageUrl;
+    private final String imageThumbUrl;
+    private final java.util.UUID imageAssetId;
     /** Hồ sơ Huynh Trưởng gắn với tài khoản; null với tài khoản quản trị không gắn Huynh Trưởng. */
     private final LeaderResponse leader;
     private final List<RankHistoryResponse> rankHistory;

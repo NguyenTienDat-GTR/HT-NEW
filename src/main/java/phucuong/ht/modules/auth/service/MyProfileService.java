@@ -2,6 +2,7 @@ package phucuong.ht.modules.auth.service;
 
 import java.time.Duration;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import phucuong.ht.modules.auth.model.request.MyAvatarUpdateRequest;
 import phucuong.ht.modules.auth.model.request.MyProfileUpdateRequest;
 import phucuong.ht.modules.leader.model.request.LeaderSelfUpdateRequest;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +22,7 @@ import phucuong.ht.modules.certificate.config.service.CertificateConfigService;
 import phucuong.ht.modules.certificate.model.response.CertificateResponse;
 import phucuong.ht.modules.certificate.service.CertificateService;
 import phucuong.ht.modules.leader.model.response.LeaderResponse;
+import phucuong.ht.modules.media.model.enums.MediaCategory;
 import phucuong.ht.modules.leader.service.LeaderService;
 import phucuong.ht.modules.system.model.entity.Account;
 import phucuong.ht.modules.system.model.entity.AccountRole;
@@ -44,6 +46,8 @@ public class MyProfileService {
     private final phucuong.ht.modules.leader.repository.LeaderRepository leaderRepository;
     private final PasswordOtpStore otpStore;
     private final phucuong.ht.common.utils.securityUtils securityUtils;
+    private final phucuong.ht.modules.media.service.MediaAssetService mediaAssetService;
+    private final phucuong.ht.modules.media.service.MediaUrls mediaUrls;
 
     @Transactional(readOnly = true)
     public MyProfileResponse currentProfile(Authentication authentication) {
@@ -56,6 +60,9 @@ public class MyProfileService {
                 .roles(roles(account.getUsername()))
                 .email(emailResolver.resolve(account))
                 .hasLeader(leader != null)
+                .imageUrl(mediaUrls.display(account.getImageAssetId(), MediaCategory.ACCOUNT_AVATAR))
+                .imageThumbUrl(mediaUrls.small(account.getImageAssetId(), MediaCategory.ACCOUNT_AVATAR))
+                .imageAssetId(account.getImageAssetId())
                 .leader(leader)
                 .rankHistory(leaderId == null ? List.of() : leaderService.findRankHistory(leaderId))
                 .certificates(leaderId == null ? List.of() : certificateService.findByLeader(leaderId, authentication))
@@ -90,6 +97,27 @@ public class MyProfileService {
         changes.setImageAssetId(request.getImageAssetId());
         changes.setClearImage(request.getClearImage());
         leaderService.updateOwnProfile(leaderId, changes, securityUtils.currentAuditActor(authentication));
+        return currentProfile(authentication);
+    }
+
+    /**
+     * Đặt ảnh đại diện cho tài khoản KHÔNG gắn huynh trưởng (tài khoản gắn huynh trưởng đổi ảnh trong hồ sơ huynh trưởng).
+     * Chỉ thay được, không xóa. Ảnh nằm trong thư mục giáo phận của tài khoản, hoặc thư mục hệ thống nếu tài khoản không thuộc giáo phận nào.
+     */
+    public MyProfileResponse updateAvatar(MyAvatarUpdateRequest request, Authentication authentication) {
+        Account account = requireAccount(authentication);
+        if (account.getLeader() != null) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, errorCode.VALIDATION_ERROR,
+                    "Tài khoản gắn hồ sơ Huynh Trưởng đổi ảnh đại diện bằng chức năng sửa hồ sơ cá nhân");
+        }
+        UUID dioceseId = accountRepository.findActiveDioceseIdByUsername(account.getUsername()).orElse(null);
+        UUID oldAssetId = account.getImageAssetId();
+        UUID newAssetId = mediaAssetService.attach(request.getImageAssetId(), MediaCategory.ACCOUNT_AVATAR, dioceseId,
+                securityUtils.currentAuditActor(authentication));
+        accountRepository.setImageAsset(account.getUsername(), newAssetId);
+        if (oldAssetId != null && !oldAssetId.equals(newAssetId)) {
+            mediaAssetService.release(oldAssetId);
+        }
         return currentProfile(authentication);
     }
 

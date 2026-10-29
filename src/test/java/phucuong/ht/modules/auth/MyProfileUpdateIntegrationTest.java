@@ -234,6 +234,49 @@ class MyProfileUpdateIntegrationTest {
     }
 
     @Test
+    @Order(8)
+    void accountWithoutLeaderCanSetAndReplaceItsAvatarButLeaderAccountsCannotUseThisEndpoint() throws Exception {
+        BufferedImage image = new BufferedImage(200, 300, BufferedImage.TYPE_INT_RGB);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ImageIO.write(image, "png", out);
+        Authentication admin = me("no.leader", null);
+        // Mọi tài khoản đã đăng nhập tải được ảnh đại diện của chính mình qua /api/media.
+        UUID first = uploadAccountAvatar(admin, out.toByteArray());
+
+        MvcResult result = mockMvc.perform(put("/api/auth/me/avatar").with(authentication(admin)).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("imageAssetId", first.toString()))))
+                .andExpect(status().isOk()).andReturn();
+        JsonNode data = objectMapper.readTree(result.getResponse().getContentAsString()).get("data");
+        assertEquals(first.toString(), data.get("imageAssetId").asText());
+        assertNotNull(data.get("imageUrl").asText());
+        assertEquals("ACTIVE", row("select status from media_asset where id = ?", first).get("status"));
+        assertEquals(first, row("select image_asset_id from account where username = 'no.leader'").get("image_asset_id"));
+
+        // Thay ảnh: ảnh cũ được giải phóng.
+        UUID second = uploadAccountAvatar(admin, out.toByteArray());
+        mockMvc.perform(put("/api/auth/me/avatar").with(authentication(admin)).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("imageAssetId", second.toString()))))
+                .andExpect(status().isOk());
+        assertEquals(second, row("select image_asset_id from account where username = 'no.leader'").get("image_asset_id"));
+        assertEquals("DELETED", row("select status from media_asset where id = ?", first).get("status"));
+
+        // Thiếu ảnh -> 400; tài khoản gắn huynh trưởng dùng chức năng sửa hồ sơ -> 400.
+        mockMvc.perform(put("/api/auth/me/avatar").with(authentication(admin)).contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(put("/api/auth/me/avatar").with(authentication(me("me", myLeaderId))).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("imageAssetId", second.toString()))))
+                .andExpect(status().isBadRequest());
+    }
+
+    private UUID uploadAccountAvatar(Authentication auth, byte[] png) throws Exception {
+        MvcResult uploaded = mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart("/api/media")
+                        .file(new org.springframework.mock.web.MockMultipartFile("file", "a.png", "image/png", png))
+                        .param("category", "ACCOUNT_AVATAR").with(authentication(auth)))
+                .andExpect(status().isOk()).andReturn();
+        return UUID.fromString(objectMapper.readTree(uploaded.getResponse().getContentAsString()).get("data").get("assetId").asText());
+    }
+
+    @Test
     @Order(7)
     void readNotificationsAreDeletedFifteenDaysAfterBeingRead() {
         String insert = "insert into training_notification (id, username, event_type, title, message, read_at, created_at, status) "
