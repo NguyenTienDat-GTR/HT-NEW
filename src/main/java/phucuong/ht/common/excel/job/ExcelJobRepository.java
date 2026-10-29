@@ -23,12 +23,13 @@ public class ExcelJobRepository {
     public record Row(UUID id, String owner, ExcelJobKind kind, String target, String idempotencyKey, String payloadHash, String status,
                       int processed, int total, String paramsJson, String principalJson, String inputPath, String outputPath,
                       String outputName, String resultJson, String errorMessage, String warning, int attempts, boolean cancelRequested,
+                      String imagesPath, String avatarStatus, String avatarPlan, OffsetDateTime avatarLeaseUntil,
                       OffsetDateTime createdAt, OffsetDateTime startedAt, OffsetDateTime finishedAt) {
     }
 
     private static final String COLUMNS = "id, owner, kind, target, idempotency_key, payload_hash, status, processed, total, params_json, "
             + "principal_json, input_path, output_path, output_name, result_json, error_message, warning, attempts, cancel_requested, "
-            + "created_at, started_at, finished_at";
+            + "images_path, avatar_status, avatar_plan::text as avatar_plan, avatar_lease_until, created_at, started_at, finished_at";
 
     private static final RowMapper<Row> MAPPER = (ResultSet rs, int i) -> map(rs);
 
@@ -40,17 +41,19 @@ public class ExcelJobRepository {
                 rs.getInt("processed"), rs.getInt("total"), rs.getString("params_json"), rs.getString("principal_json"),
                 rs.getString("input_path"), rs.getString("output_path"), rs.getString("output_name"), rs.getString("result_json"),
                 rs.getString("error_message"), rs.getString("warning"), rs.getInt("attempts"), rs.getBoolean("cancel_requested"),
+                rs.getString("images_path"), rs.getString("avatar_status"), rs.getString("avatar_plan"),
+                rs.getObject("avatar_lease_until", OffsetDateTime.class),
                 rs.getObject("created_at", OffsetDateTime.class), rs.getObject("started_at", OffsetDateTime.class),
                 rs.getObject("finished_at", OffsetDateTime.class));
     }
 
     /** Tạo job; trả rỗng nếu (owner, kind, key) đã có job (idempotent). Có thể chờ nếu một request cùng key đang commit. */
     public Optional<UUID> insert(String owner, ExcelJobKind kind, String target, String key, String hash, String paramsJson,
-                                 String principalJson, String inputPath, String warning) {
+                                 String principalJson, String inputPath, String imagesPath, String warning) {
         List<UUID> ids = jdbc.query(
-                "insert into excel_job (owner, kind, target, idempotency_key, payload_hash, status, params_json, principal_json, input_path, warning) "
-                        + "values (?, ?, ?, ?, ?, 'QUEUED', ?, ?, ?, ?) on conflict (owner, kind, idempotency_key) do nothing returning id",
-                (rs, i) -> rs.getObject(1, UUID.class), owner, kind.name(), target, key, hash, paramsJson, principalJson, inputPath, warning);
+                "insert into excel_job (owner, kind, target, idempotency_key, payload_hash, status, params_json, principal_json, input_path, images_path, warning) "
+                        + "values (?, ?, ?, ?, ?, 'QUEUED', ?, ?, ?, ?, ?) on conflict (owner, kind, idempotency_key) do nothing returning id",
+                (rs, i) -> rs.getObject(1, UUID.class), owner, kind.name(), target, key, hash, paramsJson, principalJson, inputPath, imagesPath, warning);
         return ids.stream().findFirst();
     }
 
@@ -96,14 +99,34 @@ public class ExcelJobRepository {
         return !flags.isEmpty() && flags.get(0);
     }
 
-    public int markSucceeded(UUID id, String resultJson, String outputPath, String outputName, Integer processed, Integer total) {
+    public int markSucceeded(UUID id, String resultJson, String outputPath, String outputName, Integer processed, Integer total,
+                             String avatarPlan, String avatarStatus) {
         return jdbc.update("update excel_job set status = 'SUCCEEDED', result_json = ?, output_path = ?, output_name = ?, processed = coalesce(?, processed), total = coalesce(?, total), "
-                        + "finished_at = now(), lease_until = null, input_path = null where id = ? and status = 'RUNNING'",
-                resultJson, outputPath, outputName, processed, total, id);
+                        + "finished_at = now(), lease_until = null, input_path = null, avatar_plan = ?::jsonb, avatar_status = ?, "
+                        + "images_path = case when ? = 'DONE' then null else images_path end where id = ? and status = 'RUNNING'",
+                resultJson, outputPath, outputName, processed, total, avatarPlan, avatarStatus, avatarStatus, id);
+    }
+
+    public Optional<Row> claimNextAvatar(int leaseSeconds) {
+        return jdbc.query("update excel_job set avatar_status = 'RUNNING', avatar_lease_until = now() + make_interval(secs => ?) "
+                        + "where id = (select id from excel_job where status = 'SUCCEEDED' and "
+                        + "(avatar_status = 'PENDING' or (avatar_status = 'RUNNING' and avatar_lease_until < now())) "
+                        + "order by finished_at for update skip locked limit 1) returning " + COLUMNS,
+                MAPPER, leaseSeconds).stream().findFirst();
+    }
+
+    public int touchAvatar(UUID id, String resultJson, int leaseSeconds) {
+        return jdbc.update("update excel_job set result_json = ?, avatar_lease_until = now() + make_interval(secs => ?) "
+                + "where id = ? and avatar_status = 'RUNNING'", resultJson, leaseSeconds, id);
+    }
+
+    public int finishAvatar(UUID id, String resultJson) {
+        return jdbc.update("update excel_job set result_json = ?, avatar_status = 'DONE', avatar_lease_until = null, images_path = null "
+                + "where id = ? and avatar_status = 'RUNNING'", resultJson, id);
     }
 
     public int markFailed(UUID id, String message, String resultJson) {
-        return jdbc.update("update excel_job set status = 'FAILED', error_message = ?, result_json = ?, finished_at = now(), lease_until = null "
+        return jdbc.update("update excel_job set status = 'FAILED', error_message = ?, result_json = ?, finished_at = now(), lease_until = null, images_path = null "
                 + "where id = ? and status = 'RUNNING'", message, resultJson, id);
     }
 
@@ -138,13 +161,14 @@ public class ExcelJobRepository {
         return requeued + failed;
     }
 
-    public record Expired(UUID id, String inputPath, String outputPath) {
+    public record Expired(UUID id, String inputPath, String outputPath, String imagesPath) {
     }
 
     /** Job đã quá hạn giữ (đã kết thúc hoặc bị bỏ quên): xóa dòng và trả đường dẫn file để xóa file. */
     public List<Expired> deleteExpired(int retentionDays) {
         return jdbc.query("delete from excel_job where created_at < now() - make_interval(days => ?) and status <> 'RUNNING' "
-                        + "returning id, input_path, output_path",
-                (rs, i) -> new Expired(rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3)), retentionDays);
+                        + "and avatar_status is distinct from 'RUNNING' "
+                        + "returning id, input_path, output_path, images_path",
+                (rs, i) -> new Expired(rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3), rs.getString(4)), retentionDays);
     }
 }

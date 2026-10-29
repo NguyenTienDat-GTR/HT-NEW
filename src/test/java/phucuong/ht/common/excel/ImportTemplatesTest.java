@@ -33,6 +33,7 @@ class ImportTemplatesTest {
             assertTrue(sheet.hasColumn(LeaderImportService.COL_PHONE));
             assertTrue(sheet.hasColumn(LeaderImportService.COL_LEVEL));
             assertTrue(sheet.hasColumn(LeaderImportService.COL_DEANERY));
+            assertTrue(sheet.hasColumn(LeaderImportService.COL_AVATAR_FILE));
             // Dòng ví dụ đọc được: ngày sinh là ngày, số điện thoại giữ số 0 đầu.
             ExcelRowData first = sheet.rows().get(0);
             ImportErrors rowErrors = new ImportErrors();
@@ -68,6 +69,7 @@ class ImportTemplatesTest {
                     LeaderImportService.COL_GENDER, LeaderImportService.COL_LEVEL, LeaderImportService.COL_DEANERY, LeaderImportService.COL_PARISH)) {
                 assertTrue(sheet.hasColumn(column), column);
             }
+            assertTrue(sheet.hasColumn(LeaderImportService.COL_AVATAR_FILE));
             assertEquals(2, sheet.rows().size());
             // Dòng ví dụ thứ hai là huynh trưởng chưa có hồ sơ, có đủ thông tin tạo mới.
             assertEquals("Trần Thị Bình", sheet.rows().get(1).text(LeaderImportService.COL_FULL_NAME));

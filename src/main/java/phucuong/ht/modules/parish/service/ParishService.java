@@ -166,6 +166,9 @@ public class ParishService {
             @CacheEvict(cacheNames = CacheNames.PARISH_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.PARISH_DETAIL, allEntries = true)
     })
+    @EvictCaches.Leaders
+    @EvictCaches.Certificates
+    @EvictCaches.ExecutiveAssignments
     public ParishResponse update(UUID id, ParishUpdateRequest request, Authentication authentication) {
         parishValidationHelper.validateUpdateInput(request);
         Parish existingParish = parishValidationHelper.requireExistingParishWithDeaneryAndDiocese(id);

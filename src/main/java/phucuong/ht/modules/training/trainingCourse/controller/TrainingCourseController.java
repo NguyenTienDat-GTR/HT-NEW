@@ -69,12 +69,13 @@ public class TrainingCourseController {
     public org.springframework.http.ResponseEntity<apiResponse<phucuong.ht.common.excel.job.ExcelJobResponse>> importParticipants(
             @PathVariable String courseCode,
             @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
+            @RequestPart(value = "images", required = false) org.springframework.web.multipart.MultipartFile images,
             @RequestHeader(value = phucuong.ht.common.idempotency.IdempotencyService.HEADER, required = false) String idempotencyKey,
             Authentication authentication) {
         // Báo lỗi ngay nếu khóa không thuộc đơn vị của mình thay vì đợi tác vụ chạy xong.
         pastCourseParticipantImportService.precheck(courseCode, authentication);
         return phucuong.ht.common.excel.job.ExcelJobResponses.accepted(excelJobService.createImport(
-                phucuong.ht.common.excel.job.ExcelJobKind.IMPORT_PARTICIPANTS, courseCode, file, idempotencyKey, authentication));
+                phucuong.ht.common.excel.job.ExcelJobKind.IMPORT_PARTICIPANTS, courseCode, file, images, idempotencyKey, authentication));
     }
 
     // Tải file Excel mẫu danh sách chia đội (giống danh sách tham dự khóa thường, thêm cột Tên đội, không có sheet Ngoại lệ).

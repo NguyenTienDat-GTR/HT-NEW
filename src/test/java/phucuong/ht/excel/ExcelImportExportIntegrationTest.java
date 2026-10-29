@@ -52,6 +52,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
@@ -124,6 +125,10 @@ class ExcelImportExportIntegrationTest {
     @Autowired private PastTrainingCourseService pastTrainingCourseService;
     @Autowired private PastCourseParticipantImportService participantImportService;
     @Autowired private CertificateService certificateService;
+    @Autowired private phucuong.ht.modules.diocese.service.DioceseService dioceseService;
+    @Autowired private phucuong.ht.modules.deanery.service.DeaneryService deaneryService;
+    @Autowired private phucuong.ht.modules.parish.service.ParishService parishService;
+    @Autowired private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     private record Row(String... cells) {
     }
@@ -157,6 +162,41 @@ class ExcelImportExportIntegrationTest {
             columns.add(ExcelColumn.of(headers.get(i), row -> row.cells()[index].isEmpty() ? null : row.cells()[index]));
         }
         return new MockMultipartFile("file", "import.xlsx", ExcelResponses.XLSX.toString(), ExcelExportWriter.write("Dữ liệu", columns, rows));
+    }
+
+    private static MockMultipartFile imageZip(String name, byte[] content) {
+        return imageZip(java.util.Map.of(name, content));
+    }
+
+    private static MockMultipartFile imageZip(java.util.Map<String, byte[]> entries) {
+        try {
+            java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream();
+            try (java.util.zip.ZipOutputStream zip = new java.util.zip.ZipOutputStream(output)) {
+                for (var entry : entries.entrySet()) {
+                    zip.putNextEntry(new java.util.zip.ZipEntry(entry.getKey()));
+                    zip.write(entry.getValue());
+                    zip.closeEntry();
+                }
+            }
+            return new MockMultipartFile("images", "images.zip", "application/zip", output.toByteArray());
+        } catch (java.io.IOException exception) {
+            throw new java.io.UncheckedIOException(exception);
+        }
+    }
+
+    private static byte[] validPortrait() {
+        try {
+            java.awt.image.BufferedImage image = new java.awt.image.BufferedImage(60, 90, java.awt.image.BufferedImage.TYPE_INT_RGB);
+            java.awt.Graphics2D graphics = image.createGraphics();
+            graphics.setColor(java.awt.Color.BLUE);
+            graphics.fillRect(0, 0, 60, 90);
+            graphics.dispose();
+            java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream();
+            javax.imageio.ImageIO.write(image, "png", output);
+            return output.toByteArray();
+        } catch (java.io.IOException exception) {
+            throw new java.io.UncheckedIOException(exception);
+        }
     }
 
     private static final List<String> LEADER_HEADERS =
@@ -521,7 +561,8 @@ class ExcelImportExportIntegrationTest {
         long deadline = System.currentTimeMillis() + 60_000;
         while (System.currentTimeMillis() < deadline) {
             var job = excelJobService.get(id, phuCuongAdmin());
-            if (!"QUEUED".equals(job.status()) && !"RUNNING".equals(job.status())) {
+            if (!"QUEUED".equals(job.status()) && !"RUNNING".equals(job.status())
+                    && !"PENDING".equals(job.avatarStatus()) && !"RUNNING".equals(job.avatarStatus())) {
                 return job;
             }
             try {
@@ -1042,6 +1083,234 @@ class ExcelImportExportIntegrationTest {
         assertEquals("APPROVED", approved.getApprovalStatus().name());
         assertEquals("HT_I", levelOf("tdm.moi@example.com"));
         assertEquals(LocalDate.of(2015, 12, 12), approved.getIssueDate());
+    }
+
+    @Test
+    @Order(27)
+    void avatarZipRunsAfterSuccessfulImportAndImageErrorsDoNotRollbackData() {
+        List<String> headers = new java.util.ArrayList<>(LEADER_HEADERS);
+        headers.add("Tên file ảnh");
+        MockMultipartFile file = excel(headers, List.of(
+                new Row("Phêrô", "Avatar Hợp Lệ", "01/01/1990", "Nam", "avatar.valid@example.com", "0966000001", "", "Thủ Dầu Một", "Bà Lụa", "portrait.png"),
+                new Row("Maria", "Không Có Ảnh", "02/02/1991", "Nữ", "avatar.none@example.com", "0966000002", "", "Thủ Dầu Một", "Búng", "")));
+        var job = excelJobService.createImport(phucuong.ht.common.excel.job.ExcelJobKind.IMPORT_LEADERS, "", file,
+                imageZip("folder/portrait.png", validPortrait()), newKey(), phuCuongAdmin());
+        var done = awaitJob(job.id());
+
+        assertEquals("SUCCEEDED", done.status(), done.errorMessage());
+        assertEquals("DONE", done.avatarStatus());
+        assertEquals(1, done.avatarProcessed());
+        assertEquals(1, done.avatarSucceeded());
+        assertEquals(2, countLeaders("avatar.%@example.com"));
+        UUID originalAsset = jdbc.queryForObject("select image_asset_id from leader where email='avatar.valid@example.com'", UUID.class);
+        assertNotNull(originalAsset);
+        assertEquals(null, jdbc.queryForObject("select image_asset_id from leader where email='avatar.none@example.com'", UUID.class));
+
+        // Hồ sơ đã có ảnh: import tham dự vẫn thành công và giữ nguyên ảnh cũ.
+        String course = createPastCourse("Khóa avatar 2014", 2014, null);
+        List<String> participantHeaders = new java.util.ArrayList<>(PARTICIPANT_HEADERS);
+        participantHeaders.add("Tên file ảnh");
+        MockMultipartFile participant = excel(participantHeaders, List.of(
+                new Row("avatar.valid@example.com", "0966000001", "8", "Đạt", "", "Phêrô", "Avatar Hợp Lệ", "01/01/1990", "Nam", "", "Thủ Dầu Một", "Bà Lụa", "replacement.png"),
+                new Row("avatar.participant@example.com", "0966000005", "7", "Đạt", "", "Anna", "Ảnh Từ Khóa", "05/05/1994", "Nữ", "", "Thủ Dầu Một", "Búng", "newcomer.png")));
+        var participantJob = excelJobService.createImport(phucuong.ht.common.excel.job.ExcelJobKind.IMPORT_PARTICIPANTS, course, participant,
+                imageZip(java.util.Map.of("replacement.png", validPortrait(), "newcomer.png", validPortrait())), newKey(), phuCuongAdmin());
+        var participantDone = awaitJob(participantJob.id());
+        assertEquals("SUCCEEDED", participantDone.status(), participantDone.errorMessage());
+        assertTrue(participantDone.avatarWarnings().stream().anyMatch(warning -> warning.row() == 2 && warning.fileName().equals("replacement.png")
+                && warning.reason().contains("giữ ảnh cũ")), participantDone.avatarWarnings().toString());
+        assertEquals(originalAsset, jdbc.queryForObject("select image_asset_id from leader where email='avatar.valid@example.com'", UUID.class));
+        assertNotNull(jdbc.queryForObject("select image_asset_id from leader where email='avatar.participant@example.com'", UUID.class));
+
+        // Ảnh hỏng chỉ tạo cảnh báo; hồ sơ vẫn được lưu và không có avatar.
+        MockMultipartFile brokenFile = excel(headers, List.of(new Row(
+                "Giuse", "Ảnh Bị Hỏng", "03/03/1992", "Nam", "avatar.broken@example.com", "0966000003", "", "Thủ Dầu Một", "Bà Lụa", "broken.jpg")));
+        var brokenJob = excelJobService.createImport(phucuong.ht.common.excel.job.ExcelJobKind.IMPORT_LEADERS, "", brokenFile,
+                imageZip("broken.jpg", new byte[]{1, 2, 3, 4}), newKey(), phuCuongAdmin());
+        var brokenDone = awaitJob(brokenJob.id());
+        assertEquals("SUCCEEDED", brokenDone.status(), brokenDone.errorMessage());
+        assertEquals(1, countLeaders("avatar.broken@example.com"));
+        assertEquals(0, brokenDone.avatarSucceeded());
+        assertTrue(brokenDone.avatarWarnings().stream().anyMatch(warning -> warning.row() == 2
+                && warning.fullName().equals("Ảnh Bị Hỏng") && warning.fileName().equals("broken.jpg")), brokenDone.avatarWarnings().toString());
+
+        // Excel lỗi: transaction rollback và pha cloud không được chạy.
+        int assetsBefore = jdbc.queryForObject("select count(*) from media_asset", Integer.class);
+        MockMultipartFile invalidExcel = excel(headers, List.of(new Row(
+                "", "Excel Sai", "04/04/1993", "Nam", "avatar.excel.bad@example.com", "0966000004", "", "Thủ Dầu Một", "Bà Lụa", "portrait.png")));
+        var invalidJob = excelJobService.createImport(phucuong.ht.common.excel.job.ExcelJobKind.IMPORT_LEADERS, "", invalidExcel,
+                imageZip("portrait.png", validPortrait()), newKey(), phuCuongAdmin());
+        var failed = awaitJob(invalidJob.id());
+        assertEquals("FAILED", failed.status());
+        assertEquals(0, countLeaders("avatar.excel.bad@example.com"));
+        assertEquals(assetsBefore, jdbc.queryForObject("select count(*) from media_asset", Integer.class));
+
+        // Có tên ảnh nhưng không gửi ZIP: dữ liệu vẫn lưu, cảnh báo đúng hồ sơ.
+        MockMultipartFile noZipFile = excel(headers, List.of(new Row(
+                "Luca", "Thiếu File ZIP", "06/06/1995", "Nam", "avatar.nozip@example.com", "0966000006", "", "Thủ Dầu Một", "Bà Lụa", "missing.png")));
+        var noZipJob = excelJobService.createImport(phucuong.ht.common.excel.job.ExcelJobKind.IMPORT_LEADERS, "", noZipFile,
+                null, newKey(), phuCuongAdmin());
+        var noZipDone = awaitJob(noZipJob.id());
+        assertEquals("SUCCEEDED", noZipDone.status(), noZipDone.errorMessage());
+        assertTrue(noZipDone.avatarWarnings().stream().anyMatch(warning -> warning.row() == 2 && warning.fullName().equals("Thiếu File ZIP")
+                && warning.fileName().equals("missing.png") && warning.reason().contains("Không có file ZIP")), noZipDone.avatarWarnings().toString());
+    }
+
+    // ================= Cache: dữ liệu đổi thì FE phải thấy dữ liệu mới =================
+
+    private static Authentication updater() {
+        return admin(USERNAME, "organization.leader.update.diocese", "organization.leader.read.diocese",
+                "organization.leader.create.diocese", "training.course.create_past.diocese");
+    }
+
+    private void putSentinel(String... caches) {
+        for (String name : caches) {
+            cacheManager.getCache(name).put("sentinel", "stale");
+        }
+    }
+
+    private void assertEvicted(String... caches) {
+        for (String name : caches) {
+            assertNull(cacheManager.getCache(name).get("sentinel"), "Cache " + name + " chưa được xóa");
+        }
+    }
+
+    private static final String[] ALL_DEPENDENT_CACHES = {
+            phucuong.ht.config.CacheNames.CERTIFICATE_LIST, phucuong.ht.config.CacheNames.CERTIFICATE_DETAIL,
+            phucuong.ht.config.CacheNames.EXECUTIVE_ASSIGNMENT_LIST, phucuong.ht.config.CacheNames.EXECUTIVE_ASSIGNMENT_DETAIL,
+            phucuong.ht.config.CacheNames.LEADER_LIST, phucuong.ht.config.CacheNames.LEADER_DETAIL,
+            phucuong.ht.config.CacheNames.TRAINING_COURSE_LIST, phucuong.ht.config.CacheNames.TRAINING_COURSE_DETAIL};
+
+    @Test
+    @Order(28)
+    void avatarJobEvictsTheCachedLeaderSoTheNewImageShowsAtOnce() {
+        String email = "cache.avatar@example.com";
+        excelJobService.createImport(phucuong.ht.common.excel.job.ExcelJobKind.IMPORT_LEADERS, "",
+                excel(LEADER_HEADERS, List.of(new Row("Tôma", "Cache Avatar", "09/09/1991", "Nam", email, "0966100001", "", "Thủ Dầu Một", "Bà Lụa"))),
+                newKey(), phuCuongAdmin());
+        awaitIdle();
+        UUID leaderId = jdbc.queryForObject("select id from leader where email = ?", UUID.class, email);
+        // Đọc trước để chi tiết huynh trưởng (chưa có ảnh) nằm trong cache.
+        assertNull(leaderService.findById(leaderId, phuCuongAdmin()).getImageAssetId());
+
+        String course = createPastCourse("Khóa cache avatar 2013", 2013, null);
+        List<String> headers = new java.util.ArrayList<>(PARTICIPANT_HEADERS);
+        headers.add("Tên file ảnh");
+        String[] base = fullRow(email, "Đạt", "7").cells();
+        String[] cells = java.util.Arrays.copyOf(base, base.length + 1);
+        cells[base.length] = "cache.png";
+        var job = excelJobService.createImport(phucuong.ht.common.excel.job.ExcelJobKind.IMPORT_PARTICIPANTS, course,
+                excel(headers, List.of(new Row(cells))), imageZip("cache.png", validPortrait()), newKey(), phuCuongAdmin());
+        var done = awaitJob(job.id());
+
+        assertEquals("DONE", done.avatarStatus());
+        assertEquals(1, done.avatarSucceeded());
+        var fresh = leaderService.findById(leaderId, phuCuongAdmin());
+        assertNotNull(fresh.getImageAssetId(), "Chi tiết huynh trưởng trong cache vẫn là bản cũ chưa có ảnh");
+        assertNotNull(fresh.getImageThumbUrl());
+    }
+
+    @Test
+    @Order(29)
+    void evictionWaitsForTheCommitSoAConcurrentReadCannotReloadStaleData() {
+        var cache = cacheManager.getCache(phucuong.ht.config.CacheNames.LEADER_LIST);
+        cache.put("tx-key", "cu");
+        new org.springframework.transaction.support.TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            cache.evict("tx-key");
+            // Chưa commit: giá trị cũ còn trong cache, bị xóa đúng sau khi commit.
+            assertNotNull(cache.get("tx-key"));
+        });
+        assertNull(cache.get("tx-key"));
+        // Rollback thì không được xóa nhầm cache.
+        cache.put("tx-key", "cu");
+        new org.springframework.transaction.support.TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            cache.evict("tx-key");
+            status.setRollbackOnly();
+        });
+        assertNotNull(cache.get("tx-key"));
+        cache.evict("tx-key");
+    }
+
+    @Test
+    @Order(30)
+    void changingLeaderOrUnitDataEvictsEveryCacheThatEmbedsIt() {
+        UUID leaderId = jdbc.queryForObject("select id from leader where email = 'an@example.com'", UUID.class);
+        UUID deaneryId = jdbc.queryForObject("select id from deanery where name = 'Thủ Dầu Một'", UUID.class);
+        UUID parishId = jdbc.queryForObject("select id from parish where name = 'Bà Lụa'", UUID.class);
+
+        // Đổi thông tin huynh trưởng: chứng nhận và phân công ban điều hành nhúng tên / giáo xứ của người đó.
+        putSentinel(ALL_DEPENDENT_CACHES);
+        phucuong.ht.modules.leader.model.request.LeaderUpdateRequest leaderUpdate = new phucuong.ht.modules.leader.model.request.LeaderUpdateRequest();
+        leaderUpdate.setHolyName("Phêrô");
+        leaderService.update(leaderId, leaderUpdate, updater());
+        assertEvicted(phucuong.ht.config.CacheNames.CERTIFICATE_LIST, phucuong.ht.config.CacheNames.CERTIFICATE_DETAIL,
+                phucuong.ht.config.CacheNames.EXECUTIVE_ASSIGNMENT_LIST, phucuong.ht.config.CacheNames.EXECUTIVE_ASSIGNMENT_DETAIL,
+                phucuong.ht.config.CacheNames.LEADER_LIST, phucuong.ht.config.CacheNames.LEADER_DETAIL);
+
+        // Sửa giáo xứ: tên giáo xứ nằm trong huynh trưởng, chứng nhận và phân công.
+        putSentinel(ALL_DEPENDENT_CACHES);
+        phucuong.ht.modules.parish.model.request.ParishUpdateRequest parishUpdate = new phucuong.ht.modules.parish.model.request.ParishUpdateRequest();
+        parishUpdate.setName("Bà Lụa");
+        parishUpdate.setChapterName("CĐ");
+        parishService.update(parishId, parishUpdate, updater());
+        assertEvicted(phucuong.ht.config.CacheNames.LEADER_LIST, phucuong.ht.config.CacheNames.LEADER_DETAIL,
+                phucuong.ht.config.CacheNames.CERTIFICATE_LIST, phucuong.ht.config.CacheNames.CERTIFICATE_DETAIL,
+                phucuong.ht.config.CacheNames.EXECUTIVE_ASSIGNMENT_LIST, phucuong.ht.config.CacheNames.EXECUTIVE_ASSIGNMENT_DETAIL);
+
+        // Sửa giáo hạt: tên giáo hạt nằm trong giáo xứ, huynh trưởng, khóa, chứng nhận và phân công.
+        putSentinel(ALL_DEPENDENT_CACHES);
+        putSentinel(phucuong.ht.config.CacheNames.PARISH_LIST, phucuong.ht.config.CacheNames.PARISH_DETAIL);
+        phucuong.ht.modules.deanery.model.request.DeaneryUpdateRequest deaneryUpdate = new phucuong.ht.modules.deanery.model.request.DeaneryUpdateRequest();
+        deaneryUpdate.setName("Thủ Dầu Một");
+        deaneryUpdate.setAssociationName("HĐ");
+        deaneryService.update(deaneryId, deaneryUpdate, updater());
+        assertEvicted(ALL_DEPENDENT_CACHES);
+        assertEvicted(phucuong.ht.config.CacheNames.PARISH_LIST, phucuong.ht.config.CacheNames.PARISH_DETAIL);
+
+        // Sửa giáo phận: tên giáo phận nằm trong giáo hạt, giáo xứ, khóa, chứng nhận và phân công.
+        putSentinel(ALL_DEPENDENT_CACHES);
+        putSentinel(phucuong.ht.config.CacheNames.DEANERY_LIST, phucuong.ht.config.CacheNames.DEANERY_DETAIL,
+                phucuong.ht.config.CacheNames.PARISH_LIST, phucuong.ht.config.CacheNames.PARISH_DETAIL);
+        phucuong.ht.modules.diocese.model.request.DioceseUpdateRequest dioceseUpdate = new phucuong.ht.modules.diocese.model.request.DioceseUpdateRequest();
+        dioceseUpdate.setName("Phú Cường");
+        dioceseUpdate.setUnionName("Liên đoàn PC");
+        dioceseService.update(dioceseId, dioceseUpdate, updater());
+        assertEvicted(ALL_DEPENDENT_CACHES);
+        assertEvicted(phucuong.ht.config.CacheNames.DEANERY_LIST, phucuong.ht.config.CacheNames.DEANERY_DETAIL,
+                phucuong.ht.config.CacheNames.PARISH_LIST, phucuong.ht.config.CacheNames.PARISH_DETAIL);
+    }
+
+    @Test
+    @Order(31)
+    void renamingALeaderLevelEvictsCoursesCertificatesLeadersAndAnalytics() {
+        var level = leaderLevelService.list(phuCuongAdmin()).stream().filter(item -> !Boolean.TRUE.equals(item.getIsSystem())).findFirst().orElseThrow();
+        putSentinel(phucuong.ht.config.CacheNames.TRAINING_COURSE_LIST, phucuong.ht.config.CacheNames.TRAINING_COURSE_DETAIL,
+                phucuong.ht.config.CacheNames.CERTIFICATE_LIST, phucuong.ht.config.CacheNames.LEADER_LIST,
+                phucuong.ht.config.CacheNames.ANALYTICS_COURSES, phucuong.ht.config.CacheNames.ANALYTICS_LEADERS);
+        phucuong.ht.modules.leaderLevel.model.request.LeaderLevelRequest request = new phucuong.ht.modules.leaderLevel.model.request.LeaderLevelRequest();
+        request.setLevelCode(level.getLevelCode());
+        request.setLevelName(level.getLevelName());
+        leaderLevelService.update(level.getLevelCode(), request, phuCuongAdmin());
+        assertEvicted(phucuong.ht.config.CacheNames.TRAINING_COURSE_LIST, phucuong.ht.config.CacheNames.TRAINING_COURSE_DETAIL,
+                phucuong.ht.config.CacheNames.CERTIFICATE_LIST, phucuong.ht.config.CacheNames.LEADER_LIST,
+                phucuong.ht.config.CacheNames.ANALYTICS_COURSES, phucuong.ht.config.CacheNames.ANALYTICS_LEADERS);
+    }
+
+    private void awaitIdle() {
+        long end = System.currentTimeMillis() + 20_000;
+        while (System.currentTimeMillis() < end) {
+            Integer open = jdbc.queryForObject("select count(*) from excel_job where status in ('QUEUED','RUNNING') or avatar_status in ('PENDING','RUNNING')", Integer.class);
+            if (open != null && open == 0) {
+                return;
+            }
+            try {
+                Thread.sleep(150);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+        throw new AssertionError("Tác vụ Excel nền chưa xong sau 20 giây");
     }
 
 }

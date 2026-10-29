@@ -53,10 +53,11 @@ public class LeaderController {
     @PreAuthorize("@leaderAccessEvaluator.canCreate(authentication)")
     public org.springframework.http.ResponseEntity<apiResponse<phucuong.ht.common.excel.job.ExcelJobResponse>> importLeaders(
             @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
+            @RequestPart(value = "images", required = false) org.springframework.web.multipart.MultipartFile images,
             @RequestHeader(value = phucuong.ht.common.idempotency.IdempotencyService.HEADER, required = false) String idempotencyKey,
             Authentication authentication) {
         return phucuong.ht.common.excel.job.ExcelJobResponses.accepted(excelJobService.createImport(
-                phucuong.ht.common.excel.job.ExcelJobKind.IMPORT_LEADERS, "", file, idempotencyKey, authentication));
+                phucuong.ht.common.excel.job.ExcelJobKind.IMPORT_LEADERS, "", file, images, idempotencyKey, authentication));
     }
 
     // Xuất Excel chạy nền theo đúng bộ lọc/tìm kiếm/sắp xếp của danh sách; trả 202 + tác vụ, theo dõi tại /api/excel-jobs.

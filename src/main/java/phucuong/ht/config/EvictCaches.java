@@ -62,4 +62,37 @@ public final class EvictCaches {
     })
     public @interface Analytics {
     }
+
+    // Danh sách và chi tiết giáo hạt (tên giáo hạt, tên giáo phận, số giáo xứ / huynh trưởng).
+    @Target(ElementType.METHOD)
+    @Retention(RetentionPolicy.RUNTIME)
+    @Documented
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.DEANERY_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DEANERY_DETAIL, allEntries = true)
+    })
+    public @interface Deaneries {
+    }
+
+    // Danh sách và chi tiết giáo xứ / giáo họ / giáo điểm (tên đơn vị cha, giáo hạt, giáo phận).
+    @Target(ElementType.METHOD)
+    @Retention(RetentionPolicy.RUNTIME)
+    @Documented
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.PARISH_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.PARISH_DETAIL, allEntries = true)
+    })
+    public @interface Parishes {
+    }
+
+    // Danh sách và chi tiết phân công ban điều hành (nhúng tên chức vụ, tên huynh trưởng và tên đơn vị).
+    @Target(ElementType.METHOD)
+    @Retention(RetentionPolicy.RUNTIME)
+    @Documented
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.EXECUTIVE_ASSIGNMENT_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.EXECUTIVE_ASSIGNMENT_DETAIL, allEntries = true)
+    })
+    public @interface ExecutiveAssignments {
+    }
 }
