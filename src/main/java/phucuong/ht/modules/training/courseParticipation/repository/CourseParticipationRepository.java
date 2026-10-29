@@ -50,8 +50,8 @@ public class CourseParticipationRepository extends BaseRepo<CourseParticipation,
                         CourseParticipation.class
                 )
                 .setParameter("id", id)
-                .setMaxResults(1)
                 .getResultList();
+        // Lọc theo khóa chính nên tối đa một hồ sơ; không dùng setMaxResults vì có join fetch tập hợp (Hibernate sẽ phân trang trong bộ nhớ).
         return results.stream().findFirst();
     }
 

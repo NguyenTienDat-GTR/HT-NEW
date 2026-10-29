@@ -109,8 +109,8 @@ public class securityConfig {
         return http.build();
     }
 
-    @Bean
-    public AuthenticationProvider authenticationProvider() {
+    // Không khai báo bean: có bean AuthenticationProvider cùng UserDetailsService thì Spring Security cảnh báo lúc khởi động.
+    private AuthenticationProvider authenticationProvider() {
         DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
         provider.setUserDetailsService(authUserDetailsService);
         provider.setPasswordEncoder(passwordEncoder());
