@@ -290,7 +290,7 @@ class MediaStorageIntegrationTest {
         JsonNode data = objectMapper.readTree(result.getResponse().getContentAsString()).get("data");
         uploadedAssetId = UUID.fromString(data.get("assetId").asText());
         uploadedUrl = data.get("url").asText();
-        assertTrue(uploadedUrl.startsWith("/api/media/" + uploadedAssetId + "/medium?exp="));
+        assertTrue(uploadedUrl.startsWith("/api/media/" + uploadedAssetId + "/medium?sig="));
 
         MediaAsset asset = assetRepository.findById(uploadedAssetId).orElseThrow();
         assertEquals(MediaStatus.PENDING, asset.getStatus());
@@ -332,12 +332,6 @@ class MediaStorageIntegrationTest {
         mockMvc.perform(get(uploadedUrl.replace("/medium?", "/thumb?")).with(authentication(leaderAdmin())))
                 .andExpect(status().isForbidden());
         mockMvc.perform(get(uploadedUrl.replace("/medium?", "/master?")).with(authentication(leaderAdmin())))
-                .andExpect(status().isForbidden());
-
-        // Link hết hạn → 403.
-        long expired = java.time.Instant.now().getEpochSecond() - 10;
-        mockMvc.perform(get("/api/media/" + uploadedAssetId + "/medium?exp=" + expired + "&sig=" + signer.sign(uploadedAssetId, "medium").sig())
-                        .with(authentication(leaderAdmin())))
                 .andExpect(status().isForbidden());
     }
 

@@ -6,7 +6,7 @@
 
 ```
 FE nén ảnh ──multipart──▶ POST /api/media ──▶ BE kiểm tra + tạo biến thể ──▶ MediaStorageProvider (Cloudinary | local | ...)
-FE <img src="/backend/api/media/{assetId}/{variant}?exp&sig"> ──▶ BE kiểm tra đăng nhập + chữ ký ──▶ trả byte ảnh
+FE <img src="/backend/api/media/{assetId}/{variant}?sig"> ──▶ BE kiểm tra đăng nhập + chữ ký ──▶ trả byte ảnh
 ```
 
 - Database chỉ giữ `media_asset` (siêu dữ liệu, khóa lưu trữ logic, sha256) và id asset trong bản ghi nghiệp vụ
@@ -17,8 +17,8 @@ FE <img src="/backend/api/media/{assetId}/{variant}?exp&sig"> ──▶ BE kiể
 ### Phân quyền xem ảnh
 
 1. Backend chỉ ký URL khi trả bản ghi cho người đã qua kiểm tra quyền đọc bản ghi đó (các `*AccessEvaluator` hiện có).
-2. Mở URL ảnh phải **đăng nhập** (cookie `accessToken`) **và** chữ ký HMAC còn hạn. Người ngoài có link cũng nhận 401/403.
-3. URL được làm tròn theo "bucket" nên còn hiệu lực từ `url-ttl - url-bucket` đến `url-ttl` (mặc định 20–30 phút); trình duyệt cache được (`Cache-Control: private` + `ETag`/304).
+2. Mở URL ảnh phải **đăng nhập** (cookie `accessToken`) **và** chữ ký HMAC hợp lệ. Link ảnh **không có thời hạn** (ảnh luôn hiển thị trong danh sách), nhưng người ngoài có link mà chưa đăng nhập vẫn nhận 401, chữ ký sai nhận 403.
+3. Mỗi ảnh có một URL cố định nên trình duyệt cache được (`Cache-Control: private` + `ETag`/304).
 
 ### Thư mục theo giáo phận và loại ảnh
 
@@ -48,7 +48,6 @@ Huynh trưởng chuyển sang giáo phận khác thì job dọn dẹp tự chuy�
 | `CLOUDINARY_URL` | rỗng | `cloudinary://API_KEY:API_SECRET@CLOUD_NAME` (bắt buộc khi dùng Cloudinary) |
 | `MEDIA_ROOT_PREFIX` | `ht/dev` / `ht/prod` | Tiền tố gốc, tách môi trường trên cùng tài khoản cloud |
 | `MEDIA_SIGNING_SECRET` | rỗng | Khóa ký URL ảnh. Nếu trống sẽ suy ra từ `JWT_ACCESS_SECRET` — **nên đặt riêng ở production** |
-| `MEDIA_URL_TTL` / `MEDIA_URL_BUCKET` | `30m` / `10m` | Thời hạn URL đã ký |
 | `MEDIA_LOCAL_ENABLED` / `MEDIA_LOCAL_DIR` | `true` (dev) / `false` (prod), `./uploads/media` | Nhà cung cấp thư mục cục bộ |
 | `MEDIA_LEGACY_MIGRATION_ENABLED` | `true` | Job chuyển ảnh base64 cũ lên cloud |
 | `MEDIA_PROVIDER_MIGRATION_ENABLED` | `true` | Job chuyển ảnh sang nhà cung cấp mới |

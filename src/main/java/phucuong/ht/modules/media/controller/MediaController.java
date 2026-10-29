@@ -67,17 +67,16 @@ public class MediaController {
     }
 
     /**
-     * Phát ảnh. Yêu cầu đăng nhập (đã được bộ lọc JWT kiểm tra) VÀ chữ ký còn hiệu lực: người ngoài có link cũng không xem được.
+     * Phát ảnh. Yêu cầu đăng nhập (đã được bộ lọc JWT kiểm tra) VÀ chữ ký đúng; link không hết hạn nhưng người ngoài chưa đăng nhập thì không xem được.
      */
     @GetMapping("/{assetId}/{variant}")
     public ResponseEntity<byte[]> get(
             @PathVariable UUID assetId,
             @PathVariable String variant,
-            @RequestParam(value = "exp", required = false) Long exp,
             @RequestParam(value = "sig", required = false) String sig,
             @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch) {
-        if (exp == null || !MediaVariants.ALL.contains(variant) || !signer.verify(assetId, variant, exp, sig)) {
-            throw new ApiException(HttpStatus.FORBIDDEN, errorCode.ACCESS_DENIED, "Liên kết ảnh không hợp lệ hoặc đã hết hạn");
+        if (!MediaVariants.ALL.contains(variant) || !signer.verify(assetId, variant, sig)) {
+            throw new ApiException(HttpStatus.FORBIDDEN, errorCode.ACCESS_DENIED, "Liên kết ảnh không hợp lệ");
         }
         MediaAsset asset = mediaAssetService.find(assetId);
         if (asset == null || asset.getStatus() == MediaStatus.DELETED) {
@@ -86,8 +85,7 @@ public class MediaController {
         MediaVariantInfo info = asset.variant(variant)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, errorCode.RESOURCE_NOT_FOUND, "Không tìm thấy ảnh"));
 
-        long maxAge = Math.min(MAX_BROWSER_CACHE_SECONDS, signer.secondsLeft(exp));
-        CacheControl cacheControl = CacheControl.maxAge(Duration.ofSeconds(maxAge)).cachePrivate();
+        CacheControl cacheControl = CacheControl.maxAge(Duration.ofSeconds(MAX_BROWSER_CACHE_SECONDS)).cachePrivate();
         String etag = "\"" + info.sha256() + "\"";
         if (etag.equals(ifNoneMatch)) {
             return ResponseEntity.status(HttpStatus.NOT_MODIFIED).eTag(etag).cacheControl(cacheControl).build();

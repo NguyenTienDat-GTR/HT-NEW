@@ -30,12 +30,6 @@ public class MediaProperties {
     private String signingSecret;
 
     /**
-     * Thời hạn tối đa của URL đã ký; URL được làm tròn theo {@code urlBucket} nên còn hiệu lực từ (ttl - bucket) đến ttl.
-     */
-    private Duration urlTtl = Duration.ofMinutes(30);
-    private Duration urlBucket = Duration.ofMinutes(10);
-
-    /**
      * Đường dẫn gốc của endpoint phát ảnh.
      */
     private String urlPath = "/api/media";
