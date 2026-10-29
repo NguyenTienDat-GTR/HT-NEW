@@ -148,8 +148,13 @@ public class LeaderService {
     }
 
     public List<RankHistoryResponse> findRankHistory(UUID id) {
-        return rankHistoryRepository.findAllByLeaderId(id).stream()
-                .map(this::toRankHistoryResponse)
+        List<RankHistory> histories = rankHistoryRepository.findAllByLeaderId(id);
+        Map<String, String> courseNames = rankHistoryRepository.findCourseNamesByCodes(histories.stream()
+                .map(RankHistory::getCourseCode)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet()));
+        return histories.stream()
+                .map(history -> toRankHistoryResponse(history, courseNames))
                 .toList();
     }
 
@@ -294,13 +299,22 @@ public class LeaderService {
                 .build();
     }
 
-    private RankHistoryResponse toRankHistoryResponse(RankHistory rankHistory) {
+    private RankHistoryResponse toRankHistoryResponse(RankHistory rankHistory, Map<String, String> courseNames) {
+        String courseCode = rankHistory.getCourseCode();
+        String courseName = courseCode == null ? null : courseNames.get(courseCode);
+        String note = rankHistory.getNote();
+        // Ghi chú lưu mã khóa (UUID với khóa quá khứ): đổi sang tên khóa để hiển thị.
+        if (note != null && courseCode != null && courseName != null) {
+            note = note.replace(courseCode, courseName);
+        }
         return RankHistoryResponse.builder()
                 .id(rankHistory.getId())
                 .oldLevel(rankHistory.getOldLevel())
                 .newLevel(rankHistory.getNewLevel())
                 .promotionDate(rankHistory.getPromotionDate())
-                .note(rankHistory.getNote())
+                .note(note)
+                .courseCode(courseCode)
+                .courseName(courseName)
                 .createdAt(rankHistory.getCreatedAt())
                 .createdBy(rankHistory.getCreatedBy())
                 .createdByName(auditActorNameResolver.resolve(rankHistory.getCreatedBy()))

@@ -17,13 +17,13 @@ public enum BadgeMergeField {
 
     TEAM_NAME("teamName", "Tên đội", "Đội"),
 
-    COURSE_NAME("courseName", "Tên khóa", "Khóa học"),
-    COURSE_CODE("courseCode", "Mã khóa", "Khóa học"),
-    HOST_YEAR("hostYear", "Năm tổ chức", "Khóa học"),
-    COURSE_START_DATE("courseStartDate", "Ngày bắt đầu", "Khóa học"),
-    COURSE_END_DATE("courseEndDate", "Ngày kết thúc", "Khóa học"),
-    COURSE_PERIOD("coursePeriod", "Thời gian tổ chức", "Khóa học"),
-    COURSE_LOCATION("courseLocation", "Địa điểm", "Khóa học");
+    COURSE_NAME("courseName", "Tên khóa", "Khóa huấn luyện"),
+    COURSE_CODE("courseCode", "Mã khóa", "Khóa huấn luyện"),
+    HOST_YEAR("hostYear", "Năm tổ chức", "Khóa huấn luyện"),
+    COURSE_START_DATE("courseStartDate", "Ngày bắt đầu", "Khóa huấn luyện"),
+    COURSE_END_DATE("courseEndDate", "Ngày kết thúc", "Khóa huấn luyện"),
+    COURSE_PERIOD("coursePeriod", "Thời gian tổ chức", "Khóa huấn luyện"),
+    COURSE_LOCATION("courseLocation", "Địa điểm", "Khóa huấn luyện");
 
     private final String key;
     private final String label;
