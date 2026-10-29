@@ -39,3 +39,6 @@ out/
 .idea/
 
 .env*
+
+# Ảnh lưu cục bộ (provider "local" khi phát triển)
+/uploads/media/

@@ -113,6 +113,7 @@ public class globalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<apiResponse<Void>> handleGenericException(Exception exception) {
+        org.slf4j.LoggerFactory.getLogger(globalExceptionHandler.class).error("Lỗi không xác định", exception);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(apiResponse.error("Hệ thống tạm thời không khả dụng", errorCode.INTERNAL_ERROR.name()));
     }

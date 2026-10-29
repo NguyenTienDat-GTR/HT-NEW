@@ -38,7 +38,9 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
                 || path.startsWith("/api/v3")
                 || path.startsWith("/api/actuator")
                 // Kiểm tra phiên được gọi liên tục khi tải trang; bị 429 sẽ làm người dùng bị đá ra đăng nhập.
-                || path.equals("/api/auth/me");
+                || path.equals("/api/auth/me")
+                // Phát ảnh đã ký: một trang danh sách có thể tải hàng trăm ảnh nhỏ; đã có đăng nhập + chữ ký bảo vệ.
+                || ("GET".equals(request.getMethod()) && path.startsWith("/api/media/"));
     }
 
     @Override

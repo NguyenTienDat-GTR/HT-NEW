@@ -56,6 +56,12 @@ dependencies {
     // Sinh mã QR chứa mã chứng nhận (chỉ khi bố cục có phần tử QR), vẽ dạng vector vào PDF.
     implementation 'com.google.zxing:core:3.5.3'
 
+    // Lưu ảnh trên cloud (Cloudinary) + xử lý ảnh (resize, nén) phía server.
+    implementation 'com.cloudinary:cloudinary-http5:2.6.0'
+    implementation 'net.coobird:thumbnailator:0.4.21'
+    implementation 'com.twelvemonkeys.imageio:imageio-jpeg:3.15.3'
+    implementation 'com.twelvemonkeys.imageio:imageio-webp:3.15.3'
+
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
