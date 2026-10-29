@@ -1,5 +1,6 @@
 package phucuong.ht.modules.auth.controller;
 
+import phucuong.ht.modules.auth.model.request.MyProfileUpdateRequest;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -48,6 +49,12 @@ public class AccountSelfServiceController {
     @GetMapping("/me/profile")
     public apiResponse<MyProfileResponse> profile(Authentication authentication) {
         return apiResponse.success("Lấy hồ sơ cá nhân thành công", myProfileService.currentProfile(authentication));
+    }
+
+    /** Tự sửa thông tin cá nhân (không gồm giáo xứ / giáo hạt). Email và SĐT chỉ kiểm tra trùng khi đổi. */
+    @PutMapping("/me/profile")
+    public apiResponse<MyProfileResponse> updateProfile(@Valid @RequestBody MyProfileUpdateRequest request, Authentication authentication) {
+        return apiResponse.success("Cập nhật hồ sơ cá nhân thành công", myProfileService.updateProfile(request, authentication));
     }
 
     @PutMapping("/me/email")

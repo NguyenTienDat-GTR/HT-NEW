@@ -1,5 +1,9 @@
 package phucuong.ht.modules.auth.service;
 
+import java.time.Duration;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import phucuong.ht.modules.auth.model.request.MyProfileUpdateRequest;
+import phucuong.ht.modules.leader.model.request.LeaderSelfUpdateRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -36,6 +40,10 @@ public class MyProfileService {
     private final CertificateService certificateService;
     private final CertificateConfigService certificateConfigService;
     private final AccountEmailResolver emailResolver;
+    private final PasswordEncoder passwordEncoder;
+    private final phucuong.ht.modules.leader.repository.LeaderRepository leaderRepository;
+    private final PasswordOtpStore otpStore;
+    private final phucuong.ht.common.utils.securityUtils securityUtils;
 
     @Transactional(readOnly = true)
     public MyProfileResponse currentProfile(Authentication authentication) {
@@ -52,6 +60,53 @@ public class MyProfileService {
                 .rankHistory(leaderId == null ? List.of() : leaderService.findRankHistory(leaderId))
                 .certificates(leaderId == null ? List.of() : certificateService.findByLeader(leaderId, authentication))
                 .build();
+    }
+
+    /**
+     * Tự sửa thông tin cá nhân của Huynh Trưởng gắn với tài khoản (không gồm giáo xứ / giáo hạt / cấp độ).
+     * Đổi email phải nhập đúng mật khẩu hiện tại vì email nhận OTP đổi / quên mật khẩu; sai nhiều lần bị khóa tạm.
+     */
+    public MyProfileResponse updateProfile(MyProfileUpdateRequest request, Authentication authentication) {
+        Account account = requireAccount(authentication);
+        if (account.getLeader() == null) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, errorCode.VALIDATION_ERROR,
+                    "Tài khoản này không gắn hồ sơ Huynh Trưởng nên không có thông tin cá nhân để sửa");
+        }
+        UUID leaderId = account.getLeader().getId();
+        String requestedEmail = request.getEmail() == null ? null : request.getEmail().trim();
+        // Đọc email hiện tại bằng truy vấn riêng: quan hệ leader của account là lazy và hàm này không chạy trong giao dịch.
+        String currentEmail = leaderRepository.findById(leaderId).map(phucuong.ht.modules.leader.model.entity.Leader::getEmail).orElse(null);
+        if (StringUtils.hasText(requestedEmail) && !requestedEmail.equals(currentEmail)) {
+            requireCurrentPassword(account, request.getCurrentPassword());
+        }
+
+        LeaderSelfUpdateRequest changes = new LeaderSelfUpdateRequest();
+        changes.setHolyName(request.getHolyName());
+        changes.setFullName(request.getFullName());
+        changes.setBirthDate(request.getBirthDate());
+        changes.setGender(request.getGender());
+        changes.setEmail(request.getEmail());
+        changes.setPhoneNumber(request.getPhoneNumber());
+        changes.setImageAssetId(request.getImageAssetId());
+        changes.setClearImage(request.getClearImage());
+        leaderService.updateOwnProfile(leaderId, changes, securityUtils.currentAuditActor(authentication));
+        return currentProfile(authentication);
+    }
+
+    private void requireCurrentPassword(Account account, String currentPassword) {
+        String username = account.getUsername();
+        if (otpStore.oldPasswordFailures(username) >= PasswordChangeService.MAX_OLD_PASSWORD_FAILURES) {
+            throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, errorCode.VALIDATION_ERROR,
+                    "Bạn đã nhập sai mật khẩu hiện tại quá nhiều lần, vui lòng thử lại sau 15 phút");
+        }
+        if (!StringUtils.hasText(currentPassword)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, errorCode.VALIDATION_ERROR, "Vui lòng nhập mật khẩu hiện tại để đổi email");
+        }
+        if (!passwordEncoder.matches(currentPassword, account.getPassword())) {
+            otpStore.recordOldPasswordFailure(username, Duration.ofMinutes(15));
+            throw new ApiException(HttpStatus.BAD_REQUEST, errorCode.VALIDATION_ERROR, "Mật khẩu hiện tại không chính xác");
+        }
+        otpStore.clearOldPasswordFailures(username);
     }
 
     /** Chi tiết một chứng nhận của chính mình; từ chối nếu chứng nhận không thuộc Huynh Trưởng của tài khoản. */
