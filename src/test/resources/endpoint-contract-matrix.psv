@@ -28,6 +28,7 @@ GET /api/auth/me/profile|200|401|N/A: authenticated caller reads only its own pr
 GET /api/auth/me/permissions|200|401|N/A: authenticated caller reads only the permissions of its own account|N/A: endpoint accepts no client request data|N/A: current authenticated account is resolved from the session|N/A: read-only endpoint does not mutate state
 GET /api/auth/me/permissions/filter-options|200|401|N/A: authenticated caller reads only the filter values of its own permissions|N/A: endpoint accepts no client request data|N/A: current authenticated account is resolved from the session|N/A: read-only endpoint does not mutate state
 PUT /api/auth/me/email|200|401|N/A: authenticated caller changes only the email of its own account|400|N/A: current authenticated account is resolved from the session|N/A: emails are not unique so there is no conflict
+PUT /api/auth/me/profile|200|401|N/A: any authenticated account edits only its own linked profile|400|N/A: the profile is resolved from the authenticated account|409
 GET /api/auth/me/certificates/{certificateCode}|200|401|N/A: ownership is enforced by returning 404 for certificates of other leaders|N/A: path variable is the only client input|404|N/A: read-only endpoint does not mutate state
 GET /api/auth/me/certificates/{certificateCode}/preview|200|401|N/A: ownership is enforced by returning 404 for certificates of other leaders|N/A: path variable is the only client input|404|N/A: read-only endpoint does not mutate state
 POST /api/auth/password/otp|200|401|N/A: authenticated caller requests an OTP only for its own account|400|N/A: current authenticated account is resolved from the session|N/A: resend cooldown is reported as 429 rather than a conflict
@@ -293,3 +294,11 @@ GET /api/training/courses/{courseCode}/attendance/participants/{participationId}
 POST /api/training/attendance/scan|200|401|403|400|404|409
 POST /api/training/attendance/lookup|200|401|403|400|404|409
 GET /api/search/quick|200|401|N/A: any authenticated account may search; results are filtered per permission and scope|400|N/A: search endpoint has no individual resource lookup|N/A: read-only search does not mutate state
+
+# Media (ảnh lưu trên cloud, phát qua URL đã ký)
+POST /api/media|200|401|403|400|N/A: the target record is attached later by the owning module|N/A: each upload creates an independent pending asset
+GET /api/media/{assetId}/{variant}|200|401|403|N/A: path variables are validated by the signed URL check (403)|404|N/A: read-only endpoint does not mutate state
+GET /api/media/albums/{kind}|200|401|403|N/A: kind is validated as an enum and the unit comes from the account|N/A: the unit's own album always exists|N/A: read-only endpoint does not mutate state
+POST /api/media/albums/{kind}|200|401|403|400|N/A: the album is resolved from the authenticated unit|409
+DELETE /api/media/albums/{kind}/{itemId}|200|401|403|N/A: path identifiers are validated UUIDs and enum|404|N/A: deleting an album image has no conflicting state
+GET /api/media/admin/status|200|401|403|N/A: endpoint has no request parameters to validate|N/A: aggregate endpoint has no individual resource lookup|N/A: read-only endpoint does not mutate state
