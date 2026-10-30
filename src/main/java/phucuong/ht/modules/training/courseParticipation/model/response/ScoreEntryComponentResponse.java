@@ -10,7 +10,6 @@ import java.math.BigDecimal;
 @Builder
 public class ScoreEntryComponentResponse {
     private String id;
-    private String code;
     private String name;
     private BigDecimal maxScore;
     private BigDecimal coefficient;

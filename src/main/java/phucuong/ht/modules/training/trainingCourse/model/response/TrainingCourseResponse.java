@@ -35,6 +35,8 @@ public class TrainingCourseResponse {
     private Integer maxYearsAfterPrerequisite;
     // Chỉ có ở chi tiết/cập nhật khóa: đã có hồ sơ tham gia thì khóa các trường loại khóa, năm tổ chức, số năm hoạt động, điểm đạt.
     private Boolean hasParticipations;
+    // Thành phần điểm riêng của khóa (chỉ có ở API chi tiết).
+    private List<phucuong.ht.modules.training.courseScoreComponent.model.response.CourseScoreComponentResponse> scoreComponents;
     // Số tham dự viên đã được duyệt của khóa.
     private Long approvedParticipantCount;
     private Boolean scoreLocked;

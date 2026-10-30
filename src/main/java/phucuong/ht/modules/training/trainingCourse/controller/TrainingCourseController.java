@@ -12,7 +12,6 @@ import phucuong.ht.modules.training.trainingCourse.model.response.CourseStatusIm
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.modules.training.trainingCourse.model.request.CourseRegistrationToggleRequest;
 import phucuong.ht.modules.training.trainingCourse.model.request.CourseScoreLockRequest;
-import phucuong.ht.modules.training.trainingCourse.model.response.CoursePassingScoreLimitResponse;
 import phucuong.ht.modules.training.trainingCourse.model.response.CourseRecipientCandidateResponse;
 import phucuong.ht.modules.training.trainingCourse.model.request.TrainingCourseCreateRequest;
 import phucuong.ht.modules.training.trainingCourse.model.request.TrainingCourseUpdateRequest;
@@ -161,12 +160,6 @@ public class TrainingCourseController {
     @PreAuthorize("@trainingCourseAccessEvaluator.canCreate(authentication, #courseTypeCode)")
     public apiResponse<java.util.List<CourseRecipientCandidateResponse>> recipientCandidates(@RequestParam String courseTypeCode, Authentication authentication) {
         return apiResponse.success("Lấy danh sách tài khoản nhận danh sách đăng ký thành công", trainingCourseService.recipientCandidates(courseTypeCode, authentication));
-    }
-
-    @GetMapping("/passing-score-limit")
-    @PreAuthorize("@trainingCourseAccessEvaluator.canCreate(authentication, #courseTypeCode)")
-    public apiResponse<CoursePassingScoreLimitResponse> passingScoreLimit(@RequestParam String courseTypeCode, Authentication authentication) {
-        return apiResponse.success("Lấy điểm đạt tối đa thành công", trainingCourseService.passingScoreLimit(courseTypeCode, authentication));
     }
 
     @PatchMapping("/{courseCode}/registration")

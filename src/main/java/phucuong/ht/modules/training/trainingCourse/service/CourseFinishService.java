@@ -55,6 +55,8 @@ public class CourseFinishService {
         course.setFinishedAt(now);
         course.setFinishedBy(actor);
         course.setOrganizingStatus(CourseOrganizingStatus.ENDED);
+        // Khóa đã kết thúc thì đóng đăng ký.
+        course.setRegistrationStatus(phucuong.ht.modules.training.enums.CourseRegistrationStatus.ENDED);
         // Chốt điểm: khóa đã kết thúc thì không sửa điểm nữa.
         course.setScoreLocked(Boolean.TRUE);
         course.setUpdatedAt(now);

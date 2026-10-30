@@ -40,7 +40,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class TrainingCourseAttendanceFlagsTest {
 
-    @Mock private phucuong.ht.modules.training.scoreComponentTemplate.repository.ScoreComponentTemplateRepository scoreComponentTemplateRepository;
+    @Mock private phucuong.ht.modules.training.courseScoreComponent.repository.TrainingCourseScoreComponentRepository courseScoreComponentRepository;
+    @Mock private phucuong.ht.modules.training.courseScoreComponent.service.CourseScoreComponentService courseScoreComponentService;
     @Mock private phucuong.ht.modules.notification.service.TrainingNotificationRecipientResolver notificationRecipientResolver;
     @Mock private phucuong.ht.modules.auth.repository.AccountRepository accountRepository;
     @Mock private phucuong.ht.config.DomainEventPublisher domainEventPublisher;
@@ -151,7 +152,8 @@ class TrainingCourseAttendanceFlagsTest {
                 accountScopeValidationHelper,
                 new CommonValidationHelper(new securityUtils()),
                 new securityUtils(),
-                scoreComponentTemplateRepository,
+                courseScoreComponentService,
+                courseScoreComponentRepository,
                 notificationRecipientResolver,
                 accountRepository,
                 domainEventPublisher,

@@ -52,8 +52,8 @@ import phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType;
 import phucuong.ht.modules.training.enums.CourseResult;
 import phucuong.ht.modules.training.enums.ParticipationStatus;
 import phucuong.ht.modules.training.enums.WorkflowApprovalStatus;
-import phucuong.ht.modules.training.scoreComponentTemplate.model.entity.ScoreComponentTemplate;
-import phucuong.ht.modules.training.scoreComponentTemplate.repository.ScoreComponentTemplateRepository;
+import phucuong.ht.modules.training.courseScoreComponent.model.entity.TrainingCourseScoreComponent;
+import phucuong.ht.modules.training.courseScoreComponent.repository.TrainingCourseScoreComponentRepository;
 import phucuong.ht.modules.training.trainingCourse.model.entity.TrainingCourse;
 import phucuong.ht.modules.training.trainingCourse.repository.TrainingCourseRepository;
 
@@ -77,7 +77,7 @@ public class CourseParticipationService {
     private final ParishRepository parishRepository;
     private final DeaneryRepository deaneryRepository;
     private final TrainingWorkflowSupport trainingWorkflowSupport;
-    private final ScoreComponentTemplateRepository scoreComponentTemplateRepository;
+    private final TrainingCourseScoreComponentRepository courseScoreComponentRepository;
     private final AccountScopeValidationHelper accountScopeValidationHelper;
     private final CommonValidationHelper commonValidationHelper;
     private final CertificateRepository certificateRepository;
@@ -116,29 +116,25 @@ public class CourseParticipationService {
             throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền xem hồ sơ đào tạo");
         }
         Page<CourseParticipation> page = courseParticipationRepository.findAll(scoped);
-        return new PageImpl<>(page.getContent().stream().map(this::toResponse).toList(), page.getPageable(), page.getTotalElements());
+        return new PageImpl<>(toResponses(page.getContent()), page.getPageable(), page.getTotalElements());
     }
 
-    // Thành phần điểm áp dụng cho khóa (cùng loại khóa và đơn vị sở hữu) để nhập điểm theo cột.
+    // Thành phần điểm riêng của khóa (bản sao từ thành phần mẫu khi tạo khóa) để nhập điểm theo cột.
     @Transactional(readOnly = true)
     public List<ScoreEntryComponentResponse> findScoreComponents(String courseCode) {
         TrainingCourse course = requireCourse(courseCode);
         if (course.getCourseType() == null) {
             return List.of();
         }
-        return scoreComponentTemplateRepository.findActiveForCourse(
-                        course.getCourseType().getTypeCode(),
-                        course.getDiocese() == null ? null : course.getDiocese().getId(),
-                        course.getDeanery() == null ? null : course.getDeanery().getId())
+        return courseScoreComponentRepository.findByCourseCode(courseCode)
                 .stream()
-                .map(component -> ScoreEntryComponentResponse.builder()
-                        .id(component.getId())
-                        .code(component.getCode())
-                        .name(component.getName())
-                        .maxScore(component.getMaxScore())
-                        .coefficient(component.getCoefficient())
-                        .includeInFinal(component.getIncludeInFinal())
-                        .displayOrder(component.getDisplayOrder())
+                .map(item -> ScoreEntryComponentResponse.builder()
+                        .id(item.getId())
+                        .name(item.getName())
+                        .maxScore(item.getMaxScore())
+                        .coefficient(item.getCoefficient())
+                        .includeInFinal(item.getIncludeInFinal())
+                        .displayOrder(item.getDisplayOrder())
                         .build())
                 .toList();
     }
@@ -507,7 +503,7 @@ public class CourseParticipationService {
         if (Boolean.TRUE.equals(participation.getCourse().getScoreLocked())) {
             throw commonValidationHelper.conflict("Điểm của khóa đang bị khóa chỉnh sửa, cần mở khóa trước khi nhập điểm");
         }
-        List<ScoreComponentTemplate> components = requireScoreComponents(participation);
+        List<TrainingCourseScoreComponent> components = requireScoreComponents(participation);
         Map<String, ComponentScoreRequest> requestedScores = normalizeComponentScores(request.getComponentScores());
 
         // Cập nhật tại chỗ các dòng điểm đã có (không xóa rồi thêm lại): Hibernate chèn trước khi xóa nên sẽ vi phạm
@@ -523,7 +519,8 @@ public class CourseParticipationService {
         BigDecimal coefficientSum = BigDecimal.ZERO;
         // Cho phép lưu riêng từng cột điểm: thành phần không gửi lên thì giữ nguyên điểm đã lưu (nếu có).
         boolean allComponentsScored = true;
-        for (ScoreComponentTemplate component : components) {
+        for (TrainingCourseScoreComponent courseComponent : components) {
+            TrainingCourseScoreComponent component = courseComponent;
             applicableComponentIds.add(component.getId());
             ComponentScoreRequest componentRequest = requestedScores.remove(component.getId());
             CourseParticipationComponentScore persistedScore = existingScores.get(component.getId());
@@ -531,7 +528,7 @@ public class CourseParticipationService {
             if (componentRequest == null) {
                 effectiveScore = persistedScore == null ? null : persistedScore.getScore();
             } else {
-                if (componentRequest.getScore().compareTo(component.getMaxScore()) > 0) {
+                if (componentRequest.getScore().compareTo(courseComponent.getMaxScore()) > 0) {
                     throw commonValidationHelper.validationError("Điểm vượt quá điểm tối đa của thành phần " + component.getName());
                 }
                 if (persistedScore == null) {
@@ -553,9 +550,9 @@ public class CourseParticipationService {
                 allComponentsScored = false;
                 continue;
             }
-            if (Boolean.TRUE.equals(component.getIncludeInFinal())) {
-                weightedSum = weightedSum.add(effectiveScore.multiply(component.getCoefficient()));
-                coefficientSum = coefficientSum.add(component.getCoefficient());
+            if (Boolean.TRUE.equals(courseComponent.getIncludeInFinal())) {
+                weightedSum = weightedSum.add(effectiveScore.multiply(courseComponent.getCoefficient()));
+                coefficientSum = coefficientSum.add(courseComponent.getCoefficient());
             }
         }
         if (!requestedScores.isEmpty()) {
@@ -670,17 +667,13 @@ public class CourseParticipationService {
         return toResponse(participation);
     }
 
-    private List<ScoreComponentTemplate> requireScoreComponents(CourseParticipation participation) {
+    private List<TrainingCourseScoreComponent> requireScoreComponents(CourseParticipation participation) {
         if (participation.getCourse() == null || participation.getCourse().getCourseType() == null) {
             throw commonValidationHelper.validationError("Khóa huấn luyện chưa có loại khóa");
         }
-        var course = participation.getCourse();
-        List<ScoreComponentTemplate> components = scoreComponentTemplateRepository.findActiveForCourse(
-                course.getCourseType().getTypeCode(),
-                course.getDiocese() == null ? null : course.getDiocese().getId(),
-                course.getDeanery() == null ? null : course.getDeanery().getId());
+        List<TrainingCourseScoreComponent> components = courseScoreComponentRepository.findByCourseCode(participation.getCourse().getCourseCode());
         if (components.isEmpty()) {
-            throw commonValidationHelper.validationError("Loại khóa của khóa huấn luyện chưa có thành phần điểm nào");
+            throw commonValidationHelper.validationError("Khóa huấn luyện chưa có thành phần điểm nào");
         }
         return components;
     }
@@ -770,6 +763,9 @@ public class CourseParticipationService {
         }
         if (now.isAfter(course.getRegistrationEndAt())) {
             throw commonValidationHelper.validationError("Đã hết thời gian nhận đăng ký");
+        }
+        if (TrainingCourseStatusSupport.isCourseEnded(course, now)) {
+            throw commonValidationHelper.validationError("Khóa huấn luyện đã kết thúc nên đã đóng đăng ký");
         }
         if (TrainingCourseStatusSupport.registrationStatus(course, now) == CourseRegistrationStatus.CLOSED) {
             throw commonValidationHelper.validationError("Khóa huấn luyện đang đóng đăng ký");
@@ -983,7 +979,7 @@ public class CourseParticipationService {
                 .totalCount(total)
                 .autoApprovedCount(autoApprovedCount)
                 .pendingCount(pendingCount)
-                .participations(participations.stream().map(this::toResponse).toList())
+                .participations(toResponses(participations))
                 .build();
     }
 
@@ -1105,7 +1101,17 @@ public class CourseParticipationService {
         return LocalDate.now().getYear();
     }
 
+    // Nhiều hồ sơ cùng khóa dùng chung một lần tải thành phần điểm của khóa (tránh truy vấn lặp theo từng hồ sơ).
+    private List<CourseParticipationResponse> toResponses(List<CourseParticipation> participations) {
+        Map<String, Map<String, TrainingCourseScoreComponent>> cache = new HashMap<>();
+        return participations.stream().map(participation -> toResponse(participation, cache)).toList();
+    }
+
     private CourseParticipationResponse toResponse(CourseParticipation participation) {
+        return toResponse(participation, new HashMap<>());
+    }
+
+    private CourseParticipationResponse toResponse(CourseParticipation participation, Map<String, Map<String, TrainingCourseScoreComponent>> componentCache) {
         boolean showScores = courseScoreVisibility == null || courseScoreVisibility.canSeeScores(participation.getCourse());
         return CourseParticipationResponse.builder()
                 .id(participation.getId())
@@ -1172,24 +1178,41 @@ public class CourseParticipationService {
                 .leaderGender(participation.getLeader() == null || participation.getLeader().getGender() == null ? null : participation.getLeader().getGender().name())
                 .approvedByName(auditActorNameResolver.resolve(participation.getApprovedBy()))
                 // Thành phần điểm đã bị vô hiệu hóa không hiển thị (khớp với danh sách cột ở /score-components).
-                .componentScores(!showScores ? List.<ComponentScoreResponse>of() : participation.getComponentScores().stream()
-                        .filter(score -> score.getComponent() != null && Boolean.TRUE.equals(score.getComponent().getStatus()))
-                        .sorted(Comparator.comparing(score -> score.getComponent().getDisplayOrder(), Comparator.nullsLast(Integer::compareTo)))
-                        .map(score -> ComponentScoreResponse.builder()
-                                .id(score.getId())
-                                .componentId(score.getComponent() == null ? null : score.getComponent().getId())
-                                .componentCode(score.getComponent() == null ? null : score.getComponent().getCode())
-                                .componentName(score.getComponent() == null ? null : score.getComponent().getName())
-                                .maxScore(score.getComponent() == null ? null : score.getComponent().getMaxScore())
-                                .coefficient(score.getComponent() == null ? null : score.getComponent().getCoefficient())
-                                .includeInFinal(score.getComponent() == null ? null : score.getComponent().getIncludeInFinal())
-                                .score(score.getScore())
-                                .note(score.getNote())
-                                .displayOrder(score.getComponent() == null ? null : score.getComponent().getDisplayOrder())
-                                .build())
-                        .toList())
+                .componentScores(!showScores ? List.<ComponentScoreResponse>of() : componentScoreResponses(participation, componentCache))
                 .status(participation.getStatus())
                 .build();
+    }
+
+    // Điểm thành phần của hồ sơ, chỉ gồm các thành phần đang thuộc khóa; điểm tối đa/hệ số lấy theo giá trị riêng của khóa.
+    private List<ComponentScoreResponse> componentScoreResponses(CourseParticipation participation, Map<String, Map<String, TrainingCourseScoreComponent>> componentCache) {
+        if (participation.getCourse() == null) {
+            return List.of();
+        }
+        Map<String, TrainingCourseScoreComponent> byComponentId = componentCache.computeIfAbsent(participation.getCourse().getCourseCode(), code -> {
+            Map<String, TrainingCourseScoreComponent> loaded = new HashMap<>();
+            for (TrainingCourseScoreComponent item : courseScoreComponentRepository.findByCourseCode(code)) {
+                loaded.put(item.getId(), item);
+            }
+            return loaded;
+        });
+        return participation.getComponentScores().stream()
+                .filter(score -> score.getComponent() != null && byComponentId.containsKey(score.getComponent().getId()))
+                .sorted(Comparator.comparing(score -> byComponentId.get(score.getComponent().getId()).getDisplayOrder(), Comparator.nullsLast(Integer::compareTo)))
+                .map(score -> {
+                    TrainingCourseScoreComponent courseComponent = byComponentId.get(score.getComponent().getId());
+                    return ComponentScoreResponse.builder()
+                            .id(score.getId())
+                            .componentId(score.getComponent().getId())
+                            .componentName(courseComponent.getName())
+                            .maxScore(courseComponent.getMaxScore())
+                            .coefficient(courseComponent.getCoefficient())
+                            .includeInFinal(courseComponent.getIncludeInFinal())
+                            .score(score.getScore())
+                            .note(score.getNote())
+                            .displayOrder(courseComponent.getDisplayOrder())
+                            .build();
+                })
+                .toList();
     }
 
     private String buildFullName(phucuong.ht.modules.leader.model.entity.Leader leader) {

@@ -17,10 +17,9 @@ import phucuong.ht.modules.auth.repository.AccountRepository;
 import phucuong.ht.modules.auth.repository.AccountRoleRepository;
 import phucuong.ht.modules.notification.service.TrainingNotificationRecipientResolver;
 import phucuong.ht.modules.training.courseParticipation.security.CourseParticipationAccessEvaluator;
-import phucuong.ht.modules.training.scoreComponentTemplate.model.entity.ScoreComponentTemplate;
-import phucuong.ht.modules.training.scoreComponentTemplate.repository.ScoreComponentTemplateRepository;
+import phucuong.ht.modules.training.courseScoreComponent.repository.TrainingCourseScoreComponentRepository;
+import phucuong.ht.modules.training.courseScoreComponent.service.CourseScoreComponentService;
 import phucuong.ht.modules.training.trainingCourse.model.request.CourseRegistrationToggleRequest;
-import phucuong.ht.modules.training.trainingCourse.model.response.CoursePassingScoreLimitResponse;
 import phucuong.ht.modules.training.trainingCourse.model.response.CourseRecipientCandidateResponse;
 import phucuong.ht.config.EvictCaches;
 import phucuong.ht.modules.certificate.model.entity.Certificate;
@@ -80,7 +79,8 @@ public class TrainingCourseService {
     private final AccountScopeValidationHelper accountScopeValidationHelper;
     private final CommonValidationHelper commonValidationHelper;
     private final securityUtils securityUtils;
-    private final ScoreComponentTemplateRepository scoreComponentTemplateRepository;
+    private final CourseScoreComponentService courseScoreComponentService;
+    private final TrainingCourseScoreComponentRepository courseScoreComponentRepository;
     private final TrainingNotificationRecipientResolver notificationRecipientResolver;
     private final AccountRepository accountRepository;
     private final DomainEventPublisher domainEventPublisher;
@@ -132,12 +132,14 @@ public class TrainingCourseService {
         validateRegistrationWindow(course.getRegistrationStartAt(), course.getRegistrationEndAt());
         applyOwnerScope(course, courseType, authentication);
         course.setPassingScore(request.getPassingScore());
-        requirePassingScoreWithinLimit(course);
+        courseScoreComponentService.validateInputs(request.getScoreComponents());
+        requirePassingScoreWithinLimit(course, CourseScoreComponentService.maxFinalOfInputs(request.getScoreComponents()));
         applyRecipients(course, request.getRecipientUsernames());
         applyTargetDeaneries(course, request.getTargetDeaneryIds());
         applyOpenToOtherDeaneries(course, request.getOpenToOtherDeaneries());
         TrainingCourseStatusSupport.refresh(course, now);
         trainingCourseRepository.save(course);
+        courseScoreComponentService.sync(course, request.getScoreComponents(), auditActor);
         if (Boolean.TRUE.equals(course.getOpenToOtherDeaneries()) && crossDeaneryAccessService != null) {
             crossDeaneryAccessService.notifyCourseOpened(course, auditActor);
         }
@@ -322,7 +324,10 @@ public class TrainingCourseService {
         existing.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật khóa huấn luyện"));
         validateRegistrationWindow(existing.getRegistrationStartAt(), existing.getRegistrationEndAt());
         applyOwnerScope(existing, targetType, authentication);
-        requirePassingScoreWithinLimit(existing);
+        if (request.getScoreComponents() != null) {
+            courseScoreComponentService.sync(existing, request.getScoreComponents(), existing.getUpdatedBy());
+        }
+        requirePassingScoreWithinLimit(existing, CourseScoreComponentService.maxFinalOfCourse(courseScoreComponentRepository.findByCourseCode(courseCode)));
         TrainingCourseStatusSupport.refresh(existing, OffsetDateTime.now());
         if (request.getRecipientUsernames() != null) {
             applyRecipients(existing, request.getRecipientUsernames());
@@ -526,6 +531,9 @@ public class TrainingCourseService {
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy khóa huấn luyện " + courseCode));
         courseActivityGuard.requireActive(course);
         OffsetDateTime now = OffsetDateTime.now();
+        if (TrainingCourseStatusSupport.isCourseEnded(course, now)) {
+            throw commonValidationHelper.conflict("Khóa huấn luyện đã kết thúc nên đăng ký phải đóng và không thể mở lại");
+        }
         CourseRegistrationStatus current = TrainingCourseStatusSupport.registrationStatus(course, now);
         if (current == CourseRegistrationStatus.ENDED) {
             throw commonValidationHelper.conflict("Đã hết thời gian đăng ký, hãy gia hạn thời gian đăng ký trước khi mở lại");
@@ -618,50 +626,12 @@ public class TrainingCourseService {
                 .toList();
     }
 
-    @Transactional(readOnly = true)
-    public CoursePassingScoreLimitResponse passingScoreLimit(String courseTypeCode, Authentication authentication) {
-        TrainingCourseType courseType = resolveCourseType(courseTypeCode, authentication);
-        boolean deanery = trainingWorkflowSupport.isDeaneryManaged(courseType);
-        UUID dioceseId = null;
-        UUID deaneryId = null;
-        if (deanery) {
-            deaneryId = accountScopeValidationHelper.requireActiveDeaneryId(authentication, TrainingCourseAccessEvaluator.CREATE_DEANERY);
-        } else {
-            dioceseId = accountScopeValidationHelper.requireActiveDioceseId(authentication, TrainingCourseAccessEvaluator.CREATE_DIOCESE);
-        }
-        List<ScoreComponentTemplate> components = scoreComponentTemplateRepository.findActiveForCourse(courseType.getTypeCode(), dioceseId, deaneryId);
-        return CoursePassingScoreLimitResponse.builder()
-                .maxPassingScore(maxFinalScore(components))
-                .componentCount(components.size())
-                .build();
-    }
-
-    // Điểm tổng kết tối đa = trung bình có hệ số của điểm tối đa các thành phần được tính vào điểm tổng kết.
-    private java.math.BigDecimal maxFinalScore(List<ScoreComponentTemplate> components) {
-        java.math.BigDecimal weighted = java.math.BigDecimal.ZERO;
-        java.math.BigDecimal coefficients = java.math.BigDecimal.ZERO;
-        for (ScoreComponentTemplate component : components) {
-            if (Boolean.TRUE.equals(component.getIncludeInFinal())) {
-                weighted = weighted.add(component.getMaxScore().multiply(component.getCoefficient()));
-                coefficients = coefficients.add(component.getCoefficient());
-            }
-        }
-        if (coefficients.signum() <= 0) {
-            return null;
-        }
-        return weighted.divide(coefficients, 2, java.math.RoundingMode.HALF_UP);
-    }
-
-    private void requirePassingScoreWithinLimit(TrainingCourse course) {
+    private void requirePassingScoreWithinLimit(TrainingCourse course, java.math.BigDecimal limit) {
         if (course.getPassingScore() == null || course.getCourseType() == null) {
             return;
         }
-        java.math.BigDecimal limit = maxFinalScore(scoreComponentTemplateRepository.findActiveForCourse(
-                course.getCourseType().getTypeCode(),
-                course.getDiocese() == null ? null : course.getDiocese().getId(),
-                course.getDeanery() == null ? null : course.getDeanery().getId()));
         if (limit != null && course.getPassingScore().compareTo(limit) > 0) {
-            throw commonValidationHelper.validationError("Điểm đạt không được lớn hơn điểm tối đa của loại khóa (" + limit.stripTrailingZeros().toPlainString() + ")");
+            throw commonValidationHelper.validationError("Điểm đạt không được lớn hơn điểm tối đa của các thành phần điểm của khóa (" + limit.stripTrailingZeros().toPlainString() + ")");
         }
     }
 
@@ -806,7 +776,11 @@ public class TrainingCourseService {
         if (course.getStartDate() == null || TrainingCourseStatusSupport.today().isBefore(course.getStartDate())) {
             throw commonValidationHelper.conflict("Khóa huấn luyện chưa diễn ra nên chưa thể kết thúc");
         }
+        boolean registrationWasOpen = course.getRegistrationStatus() == CourseRegistrationStatus.OPEN;
         courseFinishService.finish(course, actor, OffsetDateTime.now());
+        if (registrationWasOpen) {
+            publishRegistrationEvent(course, false, "COURSE_FINISHED", actor);
+        }
         publishCourseFinishedEvent(course, "MANUAL", actor);
         return toResponse(course, courseParticipationRepository.existsByCourseCode(courseCode));
     }
@@ -869,6 +843,7 @@ public class TrainingCourseService {
                 .hostYear(course.getHostYear())
                 .yearsActive(course.getYearsActive() == null ? 0 : course.getYearsActive())
                 .hasParticipations(hasParticipations)
+                .scoreComponents(hasParticipations == null ? null : courseScoreComponentService.list(course.getCourseCode()))
                 .requiredCurrentLevelName(hasParticipations != null && courseType != null && courseType.getRequiredCurrentLevel() != null
                         ? leaderLevelService.order(trainingWorkflowSupport.dioceseIdOf(course)).nameOf(courseType.getRequiredCurrentLevel()) : null)
                 .requiredMinAge(hasParticipations != null && courseType != null ? courseType.getRequiredMinAge() : null)
