@@ -425,6 +425,7 @@ public class AccountManagementService {
     private AccountResponse response(Account account) {
         Leader leader = account.getLeader();
         List<AccountRole> activeRoles = activeRoleAssignments(account.getUsername());
+        AccountUnits units = AccountUnits.of(account, leader);
         return AccountResponse.builder()
                 .username(account.getUsername())
                 .leaderId(leader == null ? null : leader.getId())
@@ -435,12 +436,12 @@ public class AccountManagementService {
                 .roleCodes(roleCodes(activeRoles))
                 .roleNames(roleNames(activeRoles))
                 .secondaryRoleNames(secondaryRoleNames(activeRoles))
-                .dioceseId(resolveDioceseId(account, leader))
-                .dioceseName(resolveDioceseName(account, leader))
-                .deaneryId(resolveDeaneryId(account, leader))
-                .deaneryName(resolveDeaneryName(account, leader))
-                .parishId(resolveParishId(account, leader))
-                .parishName(resolveParishName(account, leader))
+                .dioceseId(units.dioceseId())
+                .dioceseName(units.dioceseName())
+                .deaneryId(units.deaneryId())
+                .deaneryName(units.deaneryName())
+                .parishId(units.parishId())
+                .parishName(units.parishName())
                 .authProvider(account.getAuthProvider())
                 .providerId(account.getProviderId())
                 .status(account.getStatus())
@@ -602,66 +603,6 @@ public class AccountManagementService {
         if (accountRole == null || accountRole.getRole() == null) return null;
         Role role = accountRole.getRole();
         return role.getRoleName() == null || role.getRoleName().isBlank() ? role.getRoleCode() : role.getRoleName();
-    }
-
-    private UUID resolveDioceseId(Account account, Leader leader) {
-        if (account.getDiocese() != null) {
-            return account.getDiocese().getId();
-        }
-        if (leader == null || leader.getParish() == null || leader.getParish().getDeanery() == null || leader.getParish().getDeanery().getDiocese() == null) {
-            return null;
-        }
-        return leader.getParish().getDeanery().getDiocese().getId();
-    }
-
-    private String resolveDioceseName(Account account, Leader leader) {
-        if (account.getDiocese() != null) {
-            return account.getDiocese().getName();
-        }
-        if (leader == null || leader.getParish() == null || leader.getParish().getDeanery() == null || leader.getParish().getDeanery().getDiocese() == null) {
-            return null;
-        }
-        return leader.getParish().getDeanery().getDiocese().getName();
-    }
-
-    private UUID resolveDeaneryId(Account account, Leader leader) {
-        if (account.getDeanery() != null) {
-            return account.getDeanery().getId();
-        }
-        if (leader == null || leader.getParish() == null || leader.getParish().getDeanery() == null) {
-            return null;
-        }
-        return leader.getParish().getDeanery().getId();
-    }
-
-    private String resolveDeaneryName(Account account, Leader leader) {
-        if (account.getDeanery() != null) {
-            return account.getDeanery().getName();
-        }
-        if (leader == null || leader.getParish() == null || leader.getParish().getDeanery() == null) {
-            return null;
-        }
-        return leader.getParish().getDeanery().getName();
-    }
-
-    private UUID resolveParishId(Account account, Leader leader) {
-        if (account.getParish() != null) {
-            return account.getParish().getId();
-        }
-        if (leader == null || leader.getParish() == null) {
-            return null;
-        }
-        return leader.getParish().getId();
-    }
-
-    private String resolveParishName(Account account, Leader leader) {
-        if (account.getParish() != null) {
-            return account.getParish().getName();
-        }
-        if (leader == null || leader.getParish() == null) {
-            return null;
-        }
-        return leader.getParish().getName();
     }
 
     private String buildFullName(Leader leader) {
