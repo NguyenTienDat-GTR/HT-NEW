@@ -1,6 +1,7 @@
 package phucuong.ht.modules.certificate.config.repository;
 
 import jakarta.persistence.EntityManager;
+import phucuong.ht.common.layoutconfig.LayoutConfigStore;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 import phucuong.ht.common.repository.BaseRepo;
@@ -12,7 +13,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-public class CertificateConfigRepository extends BaseRepo<CertificateConfig, UUID> {
+public class CertificateConfigRepository extends BaseRepo<CertificateConfig, UUID> implements LayoutConfigStore<CertificateConfig> {
 
     public CertificateConfigRepository(EntityManager entityManager) {
         super(entityManager, CertificateConfig.class);

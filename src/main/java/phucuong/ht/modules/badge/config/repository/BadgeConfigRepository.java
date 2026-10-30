@@ -1,6 +1,7 @@
 package phucuong.ht.modules.badge.config.repository;
 
 import jakarta.persistence.EntityManager;
+import phucuong.ht.common.layoutconfig.LayoutConfigStore;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 import phucuong.ht.common.repository.BaseRepo;
@@ -12,7 +13,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-public class BadgeConfigRepository extends BaseRepo<BadgeConfig, UUID> {
+public class BadgeConfigRepository extends BaseRepo<BadgeConfig, UUID> implements LayoutConfigStore<BadgeConfig> {
 
     public BadgeConfigRepository(EntityManager entityManager) {
         super(entityManager, BadgeConfig.class);

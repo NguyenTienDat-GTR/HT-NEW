@@ -187,9 +187,7 @@ public class CertificateConfigService {
     }
 
     private List<CertificateConfig> visibleConfigs(ActorScope actor) {
-        return actor.usableKeys() == null
-                ? configRepository.findAllConfigs()
-                : configRepository.findByScopeKeys(actor.usableKeys());
+        return LayoutConfigRules.visible(configRepository, actor);
     }
 
     // Cấu hình hiệu lực của một loại khóa theo phạm vi người xem (fallback cấu hình chung), có thể rỗng.
@@ -251,20 +249,7 @@ public class CertificateConfigService {
         String audit = securityUtils.currentAuditActor(authentication);
         OffsetDateTime now = OffsetDateTime.now();
 
-        if (!Boolean.TRUE.equals(config.getIsDefault())) {
-            configRepository.findDefault(config.getScopeKey()).ifPresent(current -> {
-                current.setIsDefault(Boolean.FALSE);
-                current.setUpdatedAt(now);
-                current.setUpdatedBy(audit);
-                configRepository.merge(current);
-            });
-            // Chỉ mục duy nhất một cấu hình chung mỗi phạm vi: bỏ cờ cũ xuống DB trước khi đặt cờ mới.
-            configRepository.flush();
-            config.setIsDefault(Boolean.TRUE);
-            config.setUpdatedAt(now);
-            config.setUpdatedBy(audit);
-            config = configRepository.merge(config);
-        }
+        config = LayoutConfigRules.makeDefault(configRepository, config, audit, now);
         return toResponse(config, actor, usageByConfig(actor, authentication).getOrDefault(id, List.of()));
     }
 
@@ -275,10 +260,7 @@ public class CertificateConfigService {
     public void delete(UUID id, Authentication authentication) {
         ActorScope actor = scopeResolver.resolve(authentication);
         CertificateConfig config = requireEditable(id, actor);
-        if (Boolean.TRUE.equals(config.getIsDefault())) {
-            throw validationHelper.conflict(
-                    "Không thể xóa cấu hình chung. Hãy chọn một cấu hình khác làm cấu hình chung trước khi xóa.");
-        }
+        LayoutConfigRules.requireNotDefault(config, validationHelper);
         mediaAssetService.release(config.getBackgroundAssetId());
         configRepository.remove(config.getId());
     }
@@ -327,13 +309,7 @@ public class CertificateConfigService {
     }
 
     private CertificateConfig requireEditable(UUID id, ActorScope actor) {
-        CertificateConfig config = configRepository.findById(id)
-                .filter(c -> actor.canSee(c.getScopeKey()))
-                .orElseThrow(() -> validationHelper.notFound("Không tìm thấy cấu hình chứng nhận"));
-        if (!actor.canEdit(config.getScopeKey())) {
-            throw validationHelper.forbidden("Cấu hình này thuộc cấp khác, bạn chỉ được xem và dùng, không được sửa hoặc xóa");
-        }
-        return config;
+        return LayoutConfigRules.requireEditable(configRepository, validationHelper, id, actor, "Không tìm thấy cấu hình chứng nhận");
     }
 
     // Gắn / đổi / gỡ ảnh nền. Ảnh mới được chuyển vào thư mục cloud của giáo phận sở hữu cấu hình; ảnh cũ bị gỡ.

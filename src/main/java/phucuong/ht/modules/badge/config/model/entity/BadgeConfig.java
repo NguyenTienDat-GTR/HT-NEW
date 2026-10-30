@@ -1,6 +1,7 @@
 package phucuong.ht.modules.badge.config.model.entity;
 
 import jakarta.persistence.*;
+import phucuong.ht.common.layoutconfig.LayoutConfig;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -22,7 +23,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @ToString(exclude = {"legacyFrontBackground", "legacyBackBackground"})
 @EqualsAndHashCode(callSuper = true)
-public class BadgeConfig extends BaseModel {
+public class BadgeConfig extends BaseModel implements LayoutConfig {
 
     @Id
     @Column(name = "id")

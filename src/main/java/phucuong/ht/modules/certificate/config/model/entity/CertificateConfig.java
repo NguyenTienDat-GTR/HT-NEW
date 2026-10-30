@@ -1,6 +1,7 @@
 package phucuong.ht.modules.certificate.config.model.entity;
 
 import jakarta.persistence.*;
+import phucuong.ht.common.layoutconfig.LayoutConfig;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -21,7 +22,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @ToString
 @EqualsAndHashCode(callSuper = true)
-public class CertificateConfig extends BaseModel {
+public class CertificateConfig extends BaseModel implements LayoutConfig {
 
     @Id
     @Column(name = "id")
