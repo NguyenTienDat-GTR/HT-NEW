@@ -29,12 +29,10 @@ import phucuong.ht.modules.leader.model.entity.Leader;
 import phucuong.ht.modules.leader.repository.LeaderRepository;
 import phucuong.ht.modules.leaderLevel.service.LeaderLevelService;
 import phucuong.ht.modules.leaderLevel.service.LeaderLevelService.LevelOrder;
-import phucuong.ht.modules.notification.service.WorkflowDecisionNotifier.Decision;
 import phucuong.ht.modules.parish.model.entity.Parish;
 import phucuong.ht.modules.parish.repository.ParishRepository;
 import phucuong.ht.modules.training.ApprovalTransitionPolicy;
 import phucuong.ht.modules.training.CourseActivityGuard;
-import phucuong.ht.modules.training.TrainingDecisionNotifier;
 import phucuong.ht.modules.training.TrainingWorkflowSupport;
 import phucuong.ht.modules.training.courseParticipation.model.entity.CourseParticipation;
 import phucuong.ht.modules.training.courseParticipation.model.entity.CourseParticipationComponentScore;
@@ -84,9 +82,7 @@ public class CourseParticipationService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private phucuong.ht.common.security.UnitOperationalStatusService unitOperationalStatusService;
     @org.springframework.beans.factory.annotation.Autowired(required = false)
-    private TrainingDecisionNotifier trainingDecisionNotifier;
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    private phucuong.ht.modules.training.courseInvitation.service.CourseInvitationAutoTrigger invitationAutoTrigger;
+    private RegistrationDecisionNotifier decisionNotifier = RegistrationDecisionNotifier.noop();
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private phucuong.ht.modules.training.CourseScoreVisibility courseScoreVisibility;
 
@@ -406,7 +402,7 @@ public class CourseParticipationService {
         participation.setUpdatedAt(now);
         participation.setUpdatedBy(actor);
         publishEvent("training.registration.deanery_approved", "courseParticipation", participationId, actor, Map.of("approved", request.getApproved()));
-        notifyRegistrationDecision(List.of(participation), Boolean.TRUE.equals(request.getApproved()), Collections.singletonMap(participationId, request.getReview()), actor);
+        decisionNotifier.decided(List.of(participation), Boolean.TRUE.equals(request.getApproved()), Collections.singletonMap(participationId, request.getReview()), actor);
         return toResponse(participation);
     }
 
@@ -432,7 +428,7 @@ public class CourseParticipationService {
         participation.setUpdatedAt(now);
         participation.setUpdatedBy(actor);
         publishEvent("training.registration.diocese_approved", "courseParticipation", participationId, actor, Map.of("approved", request.getApproved()));
-        notifyRegistrationDecision(List.of(participation), Boolean.TRUE.equals(request.getApproved()), Collections.singletonMap(participationId, request.getReview()), actor);
+        decisionNotifier.decided(List.of(participation), Boolean.TRUE.equals(request.getApproved()), Collections.singletonMap(participationId, request.getReview()), actor);
         return toResponse(participation);
     }
 
@@ -1094,9 +1090,7 @@ public class CourseParticipationService {
         participation.setUpdatedAt(OffsetDateTime.now());
         participation.setUpdatedBy(actor);
         // Người gửi đăng ký và admin giáo xứ của hồ sơ được báo hồ sơ đã bị xóa khỏi danh sách tham dự.
-        if (trainingDecisionNotifier != null) {
-            trainingDecisionNotifier.notifyRegistrations(Decision.REGISTRATION_REMOVED, List.of(participation), null, actor);
-        }
+        decisionNotifier.removed(participation, actor);
         publishEvent("training.participant.removed", "courseParticipation", participationId, actor,
                 Map.of("courseCode", courseCode, "leaderId", String.valueOf(leaderId)));
         // Chứng nhận chờ duyệt của hồ sơ bị xóa theo: báo realtime để tab duyệt chứng nhận và màn chứng nhận tải lại.
@@ -1154,26 +1148,12 @@ public class CourseParticipationService {
             success++;
         }
         // Một lần duyệt/từ chối hàng loạt: từ 3 hồ sơ cùng khóa thì người nhận chỉ có một thông báo gom nhóm.
-        notifyRegistrationDecision(decided, approved, reviewsById, actor);
+        decisionNotifier.decided(decided, approved, reviewsById, actor);
         return TrainingBulkApprovalResponse.builder()
                 .successCount(success)
                 .failedCount(failures.size())
                 .failures(failures)
                 .build();
-    }
-
-    private void notifyRegistrationDecision(List<CourseParticipation> participations, boolean approved, Map<String, String> reviewsById, String actor) {
-        // Khóa bật "tự gửi email thông tin tham dự": gửi cho hồ sơ vừa được duyệt (sau khi giao dịch duyệt commit).
-        if (approved && invitationAutoTrigger != null) {
-            invitationAutoTrigger.afterApproved(participations);
-        }
-        if (trainingDecisionNotifier == null || participations.isEmpty()) {
-            return;
-        }
-        // Lý do chỉ có ý nghĩa với hồ sơ bị từ chối.
-        Map<String, String> notes = approved ? null : reviewsById;
-        trainingDecisionNotifier.notifyRegistrations(approved ? Decision.REGISTRATION_APPROVED : Decision.REGISTRATION_REJECTED,
-                participations, notes, actor);
     }
 
     private TrainingBulkApprovalResponse.Failure bulkFailure(String id, String leaderName, String reason) {
