@@ -557,13 +557,6 @@ public class CertificateService {
     }
 
     private void publishEvent(String eventType, String entityType, String entityId, String actor, Map<String, Object> payload) {
-        domainEventPublisher.publishAfterCommit(DomainEventMessage.builder()
-                .eventType(eventType)
-                .entityType(entityType)
-                .entityId(entityId)
-                .actor(actor)
-                .occurredAt(OffsetDateTime.now())
-                .payload(payload)
-                .build());
+        domainEventPublisher.publishAfterCommit(DomainEventMessage.of(eventType, entityType, entityId, actor, payload));
     }
 }

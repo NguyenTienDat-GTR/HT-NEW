@@ -409,14 +409,7 @@ public class TrainingCourseService {
     }
 
     private void publishCourseStatusEvent(TrainingCourse course, boolean active, String actor) {
-        domainEventPublisher.publishAfterCommit(DomainEventMessage.builder()
-                .eventType(active ? "training.course.enabled" : "training.course.disabled")
-                .entityType("trainingCourse")
-                .entityId(course.getCourseCode())
-                .actor(actor)
-                .occurredAt(OffsetDateTime.now())
-                .payload(Map.of("courseCode", course.getCourseCode()))
-                .build());
+        domainEventPublisher.publishAfterCommit(DomainEventMessage.of(active ? "training.course.enabled" : "training.course.disabled", "trainingCourse", course.getCourseCode(), actor, Map.of("courseCode", course.getCourseCode())));
         certificateRealtimeNotifier.notifyChanged(active ? "COURSE_ENABLED" : "COURSE_DISABLED", course.getCourseCode(), null);
     }
 
@@ -595,14 +588,7 @@ public class TrainingCourseService {
         payload.put("deaneryManaged", deaneryManaged);
         payload.put("dioceseId", course.getDiocese() == null ? null : course.getDiocese().getId().toString());
         payload.put("deaneryId", course.getDeanery() == null ? null : course.getDeanery().getId().toString());
-        domainEventPublisher.publishAfterCommit(DomainEventMessage.builder()
-                .eventType(open ? EVENT_REGISTRATION_OPENED : EVENT_REGISTRATION_CLOSED)
-                .entityType("trainingCourse")
-                .entityId(course.getCourseCode())
-                .actor(actor)
-                .occurredAt(OffsetDateTime.now())
-                .payload(payload)
-                .build());
+        domainEventPublisher.publishAfterCommit(DomainEventMessage.of(open ? EVENT_REGISTRATION_OPENED : EVENT_REGISTRATION_CLOSED, "trainingCourse", course.getCourseCode(), actor, payload));
     }
 
     // Tài khoản trong phạm vi hiện tại có quyền duyệt danh sách đăng ký của loại khóa được chọn.
@@ -761,14 +747,7 @@ public class TrainingCourseService {
     }
 
     private void publishCourseFinishedEvent(TrainingCourse course, String reason, String actor) {
-        domainEventPublisher.publishAfterCommit(DomainEventMessage.builder()
-                .eventType("training.course.finished")
-                .entityType("trainingCourse")
-                .entityId(course.getCourseCode())
-                .actor(actor)
-                .occurredAt(OffsetDateTime.now())
-                .payload(Map.of("courseCode", course.getCourseCode(), "reason", reason))
-                .build());
+        domainEventPublisher.publishAfterCommit(DomainEventMessage.of("training.course.finished", "trainingCourse", course.getCourseCode(), actor, Map.of("courseCode", course.getCourseCode(), "reason", reason)));
         certificateRealtimeNotifier.notifyChanged("COURSE_FINISHED", course.getCourseCode(), null);
     }
 
