@@ -507,7 +507,7 @@ public class PastCourseParticipantImportService {
         try {
             unitOperationalStatusService.requireUnitOperational(phucuong.ht.common.enums.UnitType.PARISH, parish.getId());
             return "";
-        } catch (phucuong.ht.modules.auth.exception.ApiException exception) {
+        } catch (phucuong.ht.common.exception.ApiException exception) {
             return exception.getMessage() == null ? "Giáo xứ đang bị khóa" : exception.getMessage();
         }
     }

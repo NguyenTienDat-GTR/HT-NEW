@@ -1,6 +1,7 @@
 package phucuong.ht.modules.training.courseType.service;
 
 import phucuong.ht.config.EvictCaches;
+import phucuong.ht.common.security.AuthorityChecks;
 import lombok.RequiredArgsConstructor;
 import phucuong.ht.modules.leaderLevel.service.LeaderLevelService;
 import org.springframework.data.domain.Page;
@@ -83,8 +84,8 @@ public class TrainingCourseTypeService {
     // Tài khoản chỉ thấy loại khóa thuộc cấp quản lý của mình (giáo hạt hoặc giáo phận).
     private BaseSearchRequest scopeByAccount(BaseSearchRequest request, Authentication authentication) {
         BaseSearchRequest source = request == null ? new BaseSearchRequest() : request;
-        boolean diocese = hasAuthority(authentication, TrainingCourseTypeAccessEvaluator.READ_DIOCESE);
-        boolean deanery = hasAuthority(authentication, TrainingCourseTypeAccessEvaluator.READ_DEANERY);
+        boolean diocese = AuthorityChecks.hasAuthority(authentication, TrainingCourseTypeAccessEvaluator.READ_DIOCESE);
+        boolean deanery = AuthorityChecks.hasAuthority(authentication, TrainingCourseTypeAccessEvaluator.READ_DEANERY);
         java.util.Optional<UUID> actorDiocese = dioceseGuard.actorDioceseId(authentication);
         if (diocese == deanery && actorDiocese.isEmpty()) {
             return source;
@@ -106,10 +107,6 @@ public class TrainingCourseTypeService {
         return copy;
     }
 
-    private boolean hasAuthority(Authentication authentication, String authority) {
-        return authentication != null && authentication.getAuthorities().stream()
-                .anyMatch(granted -> authority.equals(granted.getAuthority()));
-    }
 
     public TrainingCourseTypeResponse findById(String typeCode, Authentication authentication) {
         TrainingCourseType courseType = requireType(typeCode);

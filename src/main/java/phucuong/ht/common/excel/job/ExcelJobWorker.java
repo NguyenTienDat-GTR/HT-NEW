@@ -22,7 +22,7 @@ import phucuong.ht.common.excel.AvatarZip;
 import phucuong.ht.common.excel.ImportValidationException;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.config.CacheNames;
-import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.common.exception.ApiException;
 import phucuong.ht.modules.training.CourseScoreVisibility;
 import phucuong.ht.modules.media.config.MediaProperties;
 

@@ -4,7 +4,7 @@ import net.coobird.thumbnailator.Thumbnails;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import phucuong.ht.common.exception.errorCode;
-import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.common.exception.ApiException;
 import phucuong.ht.modules.media.config.MediaProperties;
 import phucuong.ht.modules.media.model.enums.MediaCategory;
 import phucuong.ht.modules.media.model.enums.MediaVariants;

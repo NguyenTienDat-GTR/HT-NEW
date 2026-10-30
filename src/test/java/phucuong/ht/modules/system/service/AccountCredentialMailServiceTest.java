@@ -21,7 +21,7 @@ class AccountCredentialMailServiceTest {
         AccountCredentialMailService service = new AccountCredentialMailService(mailSender, mock(CommonValidationHelper.class));
 
         var exception = org.junit.jupiter.api.Assertions.assertThrows(
-                phucuong.ht.modules.auth.exception.ApiException.class,
+                phucuong.ht.common.exception.ApiException.class,
                 () -> service.sendInitialCredentials("leader@example.com", "Nguyễn An", "an", "004321"));
 
         org.junit.jupiter.api.Assertions.assertEquals(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE, exception.getStatus());

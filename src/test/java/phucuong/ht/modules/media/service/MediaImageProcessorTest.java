@@ -1,7 +1,7 @@
 package phucuong.ht.modules.media.service;
 
 import org.junit.jupiter.api.Test;
-import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.common.exception.ApiException;
 import phucuong.ht.modules.media.config.MediaProperties;
 import phucuong.ht.modules.media.model.enums.MediaCategory;
 import phucuong.ht.modules.media.model.enums.MediaVariants;

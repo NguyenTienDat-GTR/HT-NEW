@@ -9,7 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import phucuong.ht.common.exception.errorCode;
-import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.common.exception.ApiException;
 import phucuong.ht.modules.auth.model.request.ForgotPasswordOtpRequest;
 import phucuong.ht.modules.auth.model.request.ForgotPasswordResetRequest;
 import phucuong.ht.modules.auth.model.request.ForgotPasswordVerifyRequest;

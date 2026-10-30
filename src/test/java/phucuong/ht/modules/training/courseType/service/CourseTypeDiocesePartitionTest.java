@@ -12,7 +12,7 @@ import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.common.validation.CommonValidationHelper;
-import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.common.exception.ApiException;
 import phucuong.ht.modules.auth.model.AuthUserDetails;
 import phucuong.ht.modules.leaderLevel.service.LeaderLevelService;
 import phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType;

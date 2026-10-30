@@ -12,7 +12,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.security.core.Authentication;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.utils.securityUtils;
-import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.common.exception.ApiException;
 import phucuong.ht.modules.deanery.helper.DeaneryScopeHelper;
 import phucuong.ht.modules.deanery.helper.DeaneryValidationHelper;
 import phucuong.ht.modules.deanery.model.entity.Deanery;

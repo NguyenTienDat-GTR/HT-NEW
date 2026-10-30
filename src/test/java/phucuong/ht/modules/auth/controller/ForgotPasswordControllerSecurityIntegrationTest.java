@@ -10,7 +10,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import phucuong.ht.common.exception.errorCode;
-import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.common.exception.ApiException;
 import phucuong.ht.modules.auth.model.request.ForgotPasswordOtpRequest;
 import phucuong.ht.modules.auth.model.request.ForgotPasswordResetRequest;
 import phucuong.ht.modules.auth.model.request.ForgotPasswordVerifyRequest;

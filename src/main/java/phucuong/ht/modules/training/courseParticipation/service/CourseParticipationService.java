@@ -1,6 +1,9 @@
 package phucuong.ht.modules.training.courseParticipation.service;
 
 import lombok.RequiredArgsConstructor;
+import phucuong.ht.common.security.AuthorityChecks;
+import phucuong.ht.common.utils.LeaderNames;
+import phucuong.ht.common.repository.SearchRequests;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
@@ -101,16 +104,16 @@ public class CourseParticipationService {
 
     @Transactional(readOnly = true)
     public Page<CourseParticipationResponse> findAll(BaseSearchRequest request, Authentication authentication) {
-        BaseSearchRequest scoped = copySearchRequest(request);
-        if (hasAuthority(authentication, CourseParticipationAccessEvaluator.READ_DIOCESE)
-                || hasAuthority(authentication, CourseParticipationAccessEvaluator.APPROVE_DIOCESE)
-                || hasAuthority(authentication, CourseParticipationAccessEvaluator.SCORE_DIOCESE)) {
+        BaseSearchRequest scoped = SearchRequests.copy(request);
+        if (AuthorityChecks.hasAuthority(authentication, CourseParticipationAccessEvaluator.READ_DIOCESE)
+                || AuthorityChecks.hasAuthority(authentication, CourseParticipationAccessEvaluator.APPROVE_DIOCESE)
+                || AuthorityChecks.hasAuthority(authentication, CourseParticipationAccessEvaluator.SCORE_DIOCESE)) {
             scoped.getFilters().put("course.diocese.id", accountScopeValidationHelper.requireActiveDioceseId(authentication, CourseParticipationAccessEvaluator.APPROVE_DIOCESE));
-        } else if (hasAuthority(authentication, CourseParticipationAccessEvaluator.READ_DEANERY)
-                || hasAuthority(authentication, CourseParticipationAccessEvaluator.APPROVE_DEANERY)
-                || hasAuthority(authentication, CourseParticipationAccessEvaluator.SCORE_DEANERY)) {
+        } else if (AuthorityChecks.hasAuthority(authentication, CourseParticipationAccessEvaluator.READ_DEANERY)
+                || AuthorityChecks.hasAuthority(authentication, CourseParticipationAccessEvaluator.APPROVE_DEANERY)
+                || AuthorityChecks.hasAuthority(authentication, CourseParticipationAccessEvaluator.SCORE_DEANERY)) {
             scoped.getFilters().put("course.deanery.id", accountScopeValidationHelper.requireActiveDeaneryId(authentication, CourseParticipationAccessEvaluator.APPROVE_DEANERY));
-        } else if (hasAuthority(authentication, CourseParticipationAccessEvaluator.READ_PARISH)) {
+        } else if (AuthorityChecks.hasAuthority(authentication, CourseParticipationAccessEvaluator.READ_PARISH)) {
             scoped.getFilters().put("leader.parish.id", accountScopeValidationHelper.requireActiveParishId(authentication, CourseParticipationAccessEvaluator.READ_PARISH));
         } else {
             throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền xem hồ sơ đào tạo");
@@ -142,7 +145,7 @@ public class CourseParticipationService {
     // Danh sách tham dự: chỉ huynh trưởng đã được duyệt đăng ký (hồ sơ chờ duyệt/bị từ chối không nằm trong danh sách).
     @Transactional(readOnly = true)
     public Page<CourseParticipationResponse> findParticipants(BaseSearchRequest request, Authentication authentication) {
-        BaseSearchRequest approvedOnly = copySearchRequest(request);
+        BaseSearchRequest approvedOnly = SearchRequests.copy(request);
         approvedOnly.getFilters().put("approvalStatus", WorkflowApprovalStatus.APPROVED.name());
         return findAll(approvedOnly, authentication);
     }
@@ -223,13 +226,13 @@ public class CourseParticipationService {
             boolean eligible = isEligible(leader, course);
             boolean exception = exceptionReasons.containsKey(leaderId);
             if (!exception && !eligible) {
-                throw commonValidationHelper.validationError("Huynh Trưởng " + buildFullName(leader) + " không đủ điều kiện, hãy đưa vào danh sách ngoại lệ kèm lí do");
+                throw commonValidationHelper.validationError("Huynh Trưởng " + LeaderNames.fullName(leader) + " không đủ điều kiện, hãy đưa vào danh sách ngoại lệ kèm lí do");
             }
             if (exception && eligible) {
-                throw commonValidationHelper.validationError("Huynh Trưởng " + buildFullName(leader) + " đã đủ điều kiện, hãy đưa vào danh sách đăng ký thay vì danh sách ngoại lệ");
+                throw commonValidationHelper.validationError("Huynh Trưởng " + LeaderNames.fullName(leader) + " đã đủ điều kiện, hãy đưa vào danh sách đăng ký thay vì danh sách ngoại lệ");
             }
             if (exception && exceedsNearestAchievedLevel(leader.getLeaderLevel(), course, levelOrder)) {
-                throw commonValidationHelper.validationError("Huynh Trưởng " + buildFullName(leader) + " có cấp độ cao hơn cấp độ đạt được gần nhất của loại khóa nên không thể đưa vào danh sách ngoại lệ");
+                throw commonValidationHelper.validationError("Huynh Trưởng " + LeaderNames.fullName(leader) + " có cấp độ cao hơn cấp độ đạt được gần nhất của loại khóa nên không thể đưa vào danh sách ngoại lệ");
             }
             String exceptionReason = exception ? exceptionReasons.get(leaderId) : null;
             // Ngoài đợt của khóa giáo phận: bắt buộc lí do riêng cho từng hồ sơ và luôn duyệt thủ công.
@@ -237,7 +240,7 @@ public class CourseParticipationService {
             if (trainingWorkflowSupport.isOffTarget(course, leader)) {
                 offTargetReason = offTargetReasons.get(leaderId);
                 if (offTargetReason == null) {
-                    throw commonValidationHelper.validationError("Huynh Trưởng " + buildFullName(leader)
+                    throw commonValidationHelper.validationError("Huynh Trưởng " + LeaderNames.fullName(leader)
                             + " thuộc giáo hạt ngoài đợt của khóa, hãy nhập lí do riêng cho hồ sơ này");
                 }
             }
@@ -376,9 +379,9 @@ public class CourseParticipationService {
 
     private UnitType resolveSenderType(Authentication authentication) {
         UnitType type = trainingWorkflowSupport.resolveRegistrationSender(
-                hasAuthority(authentication, CourseParticipationAccessEvaluator.SUBMIT_PARISH),
-                hasAuthority(authentication, CourseParticipationAccessEvaluator.SUBMIT_DIOCESE),
-                hasAuthority(authentication, CourseParticipationAccessEvaluator.SUBMIT_DEANERY),
+                AuthorityChecks.hasAuthority(authentication, CourseParticipationAccessEvaluator.SUBMIT_PARISH),
+                AuthorityChecks.hasAuthority(authentication, CourseParticipationAccessEvaluator.SUBMIT_DIOCESE),
+                AuthorityChecks.hasAuthority(authentication, CourseParticipationAccessEvaluator.SUBMIT_DEANERY),
                 accountScopeValidationHelper.hasDirectDiocese(authentication),
                 accountScopeValidationHelper.hasDirectDeanery(authentication)
         );
@@ -393,7 +396,7 @@ public class CourseParticipationService {
             return true;
         }
         String haystack = String.join(" ",
-                Objects.toString(buildFullName(leader), ""),
+                Objects.toString(LeaderNames.fullName(leader), ""),
                 Objects.toString(leader.getHolyName(), ""),
                 leader.getParish() == null ? "" : Objects.toString(leader.getParish().getName(), ""),
                 leader.getParish() == null || leader.getParish().getDeanery() == null ? "" : Objects.toString(leader.getParish().getDeanery().getName(), "")
@@ -407,7 +410,7 @@ public class CourseParticipationService {
         return RegistrationCandidateResponse.builder()
                 .id(leader.getId())
                 .holyName(leader.getHolyName())
-                .fullName(buildFullName(leader))
+                .fullName(LeaderNames.fullName(leader))
                 .birthDate(leader.getBirthDate())
                 .phoneNumber(leader.getPhoneNumber())
                 .email(leader.getEmail())
@@ -1117,7 +1120,7 @@ public class CourseParticipationService {
                 .id(participation.getId())
                 .leaderId(participation.getLeader() == null ? null : participation.getLeader().getId())
                 .leaderHolyName(participation.getLeader() == null ? null : participation.getLeader().getHolyName())
-                .leaderFullName(buildFullName(participation.getLeader()))
+                .leaderFullName(LeaderNames.fullName(participation.getLeader()))
                 .courseCode(participation.getCourse() == null ? null : participation.getCourse().getCourseCode())
                 .courseName(participation.getCourse() == null ? null : participation.getCourse().getCourseName())
                 .coursePast(participation.getCourse() != null && participation.getCourse().isPast())
@@ -1215,16 +1218,6 @@ public class CourseParticipationService {
                 .toList();
     }
 
-    private String buildFullName(phucuong.ht.modules.leader.model.entity.Leader leader) {
-        if (leader == null) {
-            return null;
-        }
-        if (leader.getLastName() == null || leader.getLastName().isBlank()) {
-            return leader.getFirstName();
-        }
-        return leader.getLastName() + " " + leader.getFirstName();
-    }
-
     // Thu hồi đăng ký: chỉ người gửi đăng ký, và chỉ khi hồ sơ còn chờ duyệt. Hồ sơ bị xóa để huynh trưởng có thể được đăng ký lại.
     @EvictCaches.Courses
     @EvictCaches.Analytics
@@ -1316,7 +1309,7 @@ public class CourseParticipationService {
                 continue;
             }
             CourseParticipation participation = found.get();
-            String leaderName = buildFullName(participation.getLeader());
+            String leaderName = LeaderNames.fullName(participation.getLeader());
             String problem = bulkApprovalProblem(participation, authentication, approved);
             if (problem != null) {
                 failures.add(bulkFailure(id, leaderName, problem));
@@ -1403,11 +1396,11 @@ public class CourseParticipationService {
     // Người duyệt đăng ký đúng đơn vị sở hữu khóa (giáo hạt với khóa giáo hạt, giáo phận với khóa giáo phận).
     public boolean canApproveCourse(TrainingCourse course, Authentication authentication) {
         if (trainingWorkflowSupport.isDeaneryManaged(course)) {
-            return hasAuthority(authentication, CourseParticipationAccessEvaluator.APPROVE_DEANERY)
+            return AuthorityChecks.hasAuthority(authentication, CourseParticipationAccessEvaluator.APPROVE_DEANERY)
                     && course.getDeanery() != null
                     && course.getDeanery().getId().equals(accountScopeValidationHelper.requireActiveDeaneryId(authentication, CourseParticipationAccessEvaluator.APPROVE_DEANERY));
         }
-        return hasAuthority(authentication, CourseParticipationAccessEvaluator.APPROVE_DIOCESE)
+        return AuthorityChecks.hasAuthority(authentication, CourseParticipationAccessEvaluator.APPROVE_DIOCESE)
                 && course.getDiocese() != null
                 && course.getDiocese().getId().equals(accountScopeValidationHelper.requireActiveDioceseId(authentication, CourseParticipationAccessEvaluator.APPROVE_DIOCESE));
     }
@@ -1487,24 +1480,6 @@ public class CourseParticipationService {
         }
     }
 
-    private BaseSearchRequest copySearchRequest(BaseSearchRequest request) {
-        BaseSearchRequest source = request == null ? new BaseSearchRequest() : request;
-        BaseSearchRequest copy = new BaseSearchRequest();
-        copy.setPage(source.getPage());
-        copy.setSize(source.getSize());
-        copy.setSearch(source.getSearch());
-        copy.setSearchFields(source.getSearchFields() == null ? List.of() : List.copyOf(source.getSearchFields()));
-        copy.setFilters(source.getFilters() == null ? new LinkedHashMap<>() : new LinkedHashMap<>(source.getFilters()));
-        copy.setStatus(source.getStatus());
-        copy.setSortBy(source.getSortBy());
-        copy.setSortDirection(source.getSortDirection());
-        return copy;
-    }
-
-    private boolean hasAuthority(Authentication authentication, String authority) {
-        return authentication != null && authentication.getAuthorities().stream()
-                .anyMatch(grantedAuthority -> authority.equals(grantedAuthority.getAuthority()));
-    }
 
     private void publishEvent(String eventType, String entityType, String entityId, String actor, Map<String, Object> payload) {
         domainEventPublisher.publishAfterCommit(DomainEventMessage.builder()

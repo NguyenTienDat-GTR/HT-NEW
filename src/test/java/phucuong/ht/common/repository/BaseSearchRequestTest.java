@@ -1,7 +1,7 @@
 package phucuong.ht.common.repository;
 
 import org.junit.jupiter.api.Test;
-import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.common.exception.ApiException;
 
 import java.util.LinkedHashMap;
 import java.util.List;

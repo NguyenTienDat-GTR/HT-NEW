@@ -1,6 +1,7 @@
 package phucuong.ht.modules.executiveBoard.service;
 
 import lombok.RequiredArgsConstructor;
+import phucuong.ht.common.repository.SearchRequests;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
@@ -116,7 +117,7 @@ public class ExecutiveBoardAssignmentService {
 
     @Cacheable(cacheNames = CacheNames.EXECUTIVE_ASSIGNMENT_LIST, key = "@cacheScopeKeyHelper.listKey(#authentication, #request)")
     public Page<ExecutiveBoardAssignmentResponse> findAll(BaseSearchRequest request, Authentication authentication) {
-        BaseSearchRequest scopedRequest = copyRequest(request);
+        BaseSearchRequest scopedRequest = SearchRequests.copy(request);
         if (securityUtils.hasAuthority(authentication, ExecutiveBoardAssignmentAccessEvaluator.READ_DIOCESE)) {
             UUID dioceseId = accountScopeValidationHelper.requireActiveDioceseId(authentication, ExecutiveBoardAssignmentAccessEvaluator.READ_DIOCESE);
             scopedRequest.getFilters().put(DIOCESE_FILTER_FIELD, dioceseId);
@@ -314,20 +315,6 @@ public class ExecutiveBoardAssignmentService {
                 yield new ScopeData(parish.getDeanery().getDiocese(), parish.getDeanery(), parish);
             }
         };
-    }
-
-    private BaseSearchRequest copyRequest(BaseSearchRequest request) {
-        BaseSearchRequest source = request == null ? new BaseSearchRequest() : request;
-        BaseSearchRequest copy = new BaseSearchRequest();
-        copy.setPage(source.getPage());
-        copy.setSize(source.getSize());
-        copy.setSearch(source.getSearch());
-        copy.setSearchFields(source.getSearchFields() == null ? List.of() : List.copyOf(source.getSearchFields()));
-        copy.setFilters(source.getFilters() == null ? new LinkedHashMap<>() : new LinkedHashMap<>(source.getFilters()));
-        copy.setStatus(source.getStatus());
-        copy.setSortBy(source.getSortBy());
-        copy.setSortDirection(source.getSortDirection());
-        return copy;
     }
 
     private ExecutiveBoardAssignmentResponse toResponse(ExecutiveBoardAssignment assignment) {

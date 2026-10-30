@@ -1,6 +1,7 @@
 package phucuong.ht.modules.system.service;
 
 import lombok.RequiredArgsConstructor;
+import phucuong.ht.common.repository.InMemoryPager;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -549,12 +550,7 @@ public class AccountManagementService {
     }
 
     private Page<AccountResponse> page(BaseSearchRequest request, List<AccountResponse> accounts) {
-        int page = request == null ? 0 : request.getPage();
-        int size = request == null ? 10 : request.getSize();
-        List<AccountResponse> ordered = request == null ? accounts : phucuong.ht.common.utils.InMemorySortSupport.sort(accounts, request.getSortBy(), request.getSortDirection());
-        int start = Math.min(page * size, ordered.size());
-        int end = Math.min(start + size, ordered.size());
-        return new PageImpl<>(ordered.subList(start, end), PageRequest.of(page, size), ordered.size());
+        return InMemoryPager.sortedPage(request, accounts);
     }
 
     private String safe(String value) {

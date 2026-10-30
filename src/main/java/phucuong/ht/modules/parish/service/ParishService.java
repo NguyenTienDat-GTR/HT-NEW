@@ -1,6 +1,7 @@
 package phucuong.ht.modules.parish.service;
 
 import phucuong.ht.config.EvictCaches;
+import phucuong.ht.common.repository.SearchRequests;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
@@ -24,7 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 import phucuong.ht.common.utils.AuditActorNameResolver;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.config.CacheNames;
-import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.common.exception.ApiException;
 import phucuong.ht.modules.deanery.model.entity.Deanery;
 import phucuong.ht.modules.parish.helper.ParishScopeHelper;
 import phucuong.ht.modules.parish.helper.ParishValidationHelper;
@@ -120,7 +121,7 @@ public class ParishService {
 
     @Cacheable(cacheNames = CacheNames.PARISH_LIST, key = "@cacheScopeKeyHelper.listKey(#authentication, #request)")
     public Page<ParishResponse> findAll(BaseSearchRequest request, Authentication authentication) {
-        BaseSearchRequest scopedRequest = copyRequest(request);
+        BaseSearchRequest scopedRequest = SearchRequests.copy(request);
 
         if (securityUtils.hasAuthority(authentication, ParishAccessEvaluator.READ_ALL)) {
             return loadParishPageWithDeanery(scopedRequest);
@@ -310,20 +311,6 @@ public class ParishService {
     private String unitLabel(String unitType, String name) {
         String normalizedName = name == null ? null : name.trim();
         return normalizedName == null || normalizedName.isBlank() ? unitType : unitType + " " + normalizedName;
-    }
-
-    private BaseSearchRequest copyRequest(BaseSearchRequest request) {
-        BaseSearchRequest source = request == null ? new BaseSearchRequest() : request;
-        BaseSearchRequest copy = new BaseSearchRequest();
-        copy.setPage(source.getPage());
-        copy.setSize(source.getSize());
-        copy.setSearch(source.getSearch());
-        copy.setSearchFields(source.getSearchFields() == null ? List.of() : List.copyOf(source.getSearchFields()));
-        copy.setFilters(source.getFilters() == null ? new LinkedHashMap<>() : new LinkedHashMap<>(source.getFilters()));
-        copy.setStatus(source.getStatus());
-        copy.setSortBy(source.getSortBy());
-        copy.setSortDirection(source.getSortDirection());
-        return copy;
     }
 
     private Page<ParishResponse> loadParishPageWithDeanery(BaseSearchRequest request) {

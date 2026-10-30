@@ -1,6 +1,8 @@
 package phucuong.ht.modules.system.service;
 
 import lombok.RequiredArgsConstructor;
+import phucuong.ht.common.repository.InMemoryPager;
+import phucuong.ht.common.security.AuthorityChecks;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -313,9 +315,9 @@ public class AccountRoleService {
         if (hasRole(authentication, ROLE_SUPER_ADMIN)) {
             return isSuperAdminAssignableRole(role);
         }
-        String actorRoleCode = hasAuthority(authentication, "system.account_role.assign.diocese") ? ROLE_ADMIN_DIOCESE
-                : hasAuthority(authentication, "system.account_role.assign.deanery") ? ROLE_ADMIN_DEANERY
-                : hasAuthority(authentication, "system.account_role.assign.parish") ? ROLE_ADMIN_PARISH : null;
+        String actorRoleCode = AuthorityChecks.hasAuthority(authentication, "system.account_role.assign.diocese") ? ROLE_ADMIN_DIOCESE
+                : AuthorityChecks.hasAuthority(authentication, "system.account_role.assign.deanery") ? ROLE_ADMIN_DEANERY
+                : AuthorityChecks.hasAuthority(authentication, "system.account_role.assign.parish") ? ROLE_ADMIN_PARISH : null;
         if (actorRoleCode == null) {
             return false;
         }
@@ -346,7 +348,7 @@ public class AccountRoleService {
 
         accountManagementAuthorizationHelper.requireTargetAccountNotAboveActor(authentication, targetAccount);
 
-        if (hasAuthority(authentication, "system.account_role.assign.diocese")) {
+        if (AuthorityChecks.hasAuthority(authentication, "system.account_role.assign.diocese")) {
             enforceScopedSystemRoleAssignment(ROLE_ADMIN_DIOCESE, targetRole);
             UUID actorDioceseId = accountRepository.findActiveDioceseIdByUsername(currentUsername(authentication))
                     .orElseThrow(() -> commonValidationHelper.forbidden("Tài khoản hiện tại không có scope giáo phận hợp lệ"));
@@ -359,7 +361,7 @@ public class AccountRoleService {
             return;
         }
 
-        if (hasAuthority(authentication, "system.account_role.assign.deanery")) {
+        if (AuthorityChecks.hasAuthority(authentication, "system.account_role.assign.deanery")) {
             enforceScopedSystemRoleAssignment(ROLE_ADMIN_DEANERY, targetRole);
             UUID actorDeaneryId = accountRepository.findActiveDeaneryIdByUsername(currentUsername(authentication))
                     .orElseThrow(() -> commonValidationHelper.forbidden("Tài khoản hiện tại không có phạm vi giáo hạt hợp lệ"));
@@ -372,7 +374,7 @@ public class AccountRoleService {
             return;
         }
 
-        if (hasAuthority(authentication, "system.account_role.assign.parish")) {
+        if (AuthorityChecks.hasAuthority(authentication, "system.account_role.assign.parish")) {
             enforceScopedSystemRoleAssignment(ROLE_ADMIN_PARISH, targetRole);
             UUID actorParishId = accountRepository.findActiveParishIdByUsername(currentUsername(authentication))
                     .orElseThrow(() -> commonValidationHelper.forbidden("Tài khoản hiện tại không có phạm vi giáo xứ hợp lệ"));
@@ -468,10 +470,6 @@ public class AccountRoleService {
         return role.getDisplayOrder() == null ? Integer.MAX_VALUE : role.getDisplayOrder();
     }
 
-    private boolean hasAuthority(Authentication authentication, String authority) {
-        return authentication != null && authentication.getAuthorities().stream()
-                .anyMatch(grantedAuthority -> authority.equals(grantedAuthority.getAuthority()));
-    }
 
     private boolean hasRole(Authentication authentication, String roleCode) {
         if (authentication == null || !(authentication.getPrincipal() instanceof AuthUserDetails principal)) {
@@ -546,12 +544,7 @@ public class AccountRoleService {
     }
 
     private Page<AccountRoleResponse> page(BaseSearchRequest request, List<AccountRoleResponse> accountRoles) {
-        int page = request == null ? 0 : request.getPage();
-        int size = request == null ? 10 : request.getSize();
-        List<AccountRoleResponse> ordered = request == null ? accountRoles : phucuong.ht.common.utils.InMemorySortSupport.sort(accountRoles, request.getSortBy(), request.getSortDirection());
-        int start = Math.min(page * size, ordered.size());
-        int end = Math.min(start + size, ordered.size());
-        return new PageImpl<>(ordered.subList(start, end), PageRequest.of(page, size), ordered.size());
+        return InMemoryPager.sortedPage(request, accountRoles);
     }
 
     private String safe(String value) {

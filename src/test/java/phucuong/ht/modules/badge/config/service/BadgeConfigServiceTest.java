@@ -8,7 +8,7 @@ import org.springframework.security.core.Authentication;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.common.validation.CommonValidationHelper;
-import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.common.exception.ApiException;
 import phucuong.ht.modules.auth.repository.AccountRepository;
 import phucuong.ht.modules.badge.config.model.entity.BadgeConfig;
 import phucuong.ht.modules.badge.config.model.request.BadgeConfigUpsertRequest;

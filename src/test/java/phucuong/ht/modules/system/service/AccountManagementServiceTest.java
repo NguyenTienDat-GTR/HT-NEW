@@ -10,7 +10,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import phucuong.ht.common.validation.CommonValidationHelper;
-import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.common.exception.ApiException;
 import phucuong.ht.modules.auth.model.AuthUserDetails;
 import phucuong.ht.modules.auth.repository.AccountRepository;
 import phucuong.ht.modules.auth.repository.AccountRoleRepository;
@@ -124,7 +124,7 @@ class AccountManagementServiceTest {
         stubCreate(diocese, adminDioceseRole());
         when(validation.normalizeRequiredText("admin@phucuong.vn")).thenReturn("admin@phucuong.vn");
         when(accountRepository.existsByUsername("phucuongadmin")).thenReturn(false);
-        var mailFailure = new phucuong.ht.modules.auth.exception.ApiException(
+        var mailFailure = new phucuong.ht.common.exception.ApiException(
                 org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
                 phucuong.ht.common.exception.errorCode.INTERNAL_ERROR, "SMTP down");
         org.mockito.Mockito.doThrow(mailFailure).when(mailService)

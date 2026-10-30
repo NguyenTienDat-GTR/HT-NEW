@@ -392,7 +392,7 @@ class MediaStorageIntegrationTest {
         Authentication intruder = new UsernamePasswordAuthenticationToken("intruder", "n/a",
                 List.of(new SimpleGrantedAuthority("organization.leader.create.diocese")));
         jdbc.update("insert into account (username, created_at, diocese_id) values ('intruder', now(), ?)", dioceseId);
-        org.junit.jupiter.api.Assertions.assertThrows(phucuong.ht.modules.auth.exception.ApiException.class,
+        org.junit.jupiter.api.Assertions.assertThrows(phucuong.ht.common.exception.ApiException.class,
                 () -> leaderService.create(request, intruder));
         assertEquals(MediaStatus.PENDING, assetRepository.findById(pending).orElseThrow().getStatus());
     }
@@ -420,7 +420,7 @@ class MediaStorageIntegrationTest {
         // Ảnh đại diện không được xóa, chỉ được thay thế: yêu cầu gỡ ảnh bị từ chối và ảnh hiện tại giữ nguyên.
         LeaderUpdateRequest clear = new LeaderUpdateRequest();
         clear.setClearFields(List.of("imageUrl"));
-        org.junit.jupiter.api.Assertions.assertThrows(phucuong.ht.modules.auth.exception.ApiException.class,
+        org.junit.jupiter.api.Assertions.assertThrows(phucuong.ht.common.exception.ApiException.class,
                 () -> leaderService.update(leaderId, clear, updater));
         assertEquals(MediaStatus.ACTIVE, assetRepository.findById(replacement).orElseThrow().getStatus());
         assertEquals(replacement, jdbc.queryForObject("select image_asset_id from leader where id = ?", UUID.class, leaderId));
@@ -732,7 +732,7 @@ class MediaStorageIntegrationTest {
                 new phucuong.ht.modules.certificate.config.model.request.CertificateConfigUpsertRequest();
         stolen.setName("Dùng ảnh người khác");
         stolen.setBackgroundAssetId(anotherDioceseAsset);
-        org.junit.jupiter.api.Assertions.assertThrows(phucuong.ht.modules.auth.exception.ApiException.class,
+        org.junit.jupiter.api.Assertions.assertThrows(phucuong.ht.common.exception.ApiException.class,
                 () -> certificateConfigService.create(stolen, deaneryCertAdmin()));
 
         // Nhưng ảnh của chính album giáo hạt thì dùng được.

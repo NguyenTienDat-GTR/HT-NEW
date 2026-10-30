@@ -1,6 +1,7 @@
 package phucuong.ht.modules.system.service;
 
 import lombok.RequiredArgsConstructor;
+import phucuong.ht.common.repository.SearchRequests;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.security.core.Authentication;
@@ -32,7 +33,7 @@ public class SystemLogService {
     private final securityUtils securityUtils;
 
     public Page<SystemLogResponse> findAll(BaseSearchRequest request, Authentication authentication) {
-        BaseSearchRequest scopedRequest = copyRequest(request);
+        BaseSearchRequest scopedRequest = SearchRequests.copy(request);
 
         if (securityUtils.hasAuthority(authentication, SystemLogAccessEvaluator.READ_ALL)) {
             return map(systemLogRepository.findAll(scopedRequest));
@@ -66,20 +67,6 @@ public class SystemLogService {
 
     private Page<SystemLogResponse> map(Page<SystemLog> page) {
         return new PageImpl<>(page.getContent().stream().map(this::toResponse).toList(), page.getPageable(), page.getTotalElements());
-    }
-
-    private BaseSearchRequest copyRequest(BaseSearchRequest request) {
-        BaseSearchRequest source = request == null ? new BaseSearchRequest() : request;
-        BaseSearchRequest copy = new BaseSearchRequest();
-        copy.setPage(source.getPage());
-        copy.setSize(source.getSize());
-        copy.setSearch(source.getSearch());
-        copy.setSearchFields(source.getSearchFields() == null ? List.of() : List.copyOf(source.getSearchFields()));
-        copy.setFilters(source.getFilters() == null ? new LinkedHashMap<>() : new LinkedHashMap<>(source.getFilters()));
-        copy.setStatus(source.getStatus());
-        copy.setSortBy(source.getSortBy());
-        copy.setSortDirection(source.getSortDirection());
-        return copy;
     }
 
     private SystemLogResponse toResponse(SystemLog systemLog) {

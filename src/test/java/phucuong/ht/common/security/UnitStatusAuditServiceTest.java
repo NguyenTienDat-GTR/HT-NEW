@@ -11,7 +11,7 @@ import phucuong.ht.common.dto.UnitToggleImpactResponse;
 import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.common.exception.errorCode;
 import phucuong.ht.common.validation.CommonValidationHelper;
-import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.common.exception.ApiException;
 
 import java.util.Set;
 import java.util.UUID;

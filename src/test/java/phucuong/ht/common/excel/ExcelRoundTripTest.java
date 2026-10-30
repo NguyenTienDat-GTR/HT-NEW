@@ -6,7 +6,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.mock.web.MockMultipartFile;
 import phucuong.ht.common.repository.BaseSearchRequest;
-import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.common.exception.ApiException;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;

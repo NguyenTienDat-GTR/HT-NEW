@@ -1,6 +1,8 @@
 package phucuong.ht.modules.leader.service;
 
 import phucuong.ht.config.EvictCaches;
+import phucuong.ht.common.utils.LeaderNames;
+import phucuong.ht.common.repository.SearchRequests;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
@@ -15,7 +17,7 @@ import phucuong.ht.common.exception.errorCode;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.config.CacheNames;
-import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.common.exception.ApiException;
 import phucuong.ht.modules.auth.repository.AccountRepository;
 import phucuong.ht.modules.leader.helper.LeaderScopeHelper;
 import phucuong.ht.modules.leader.helper.LeaderValidationHelper;
@@ -115,7 +117,7 @@ public class LeaderService {
             throw new ApiException(HttpStatus.FORBIDDEN, errorCode.ACCESS_DENIED, "Tài khoản hiện tại không có quyền xem danh sách Huynh Trưởng");
         }
 
-        BaseSearchRequest scopedRequest = copyRequest(request);
+        BaseSearchRequest scopedRequest = SearchRequests.copy(request);
         if (hasAuthority(authentication, LeaderAccessEvaluator.READ_DIOCESE)) {
             UUID dioceseId = leaderScopeHelper.getRequiredActiveDioceseId(authentication, LeaderAccessEvaluator.READ_DIOCESE);
             scopedRequest.getFilters().put(DIOCESE_FILTER_FIELD, dioceseId);
@@ -143,7 +145,7 @@ public class LeaderService {
         int pageIndex = Math.max(source.getPage(), 0);
         Page<LeaderResponse> page;
         do {
-            BaseSearchRequest candidateRequest = copyRequest(source);
+            BaseSearchRequest candidateRequest = SearchRequests.copy(source);
             candidateRequest.setSearch(null);
             candidateRequest.setSearchFields(List.of());
             candidateRequest.setPage(pageIndex++);
@@ -367,20 +369,6 @@ public class LeaderService {
                 .anyMatch(permissionCode::equals);
     }
 
-    private BaseSearchRequest copyRequest(BaseSearchRequest request) {
-        BaseSearchRequest source = request == null ? new BaseSearchRequest() : request;
-        BaseSearchRequest copy = new BaseSearchRequest();
-        copy.setPage(source.getPage());
-        copy.setSize(source.getSize());
-        copy.setSearch(source.getSearch());
-        copy.setSearchFields(source.getSearchFields() == null ? List.of() : List.copyOf(source.getSearchFields()));
-        copy.setFilters(source.getFilters() == null ? new LinkedHashMap<>() : new LinkedHashMap<>(source.getFilters()));
-        copy.setStatus(source.getStatus());
-        copy.setSortBy(source.getSortBy());
-        copy.setSortDirection(source.getSortDirection());
-        return copy;
-    }
-
     private Page<LeaderResponse> loadLeaderPageWithParish(BaseSearchRequest request) {
         Page<Leader> page = leaderRepository.findAll(request);
         if (page.isEmpty()) {
@@ -414,7 +402,7 @@ public class LeaderService {
                 .updatedByName(auditActorNameResolver.resolve(leader.getUpdatedBy()))
                 .status(leader.getStatus())
                 .holyName(leader.getHolyName())
-                .fullName(buildFullName(leader))
+                .fullName(LeaderNames.fullName(leader))
                 .firstName(leader.getFirstName())
                 .lastName(leader.getLastName())
                 .birthDate(leader.getBirthDate())
@@ -457,13 +445,4 @@ public class LeaderService {
                 .build();
     }
 
-    private String buildFullName(Leader leader) {
-        if (leader == null) {
-            return null;
-        }
-        if (leader.getLastName() == null || leader.getLastName().isBlank()) {
-            return leader.getFirstName();
-        }
-        return leader.getLastName() + " " + leader.getFirstName();
-    }
 }

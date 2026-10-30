@@ -1,6 +1,7 @@
 package phucuong.ht.modules.system.service;
 
 import lombok.RequiredArgsConstructor;
+import phucuong.ht.common.repository.InMemoryPager;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -211,11 +212,7 @@ public class PermissionManagementService {
     }
 
     private Page<PermissionResponse> page(BaseSearchRequest request, List<Permission> permissions) {
-        int page = request == null ? 0 : request.getPage();
-        int size = request == null ? 10 : request.getSize();
-        int start = Math.min(page * size, permissions.size());
-        int end = Math.min(start + size, permissions.size());
-        return new PageImpl<>(permissions.subList(start, end).stream().map(this::toResponse).toList(), PageRequest.of(page, size), permissions.size());
+        return InMemoryPager.page(request, permissions, this::toResponse);
     }
 
     private PermissionResponse toResponse(Permission permission) {

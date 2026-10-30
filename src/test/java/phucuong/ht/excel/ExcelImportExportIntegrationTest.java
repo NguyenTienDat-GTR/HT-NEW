@@ -31,7 +31,7 @@ import phucuong.ht.common.excel.ImportSummary;
 import phucuong.ht.common.excel.ImportValidationException;
 import phucuong.ht.common.excel.job.JobProgress;
 import phucuong.ht.common.repository.BaseSearchRequest;
-import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.common.exception.ApiException;
 import phucuong.ht.modules.certificate.model.enums.CertificateSignerType;
 import phucuong.ht.modules.certificate.model.request.CertificateApproveRequest;
 import phucuong.ht.modules.certificate.service.CertificateService;

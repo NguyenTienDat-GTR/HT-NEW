@@ -8,7 +8,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.common.exception.errorCode;
 import phucuong.ht.common.validation.CommonValidationHelper;
-import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.common.exception.ApiException;
 import phucuong.ht.modules.deanery.model.entity.Deanery;
 import phucuong.ht.modules.diocese.model.entity.Diocese;
 import phucuong.ht.modules.leader.model.entity.Leader;

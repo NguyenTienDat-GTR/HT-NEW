@@ -23,7 +23,7 @@ import phucuong.ht.common.exception.errorCode;
 import phucuong.ht.common.idempotency.IdempotencyService;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.utils.securityUtils;
-import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.common.exception.ApiException;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
