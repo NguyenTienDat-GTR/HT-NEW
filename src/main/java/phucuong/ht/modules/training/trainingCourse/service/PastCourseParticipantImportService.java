@@ -11,6 +11,7 @@ import phucuong.ht.common.excel.ExcelSheetData;
 import phucuong.ht.common.excel.ExcelWorkbookReader;
 import phucuong.ht.common.excel.ImportErrors;
 import phucuong.ht.common.excel.ImportSummary;
+import phucuong.ht.common.excel.AbstractExcelImporter;
 import phucuong.ht.common.excel.AvatarImportCollector;
 import phucuong.ht.common.excel.AvatarPlan;
 import phucuong.ht.common.excel.AvatarWarning;
@@ -61,7 +62,7 @@ import java.util.UUID;
  */
 @Service
 @RequiredArgsConstructor
-public class PastCourseParticipantImportService {
+public class PastCourseParticipantImportService extends AbstractExcelImporter<PastCourseParticipantImportService.Parsed, PastCourseParticipantImportService.ImportRun> {
 
     public static final String COL_EMAIL = "Email";
     public static final String COL_PHONE = "Số điện thoại";
@@ -98,7 +99,7 @@ public class PastCourseParticipantImportService {
     private phucuong.ht.modules.training.courseInvitation.service.CourseInvitationAutoTrigger invitationAutoTrigger;
 
     // leader: huynh trưởng đã có hồ sơ; newLeader: thông tin để tạo mới (đúng một trong hai khác null).
-    private record Parsed(ExcelRowData row, Leader leader, LeaderImportService.NewLeader newLeader, CourseResult result, BigDecimal score, String review,
+    record Parsed(ExcelRowData row, Leader leader, LeaderImportService.NewLeader newLeader, CourseResult result, BigDecimal score, String review,
                           boolean exception, String exceptionReason, String teamName, String note, String avatarFileName) {
     }
 
@@ -148,135 +149,179 @@ public class PastCourseParticipantImportService {
         requireImportAllowed(course, authentication);
         lockCourse(course);
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người import danh sách tham dự");
+        return runImport(file, progress, new ImportRun(course, past, withTeam, actor, images));
+    }
 
-        List<Parsed> parsed;
-        try (ExcelWorkbookReader reader = ExcelWorkbookReader.open(file)) {
-            ExcelSheetData sheet = reader.firstSheet();
-            ImportErrors errors = new ImportErrors();
-            // Mọi cột đều bắt buộc có trong file, trừ Cấp độ và Nhận xét; khóa thường không có Tổng điểm / Kết quả.
-            sheet.requireColumns(errors, COL_EMAIL, COL_PHONE,
+    /** Trạng thái của một lần import (service dùng chung nhiều luồng nên không giữ trong field). */
+    static final class ImportRun {
+        private final TrainingCourse course;
+        private final boolean past;
+        private final boolean withTeam;
+        private final String actor;
+        private final AvatarZip images;
+        private final List<AvatarPlan> avatarPlan = new ArrayList<>();
+        private final List<AvatarWarning> avatarWarnings = new ArrayList<>();
+        // Khóa thường: hồ sơ vào thẳng danh sách tham dự coi như vừa được duyệt (khóa bật tự gửi email sẽ gửi thông tin tham dự).
+        private final List<CourseParticipation> directlyApproved = new ArrayList<>();
+        private OffsetDateTime now;
+        private LocalDate registrationDate;
+        private boolean certificateRequired;
+        private int newLeaders;
+        private int exceptions;
+
+        ImportRun(TrainingCourse course, boolean past, boolean withTeam, String actor, AvatarZip images) {
+            this.course = course;
+            this.past = past;
+            this.withTeam = withTeam;
+            this.actor = actor;
+            this.images = images;
+        }
+    }
+
+    @Override
+    protected List<Parsed> readRows(ExcelWorkbookReader reader, ImportRun run, ImportErrors errors) {
+        TrainingCourse course = run.course;
+        boolean past = run.past;
+        boolean withTeam = run.withTeam;
+        ExcelSheetData sheet = reader.firstSheet();
+        // Mọi cột đều bắt buộc có trong file, trừ Cấp độ và Nhận xét; khóa thường không có Tổng điểm / Kết quả.
+        sheet.requireColumns(errors, COL_EMAIL, COL_PHONE,
+                LeaderImportService.COL_HOLY_NAME, LeaderImportService.COL_FULL_NAME, LeaderImportService.COL_BIRTH_DATE,
+                LeaderImportService.COL_GENDER, LeaderImportService.COL_DEANERY, LeaderImportService.COL_PARISH);
+        if (past) {
+            sheet.requireColumns(errors, COL_SCORE, COL_RESULT);
+        }
+        if (withTeam) {
+            sheet.requireColumns(errors, COL_TEAM);
+        }
+        errors.throwIfAny();
+        // Khóa thường có thêm sheet "Ngoại lệ" (huynh trưởng không đủ điều kiện, chờ duyệt đăng ký); sheet này có thể không có hoặc để trống.
+        ExcelSheetData exceptionSheet = past || withTeam ? null : reader.sheet(ImportTemplates.EXCEPTION_SHEET);
+        if (exceptionSheet != null) {
+            exceptionSheet.requireColumns(errors, COL_EMAIL, COL_PHONE, COL_EXCEPTION_REASON,
                     LeaderImportService.COL_HOLY_NAME, LeaderImportService.COL_FULL_NAME, LeaderImportService.COL_BIRTH_DATE,
                     LeaderImportService.COL_GENDER, LeaderImportService.COL_DEANERY, LeaderImportService.COL_PARISH);
-            if (past) {
-                sheet.requireColumns(errors, COL_SCORE, COL_RESULT);
-            }
-            if (withTeam) {
-                sheet.requireColumns(errors, COL_TEAM);
-            }
-            errors.throwIfAny();
-            // Khóa thường có thêm sheet "Ngoại lệ" (huynh trưởng không đủ điều kiện, chờ duyệt đăng ký); sheet này có thể không có hoặc để trống.
-            ExcelSheetData exceptionSheet = past || withTeam ? null : reader.sheet(ImportTemplates.EXCEPTION_SHEET);
-            if (exceptionSheet != null) {
-                exceptionSheet.requireColumns(errors, COL_EMAIL, COL_PHONE, COL_EXCEPTION_REASON,
-                        LeaderImportService.COL_HOLY_NAME, LeaderImportService.COL_FULL_NAME, LeaderImportService.COL_BIRTH_DATE,
-                        LeaderImportService.COL_GENDER, LeaderImportService.COL_DEANERY, LeaderImportService.COL_PARISH);
-                errors.throwIfAny();
-            }
-            if (sheet.rows().isEmpty() && (exceptionSheet == null || exceptionSheet.rows().isEmpty())) {
-                throw commonValidationHelper.validationError("File Excel không có dòng dữ liệu nào");
-            }
-            parsed = parse(sheet, exceptionSheet, course, errors, past, withTeam);
             errors.throwIfAny();
         }
-        progress.report(0, parsed.size());
+        if (sheet.rows().isEmpty() && (exceptionSheet == null || exceptionSheet.rows().isEmpty())) {
+            throw commonValidationHelper.validationError("File Excel không có dòng dữ liệu nào");
+        }
+        return parse(sheet, exceptionSheet, course, errors, past, withTeam);
+    }
 
-        OffsetDateTime now = OffsetDateTime.now();
-        LocalDate registrationDate = course.getStartDate() != null ? course.getStartDate() : LocalDate.of(course.getHostYear(), 1, 1);
-        boolean certificateRequired = trainingWorkflowSupport.requiresCertificate(course);
-        int created = 0;
-        int newLeaders = 0;
-        int exceptions = 0;
-        List<AvatarPlan> avatarPlan = new ArrayList<>();
-        List<AvatarWarning> avatarWarnings = new ArrayList<>();
-        // Khóa thường: hồ sơ vào thẳng danh sách tham dự coi như vừa được duyệt (khóa bật tự gửi email sẽ gửi thông tin tham dự).
-        List<CourseParticipation> directlyApproved = new java.util.ArrayList<>();
-        for (Parsed item : parsed) {
-            Leader leader = item.leader();
-            if (leader == null) {
-                // Huynh trưởng chưa có hồ sơ: tạo ngay trong cùng transaction (lỗi ở bất kỳ dòng nào thì rollback cả hồ sơ lẫn danh sách tham dự).
-                leader = leaderRepository.save(leaderImportService.buildLeader(item.newLeader(), actor, now));
-                newLeaders++;
-            }
-            if (past && item.avatarFileName() != null) {
-                if (item.leader() != null && item.leader().getImageAssetId() != null) {
-                    avatarWarnings.add(new AvatarWarning(item.row().number(), item.row().text(LeaderImportService.COL_FULL_NAME),
-                            item.avatarFileName(), "Hồ sơ đã có ảnh, giữ ảnh cũ"));
-                } else {
-                    AvatarImportCollector.collect(images, avatarPlan, avatarWarnings, item.row().number(), leader.getId(),
-                            item.row().text(LeaderImportService.COL_FULL_NAME), item.avatarFileName(),
-                            leader.getParish().getDeanery().getDiocese().getId());
-                }
-            }
-            CourseParticipation participation = new CourseParticipation();
-            participation.setLeader(leader);
-            participation.setCourse(course);
-            participation.setEligible(Boolean.TRUE);
-            participation.setApprovalStatus(WorkflowApprovalStatus.APPROVED);
-            participation.setApprovedBy(actor);
-            boolean passed = false;
-            if (past) {
-                participation.setRegistrationDate(registrationDate);
-                participation.setTotalScore(item.score());
-                participation.setReview(item.review());
-                participation.setResult(item.result());
-                passed = item.result() == CourseResult.COMPLETED;
-                participation.setParticipationStatus(passed ? ParticipationStatus.COMPLETED : ParticipationStatus.ATTENDED);
-                if (!passed) {
-                    participation.setFinalResult(CourseFinalResult.FAILED);
-                    participation.setCertificateApprovalStatus(WorkflowApprovalStatus.NOT_REQUIRED);
-                } else if (certificateRequired) {
-                    // Chờ duyệt chứng nhận; kết quả chung (Đạt) chốt khi chứng nhận được duyệt.
-                    participation.setCertificateApprovalStatus(WorkflowApprovalStatus.PENDING);
-                    participation.setCertificateRequestedAt(now);
-                } else {
-                    participation.setFinalResult(CourseFinalResult.PASSED);
-                    participation.setCertificateApprovalStatus(WorkflowApprovalStatus.NOT_REQUIRED);
-                }
-            } else if (item.exception()) {
-                // Ngoại lệ: chờ duyệt đăng ký như hồ sơ gửi từ màn Đăng ký (cờ ngoại lệ + lí do), người duyệt chọn cấp độ đạt được khi duyệt.
-                exceptions++;
-                participation.setEligible(Boolean.FALSE);
-                participation.setExceptionReason(item.exceptionReason());
-                participation.setApprovalStatus(WorkflowApprovalStatus.PENDING);
-                participation.setApprovedBy(null);
-                participation.setRegistrationDate(LocalDate.now());
-                participation.setResult(CourseResult.UNCOMPLETED);
-                participation.setParticipationStatus(ParticipationStatus.REGISTERED);
-                participation.setParishSubmittedAt(now);
-                participation.setCertificateApprovalStatus(WorkflowApprovalStatus.NOT_REQUIRED);
+    @Override
+    protected void beforeWrite(ImportRun run) {
+        TrainingCourse course = run.course;
+        run.now = OffsetDateTime.now();
+        run.registrationDate = course.getStartDate() != null ? course.getStartDate() : LocalDate.of(course.getHostYear(), 1, 1);
+        run.certificateRequired = trainingWorkflowSupport.requiresCertificate(course);
+    }
+
+    @Override
+    protected void write(Parsed item, ImportRun run) {
+        TrainingCourse course = run.course;
+        boolean past = run.past;
+        String actor = run.actor;
+        OffsetDateTime now = run.now;
+        LocalDate registrationDate = run.registrationDate;
+        boolean certificateRequired = run.certificateRequired;
+        AvatarZip images = run.images;
+        List<AvatarPlan> avatarPlan = run.avatarPlan;
+        List<AvatarWarning> avatarWarnings = run.avatarWarnings;
+        List<CourseParticipation> directlyApproved = run.directlyApproved;
+        Leader leader = item.leader();
+        if (leader == null) {
+            // Huynh trưởng chưa có hồ sơ: tạo ngay trong cùng transaction (lỗi ở bất kỳ dòng nào thì rollback cả hồ sơ lẫn danh sách tham dự).
+            leader = leaderRepository.save(leaderImportService.buildLeader(item.newLeader(), actor, now));
+            run.newLeaders++;
+        }
+        if (past && item.avatarFileName() != null) {
+            if (item.leader() != null && item.leader().getImageAssetId() != null) {
+                avatarWarnings.add(new AvatarWarning(item.row().number(), item.row().text(LeaderImportService.COL_FULL_NAME),
+                        item.avatarFileName(), "Hồ sơ đã có ảnh, giữ ảnh cũ"));
             } else {
-                // Khóa thường: vào thẳng danh sách tham dự (như hồ sơ đã duyệt), điểm được chấm sau ở tab Chấm điểm.
-                participation.setRegistrationDate(LocalDate.now());
-                participation.setResult(CourseResult.UNCOMPLETED);
-                participation.setParticipationStatus(ParticipationStatus.ATTENDED);
+                AvatarImportCollector.collect(images, avatarPlan, avatarWarnings, item.row().number(), leader.getId(),
+                        item.row().text(LeaderImportService.COL_FULL_NAME), item.avatarFileName(),
+                        leader.getParish().getDeanery().getDiocese().getId());
+            }
+        }
+        CourseParticipation participation = new CourseParticipation();
+        participation.setLeader(leader);
+        participation.setCourse(course);
+        participation.setEligible(Boolean.TRUE);
+        participation.setApprovalStatus(WorkflowApprovalStatus.APPROVED);
+        participation.setApprovedBy(actor);
+        boolean passed = false;
+        if (past) {
+            participation.setRegistrationDate(registrationDate);
+            participation.setTotalScore(item.score());
+            participation.setReview(item.review());
+            participation.setResult(item.result());
+            passed = item.result() == CourseResult.COMPLETED;
+            participation.setParticipationStatus(passed ? ParticipationStatus.COMPLETED : ParticipationStatus.ATTENDED);
+            if (!passed) {
+                participation.setFinalResult(CourseFinalResult.FAILED);
                 participation.setCertificateApprovalStatus(WorkflowApprovalStatus.NOT_REQUIRED);
-                participation.setTeamName(item.teamName());
-                directlyApproved.add(participation);
+            } else if (certificateRequired) {
+                // Chờ duyệt chứng nhận; kết quả chung (Đạt) chốt khi chứng nhận được duyệt.
+                participation.setCertificateApprovalStatus(WorkflowApprovalStatus.PENDING);
+                participation.setCertificateRequestedAt(now);
+            } else {
+                participation.setFinalResult(CourseFinalResult.PASSED);
+                participation.setCertificateApprovalStatus(WorkflowApprovalStatus.NOT_REQUIRED);
             }
-            participation.setRegistrationNote(item.note());
-            participation.setStatus(Boolean.TRUE);
-            participation.setCreatedAt(now);
-            participation.setUpdatedAt(now);
-            participation.setCreatedBy(actor);
-            participation.setUpdatedBy(actor);
-            courseParticipationRepository.save(participation);
-            if (passed && certificateRequired) {
-                courseParticipationService.ensureSuggestedCertificateExists(participation, actor);
-            }
-            created++;
-            if (created % 200 == 0) {
-                progress.report(created, parsed.size());
-            }
+        } else if (item.exception()) {
+            // Ngoại lệ: chờ duyệt đăng ký như hồ sơ gửi từ màn Đăng ký (cờ ngoại lệ + lí do), người duyệt chọn cấp độ đạt được khi duyệt.
+            run.exceptions++;
+            participation.setEligible(Boolean.FALSE);
+            participation.setExceptionReason(item.exceptionReason());
+            participation.setApprovalStatus(WorkflowApprovalStatus.PENDING);
+            participation.setApprovedBy(null);
+            participation.setRegistrationDate(LocalDate.now());
+            participation.setResult(CourseResult.UNCOMPLETED);
+            participation.setParticipationStatus(ParticipationStatus.REGISTERED);
+            participation.setParishSubmittedAt(now);
+            participation.setCertificateApprovalStatus(WorkflowApprovalStatus.NOT_REQUIRED);
+        } else {
+            // Khóa thường: vào thẳng danh sách tham dự (như hồ sơ đã duyệt), điểm được chấm sau ở tab Chấm điểm.
+            participation.setRegistrationDate(LocalDate.now());
+            participation.setResult(CourseResult.UNCOMPLETED);
+            participation.setParticipationStatus(ParticipationStatus.ATTENDED);
+            participation.setCertificateApprovalStatus(WorkflowApprovalStatus.NOT_REQUIRED);
+            participation.setTeamName(item.teamName());
+            directlyApproved.add(participation);
         }
+        participation.setRegistrationNote(item.note());
+        participation.setStatus(Boolean.TRUE);
+        participation.setCreatedAt(now);
+        participation.setUpdatedAt(now);
+        participation.setCreatedBy(actor);
+        participation.setUpdatedBy(actor);
+        courseParticipationRepository.save(participation);
+        if (passed && certificateRequired) {
+            courseParticipationService.ensureSuggestedCertificateExists(participation, actor);
+        }
+    
+    }
+
+    @Override
+    protected void afterWrite(ImportRun run) {
         if (invitationAutoTrigger != null) {
-            invitationAutoTrigger.afterApproved(directlyApproved);
+            invitationAutoTrigger.afterApproved(run.directlyApproved);
         }
-        String message = withTeam ? "Đã import " + created + " học viên đã chia đội vào khóa \"" + course.getCourseName() + "\""
+    }
+
+    @Override
+    protected ImportSummary summarize(int created, ImportRun run) {
+        TrainingCourse course = run.course;
+        int newLeaders = run.newLeaders;
+        int exceptions = run.exceptions;
+        String message = run.withTeam ? "Đã import " + created + " học viên đã chia đội vào khóa \"" + course.getCourseName() + "\""
                 + (newLeaders > 0 ? ", trong đó tạo mới " + newLeaders + " hồ sơ huynh trưởng" : "")
                 : "Đã import " + created + " học viên vào khóa \"" + course.getCourseName() + "\""
                 + (exceptions > 0 ? ", trong đó " + exceptions + " hồ sơ ngoại lệ chờ duyệt đăng ký" : "")
                 + (newLeaders > 0 ? ", trong đó tạo mới " + newLeaders + " hồ sơ huynh trưởng" : "");
-        return new ImportSummary(created, message, avatarPlan, avatarWarnings);
+        return new ImportSummary(created, message, run.avatarPlan, run.avatarWarnings);
     }
 
     // Xóa một học viên khỏi khóa quá khứ (sửa nhầm khi import). Học viên đã có chứng nhận được duyệt thì phải thu hồi trước.
