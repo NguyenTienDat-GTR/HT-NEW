@@ -1,6 +1,7 @@
 package phucuong.ht.modules.badge.config.service;
 
 import lombok.RequiredArgsConstructor;
+import phucuong.ht.common.utils.TextFolding;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -99,12 +100,12 @@ public class BadgeConfigService {
     public Page<BadgeConfigResponse> search(BaseSearchRequest request, Authentication authentication) {
         ActorScope actor = actorOf(authentication);
         Map<String, Object> filters = request.getFilters() == null ? Map.of() : request.getFilters();
-        String keyword = foldText(request.getSearch());
-        String scope = filterText(filters, "scope");
-        Boolean isDefault = filterBoolean(filters, "isDefault");
-        Boolean hasBack = filterBoolean(filters, "hasBack");
-        String paperSize = filterText(filters, "paperSize");
-        String cardOrientation = filterText(filters, "cardOrientation");
+        String keyword = TextFolding.foldText(request.getSearch());
+        String scope = TextFolding.filterText(filters, "scope");
+        Boolean isDefault = TextFolding.filterBoolean(filters, "isDefault");
+        Boolean hasBack = TextFolding.filterBoolean(filters, "hasBack");
+        String paperSize = TextFolding.filterText(filters, "paperSize");
+        String cardOrientation = TextFolding.filterText(filters, "cardOrientation");
 
         List<BadgeConfigResponse> matched = new ArrayList<>();
         for (BadgeConfig config : visibleConfigs(actor)) {
@@ -113,11 +114,11 @@ public class BadgeConfigService {
             if (hasBack != null && hasBack != Boolean.TRUE.equals(config.getHasBack())) continue;
             if (paperSize != null && !paperSize.equalsIgnoreCase(config.getPaperSize())) continue;
             if (cardOrientation != null && !cardOrientation.equalsIgnoreCase(config.getCardOrientation())) continue;
-            if (!keyword.isEmpty() && !foldText(config.getName()).contains(keyword)) continue;
+            if (!keyword.isEmpty() && !TextFolding.foldText(config.getName()).contains(keyword)) continue;
             matched.add(toSummary(config, actor));
         }
 
-        Comparator<BadgeConfigResponse> byName = Comparator.comparing(c -> foldText(c.getName()));
+        Comparator<BadgeConfigResponse> byName = Comparator.comparing(c -> TextFolding.foldText(c.getName()));
         Comparator<BadgeConfigResponse> order = switch (request.getSortBy() == null ? "" : request.getSortBy()) {
             case "name" -> byName;
             case "updatedAt" -> Comparator.comparing(BadgeConfigResponse::getUpdatedAt, Comparator.nullsFirst(Comparator.naturalOrder()));
@@ -161,7 +162,7 @@ public class BadgeConfigService {
         String audit = securityUtils.currentAuditActor(authentication);
         OffsetDateTime now = OffsetDateTime.now();
 
-        if (normalize(request.getName()) != null) {
+        if (TextFolding.normalize(request.getName()) != null) {
             config.setName(uniqueName(config.getScopeKey(), request.getName(), config.getName()));
         }
         applyContent(config, request, now, audit, actor);
@@ -225,7 +226,7 @@ public class BadgeConfigService {
 
     // Kiểm tra và áp nội dung cấu hình. Mọi sai lệch trả 400 kèm thông báo tiếng Việt cụ thể.
     void applyContent(BadgeConfig config, BadgeConfigUpsertRequest request, OffsetDateTime now, String audit, ActorScope actor) {
-        String paperSize = normalize(request.getPaperSize()) == null ? "A4" : request.getPaperSize().trim().toUpperCase(Locale.ROOT);
+        String paperSize = TextFolding.normalize(request.getPaperSize()) == null ? "A4" : request.getPaperSize().trim().toUpperCase(Locale.ROOT);
         if (!BadgeSheetLayout.isKnownPaper(paperSize)) {
             throw validationHelper.validationError("Khổ giấy không hợp lệ: " + request.getPaperSize() + " (chọn A3, A4, A5, Letter hoặc Legal)");
         }
@@ -282,7 +283,7 @@ public class BadgeConfigService {
     }
 
     private String orientation(String value, String fallback, String label) {
-        if (normalize(value) == null) {
+        if (TextFolding.normalize(value) == null) {
             return fallback;
         }
         String upper = value.trim().toUpperCase(Locale.ROOT);
@@ -353,25 +354,7 @@ public class BadgeConfigService {
 
     // Tên duy nhất (không phân biệt hoa thường) trong phạm vi; trùng thì thêm " (1)", " (2)"...
     private String uniqueName(String scopeKey, String requested, String currentName) {
-        String base = normalize(requested);
-        if (base == null) {
-            base = "Cấu hình thẻ tham dự";
-        }
-        if (base.length() > MAX_NAME_LENGTH) {
-            base = base.substring(0, MAX_NAME_LENGTH).trim();
-        }
-        Set<String> taken = new HashSet<>();
-        for (String name : configRepository.findNamesInScope(scopeKey)) {
-            taken.add(name.toLowerCase());
-        }
-        if (currentName != null) {
-            taken.remove(currentName.toLowerCase());
-        }
-        String candidate = base;
-        for (int n = 1; taken.contains(candidate.toLowerCase()); n++) {
-            candidate = base + " (" + n + ")";
-        }
-        return candidate;
+        return TextFolding.uniqueName(configRepository.findNamesInScope(scopeKey), requested, currentName, "Cấu hình thẻ tham dự", MAX_NAME_LENGTH);
     }
 
     BadgeConfigResponse toResponse(BadgeConfig config, ActorScope actor) {
@@ -429,31 +412,4 @@ public class BadgeConfigService {
         return value == Math.rint(value) ? String.valueOf((long) value) : String.valueOf(value);
     }
 
-    private static String filterText(Map<String, Object> filters, String key) {
-        Object value = filters.get(key);
-        return value == null || value.toString().isBlank() ? null : value.toString().trim();
-    }
-
-    private static Boolean filterBoolean(Map<String, Object> filters, String key) {
-        String value = filterText(filters, key);
-        return value == null ? null : Boolean.valueOf(value);
-    }
-
-    // Chữ thường, bỏ dấu tiếng Việt để tìm kiếm thân thiện.
-    private static String foldText(String value) {
-        if (value == null) {
-            return "";
-        }
-        return Normalizer.normalize(value, Normalizer.Form.NFD)
-                .replaceAll("\\p{M}", "").replace('đ', 'd').replace('Đ', 'D')
-                .toLowerCase().trim();
-    }
-
-    private static String normalize(String value) {
-        if (value == null) {
-            return null;
-        }
-        String trimmed = value.trim();
-        return trimmed.isEmpty() ? null : trimmed;
-    }
 }

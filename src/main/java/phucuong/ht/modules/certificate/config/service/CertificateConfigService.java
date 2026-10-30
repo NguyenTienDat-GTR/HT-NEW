@@ -1,6 +1,7 @@
 package phucuong.ht.modules.certificate.config.service;
 
 import com.google.zxing.common.BitMatrix;
+import phucuong.ht.common.utils.TextFolding;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -141,13 +142,13 @@ public class CertificateConfigService {
         ActorScope actor = scopeResolver.resolve(authentication);
         Map<UUID, List<CertifiedCourseTypeResponse>> usage = usageByConfig(actor, authentication);
         Map<String, Object> filters = request.getFilters() == null ? Map.of() : request.getFilters();
-        String keyword = foldText(request.getSearch());
-        String scope = filterText(filters, "scope");
-        Boolean isDefault = filterBoolean(filters, "isDefault");
-        Boolean used = filterBoolean(filters, "used");
-        String paperSize = filterText(filters, "paperSize");
-        String orientation = filterText(filters, "orientation");
-        String courseTypeCode = filterText(filters, "courseTypeCode");
+        String keyword = TextFolding.foldText(request.getSearch());
+        String scope = TextFolding.filterText(filters, "scope");
+        Boolean isDefault = TextFolding.filterBoolean(filters, "isDefault");
+        Boolean used = TextFolding.filterBoolean(filters, "used");
+        String paperSize = TextFolding.filterText(filters, "paperSize");
+        String orientation = TextFolding.filterText(filters, "orientation");
+        String courseTypeCode = TextFolding.filterText(filters, "courseTypeCode");
 
         List<CertificateConfigResponse> matched = new ArrayList<>();
         for (CertificateConfig config : visibleConfigs(actor)) {
@@ -159,14 +160,14 @@ public class CertificateConfigService {
             if (orientation != null && !orientation.equalsIgnoreCase(config.getOrientation())) continue;
             if (courseTypeCode != null && usedBy.stream().noneMatch(t -> courseTypeCode.equals(t.getTypeCode()))) continue;
             if (!keyword.isEmpty()) {
-                boolean hit = foldText(config.getName()).contains(keyword)
-                        || usedBy.stream().anyMatch(t -> foldText(t.getTypeName()).contains(keyword) || foldText(t.getTypeCode()).contains(keyword));
+                boolean hit = TextFolding.foldText(config.getName()).contains(keyword)
+                        || usedBy.stream().anyMatch(t -> TextFolding.foldText(t.getTypeName()).contains(keyword) || TextFolding.foldText(t.getTypeCode()).contains(keyword));
                 if (!hit) continue;
             }
             matched.add(toSummary(config, actor, usedBy));
         }
 
-        Comparator<CertificateConfigResponse> byName = Comparator.comparing(c -> foldText(c.getName()));
+        Comparator<CertificateConfigResponse> byName = Comparator.comparing(c -> TextFolding.foldText(c.getName()));
         Comparator<CertificateConfigResponse> order = switch (request.getSortBy() == null ? "" : request.getSortBy()) {
             case "name" -> byName;
             case "updatedAt" -> Comparator.comparing(CertificateConfigResponse::getUpdatedAt, Comparator.nullsFirst(Comparator.naturalOrder()));
@@ -191,31 +192,11 @@ public class CertificateConfigService {
                 : configRepository.findByScopeKeys(actor.usableKeys());
     }
 
-    private static String filterText(Map<String, Object> filters, String key) {
-        Object value = filters.get(key);
-        return value == null || value.toString().isBlank() ? null : value.toString().trim();
-    }
-
-    private static Boolean filterBoolean(Map<String, Object> filters, String key) {
-        String value = filterText(filters, key);
-        return value == null ? null : Boolean.valueOf(value);
-    }
-
-    // Chữ thường, bỏ dấu tiếng Việt để tìm kiếm thân thiện.
-    private static String foldText(String value) {
-        if (value == null) {
-            return "";
-        }
-        return Normalizer.normalize(value, Normalizer.Form.NFD)
-                .replaceAll("\\p{M}", "").replace('đ', 'd').replace('Đ', 'D')
-                .toLowerCase().trim();
-    }
-
     // Cấu hình hiệu lực của một loại khóa theo phạm vi người xem (fallback cấu hình chung), có thể rỗng.
     @Transactional(readOnly = true)
     public CertificateConfigResponse getResolved(String courseTypeCode, Authentication authentication) {
         ActorScope actor = scopeResolver.resolve(authentication);
-        return resolve(normalize(courseTypeCode), chainOf(actor))
+        return resolve(TextFolding.normalize(courseTypeCode), chainOf(actor))
                 .map(config -> toResponse(config, actor, List.of()))
                 .orElse(null);
     }
@@ -255,7 +236,7 @@ public class CertificateConfigService {
         String audit = securityUtils.currentAuditActor(authentication);
         OffsetDateTime now = OffsetDateTime.now();
 
-        if (normalize(request.getName()) != null) {
+        if (TextFolding.normalize(request.getName()) != null) {
             config.setName(uniqueName(config.getScopeKey(), request.getName(), config.getName()));
         }
         applyContent(config, request, now, audit, actor);
@@ -306,7 +287,7 @@ public class CertificateConfigService {
     @Transactional
     public void assign(CertificateConfigAssignRequest request, Authentication authentication) {
         ActorScope actor = scopeResolver.resolve(authentication);
-        String typeCode = normalize(request.getCourseTypeCode());
+        String typeCode = TextFolding.normalize(request.getCourseTypeCode());
         TrainingCourseType type = courseTypeRepository.findByCodeWithPrerequisite(typeCode)
                 .orElseThrow(() -> validationHelper.notFound("Không tìm thấy loại khóa: " + typeCode));
         courseTypeDioceseGuard.requireSameDiocese(type, authentication);
@@ -389,25 +370,7 @@ public class CertificateConfigService {
     // Tên duy nhất (không phân biệt hoa thường) trong phạm vi; trùng thì thêm " (1)", " (2)"... như Windows.
     // currentName: tên hiện tại của chính cấu hình đang sửa, không tính là trùng với chính nó.
     private String uniqueName(String scopeKey, String requested, String currentName) {
-        String base = normalize(requested);
-        if (base == null) {
-            base = "Cấu hình chứng nhận";
-        }
-        if (base.length() > 200) {
-            base = base.substring(0, 200).trim();
-        }
-        Set<String> taken = new HashSet<>();
-        for (String name : configRepository.findNamesInScope(scopeKey)) {
-            taken.add(name.toLowerCase());
-        }
-        if (currentName != null) {
-            taken.remove(currentName.toLowerCase());
-        }
-        String candidate = base;
-        for (int n = 1; taken.contains(candidate.toLowerCase()); n++) {
-            candidate = base + " (" + n + ")";
-        }
-        return candidate;
+        return TextFolding.uniqueName(configRepository.findNamesInScope(scopeKey), requested, currentName, "Cấu hình chứng nhận", 200);
     }
 
     // Chuỗi phạm vi tra cứu theo thứ tự ưu tiên: phạm vi của chính mình -> cấp trên -> hệ thống.
@@ -500,7 +463,7 @@ public class CertificateConfigService {
         }
         TrainingCourse course = certificate.getCourse();
         String courseTypeCode = course != null && course.getCourseType() != null ? course.getCourseType().getTypeCode() : null;
-        Optional<CertificateConfig> found = resolve(normalize(courseTypeCode), chainOf(course));
+        Optional<CertificateConfig> found = resolve(TextFolding.normalize(courseTypeCode), chainOf(course));
         if (found.isEmpty()) {
             return CertificatePreviewResponse.builder().configured(false).items(List.of()).build();
         }
@@ -576,7 +539,7 @@ public class CertificateConfigService {
                 TrainingCourse course = certificate.getCourse();
                 String courseTypeCode = course != null && course.getCourseType() != null
                         ? course.getCourseType().getTypeCode() : null;
-                CertificateConfig config = resolve(normalize(courseTypeCode), chainOf(course))
+                CertificateConfig config = resolve(TextFolding.normalize(courseTypeCode), chainOf(course))
                         .orElseThrow(() -> validationHelper.validationError(
                                 "Chưa có cấu hình chứng nhận (riêng hoặc chung) cho chứng nhận: " + code));
                 configs.add(config);
@@ -881,14 +844,6 @@ public class CertificateConfigService {
             sb.append(leader.getFirstName().trim());
         }
         return sb.toString();
-    }
-
-    private String normalize(String value) {
-        if (value == null) {
-            return null;
-        }
-        String trimmed = value.trim();
-        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private String nullToEmpty(String value) {
