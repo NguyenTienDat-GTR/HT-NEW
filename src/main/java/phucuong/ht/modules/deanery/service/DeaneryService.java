@@ -1,6 +1,7 @@
 package phucuong.ht.modules.deanery.service;
 
 import phucuong.ht.config.EvictCaches;
+import phucuong.ht.common.security.UnitToggleSupport;
 import phucuong.ht.common.repository.SearchRequests;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -61,15 +62,7 @@ public class DeaneryService {
     private final securityUtils securityUtils;
     private final AuditActorNameResolver auditActorNameResolver;
     @Autowired(required = false)
-    private UnitOperationalStatusService unitOperationalStatusService;
-    @Autowired(required = false)
-    private UnitStatusAuditService unitStatusAuditService;
-    @Autowired(required = false)
-    private ToggleNotificationRecipientResolver toggleNotificationRecipientResolver;
-    @Autowired(required = false)
-    private ToggleNotificationDispatcher toggleNotificationDispatcher;
-    @Autowired(required = false)
-    private RbacAuthRefreshNotifier authRefreshNotifier;
+    private UnitToggleSupport toggleSupport = UnitToggleSupport.noop();
 
     @EvictCaches.Analytics
     @Caching(evict = {
@@ -84,7 +77,7 @@ public class DeaneryService {
         String auditActor = deaneryValidationHelper.getRequiredAuditActor(authentication);
         try {
             Diocese diocese = deaneryValidationHelper.requireExistingDiocese(request.getDioceseId());
-            requireUnitOperational(UnitType.DIOCESE, diocese.getId());
+            toggleSupport.requireOperational(UnitType.DIOCESE, diocese.getId());
             deaneryValidationHelper.validateCreateNameUniqueness(request.getName(), diocese.getId());
             Deanery deanery = new Deanery();
             deanery.setDiocese(diocese);
@@ -155,7 +148,7 @@ public class DeaneryService {
     public DeaneryResponse update(UUID id, DeaneryUpdateRequest request, Authentication authentication) {
         deaneryValidationHelper.validateUpdateInput(request);
         Deanery existingDeanery = deaneryValidationHelper.requireExistingDeaneryWithDiocese(id);
-        requireUnitOperational(UnitType.DEANERY, id);
+        toggleSupport.requireOperational(UnitType.DEANERY, id);
         String auditActor = deaneryValidationHelper.getRequiredAuditActor(authentication);
         deaneryValidationHelper.validateUpdateNameUniqueness(id, request.getName(), existingDeanery);
         try {
@@ -179,64 +172,30 @@ public class DeaneryService {
     })
     public DeaneryResponse toggleStatus(UUID id, StatusToggleRequest request, Authentication authentication) {
         deaneryValidationHelper.requireExistingDeaneryWithDiocese(id);
-        requireUnitToggleAllowed(UnitType.DEANERY, id);
-        Set<String> recipients = toggleNotificationRecipientResolver == null ? Set.of() : toggleNotificationRecipientResolver.byUnit(UnitType.DEANERY, id);
+        toggleSupport.requireToggleAllowed(UnitType.DEANERY, id);
+        Set<String> recipients = toggleSupport.recipients(UnitType.DEANERY, id);
         deaneryValidationHelper.validateToggleConfirmation(request == null ? null : request.getConfirmationText());
-        UnitStatusAuditService.ToggleContext toggleContext = unitStatusAuditService == null ? null
-                : unitStatusAuditService.begin(UnitType.DEANERY, id, request == null ? null : request.getReason());
+        UnitStatusAuditService.ToggleContext toggleContext = toggleSupport.begin(UnitType.DEANERY, id, request == null ? null : request.getReason());
         String auditActor = deaneryValidationHelper.getRequiredAuditActor(authentication);
         deaneryRepository.toggleStatus(id, auditActor);
-        if (toggleContext != null) {
-            unitStatusAuditService.finish(toggleContext, UnitType.DEANERY, id, auditActor);
-        }
+        toggleSupport.finish(toggleContext, UnitType.DEANERY, id, auditActor);
         DeaneryResponse response = toDeaneryResponse(deaneryValidationHelper.requireExistingDeaneryWithDiocese(id));
-        notifyUsers(recipients);
-        dispatchUnitToggle(recipients, unitLabel("Giáo hạt", response.getName()), Boolean.TRUE.equals(response.getStatus()), auditActor);
+        toggleSupport.announce(recipients, "Giáo hạt", response.getName(), Boolean.TRUE.equals(response.getStatus()), auditActor);
         return response;
     }
 
     public UnitToggleImpactResponse toggleImpact(UUID id) {
-        if (unitStatusAuditService == null) {
-            throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, errorCode.CONFLICT, "Chưa sẵn sàng tính tác động");
-        }
-        return unitStatusAuditService.impact(UnitType.DEANERY, id);
+        return toggleSupport.impact(UnitType.DEANERY, id);
     }
 
     public List<UnitStatusHistoryResponse> statusHistory(UUID id, int page, int size) {
-        if (unitStatusAuditService == null) {
-            return List.of();
-        }
-        return unitStatusAuditService.history(UnitType.DEANERY, id, page, size);
+        return toggleSupport.history(UnitType.DEANERY, id, page, size);
     }
 
-    private void requireUnitOperational(UnitType unitType, UUID id) {
-        if (unitOperationalStatusService != null) {
-            unitOperationalStatusService.requireUnitOperational(unitType, id);
-        }
-    }
 
-    private void requireUnitToggleAllowed(UnitType unitType, UUID id) {
-        if (unitOperationalStatusService != null) {
-            unitOperationalStatusService.requireUnitToggleAllowed(unitType, id);
-        }
-    }
 
-    private void notifyUsers(Set<String> recipients) {
-        if (authRefreshNotifier != null) {
-            authRefreshNotifier.notifyUsers(recipients, "UNIT_STATUS_TOGGLED");
-        }
-    }
 
-    private void dispatchUnitToggle(Set<String> recipients, String targetLabel, boolean enabled, String actor) {
-        if (toggleNotificationDispatcher != null) {
-            toggleNotificationDispatcher.dispatch(recipients, "UNIT_STATUS_TOGGLED", targetLabel, enabled, actor);
-        }
-    }
 
-    private String unitLabel(String unitType, String name) {
-        String normalizedName = name == null ? null : name.trim();
-        return normalizedName == null || normalizedName.isBlank() ? unitType : unitType + " " + normalizedName;
-    }
 
     private Page<DeaneryResponse> loadDeaneryPageWithDiocese(BaseSearchRequest request) {
         Page<Deanery> page = deaneryRepository.findAll(request);
