@@ -14,4 +14,9 @@ public class AuditScopeContext {
     private final UUID dioceseId;
     private final UUID deaneryId;
     private final UUID parishId;
+
+    /** Không xác định được phạm vi. */
+    public static AuditScopeContext empty() {
+        return AuditScopeContext.builder().build();
+    }
 }
