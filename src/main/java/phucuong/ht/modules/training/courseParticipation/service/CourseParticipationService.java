@@ -29,9 +29,6 @@ import phucuong.ht.modules.leader.model.entity.Leader;
 import phucuong.ht.modules.leader.repository.LeaderRepository;
 import phucuong.ht.modules.leaderLevel.service.LeaderLevelService;
 import phucuong.ht.modules.leaderLevel.service.LeaderLevelService.LevelOrder;
-import phucuong.ht.modules.notification.service.TrainingNotificationCommand;
-import phucuong.ht.modules.notification.service.TrainingNotificationRecipientResolver;
-import phucuong.ht.modules.notification.service.TrainingNotificationService;
 import phucuong.ht.modules.notification.service.WorkflowDecisionNotifier.Decision;
 import phucuong.ht.modules.parish.model.entity.Parish;
 import phucuong.ht.modules.parish.repository.ParishRepository;
@@ -64,7 +61,6 @@ public class CourseParticipationService {
 
     private static final String AUTO_APPROVAL_SYSTEM_ACTOR = "SYSTEM_AUTO_APPROVAL";
     private static final String REMOVED_FROM_PARTICIPANTS_REVIEW = "Bị xóa khỏi danh sách tham dự";
-    private static final String EVENT_BATCH_SUBMITTED = "training.registration.batch_submitted";
 
     private final CourseParticipationRepository courseParticipationRepository;
     private final TrainingCourseRepository trainingCourseRepository;
@@ -79,8 +75,7 @@ public class CourseParticipationService {
     private final CertificateCodeGenerator certificateCodeGenerator;
     private final DomainEventPublisher domainEventPublisher;
     private final CertificateRealtimeNotifier certificateRealtimeNotifier;
-    private final TrainingNotificationRecipientResolver notificationRecipientResolver;
-    private final TrainingNotificationService trainingNotificationService;
+    private final RegistrationSubmissionNotifier submissionNotifier;
     private final LeaderLevelService leaderLevelService;
     private final CourseActivityGuard courseActivityGuard;
     private final ParticipationEligibilityChecker eligibilityChecker;
@@ -247,48 +242,20 @@ public class CourseParticipationService {
 
         // Giáo hạt gửi thay giáo xứ: tài khoản quản lý của các giáo xứ có hồ sơ trong danh sách được báo.
         if (senderType == UnitType.DEANERY) {
-            notifyParishManagersOfDeanerySubmission(createdParticipations, senderName, senderId, course, actor);
+            submissionNotifier.notifyParishManagersOfDeanerySubmission(createdParticipations, senderName, senderId, course, actor);
         }
 
-        announceSubmission(course, createdParticipations, senderType, senderId, senderName, actor);
+        submissionNotifier.announce(course, createdParticipations, senderType, senderId, senderName, actor);
         return buildBatchResponse(course, senderType, senderId, senderName, createdParticipations, previewParishSubmissionAutoApprovedCount(course, createdParticipations));
     }
 
     // Báo cho người duyệt của đơn vị sở hữu khóa có danh sách đăng ký mới và phát sự kiện tự duyệt (hồ sơ ngoại lệ / ngoài đợt / liên giáo hạt không được tự duyệt).
+    
+
+    // Báo người duyệt có danh sách đăng ký mới và phát sự kiện tự duyệt (dùng lại cho luồng liên giáo hạt).
     public void announceSubmission(TrainingCourse course, List<CourseParticipation> createdParticipations, UnitType senderType, UUID senderId,
                                    String senderName, String actor) {
-        boolean deaneryManaged = trainingWorkflowSupport.isDeaneryManaged(course);
-        String courseCode = course.getCourseCode();
-        // Người nhận: tài khoản duyệt của đơn vị sở hữu khóa (giáo hạt với khóa giáo hạt, giáo phận với khóa giáo phận).
-        UnitType recipientScopeType = deaneryManaged ? UnitType.DEANERY : UnitType.DIOCESE;
-        UUID recipientScopeId = deaneryManaged ? course.getDeanery().getId() : course.getDiocese().getId();
-        String recipientPermission = deaneryManaged
-                ? CourseParticipationAccessEvaluator.APPROVE_DEANERY
-                : CourseParticipationAccessEvaluator.APPROVE_DIOCESE;
-        List<String> recipients = resolveCourseRecipients(course, deaneryManaged, recipientPermission, recipientScopeType, recipientScopeId);
-        trainingNotificationService.notifyUsers(recipients, buildSubmissionNotification(
-                "training.registration.submitted",
-                senderName,
-                senderType,
-                senderId,
-                courseCode,
-                course.getCourseName(),
-                createdParticipations.size(),
-                actor
-        ));
-
-        publishBatchEvent(
-                EVENT_BATCH_SUBMITTED,
-                course,
-                createdParticipations,
-                senderType,
-                senderId,
-                senderName,
-                actor,
-                recipientScopeType,
-                recipientScopeId,
-                recipientPermission
-        );
+        submissionNotifier.announce(course, createdParticipations, senderType, senderId, senderName, actor);
     }
 
     // Danh sách huynh trưởng trong phạm vi tài khoản để lập danh sách đăng ký (eligible=true) hoặc ngoại lệ (eligible=false).
@@ -786,35 +753,7 @@ public class CourseParticipationService {
         return deanery;
     }
 
-    private void notifyParishManagersOfDeanerySubmission(List<CourseParticipation> participations, String deaneryName, UUID deaneryId, TrainingCourse course, String actor) {
-        Map<UUID, Long> countByParish = new LinkedHashMap<>();
-        for (CourseParticipation participation : participations) {
-            Parish parish = participation.getLeader().getParish();
-            if (parish != null) {
-                countByParish.merge(parish.getId(), 1L, Long::sum);
-            }
-        }
-        String courseLabel = course.getCourseName() == null || course.getCourseName().isBlank() ? course.getCourseCode() : course.getCourseName();
-        countByParish.forEach((parishId, count) -> {
-            List<String> recipients = notificationRecipientResolver.resolveRecipients(null,
-                    CourseParticipationAccessEvaluator.READ_PARISH, UnitType.PARISH, parishId);
-            if (recipients.isEmpty()) {
-                return;
-            }
-            trainingNotificationService.notifyUsers(recipients, TrainingNotificationCommand.builder()
-                    .eventType("training.registration.submitted_by_deanery")
-                    .title("Giáo hạt đã gửi đăng ký cho huynh trưởng của giáo xứ")
-                    .message(deaneryName + " đã gửi " + count + " hồ sơ đăng ký của giáo xứ bạn cho khóa " + courseLabel)
-                    .senderUnitType(UnitType.DEANERY)
-                    .senderUnitId(deaneryId)
-                    .courseCode(course.getCourseCode())
-                    .totalCount(count.intValue())
-                    .approvedCount(0)
-                    .pendingCount(count.intValue())
-                    .actor(actor)
-                    .build());
-        });
-    }
+    
 
     private void requireParishWithinCourseScope(TrainingCourse course, Parish parish) {
         if (parish == null || parish.getDeanery() == null) {
@@ -928,14 +867,7 @@ public class CourseParticipationService {
     }
 
     // Người nhận lấy từ danh sách tài khoản đã chọn khi tạo khóa (nếu còn hợp lệ), ngược lại gửi cho mọi tài khoản đủ quyền.
-    private List<String> resolveCourseRecipients(TrainingCourse course, boolean useCourseList, String permissionCode, UnitType scopeType, UUID scopeId) {
-        List<String> eligible = notificationRecipientResolver.resolveRecipients(null, permissionCode, scopeType, scopeId);
-        if (!useCourseList || course.getRecipientUsernames().isEmpty()) {
-            return eligible;
-        }
-        List<String> chosen = eligible.stream().filter(course.getRecipientUsernames()::contains).toList();
-        return chosen.isEmpty() ? eligible : chosen;
-    }
+    
 
     // Hồ sơ gửi ngoài đợt hoặc liên giáo hạt luôn duyệt thủ công, kể cả khi đủ điều kiện và khóa bật tự duyệt.
     public static boolean requiresManualApproval(CourseParticipation participation) {
@@ -973,56 +905,9 @@ public class CourseParticipationService {
                 .build();
     }
 
-    private TrainingNotificationCommand buildSubmissionNotification(
-            String eventType,
-            String senderUnitName,
-            UnitType senderUnitType,
-            UUID senderUnitId,
-            String courseCode,
-            String courseName,
-            int totalCount,
-            String actor
-    ) {
-        return TrainingNotificationCommand.builder()
-                .eventType(eventType)
-                .title("Danh sách đăng ký mới")
-                .message(senderUnitName + " gửi " + totalCount + " đăng ký cho khóa " + (courseName == null || courseName.isBlank() ? courseCode : courseName))
-                .senderUnitType(senderUnitType)
-                .senderUnitId(senderUnitId)
-                .courseCode(courseCode)
-                .totalCount(totalCount)
-                .approvedCount(0)
-                .pendingCount(totalCount)
-                .actor(actor)
-                .build();
-    }
+    
 
-    private void publishBatchEvent(
-            String eventType,
-            TrainingCourse course,
-            List<CourseParticipation> participations,
-            UnitType senderUnitType,
-            UUID senderUnitId,
-            String senderUnitName,
-            String actor,
-            UnitType recipientScopeType,
-            UUID recipientScopeId,
-            String recipientPermission
-    ) {
-        publishEvent(eventType, "trainingCourse", course.getCourseCode(), actor, Map.ofEntries(
-                Map.entry("courseCode", course.getCourseCode()),
-                Map.entry("courseType", course.getCourseType() == null ? "" : course.getCourseType().getTypeCode()),
-                Map.entry("deaneryManaged", trainingWorkflowSupport.isDeaneryManaged(course)),
-                Map.entry("participationIds", participations.stream().map(CourseParticipation::getId).toList()),
-                Map.entry("senderUnitType", senderUnitType.name()),
-                Map.entry("senderUnitId", String.valueOf(senderUnitId)),
-                Map.entry("senderUnitName", senderUnitName),
-                Map.entry("recipientScopeType", recipientScopeType.name()),
-                Map.entry("recipientScopeId", String.valueOf(recipientScopeId)),
-                Map.entry("recipientPermission", recipientPermission),
-                Map.entry("totalCount", participations.size())
-        ));
-    }
+    
 
     private boolean isEligible(Leader leader, TrainingCourse course) {
         return isEligible(leader.getLeaderLevel(), leader.getBirthDate(), leader.getId(), course);
@@ -1404,7 +1289,6 @@ public class CourseParticipationService {
             throw commonValidationHelper.validationError("Chỉ được chấm điểm sau khi hồ sơ đã được duyệt đúng cấp");
         }
     }
-
 
     private void publishEvent(String eventType, String entityType, String entityId, String actor, Map<String, Object> payload) {
         domainEventPublisher.publishAfterCommit(DomainEventMessage.of(eventType, entityType, entityId, actor, payload));
