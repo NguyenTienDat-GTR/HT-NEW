@@ -3,7 +3,7 @@ package phucuong.ht.modules.training.courseParticipation.model.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import phucuong.ht.common.model.BaseModel;
-import phucuong.ht.modules.training.scoreComponentTemplate.model.entity.ScoreComponentTemplate;
+import phucuong.ht.modules.training.courseScoreComponent.model.entity.TrainingCourseScoreComponent;
 
 import java.math.BigDecimal;
 
@@ -27,7 +27,7 @@ public class CourseParticipationComponentScore extends BaseModel {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "component_id")
-    private ScoreComponentTemplate component;
+    private TrainingCourseScoreComponent component;
 
     private BigDecimal score;
 

@@ -35,8 +35,8 @@ import phucuong.ht.modules.training.courseParticipation.security.CourseParticipa
 import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType;
 import phucuong.ht.modules.training.enums.WorkflowApprovalStatus;
-import phucuong.ht.modules.training.scoreComponentTemplate.model.entity.ScoreComponentTemplate;
-import phucuong.ht.modules.training.scoreComponentTemplate.repository.ScoreComponentTemplateRepository;
+import phucuong.ht.modules.training.courseScoreComponent.repository.TrainingCourseScoreComponentRepository;
+import phucuong.ht.modules.training.courseScoreComponent.model.entity.TrainingCourseScoreComponent;
 import phucuong.ht.modules.training.trainingCourse.model.entity.TrainingCourse;
 import phucuong.ht.modules.training.trainingCourse.repository.TrainingCourseRepository;
 
@@ -91,7 +91,7 @@ class CourseParticipationServiceTest {
     private TrainingNotificationService trainingNotificationService;
 
     @Mock
-    private ScoreComponentTemplateRepository scoreComponentTemplateRepository;
+    private TrainingCourseScoreComponentRepository courseScoreComponentRepository;
     private final CommonValidationHelper commonValidationHelper = new CommonValidationHelper(new securityUtils());
 
     @org.mockito.Mock
@@ -367,11 +367,11 @@ class CourseParticipationServiceTest {
         course.setDiocese(diocese);
         course.setPassingScore(BigDecimal.valueOf(8));
         // Tinh than he so 2, ky nang he so 1, "chuyen can" he so 1 nhung khong tinh vao diem tong ket.
-        ScoreComponentTemplate tinhThan = component("component-1", "TINH_THAN", BigDecimal.valueOf(10), 0, BigDecimal.valueOf(2), true);
-        ScoreComponentTemplate kyNang = component("component-2", "KY_NANG", BigDecimal.valueOf(10), 1, BigDecimal.ONE, true);
-        ScoreComponentTemplate chuyenCan = component("component-3", "CHUYEN_CAN", BigDecimal.valueOf(10), 2, BigDecimal.ONE, false);
-        when(scoreComponentTemplateRepository.findActiveForCourse(org.mockito.ArgumentMatchers.eq("SMKN_I"), any(), any()))
-                .thenReturn(List.of(tinhThan, kyNang, chuyenCan));
+        TrainingCourseScoreComponent tinhThan = component("component-1", "TINH_THAN", BigDecimal.valueOf(10), 0, BigDecimal.valueOf(2), true);
+        TrainingCourseScoreComponent kyNang = component("component-2", "KY_NANG", BigDecimal.valueOf(10), 1, BigDecimal.ONE, true);
+        TrainingCourseScoreComponent chuyenCan = component("component-3", "CHUYEN_CAN", BigDecimal.valueOf(10), 2, BigDecimal.ONE, false);
+        when(courseScoreComponentRepository.findByCourseCode(any()))
+                .thenReturn(courseComponents(tinhThan, kyNang, chuyenCan));
         participation.setCourse(course);
         participation.setLeader(leader(UUID.randomUUID(), UUID.randomUUID(), "HT_XU"));
         participation.setApprovalStatus(WorkflowApprovalStatus.APPROVED);
@@ -581,10 +581,10 @@ class CourseParticipationServiceTest {
         course.setCourseName("SMKN I");
         course.setHostYear(2026);
         course.setPassingScore(BigDecimal.valueOf(8));
-        ScoreComponentTemplate first = component("component-1", "TINH_THAN", BigDecimal.valueOf(10), 0, BigDecimal.ONE, true);
-        ScoreComponentTemplate second = component("component-2", "KY_NANG", BigDecimal.valueOf(10), 1, BigDecimal.ONE, true);
-        when(scoreComponentTemplateRepository.findActiveForCourse(org.mockito.ArgumentMatchers.eq("SMKN_I"), any(), any()))
-                .thenReturn(List.of(first, second));
+        TrainingCourseScoreComponent first = component("component-1", "TINH_THAN", BigDecimal.valueOf(10), 0, BigDecimal.ONE, true);
+        TrainingCourseScoreComponent second = component("component-2", "KY_NANG", BigDecimal.valueOf(10), 1, BigDecimal.ONE, true);
+        when(courseScoreComponentRepository.findByCourseCode(any()))
+                .thenReturn(courseComponents(first, second));
         participation.setCourse(course);
         participation.setLeader(leader(UUID.randomUUID(), UUID.randomUUID(), "HT_XU"));
         participation.setApprovalStatus(WorkflowApprovalStatus.APPROVED);
@@ -702,7 +702,7 @@ class CourseParticipationServiceTest {
         when(courseParticipationRepository.findByIdWithLeaderAndCourse("cp-l")).thenReturn(Optional.of(participation));
 
         assertThrows(RuntimeException.class, () -> courseParticipationService.score("cp-l", scoreRequest(9, 9), authentication("admin-diocese", "training.participation.score.diocese")));
-        verify(scoreComponentTemplateRepository, never()).findActiveForCourse(any(), any(), any());
+        verify(courseScoreComponentRepository, never()).findByCourseCode(any());
     }
 
     @Test
@@ -717,7 +717,7 @@ class CourseParticipationServiceTest {
         when(certificateRepository.findByLeaderIdAndCourseCode(any(), any())).thenReturn(Optional.of(certificate));
 
         assertThrows(RuntimeException.class, () -> courseParticipationService.score("cp-c", scoreRequest(9, 9), authentication("admin-diocese", "training.participation.score.diocese")));
-        verify(scoreComponentTemplateRepository, never()).findActiveForCourse(any(), any(), any());
+        verify(courseScoreComponentRepository, never()).findByCourseCode(any());
     }
 
     @Test
@@ -727,10 +727,10 @@ class CourseParticipationServiceTest {
         participation.setId("cp-d");
         TrainingCourse course = course("SMKN_I", UnitType.DIOCESE);
         course.setPassingScore(BigDecimal.valueOf(8));
-        ScoreComponentTemplate first = component("component-1", "TINH_THAN", BigDecimal.valueOf(10), 0, BigDecimal.ONE, true);
-        ScoreComponentTemplate second = component("component-2", "KY_NANG", BigDecimal.valueOf(10), 1, BigDecimal.ONE, true);
-        when(scoreComponentTemplateRepository.findActiveForCourse(org.mockito.ArgumentMatchers.eq("SMKN_I"), any(), any()))
-                .thenReturn(List.of(first, second));
+        TrainingCourseScoreComponent first = component("component-1", "TINH_THAN", BigDecimal.valueOf(10), 0, BigDecimal.ONE, true);
+        TrainingCourseScoreComponent second = component("component-2", "KY_NANG", BigDecimal.valueOf(10), 1, BigDecimal.ONE, true);
+        when(courseScoreComponentRepository.findByCourseCode(any()))
+                .thenReturn(courseComponents(first, second));
         participation.setCourse(course);
         participation.setLeader(leader(UUID.randomUUID(), UUID.randomUUID(), "HT_XU"));
         participation.setApprovalStatus(WorkflowApprovalStatus.APPROVED);
@@ -763,7 +763,7 @@ class CourseParticipationServiceTest {
         request.setComponentScores(List.of(score));
 
         assertThrows(RuntimeException.class, () -> courseParticipationService.score("cp-s", request, authentication("admin-diocese", "training.participation.score.diocese")));
-        verify(scoreComponentTemplateRepository, never()).findActiveForCourse(any(), any(), any());
+        verify(courseScoreComponentRepository, never()).findByCourseCode(any());
     }
 
     @Test
@@ -813,7 +813,7 @@ class CourseParticipationServiceTest {
                 parishRepository,
                 deaneryRepository,
                 new TrainingWorkflowSupport(),
-                scoreComponentTemplateRepository,
+                courseScoreComponentRepository,
                 accountScopeValidationHelper,
                 commonValidationHelper,
                 certificateRepository,
@@ -883,10 +883,13 @@ class CourseParticipationServiceTest {
         return parish;
     }
 
-    private ScoreComponentTemplate component(String id, String code, BigDecimal maxScore, int displayOrder, BigDecimal coefficient, boolean includeInFinal) {
-        ScoreComponentTemplate component = new ScoreComponentTemplate();
+    private List<TrainingCourseScoreComponent> courseComponents(TrainingCourseScoreComponent... items) {
+        return List.of(items);
+    }
+
+    private TrainingCourseScoreComponent component(String id, String code, BigDecimal maxScore, int displayOrder, BigDecimal coefficient, boolean includeInFinal) {
+        TrainingCourseScoreComponent component = new TrainingCourseScoreComponent();
         component.setId(id);
-        component.setCode(code);
         component.setName(code);
         component.setMaxScore(maxScore);
         component.setDisplayOrder(displayOrder);

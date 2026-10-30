@@ -58,6 +58,8 @@ class CourseStatusToggleTest {
     private CertificateRealtimeNotifier certificateRealtimeNotifier;
     @Mock
     private CourseActivityGuard courseActivityGuard;
+    @Mock
+    private phucuong.ht.modules.training.courseScoreComponent.service.CourseScoreComponentService courseScoreComponentService;
     @Spy
     private CommonValidationHelper commonValidationHelper = new CommonValidationHelper(new securityUtils());
     @Spy

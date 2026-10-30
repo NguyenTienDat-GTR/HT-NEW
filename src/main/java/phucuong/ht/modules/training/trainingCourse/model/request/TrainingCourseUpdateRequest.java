@@ -42,6 +42,10 @@ public class TrainingCourseUpdateRequest {
     // Giáo hạt mà khóa giáo phận dành cho (một đợt): null = giữ nguyên; danh sách (kể cả rỗng = mở cho tất cả) = thay thế.
     private List<java.util.UUID> targetDeaneryIds;
 
+    // Thành phần điểm của khóa (tên, điểm tối đa, hệ số, cờ tính tổng kết). Bắt buộc khi tạo; khi sửa null = giữ nguyên.
+    @jakarta.validation.Valid
+    private List<phucuong.ht.modules.training.courseScoreComponent.model.request.ScoreComponentInput> scoreComponents;
+
     // Khóa giáo hạt mở đăng ký cho các giáo hạt khác cùng giáo phận (chờ từng giáo hạt cho phép); null = giữ nguyên.
     private Boolean openToOtherDeaneries;
 

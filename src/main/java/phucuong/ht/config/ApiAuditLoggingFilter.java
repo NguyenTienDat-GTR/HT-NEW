@@ -166,7 +166,6 @@ public class ApiAuditLoggingFilter extends OncePerRequestFilter {
         if (path.startsWith("/api/leader-levels")) return "leader_level";
         if (path.startsWith("/api/training/courses")) return "course";
         if (path.startsWith("/api/training/course-types")) return "course_type";
-        if (path.startsWith("/api/training/score-components")) return "score_component";
         if (path.startsWith("/api/training/requirements")) return "requirement";
         if (path.startsWith("/api/training/participations") || path.startsWith("/api/training/registrations")) return "participation";
         if (path.startsWith("/api/certificates/config")) return "certificate_config";

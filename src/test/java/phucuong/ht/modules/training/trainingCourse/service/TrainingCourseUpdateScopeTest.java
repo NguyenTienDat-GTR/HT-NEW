@@ -42,7 +42,7 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class TrainingCourseUpdateScopeTest {
 
-    @Mock private phucuong.ht.modules.training.scoreComponentTemplate.repository.ScoreComponentTemplateRepository scoreComponentTemplateRepository;
+    @Mock private phucuong.ht.modules.training.courseScoreComponent.repository.TrainingCourseScoreComponentRepository courseScoreComponentRepository;
     @Mock private phucuong.ht.modules.notification.service.TrainingNotificationRecipientResolver notificationRecipientResolver;
     @Mock private phucuong.ht.modules.auth.repository.AccountRepository accountRepository;
     @Mock private phucuong.ht.config.DomainEventPublisher domainEventPublisher;
@@ -231,20 +231,22 @@ class TrainingCourseUpdateScopeTest {
         when(courseParticipationRepository.existsByCourseCode("DT-5")).thenReturn(false);
         when(deaneryRepository.getRequired(deaneryId)).thenReturn(course.getDeanery());
         when(accountScopeValidationHelper.requireActiveDeaneryId(any(), eq(TrainingCourseAccessEvaluator.CREATE_DEANERY))).thenReturn(deaneryId);
-        when(scoreComponentTemplateRepository.findActiveForCourse(eq("SMTL_DT"), any(), eq(deaneryId)))
-                .thenReturn(List.of(component(10, true), component(5, true), component(20, false)));
+        when(courseScoreComponentRepository.findByCourseCode("DT-5"))
+                .thenReturn(List.of(courseComponent(10, true), courseComponent(5, true), courseComponent(20, false)));
 
         assertThrows(RuntimeException.class, () -> service().update("DT-5", request, authentication));
         request.setPassingScore(java.math.BigDecimal.valueOf(7.5));
         assertEquals(0, java.math.BigDecimal.valueOf(7.5).compareTo(service().update("DT-5", request, authentication).getPassingScore()));
     }
 
-    private phucuong.ht.modules.training.scoreComponentTemplate.model.entity.ScoreComponentTemplate component(int max, boolean included) {
-        var component = new phucuong.ht.modules.training.scoreComponentTemplate.model.entity.ScoreComponentTemplate();
-        component.setMaxScore(java.math.BigDecimal.valueOf(max));
-        component.setCoefficient(java.math.BigDecimal.ONE);
-        component.setIncludeInFinal(included);
-        return component;
+    private phucuong.ht.modules.training.courseScoreComponent.model.entity.TrainingCourseScoreComponent courseComponent(int max, boolean included) {
+        var item = new phucuong.ht.modules.training.courseScoreComponent.model.entity.TrainingCourseScoreComponent();
+        item.setId("c-" + max);
+        item.setName("Thành phần " + max);
+        item.setMaxScore(java.math.BigDecimal.valueOf(max));
+        item.setCoefficient(java.math.BigDecimal.ONE);
+        item.setIncludeInFinal(included);
+        return item;
     }
 
     private TrainingCourseService service() {
@@ -259,7 +261,8 @@ class TrainingCourseUpdateScopeTest {
                 accountScopeValidationHelper,
                 new CommonValidationHelper(new securityUtils()),
                 new securityUtils(),
-                scoreComponentTemplateRepository,
+                new phucuong.ht.modules.training.courseScoreComponent.service.CourseScoreComponentService(courseScoreComponentRepository, new CommonValidationHelper(new securityUtils())),
+                courseScoreComponentRepository,
                 notificationRecipientResolver,
                 accountRepository,
                 domainEventPublisher,
