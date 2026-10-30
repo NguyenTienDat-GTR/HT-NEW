@@ -57,6 +57,32 @@ class ImportTemplatesTest {
     }
 
     @Test
+    void regularParticipantTemplateAcceptsAvatarFileNamesOnBothSheets() {
+        byte[] content = ImportTemplates.regularParticipants(List.of("Dự trưởng"));
+        try (ExcelWorkbookReader reader = ExcelWorkbookReader.open(upload(content))) {
+            ExcelSheetData sheet = reader.firstSheet();
+            ExcelSheetData exceptions = reader.sheet(ImportTemplates.EXCEPTION_SHEET);
+            assertEquals(ImportTemplates.PARTICIPANTS_SHEET, sheet.name());
+            // Cột ảnh là tùy chọn nhưng có mặt ở sheet chính và sheet Ngoại lệ, dòng ví dụ ghi sẵn tên file mẫu.
+            assertTrue(sheet.hasColumn(LeaderImportService.COL_AVATAR_FILE));
+            assertEquals("nguyen-van-an.jpg", sheet.rows().get(0).text(LeaderImportService.COL_AVATAR_FILE));
+            assertEquals(null, sheet.rows().get(1).text(LeaderImportService.COL_AVATAR_FILE));
+            assertTrue(exceptions.hasColumn(LeaderImportService.COL_AVATAR_FILE));
+            // Thêm cột ảnh không làm lệch các cột sau nó: lí do ngoại lệ vẫn đọc đúng.
+            assertEquals("Chưa đủ số năm hoạt động nhưng được giáo xứ đề cử",
+                    exceptions.rows().get(0).text(PastCourseParticipantImportService.COL_EXCEPTION_REASON));
+            assertEquals("Ghi chú tùy chọn", sheet.rows().get(0).text(PastCourseParticipantImportService.COL_NOTE));
+        }
+    }
+
+    @Test
+    void teamTemplateStillHasNoAvatarColumn() {
+        try (ExcelWorkbookReader reader = ExcelWorkbookReader.open(upload(ImportTemplates.teamParticipants(List.of("Dự trưởng"))))) {
+            assertFalse(reader.firstSheet().hasColumn(LeaderImportService.COL_AVATAR_FILE));
+        }
+    }
+
+    @Test
     void participantTemplateHasTheResultColumnAndTheOptionalLeaderColumns() {
         byte[] content = ImportTemplates.participants(List.of("Dự trưởng"));
         try (ExcelWorkbookReader reader = ExcelWorkbookReader.open(upload(content))) {

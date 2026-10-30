@@ -235,7 +235,7 @@ public class PastCourseParticipantImportService extends AbstractExcelImporter<Pa
             leader = leaderRepository.save(leaderImportService.buildLeader(item.newLeader(), actor, now));
             run.newLeaders++;
         }
-        if (past && item.avatarFileName() != null) {
+        if (item.avatarFileName() != null) {
             if (item.leader() != null && item.leader().getImageAssetId() != null) {
                 avatarWarnings.add(new AvatarWarning(item.row().number(), item.row().text(LeaderImportService.COL_FULL_NAME),
                         item.avatarFileName(), "Hồ sơ đã có ảnh, giữ ảnh cũ"));
@@ -482,7 +482,8 @@ public class PastCourseParticipantImportService extends AbstractExcelImporter<Pa
             if (note != null && note.length() > MAX_NOTE) {
                 row.error(errors, COL_NOTE, "Ghi chú tối đa " + MAX_NOTE + " ký tự");
             }
-            String avatarFileName = past ? row.text(LeaderImportService.COL_AVATAR_FILE) : null;
+            // Ảnh đi kèm file Excel áp dụng cho cả khóa thường và khóa quá khứ (import chia đội không nhận ảnh).
+            String avatarFileName = !withTeam ? row.text(LeaderImportService.COL_AVATAR_FILE) : null;
             if (avatarFileName != null && avatarFileName.length() > 255) {
                 row.error(errors, LeaderImportService.COL_AVATAR_FILE, "Tên file ảnh tối đa 255 ký tự");
             }

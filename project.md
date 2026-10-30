@@ -1599,3 +1599,10 @@ Ma trận endpoint (`endpoint-contract-matrix.psv`) hiện có 124 route.
 - `RoleAssignmentPolicy`: toàn bộ luật gán vai trò tách khỏi `AccountRoleService`; ba cấp giáo phận/giáo hạt/giáo xứ dùng chung một luật qua bảng `Level`. Constructor của `AccountRoleService` không đổi.
 - Test thêm: `RegistrationDecisionNotifierTest`, `AbstractExcelImporterTest`, `AuditScopeResolverTest`, `RoleAssignmentPolicyTest`. Toàn bộ 997 test pass.
 - Không làm: Strategy theo `UnitType` cho `CrossDeaneryService`/`TrainingWorkflowSupport`/`CourseParticipationService` — nhánh theo cấp ở đó gắn chặt với quy trình nghiệp vụ, gom lại dễ đổi hành vi mà không có test bao phủ.
+
+## Ảnh đại diện kèm Excel danh sách tham dự khóa thường (2026-10-30)
+
+- Import danh sách tham dự khóa thường nhận cột tùy chọn "Tên file ảnh" và file ZIP ảnh giống khóa quá khứ: `PastCourseParticipantImportService` đọc cột này cho mọi khóa trừ import chia đội (`withTeam`), hồ sơ đã có ảnh giữ ảnh cũ, ảnh lỗi chỉ tạo cảnh báo.
+- `ImportTemplates.regularParticipants`: thêm cột "Tên file ảnh" ở sheet "Danh sách tham dự" và sheet "Ngoại lệ", thêm dòng hướng dẫn số 13. File Excel mẫu cũ (không có cột ảnh) vẫn import được. Mẫu chia đội không đổi.
+- Test: `ImportTemplatesTest` (mẫu khóa thường có cột ảnh ở cả hai sheet, mẫu chia đội không có).
+
