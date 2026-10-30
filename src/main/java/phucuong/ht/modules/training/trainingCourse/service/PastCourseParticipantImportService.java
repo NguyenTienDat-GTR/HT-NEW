@@ -138,8 +138,17 @@ public class PastCourseParticipantImportService extends AbstractExcelImporter<Pa
         return importParticipants(courseCode, file, authentication, progress, withTeam, null);
     }
 
-    private ImportSummary importParticipants(String courseCode, java.nio.file.Path file, Authentication authentication,
-                                             JobProgress progress, boolean withTeam, AvatarZip images) {
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_DETAIL, allEntries = true)
+    })
+    @EvictCaches.Analytics
+    @EvictCaches.Leaders
+    @Transactional
+    public ImportSummary importParticipants(String courseCode, java.nio.file.Path file, Authentication authentication,
+                                            JobProgress progress, boolean withTeam, AvatarZip images) {
         TrainingCourse course = trainingCourseRepository.findByCodeWithType(courseCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy khóa huấn luyện " + courseCode));
         boolean past = course.isPast();
@@ -225,9 +234,6 @@ public class PastCourseParticipantImportService extends AbstractExcelImporter<Pa
         OffsetDateTime now = run.now;
         LocalDate registrationDate = run.registrationDate;
         boolean certificateRequired = run.certificateRequired;
-        AvatarZip images = run.images;
-        List<AvatarPlan> avatarPlan = run.avatarPlan;
-        List<AvatarWarning> avatarWarnings = run.avatarWarnings;
         List<CourseParticipation> directlyApproved = run.directlyApproved;
         Leader leader = item.leader();
         if (leader == null) {
@@ -235,16 +241,7 @@ public class PastCourseParticipantImportService extends AbstractExcelImporter<Pa
             leader = leaderRepository.save(leaderImportService.buildLeader(item.newLeader(), actor, now));
             run.newLeaders++;
         }
-        if (item.avatarFileName() != null) {
-            if (item.leader() != null && item.leader().getImageAssetId() != null) {
-                avatarWarnings.add(new AvatarWarning(item.row().number(), item.row().text(LeaderImportService.COL_FULL_NAME),
-                        item.avatarFileName(), "Hồ sơ đã có ảnh, giữ ảnh cũ"));
-            } else {
-                AvatarImportCollector.collect(images, avatarPlan, avatarWarnings, item.row().number(), leader.getId(),
-                        item.row().text(LeaderImportService.COL_FULL_NAME), item.avatarFileName(),
-                        leader.getParish().getDeanery().getDiocese().getId());
-            }
-        }
+        collectAvatar(item, leader, run);
         CourseParticipation participation = new CourseParticipation();
         participation.setLeader(leader);
         participation.setCourse(course);
@@ -302,6 +299,20 @@ public class PastCourseParticipantImportService extends AbstractExcelImporter<Pa
             courseParticipationService.ensureSuggestedCertificateExists(participation, actor);
         }
     
+    }
+
+    /** Ghi nhận ảnh của dòng vào kế hoạch gắn ảnh: hồ sơ đã có ảnh thì giữ ảnh cũ (chỉ cảnh báo), còn lại đưa vào kế hoạch. */
+    private void collectAvatar(Parsed item, Leader leader, ImportRun run) {
+        if (item.avatarFileName() == null) {
+            return;
+        }
+        String fullName = item.row().text(LeaderImportService.COL_FULL_NAME);
+        if (item.leader() != null && item.leader().getImageAssetId() != null) {
+            run.avatarWarnings.add(new AvatarWarning(item.row().number(), fullName, item.avatarFileName(), "Hồ sơ đã có ảnh, giữ ảnh cũ"));
+            return;
+        }
+        AvatarImportCollector.collect(run.images, run.avatarPlan, run.avatarWarnings, item.row().number(), leader.getId(), fullName,
+                item.avatarFileName(), leader.getParish().getDeanery().getDiocese().getId());
     }
 
     @Override
@@ -482,8 +493,8 @@ public class PastCourseParticipantImportService extends AbstractExcelImporter<Pa
             if (note != null && note.length() > MAX_NOTE) {
                 row.error(errors, COL_NOTE, "Ghi chú tối đa " + MAX_NOTE + " ký tự");
             }
-            // Ảnh đi kèm file Excel áp dụng cho cả khóa thường và khóa quá khứ (import chia đội không nhận ảnh).
-            String avatarFileName = !withTeam ? row.text(LeaderImportService.COL_AVATAR_FILE) : null;
+            // Ảnh đi kèm file Excel áp dụng cho khóa thường, khóa quá khứ và import chia đội.
+            String avatarFileName = row.text(LeaderImportService.COL_AVATAR_FILE);
             if (avatarFileName != null && avatarFileName.length() > 255) {
                 row.error(errors, LeaderImportService.COL_AVATAR_FILE, "Tên file ảnh tối đa 255 ký tự");
             }

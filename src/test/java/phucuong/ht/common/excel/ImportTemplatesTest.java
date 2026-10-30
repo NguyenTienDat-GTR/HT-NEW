@@ -76,9 +76,15 @@ class ImportTemplatesTest {
     }
 
     @Test
-    void teamTemplateStillHasNoAvatarColumn() {
+    void teamTemplateAcceptsAvatarFileNamesAndKeepsTheTeamColumn() {
         try (ExcelWorkbookReader reader = ExcelWorkbookReader.open(upload(ImportTemplates.teamParticipants(List.of("Dự trưởng"))))) {
-            assertFalse(reader.firstSheet().hasColumn(LeaderImportService.COL_AVATAR_FILE));
+            ExcelSheetData sheet = reader.firstSheet();
+            assertTrue(sheet.hasColumn(LeaderImportService.COL_AVATAR_FILE));
+            assertEquals("nguyen-van-an.jpg", sheet.rows().get(0).text(LeaderImportService.COL_AVATAR_FILE));
+            // Thêm cột ảnh không làm lệch cột Tên đội và Ghi chú.
+            assertEquals("Đội 1", sheet.rows().get(0).text(PastCourseParticipantImportService.COL_TEAM));
+            assertEquals("Ghi chú tùy chọn", sheet.rows().get(0).text(PastCourseParticipantImportService.COL_NOTE));
+            assertEquals(null, reader.sheet(ImportTemplates.EXCEPTION_SHEET));
         }
     }
 

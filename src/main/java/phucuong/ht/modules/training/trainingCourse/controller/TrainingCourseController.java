@@ -92,11 +92,12 @@ public class TrainingCourseController {
     public org.springframework.http.ResponseEntity<apiResponse<phucuong.ht.common.excel.job.ExcelJobResponse>> importTeamParticipants(
             @PathVariable String courseCode,
             @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
+            @RequestPart(value = "images", required = false) org.springframework.web.multipart.MultipartFile images,
             @RequestHeader(value = phucuong.ht.common.idempotency.IdempotencyService.HEADER, required = false) String idempotencyKey,
             Authentication authentication) {
         pastCourseParticipantImportService.precheck(courseCode, authentication, true);
         return phucuong.ht.common.excel.job.ExcelJobResponses.accepted(excelJobService.createImport(
-                phucuong.ht.common.excel.job.ExcelJobKind.IMPORT_TEAM_PARTICIPANTS, courseCode, file, idempotencyKey, authentication));
+                phucuong.ht.common.excel.job.ExcelJobKind.IMPORT_TEAM_PARTICIPANTS, courseCode, file, images, idempotencyKey, authentication));
     }
 
     // Xóa học viên nhập nhầm khỏi khóa quá khứ.

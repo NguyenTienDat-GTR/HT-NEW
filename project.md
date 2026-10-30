@@ -1605,4 +1605,6 @@ Ma trận endpoint (`endpoint-contract-matrix.psv`) hiện có 124 route.
 - Import danh sách tham dự khóa thường nhận cột tùy chọn "Tên file ảnh" và file ZIP ảnh giống khóa quá khứ: `PastCourseParticipantImportService` đọc cột này cho mọi khóa trừ import chia đội (`withTeam`), hồ sơ đã có ảnh giữ ảnh cũ, ảnh lỗi chỉ tạo cảnh báo.
 - `ImportTemplates.regularParticipants`: thêm cột "Tên file ảnh" ở sheet "Danh sách tham dự" và sheet "Ngoại lệ", thêm dòng hướng dẫn số 13. File Excel mẫu cũ (không có cột ảnh) vẫn import được. Mẫu chia đội không đổi.
 - Test: `ImportTemplatesTest` (mẫu khóa thường có cột ảnh ở cả hai sheet, mẫu chia đội không có).
+- Import chia đội cũng nhận ảnh: endpoint `/teams/import` nhận phần `images`, `ExcelImportHandlerConfig` truyền ZIP cho `IMPORT_TEAM_PARTICIPANTS`, mẫu chia đội có cột "Tên file ảnh". `PastCourseParticipantImportService.importParticipants(..., withTeam, images)` là phương thức public có đủ `@Transactional`/`@CacheEvict`.
+- Dọn trùng lặp: `ImportTemplates.avatarColumn()` / `avatarGuide(...)` thay 4 bản định nghĩa cột và dòng hướng dẫn ảnh; việc gom ảnh của một dòng nằm ở `collectAvatar(...)` thay vì trong thân vòng ghi.
 

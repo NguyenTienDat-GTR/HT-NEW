@@ -26,6 +26,6 @@ public class ExcelImportHandlerConfig {
     @Bean
     ExcelImportHandler teamParticipantImport(PastCourseParticipantImportService service) {
         return ExcelImportHandler.of(ExcelJobKind.IMPORT_TEAM_PARTICIPANTS,
-                (target, file, auth, progress, images) -> service.importParticipants(target, file, auth, progress, true));
+                (target, file, auth, progress, images) -> service.importParticipants(target, file, auth, progress, true, images));
     }
 }
