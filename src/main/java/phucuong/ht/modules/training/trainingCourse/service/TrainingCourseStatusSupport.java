@@ -22,6 +22,10 @@ public final class TrainingCourseStatusSupport {
         if (course.isPast()) {
             return CourseRegistrationStatus.ENDED;
         }
+        // Khóa đã kết thúc (kết thúc thủ công hoặc quá ngày kết thúc) thì bắt buộc đã đóng đăng ký, không mở lại được.
+        if (isCourseEnded(course, now)) {
+            return CourseRegistrationStatus.ENDED;
+        }
         OffsetDateTime start = course.getRegistrationStartAt();
         OffsetDateTime end = course.getRegistrationEndAt();
         if (end != null && now.isAfter(end)) {
@@ -34,6 +38,10 @@ public final class TrainingCourseStatusSupport {
             return CourseRegistrationStatus.NOT_STARTED;
         }
         return CourseRegistrationStatus.OPEN;
+    }
+
+    public static boolean isCourseEnded(TrainingCourse course, OffsetDateTime now) {
+        return organizingStatus(course, now.atZoneSameInstant(ZONE).toLocalDate()) == CourseOrganizingStatus.ENDED;
     }
 
     public static CourseOrganizingStatus organizingStatus(TrainingCourse course, LocalDate today) {
