@@ -1578,3 +1578,13 @@ Ma trận endpoint (`endpoint-contract-matrix.psv`) hiện có 124 route.
 - `ExcelAvatarProcessor` xóa cache huynh trưởng sau mỗi 25 ảnh gắn xong và luôn xóa ở cuối job (kể cả khi `finishAvatar` không cập nhật được), để danh sách thấy ảnh mới ngay.
 - Bỏ chú thích cache vô hiệu trên phương thức private `LeaderService.requireParishOperational`.
 - Test tích hợp (`ExcelImportExportIntegrationTest`): job ảnh xóa cache huynh trưởng (chi tiết hiện ảnh mới ngay); cache chờ commit và không xóa khi rollback; sửa huynh trưởng / giáo xứ / giáo hạt / giáo phận xóa đủ cache phụ thuộc; sửa cấp độ xóa cache khóa, chứng nhận, huynh trưởng, thống kê.
+
+## Refactor SOLID / design pattern (nhánh `refactor/solid-design-patterns`, 2026-10-30)
+
+- Không đổi API hay hành vi; test hiện có vẫn pass (964 test).
+- Helper dùng chung thay cho các bản private lặp ở nhiều service: `common/repository/SearchRequests.copy`, `common/repository/InMemoryPager`, `common/utils/LeaderNames.fullName`, `common/security/AuthorityChecks.hasAuthority`. Các bản có logic khác nhau được giữ nguyên.
+- `ApiException` chuyển từ `modules/auth/exception` sang `common/exception`.
+- Excel job: Strategy + Registry. `ExcelExportHandler` / `ExcelImportHandler` (một handler cho mỗi `ExcelJobKind`, khai báo trong `common/excel/job/handler`), `ExcelJobHandlerRegistry` kiểm tra đủ handler lúc khởi động; `ExcelJobHandlers` chỉ còn chuyển việc. Thêm loại xuất mới = thêm một bean handler.
+- `CourseParticipationService`: tách `ScoreCalculator` / `WeightedScoreCalculator` (điểm tổng kết), `ParticipationEligibilityChecker` (điều kiện tham dự); `modules/training/ApprovalTransitionPolicy` dùng chung cho hồ sơ tham dự và `CertificateService.rejectInternal`. Constructor của service đổi (thêm hai collaborator, bỏ `RankHistoryRepository`); chữ ký public không đổi.
+- Test thêm: `ExcelJobHandlerRegistryTest`, `WeightedScoreCalculatorTest`, `ApprovalTransitionPolicyTest`.
+- Chưa làm: Template Method cho import Excel và cấu hình chứng nhận/thẻ, Strategy theo `UnitType`, `AbstractUnitService` cho giáo phận/giáo hạt/giáo xứ, gom luật RBAC của `AccountRoleService`, tách notifier khỏi `CourseParticipationService`.
