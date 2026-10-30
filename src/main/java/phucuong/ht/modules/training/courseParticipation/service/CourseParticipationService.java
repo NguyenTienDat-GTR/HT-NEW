@@ -1,9 +1,6 @@
 package phucuong.ht.modules.training.courseParticipation.service;
 
 import lombok.RequiredArgsConstructor;
-import phucuong.ht.common.security.AuthorityChecks;
-import phucuong.ht.common.utils.LeaderNames;
-import phucuong.ht.common.repository.SearchRequests;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
@@ -13,11 +10,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.common.repository.BaseSearchRequest;
+import phucuong.ht.common.repository.SearchRequests;
+import phucuong.ht.common.security.AuthorityChecks;
+import phucuong.ht.common.utils.LeaderNames;
 import phucuong.ht.common.validation.AccountScopeValidationHelper;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.config.CacheNames;
 import phucuong.ht.config.DomainEventMessage;
 import phucuong.ht.config.DomainEventPublisher;
+import phucuong.ht.config.EvictCaches;
 import phucuong.ht.modules.certificate.CertificateCodeGenerator;
 import phucuong.ht.modules.certificate.model.entity.Certificate;
 import phucuong.ht.modules.certificate.repository.CertificateRepository;
@@ -25,46 +26,36 @@ import phucuong.ht.modules.certificate.service.CertificateRealtimeNotifier;
 import phucuong.ht.modules.deanery.model.entity.Deanery;
 import phucuong.ht.modules.deanery.repository.DeaneryRepository;
 import phucuong.ht.modules.leader.model.entity.Leader;
-import phucuong.ht.config.EvictCaches;
-import phucuong.ht.modules.leaderLevel.service.LeaderLevelService;
-import phucuong.ht.modules.training.CourseActivityGuard;
-import phucuong.ht.modules.leaderLevel.service.LeaderLevelService.LevelOrder;
 import phucuong.ht.modules.leader.repository.LeaderRepository;
+import phucuong.ht.modules.leaderLevel.service.LeaderLevelService;
+import phucuong.ht.modules.leaderLevel.service.LeaderLevelService.LevelOrder;
 import phucuong.ht.modules.notification.service.TrainingNotificationCommand;
 import phucuong.ht.modules.notification.service.TrainingNotificationRecipientResolver;
 import phucuong.ht.modules.notification.service.TrainingNotificationService;
 import phucuong.ht.modules.notification.service.WorkflowDecisionNotifier.Decision;
-import phucuong.ht.modules.training.TrainingDecisionNotifier;
 import phucuong.ht.modules.parish.model.entity.Parish;
 import phucuong.ht.modules.parish.repository.ParishRepository;
+import phucuong.ht.modules.training.ApprovalTransitionPolicy;
+import phucuong.ht.modules.training.CourseActivityGuard;
+import phucuong.ht.modules.training.TrainingDecisionNotifier;
 import phucuong.ht.modules.training.TrainingWorkflowSupport;
 import phucuong.ht.modules.training.courseParticipation.model.entity.CourseParticipation;
 import phucuong.ht.modules.training.courseParticipation.model.entity.CourseParticipationComponentScore;
 import phucuong.ht.modules.training.courseParticipation.model.request.*;
-import phucuong.ht.modules.training.courseParticipation.model.response.ComponentScoreResponse;
-import phucuong.ht.modules.training.courseParticipation.model.response.CourseParticipationResponse;
-import phucuong.ht.modules.training.courseParticipation.model.response.RegistrationCandidateResponse;
-import phucuong.ht.modules.training.courseParticipation.model.response.ScoreEntryComponentResponse;
-import phucuong.ht.modules.training.courseParticipation.model.response.TrainingBulkApprovalResponse;
-import phucuong.ht.modules.training.courseParticipation.model.response.TrainingRegistrationBatchResponse;
+import phucuong.ht.modules.training.courseParticipation.model.response.*;
 import phucuong.ht.modules.training.courseParticipation.repository.CourseParticipationRepository;
 import phucuong.ht.modules.training.courseParticipation.security.CourseParticipationAccessEvaluator;
-import phucuong.ht.modules.training.enums.CourseRegistrationStatus;
-import phucuong.ht.modules.training.trainingCourse.service.TrainingCourseStatusSupport;
-import phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType;
-import phucuong.ht.modules.training.enums.CourseResult;
-import phucuong.ht.modules.training.enums.ParticipationStatus;
-import phucuong.ht.modules.training.enums.WorkflowApprovalStatus;
-import phucuong.ht.modules.training.ApprovalTransitionPolicy;
 import phucuong.ht.modules.training.courseScoreComponent.model.entity.TrainingCourseScoreComponent;
 import phucuong.ht.modules.training.courseScoreComponent.repository.TrainingCourseScoreComponentRepository;
+import phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType;
+import phucuong.ht.modules.training.enums.*;
 import phucuong.ht.modules.training.trainingCourse.model.entity.TrainingCourse;
 import phucuong.ht.modules.training.trainingCourse.repository.TrainingCourseRepository;
+import phucuong.ht.modules.training.trainingCourse.service.TrainingCourseStatusSupport;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
-import java.time.Period;
 import java.util.*;
 
 @Service
@@ -1399,7 +1390,7 @@ public class CourseParticipationService {
 
     // Chỉ được chấm điểm khi khóa đang trong thời gian diễn ra (từ ngày bắt đầu đến hết ngày kết thúc, múi giờ Việt Nam).
     private void requireCourseOngoingForScoring(TrainingCourse course) {
-        if (TrainingCourseStatusSupport.organizingStatus(course, TrainingCourseStatusSupport.today()) != phucuong.ht.modules.training.enums.CourseOrganizingStatus.ONGOING) {
+        if (TrainingCourseStatusSupport.organizingStatus(course, TrainingCourseStatusSupport.today()) != CourseOrganizingStatus.ONGOING) {
             throw commonValidationHelper.conflict("Chỉ được chấm điểm khi khóa huấn luyện đang trong thời gian diễn ra");
         }
     }
