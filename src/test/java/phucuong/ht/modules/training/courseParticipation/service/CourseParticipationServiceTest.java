@@ -806,13 +806,14 @@ class CourseParticipationServiceTest {
     }
 
     private CourseParticipationService buildService() {
+        TrainingWorkflowSupport workflowSupport = new TrainingWorkflowSupport();
         return new CourseParticipationService(
                 courseParticipationRepository,
                 trainingCourseRepository,
                 leaderRepository,
                 parishRepository,
                 deaneryRepository,
-                new TrainingWorkflowSupport(),
+                workflowSupport,
                 courseScoreComponentRepository,
                 accountScopeValidationHelper,
                 commonValidationHelper,
@@ -824,8 +825,9 @@ class CourseParticipationServiceTest {
                 trainingNotificationService,
                 org.mockito.Mockito.mock(phucuong.ht.modules.leaderLevel.service.LeaderLevelService.class),
                 org.mockito.Mockito.mock(phucuong.ht.modules.training.CourseActivityGuard.class),
-                rankHistoryRepository
-        , org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class));
+                new ParticipationEligibilityChecker(workflowSupport, rankHistoryRepository, courseParticipationRepository),
+                org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class),
+                new WeightedScoreCalculator());
     }
 
     private UsernamePasswordAuthenticationToken authentication(String username, String permission) {

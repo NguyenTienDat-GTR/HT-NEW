@@ -1,6 +1,7 @@
 package phucuong.ht.modules.certificate.service;
 
 import lombok.RequiredArgsConstructor;
+import phucuong.ht.modules.training.ApprovalTransitionPolicy;
 import phucuong.ht.common.security.AuthorityChecks;
 import phucuong.ht.common.utils.LeaderNames;
 import phucuong.ht.common.repository.SearchRequests;
@@ -305,7 +306,7 @@ public class CertificateService {
             throw commonValidationHelper.conflict("Khóa huấn luyện đã kết thúc nên không từ chối chứng nhận được, chỉ xuất được PDF");
         }
         WorkflowApprovalStatus current = certificate.getApprovalStatus();
-        if (current != WorkflowApprovalStatus.PENDING && current != WorkflowApprovalStatus.SUBMITTED) {
+        if (!ApprovalTransitionPolicy.canReject(current)) {
             throw commonValidationHelper.conflict("Chỉ từ chối được chứng nhận đang chờ duyệt");
         }
         String reason = commonValidationHelper.normalizeOptionalText(rawReason);
