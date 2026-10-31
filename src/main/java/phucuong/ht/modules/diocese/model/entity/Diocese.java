@@ -25,4 +25,8 @@ public class Diocese extends OrganizationUnit {
     @Column(name = "union_name", nullable = false, length = 100)
     private String unionName;
 
+    /** Nhãn subdomain của giáo phận (không gồm tên miền chính); null nếu giáo phận không có trang riêng. */
+    @Column(name = "site_subdomain", length = 63)
+    private String siteSubdomain;
+
 }

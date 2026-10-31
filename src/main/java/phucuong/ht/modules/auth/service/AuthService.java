@@ -50,6 +50,7 @@ public class AuthService {
     private final jwtUtils jwtUtils;
     private final AuthProperties authProperties;
     private final RedisTokenSessionService redisTokenSessionService;
+    private final SiteLoginGuard siteLoginGuard;
     @Autowired(required = false)
     private UnitOperationalStatusService unitOperationalStatusService;
 
@@ -98,12 +99,18 @@ public class AuthService {
     }
 
     public AuthTokenResponse login(LoginRequest request, String ipAddress) {
+        return login(request, ipAddress, null);
+    }
+
+    /** siteHost: tên miền người dùng đang truy cập (do reverse proxy đặt), null khi không đi qua proxy. */
+    public AuthTokenResponse login(LoginRequest request, String ipAddress, String siteHost) {
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword())
         );
         SecurityContextHolder.getContext().setAuthentication(authentication);
         AuthUserDetails principal = (AuthUserDetails) authentication.getPrincipal();
         rejectExpiredTemporaryPassword(principal.getUsername());
+        siteLoginGuard.assertCanLogin(principal.getUsername(), siteHost);
         return issueNewSessionTokens(principal, normalizeIpAddress(ipAddress), request.isRememberMeEnabled());
     }
 

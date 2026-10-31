@@ -26,6 +26,15 @@ public class DioceseRepository extends BaseRepo<Diocese, UUID> {
         return diocese;
     }
 
+    public Optional<Diocese> findBySiteSubdomain(String siteSubdomain) {
+        return entityManager.createQuery(
+                        "select d from Diocese d where lower(d.siteSubdomain) = :sub", Diocese.class)
+                .setParameter("sub", siteSubdomain.toLowerCase())
+                .setMaxResults(1)
+                .getResultStream()
+                .findFirst();
+    }
+
     public boolean existsByName(String name) {
         return existsByField("name", name);
     }
