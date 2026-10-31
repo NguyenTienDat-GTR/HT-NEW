@@ -1,0 +1,104 @@
+name: CD
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  build-push:
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tên image (GHCR yêu cầu chữ thường)
+        id: vars
+        run: echo "repo=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ steps.vars.outputs.repo }}:${{ github.sha }}
+            ${{ steps.vars.outputs.repo }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build-push
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      DEPLOY_DIR: ${{ vars.DEPLOY_DIR || '/home/ubuntu/ht' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Gom file gửi lên server (.env lấy từ secret)
+        run: |
+          mkdir out
+          printf '%s\n' "$PROD_ENV_FILE" > out/env.deploy
+          cp compose.prod.yaml deploy/Caddyfile out/
+        env:
+          PROD_ENV_FILE: ${{ secrets.PROD_ENV_FILE }}
+
+      - name: Copy file lên server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "out/*"
+          strip_components: 1
+          target: ${{ env.DEPLOY_DIR }}
+
+      - name: Pull image và khởi động lại
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: GHCR_USER,GHCR_TOKEN,DEPLOY_DIR
+          script_stop: true
+          script: |
+            set -e
+            cd "$DEPLOY_DIR"
+            mv env.deploy .env && chmod 600 .env
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+            docker compose -f compose.prod.yaml pull app
+            docker compose -f compose.prod.yaml up -d --remove-orphans postgres redis rabbitmq app caddy
+            docker logout ghcr.io
+
+            echo "Chờ app healthy..."
+            for i in $(seq 1 40); do
+              status="$(docker inspect -f '{{.State.Health.Status}}' ht-app 2>/dev/null || echo starting)"
+              [ "$status" = "healthy" ] && echo "Deploy BE OK" && break
+              [ "$i" = "40" ] && { docker compose -f compose.prod.yaml logs --tail=200 app; exit 1; }
+              sleep 5
+            done
+            docker image prune -f

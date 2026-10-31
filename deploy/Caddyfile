@@ -1,0 +1,12 @@
+# Caddy tự xin và gia hạn chứng chỉ HTTPS (Let's Encrypt) cho PUBLIC_HOST.
+# Yêu cầu: PUBLIC_HOST trỏ về IP server, cổng 80 và 443 đã mở.
+{$PUBLIC_HOST} {
+	encode gzip
+
+	# WebSocket thông báo đi thẳng vào BE, mọi đường dẫn còn lại vào FE
+	# (FE tự rewrite /backend/api/* sang BE).
+	@ws path /ws/*
+	reverse_proxy @ws app:{$SERVER_PORT}
+
+	reverse_proxy fe:3000
+}
