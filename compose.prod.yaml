@@ -102,6 +102,36 @@ services:
       app: { condition: service_healthy }
     networks: [ht-network]
 
+  # ===== Môi trường TEST: chung máy với production nhưng cách ly (database, Redis số 1, vhost RabbitMQ, JWT riêng).
+  # Cấu hình nằm hết trong .env.test (do cd-test.yml đưa lên từ secret TEST_ENV_FILE). Chỉ chạy khi được gọi tên.
+  app-test:
+    image: ${APP_TEST_IMAGE:-ghcr.io/nguyentiendat-gtr/ht-new:test}
+    container_name: ht-app-test
+    restart: unless-stopped
+    env_file:
+      - path: .env.test
+        required: false
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      JAVA_TOOL_OPTIONS: -Xms128m -Xmx512m
+      MANAGEMENT_HEALTH_MAIL_ENABLED: "false"
+      TZ: Asia/Ho_Chi_Minh
+    expose:
+      - "1007"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:1007/actuator/health | grep -q UP"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
+    networks: [ht-network]
+
+  fe-test:
+    image: ${FE_TEST_IMAGE:-ghcr.io/nguyentiendat-gtr/ht-new-fe:test}
+    container_name: ht-fe-test
+    restart: unless-stopped
+    networks: [ht-network]
+
   caddy:
     image: caddy:2-alpine
     container_name: ht-caddy

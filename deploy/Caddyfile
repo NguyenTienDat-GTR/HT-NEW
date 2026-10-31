@@ -16,3 +16,17 @@
 		header_up X-Site-Host {host}
 	}
 }
+
+# Môi trường test: trang riêng, app-test + fe-test, database ht_management_test.
+{$TEST_HOST} {
+	encode gzip
+
+	@ws path /ws/*
+	reverse_proxy @ws app-test:1007 {
+		header_up X-Site-Host {host}
+	}
+
+	reverse_proxy fe-test:3000 {
+		header_up X-Site-Host {host}
+	}
+}
