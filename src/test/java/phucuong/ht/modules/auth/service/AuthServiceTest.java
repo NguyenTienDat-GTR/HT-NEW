@@ -68,6 +68,8 @@ class AuthServiceTest {
 
     @Mock
     private RedisTokenSessionService redisTokenSessionService;
+    @Mock
+    private SiteLoginGuard siteLoginGuard;
 
     @Test
     void bootstrapSuperAdminShouldAttachSavedAccountToRoleAssignment() {
@@ -430,7 +432,8 @@ class AuthServiceTest {
                 authUserDetailsService,
                 jwtUtils,
                 authProperties(),
-                redisTokenSessionService
+                redisTokenSessionService,
+                siteLoginGuard
         );
     }
 

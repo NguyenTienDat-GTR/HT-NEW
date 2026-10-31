@@ -67,7 +67,7 @@ class AuthControllerSecurityIntegrationTest {
         request.setUsername("superadminpc");
         request.setPassword("htgppc2026");
 
-        when(authService.login(any(LoginRequest.class), anyString())).thenReturn(sampleTokenResponse());
+        when(authService.login(any(LoginRequest.class), anyString(), any())).thenReturn(sampleTokenResponse());
 
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -84,7 +84,7 @@ class AuthControllerSecurityIntegrationTest {
         LoginRequest request = new LoginRequest();
         request.setUsername("superadminpc");
         request.setPassword("htgppc2026");
-        when(authService.login(any(LoginRequest.class), anyString())).thenReturn(tokenResponse(false, 43_200_000L));
+        when(authService.login(any(LoginRequest.class), anyString(), any())).thenReturn(tokenResponse(false, 43_200_000L));
 
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -101,7 +101,7 @@ class AuthControllerSecurityIntegrationTest {
         request.setUsername("superadminpc");
         request.setPassword("htgppc2026");
         request.setRememberMe(true);
-        when(authService.login(any(LoginRequest.class), anyString())).thenReturn(tokenResponse(true, 604_800_000L));
+        when(authService.login(any(LoginRequest.class), anyString(), any())).thenReturn(tokenResponse(true, 604_800_000L));
 
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)

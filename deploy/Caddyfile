@@ -1,12 +1,18 @@
-# Caddy tự xin và gia hạn chứng chỉ HTTPS (Let's Encrypt) cho PUBLIC_HOST.
-# Yêu cầu: PUBLIC_HOST trỏ về IP server, cổng 80 và 443 đã mở.
-{$PUBLIC_HOST} {
+# Caddy tự xin và gia hạn chứng chỉ HTTPS (Let's Encrypt) cho từng tên miền trong SITE_HOSTS
+# (cách nhau bằng dấu phẩy: tên miền chính, các subdomain giáo phận, staging...).
+# Yêu cầu: mọi tên miền đã trỏ về IP server, cổng 80 và 443 đã mở.
+{$SITE_HOSTS} {
 	encode gzip
 
-	# WebSocket thông báo đi thẳng vào BE, mọi đường dẫn còn lại vào FE
-	# (FE tự rewrite /backend/api/* sang BE).
+	# BE dùng X-Site-Host để biết người dùng đang ở subdomain nào (giới hạn đăng nhập theo giáo phận).
+	# header_up ghi đè mọi giá trị client tự gửi, và BE không ra internet nên chỉ Caddy đặt được header này.
 	@ws path /ws/*
-	reverse_proxy @ws app:{$SERVER_PORT}
+	reverse_proxy @ws app:{$SERVER_PORT} {
+		header_up X-Site-Host {host}
+	}
 
-	reverse_proxy fe:3000
+	# Mọi đường dẫn còn lại vào FE (FE tự rewrite /backend/api/* sang BE, giữ nguyên header).
+	reverse_proxy fe:3000 {
+		header_up X-Site-Host {host}
+	}
 }

@@ -33,7 +33,7 @@ public class AuthController {
             HttpServletRequest httpServletRequest,
             HttpServletResponse httpServletResponse
     ) {
-        AuthTokenResponse tokens = authService.login(request, httpServletRequest.getRemoteAddr());
+        AuthTokenResponse tokens = authService.login(request, httpServletRequest.getRemoteAddr(), httpServletRequest.getHeader("X-Site-Host"));
         authCookieService.writeRefreshCookie(httpServletResponse, tokens);
         authCookieService.writeAccessCookie(httpServletResponse, tokens);
         return apiResponse.success("Đăng nhập thành công", tokens);
