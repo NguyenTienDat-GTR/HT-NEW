@@ -7,35 +7,85 @@
 	}
 }
 
+# Tùy chọn dùng chung cho mọi reverse_proxy.
+# - X-Site-Host: BE biết người dùng đang ở subdomain nào (giới hạn đăng nhập theo giáo phận). header_up ghi đè mọi giá
+#   trị client tự gửi, và BE không ra internet nên chỉ Caddy đặt được header này.
+# - lb_try_duration: khi BE/FE đang khởi động lại (deploy), giữ request chờ tối đa 20 giây thay vì trả lỗi ngay;
+#   quá hạn mới hiện trang bảo trì bên dưới.
+(proxy_opts) {
+	header_up X-Site-Host {host}
+	lb_try_duration 20s
+	lb_try_interval 250ms
+}
+
+# Trang "đang bảo trì" khi BE/FE không phản hồi (502/503/504). Lời gọi API và WebSocket nhận JSON để FE hiện đúng thông báo.
+# Lưu ý: nội dung trả về qua Caddyfile nên không dùng ký tự ngoặc nhọn (sẽ bị hiểu là placeholder), chỉ dùng style nội tuyến.
+(maintenance) {
+	handle_errors {
+		@unavailable expression {http.error.status_code} in [502, 503, 504]
+		handle @unavailable {
+			header Retry-After "15"
+			header Cache-Control "no-store"
+
+			@api path /backend/api/* /ws/*
+			handle @api {
+				header Content-Type "application/json; charset=utf-8"
+				respond `{"success":false,"message":"Hệ thống đang được cập nhật, vui lòng thử lại sau ít phút","errorCode":"SERVICE_UNAVAILABLE"}` 503
+			}
+
+			header Content-Type "text/html; charset=utf-8"
+			respond <<HTML
+				<!doctype html>
+				<html lang="vi">
+				<head>
+				<meta charset="utf-8">
+				<meta name="viewport" content="width=device-width, initial-scale=1">
+				<meta http-equiv="refresh" content="10">
+				<title>Hệ thống đang bảo trì</title>
+				</head>
+				<body style="margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f4f6f9;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#1f2937;">
+				<main style="max-width:440px;margin:24px;padding:32px 28px;background:#fff;border-radius:14px;box-shadow:0 8px 30px rgba(15,23,42,.08);text-align:center;">
+				<div style="width:56px;height:56px;margin:0 auto 16px;border-radius:50%;background:#e0ecff;color:#2563eb;display:flex;align-items:center;justify-content:center;font-size:28px;">&#9881;</div>
+				<h1 style="margin:0 0 8px;font-size:20px;">Hệ thống đang được cập nhật</h1>
+				<p style="margin:0 0 6px;font-size:15px;line-height:1.6;color:#4b5563;">Chúng tôi đang nâng cấp để phục vụ bạn tốt hơn. Việc này thường chỉ mất vài phút.</p>
+				<p style="margin:0;font-size:13px;color:#6b7280;">Trang sẽ tự tải lại sau ít giây, bạn không cần làm gì thêm.</p>
+				</main>
+				</body>
+				</html>
+				HTML 503
+		}
+	}
+}
+
 # Tên miền chính (cố định). Xin chứng chỉ ngay khi Caddy khởi động.
 # Yêu cầu: tên miền đã trỏ về IP server, cổng 80 và 443 đã mở.
 {$SITE_HOSTS} {
 	encode gzip
+	import maintenance
 
-	# BE dùng X-Site-Host để biết người dùng đang ở subdomain nào (giới hạn đăng nhập theo giáo phận).
-	# header_up ghi đè mọi giá trị client tự gửi, và BE không ra internet nên chỉ Caddy đặt được header này.
 	@ws path /ws/*
 	reverse_proxy @ws app:{$SERVER_PORT} {
-		header_up X-Site-Host {host}
+		import proxy_opts
 	}
 
 	# Mọi đường dẫn còn lại vào FE (FE tự rewrite /backend/api/* sang BE, giữ nguyên header).
 	reverse_proxy fe:3000 {
-		header_up X-Site-Host {host}
+		import proxy_opts
 	}
 }
 
 # Môi trường test: trang riêng, app-test + fe-test, database ht_management_test.
 {$TEST_HOST} {
 	encode gzip
+	import maintenance
 
 	@ws path /ws/*
 	reverse_proxy @ws app-test:1007 {
-		header_up X-Site-Host {host}
+		import proxy_opts
 	}
 
 	reverse_proxy fe-test:3000 {
-		header_up X-Site-Host {host}
+		import proxy_opts
 	}
 }
 
@@ -45,19 +95,22 @@ https:// {
 		on_demand
 	}
 	encode gzip
+	import maintenance
 
 	# Hỏi BE trước MỖI request (BE nhớ kết quả ~15 giây): subdomain bị thu hồi thì ngừng phục vụ ngay,
 	# dù chứng chỉ đã cấp trước đó vẫn còn trong bộ nhớ của Caddy.
 	forward_auth app:{$SERVER_PORT} {
 		uri /internal/site-hosts/check?domain={host}
+		lb_try_duration 20s
+		lb_try_interval 250ms
 	}
 
 	@ws path /ws/*
 	reverse_proxy @ws app:{$SERVER_PORT} {
-		header_up X-Site-Host {host}
+		import proxy_opts
 	}
 
 	reverse_proxy fe:3000 {
-		header_up X-Site-Host {host}
+		import proxy_opts
 	}
 }

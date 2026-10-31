@@ -61,6 +61,8 @@ services:
     image: ${APP_IMAGE:-ghcr.io/nguyentiendat-gtr/ht-new:latest}
     container_name: ht-app
     restart: unless-stopped
+    # Cho BE tắt nhẹ nhàng (xử lý xong request đang chạy) trước khi bị buộc dừng; khớp spring.lifecycle.timeout-per-shutdown-phase.
+    stop_grace_period: 40s
     env_file: .env
     environment:
       SPRING_PROFILES_ACTIVE: prod
@@ -108,6 +110,8 @@ services:
     image: ${APP_TEST_IMAGE:-ghcr.io/nguyentiendat-gtr/ht-new:test}
     container_name: ht-app-test
     restart: unless-stopped
+    # Cho BE tắt nhẹ nhàng (xử lý xong request đang chạy) trước khi bị buộc dừng; khớp spring.lifecycle.timeout-per-shutdown-phase.
+    stop_grace_period: 40s
     env_file:
       - path: .env.test
         required: false
