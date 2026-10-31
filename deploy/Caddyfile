@@ -1,6 +1,14 @@
-# Caddy tự xin và gia hạn chứng chỉ HTTPS (Let's Encrypt) cho từng tên miền trong SITE_HOSTS
-# (cách nhau bằng dấu phẩy: tên miền chính, các subdomain giáo phận, staging...).
-# Yêu cầu: mọi tên miền đã trỏ về IP server, cổng 80 và 443 đã mở.
+{
+	# Cấp chứng chỉ HTTPS theo yêu cầu cho trang riêng của từng giáo phận: Caddy hỏi BE trước khi xin Let's Encrypt,
+	# BE chỉ trả 200 cho <site_subdomain>.<tên-miền-chính> của giáo phận đang hoạt động. Thêm giáo phận mới chỉ cần
+	# gán diocese.site_subdomain trong database (không phải sửa file này hay .env).
+	on_demand_tls {
+		ask http://app:{$SERVER_PORT}/internal/site-hosts/check
+	}
+}
+
+# Tên miền chính (cố định). Xin chứng chỉ ngay khi Caddy khởi động.
+# Yêu cầu: tên miền đã trỏ về IP server, cổng 80 và 443 đã mở.
 {$SITE_HOSTS} {
 	encode gzip
 
@@ -27,6 +35,23 @@
 	}
 
 	reverse_proxy fe-test:3000 {
+		header_up X-Site-Host {host}
+	}
+}
+
+# Mọi tên miền khác (trang giáo phận): chứng chỉ cấp theo yêu cầu, chỉ khi BE cho phép ở trên.
+https:// {
+	tls {
+		on_demand
+	}
+	encode gzip
+
+	@ws path /ws/*
+	reverse_proxy @ws app:{$SERVER_PORT} {
+		header_up X-Site-Host {host}
+	}
+
+	reverse_proxy fe:3000 {
 		header_up X-Site-Host {host}
 	}
 }
