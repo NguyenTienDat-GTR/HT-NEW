@@ -588,7 +588,8 @@ class ExcelImportExportIntegrationTest {
         String key = newKey();
         var first = excelJobService.createImport(phucuong.ht.common.excel.job.ExcelJobKind.IMPORT_LEADERS, "", importedFile, key, phuCuongAdmin());
         assertFalse(first.replayed());
-        assertEquals("QUEUED", first.status());
+        // Worker có thể nhận việc ngay trước khi response được trả về nên chấp nhận cả RUNNING.
+        assertTrue(List.of("QUEUED", "RUNNING").contains(first.status()), first.status());
 
         var done = awaitJob(first.id());
         assertEquals("SUCCEEDED", done.status(), done.errorMessage());
