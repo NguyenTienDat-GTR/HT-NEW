@@ -862,7 +862,7 @@ class AttendeeBadgeAttendanceInvitationIntegrationTest {
     private void importTeam(List<String[]> rows) throws Exception {
         try {
             participantImportService.importParticipants("KH-IT-3", teamImportFile(rows), deaneryAdmin(),
-                    phucuong.ht.common.excel.job.JobProgress.NONE, true);
+                    phucuong.ht.common.excel.job.JobProgress.NONE, true, null);
         } catch (phucuong.ht.common.excel.ImportValidationException exception) {
             throw new AssertionError("Import lỗi: " + exception.getErrors().stream()
                     .map(error -> error.row() + ":" + error.column() + ":" + error.message()).toList(), exception);
