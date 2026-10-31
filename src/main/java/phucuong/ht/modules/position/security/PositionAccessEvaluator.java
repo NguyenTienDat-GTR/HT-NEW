@@ -17,8 +17,16 @@ public class PositionAccessEvaluator {
     private final PositionRepository positionRepository;
     private final AccountRepository accountRepository;
 
+    private PositionOwnership ownership() {
+        return new PositionOwnership(accountRepository, positionRepository);
+    }
+
     public boolean canCreate(Authentication authentication, UnitType positionType) {
-        return hasAuthorityForType(authentication, positionType, "create") && currentDioceseId(authentication) != null;
+        if (!hasAuthorityForType(authentication, positionType, "create")) {
+            return false;
+        }
+        PositionOwnership ownership = ownership();
+        return ownership.ownerUnitForCreate(ownership.viewer(securityUtils.currentUsername(authentication)), positionType) != null;
     }
 
     public boolean canList(Authentication authentication) {
@@ -40,29 +48,27 @@ public class PositionAccessEvaluator {
     public boolean canUpdate(Authentication authentication, String positionCode, UnitType targetType) {
         return positionRepository.findById(positionCode)
                 .map(position -> hasAuthorityForType(authentication, position.getPositionType(), "update")
-                        && ownsPosition(authentication, position)
+                        && managesPosition(authentication, position)
                         && (targetType == null || hasAuthorityForType(authentication, targetType, "update")))
                 .orElse(false);
     }
 
     public boolean canToggle(Authentication authentication, String positionCode) {
         return positionRepository.findById(positionCode)
-                .map(position -> hasAuthorityForType(authentication, position.getPositionType(), "toggle") && ownsPosition(authentication, position))
+                .map(position -> hasAuthorityForType(authentication, position.getPositionType(), "toggle") && managesPosition(authentication, position))
                 .orElse(false);
     }
 
-    /** Chức vụ thuộc riêng từng giáo phận: chỉ tài khoản của giáo phận đó được xem và sửa. */
+    /** Chức vụ thuộc riêng từng đơn vị: chỉ tài khoản của đơn vị đó (hoặc cấp trên trực tiếp, chỉ xem) được xem. */
     private boolean ownsPosition(Authentication authentication, Position position) {
-        java.util.UUID dioceseId = currentDioceseId(authentication);
-        return dioceseId != null && dioceseId.equals(position.getDioceseId());
+        PositionOwnership ownership = ownership();
+        return ownership.canAccess(ownership.viewer(securityUtils.currentUsername(authentication)), position);
     }
 
-    private java.util.UUID currentDioceseId(Authentication authentication) {
-        String username = securityUtils.currentUsername(authentication);
-        if (username == null || username.isBlank()) {
-            return null;
-        }
-        return accountRepository.findActiveDioceseIdByUsername(username).orElse(null);
+    /** Sửa và đổi trạng thái chỉ dành cho đơn vị sở hữu chức vụ, cấp trên không được sửa. */
+    private boolean managesPosition(Authentication authentication, Position position) {
+        PositionOwnership ownership = ownership();
+        return ownership.canManage(ownership.viewer(securityUtils.currentUsername(authentication)), position);
     }
 
     private boolean hasAuthorityForType(Authentication authentication, UnitType unitType, String action) {
