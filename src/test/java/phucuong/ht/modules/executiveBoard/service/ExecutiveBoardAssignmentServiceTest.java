@@ -101,6 +101,7 @@ class ExecutiveBoardAssignmentServiceTest {
         position.setPositionCode("POS-1");
         position.setPositionType(UnitType.DEANERY);
         position.setStatus(Boolean.TRUE);
+        position.setDioceseId(diocese.getId());
 
         when(leaderRepository.findByIdWithParish(leaderId)).thenReturn(Optional.of(leader));
         when(positionRepository.findById("POS-1")).thenReturn(Optional.of(position));
@@ -165,5 +166,57 @@ class ExecutiveBoardAssignmentServiceTest {
                 assignmentRepository, leaderRepository, positionRepository, dioceseRepository, deaneryRepository, parishRepository,
                 accountScopeValidationHelper, new CommonValidationHelper(new securityUtils()), new securityUtils(),
                 org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class));
+    }
+
+    @Test
+    void createShouldRejectPositionOfAnotherDiocese() {
+        CommonValidationHelper commonValidationHelper = new CommonValidationHelper(new securityUtils());
+        ExecutiveBoardAssignmentService service = new ExecutiveBoardAssignmentService(
+                assignmentRepository,
+                leaderRepository,
+                positionRepository,
+                dioceseRepository,
+                deaneryRepository,
+                parishRepository,
+                accountScopeValidationHelper,
+                commonValidationHelper,
+                new securityUtils(),
+                org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class)
+        );
+
+        UUID deaneryId = UUID.randomUUID();
+        UUID leaderId = UUID.randomUUID();
+        ExecutiveBoardAssignmentCreateRequest request = new ExecutiveBoardAssignmentCreateRequest();
+        request.setUnitType(UnitType.DEANERY);
+        request.setUnitId(deaneryId);
+        request.setLeaderId(leaderId);
+        request.setPositionCode("POS-OTHER");
+
+        Diocese diocese = new Diocese();
+        diocese.setId(UUID.randomUUID());
+        Deanery deanery = new Deanery();
+        deanery.setId(deaneryId);
+        deanery.setDiocese(diocese);
+
+        Position position = new Position();
+        position.setPositionCode("POS-OTHER");
+        position.setPositionType(UnitType.DEANERY);
+        position.setStatus(Boolean.TRUE);
+        position.setDioceseId(UUID.randomUUID());
+
+        when(leaderRepository.findByIdWithParish(leaderId)).thenReturn(Optional.of(new Leader()));
+        when(positionRepository.findById("POS-OTHER")).thenReturn(Optional.of(position));
+        when(deaneryRepository.findByIdWithDiocese(deaneryId)).thenReturn(Optional.of(deanery));
+
+        AuthUserDetails principal = AuthUserDetails.tokenPrincipal(
+                "admin-deanery",
+                leaderId.toString(),
+                List.of("ADMIN_DEANERY"),
+                List.of("organization.executive_board_assignment.create.deanery")
+        );
+        var authentication = new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
+
+        var exception = assertThrows(Exception.class, () -> service.create(request, authentication));
+        org.junit.jupiter.api.Assertions.assertTrue(exception.getMessage().contains("giáo phận khác"), exception.getMessage());
     }
 }

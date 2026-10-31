@@ -29,4 +29,8 @@ public class Position extends BaseModel {
     @Column(name = "position_type")
     @Enumerated(EnumType.STRING)
     private UnitType positionType;
+
+    /** Giáo phận sở hữu chức vụ: mỗi giáo phận có danh sách chức vụ riêng. */
+    @Column(name = "diocese_id", nullable = false, updatable = false)
+    private java.util.UUID dioceseId;
 }

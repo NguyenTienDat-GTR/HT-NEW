@@ -14,10 +14,11 @@ public class PositionRepository extends BaseRepo<Position, String> {
         super(entityManager, Position.class);
     }
 
-    /** Thứ tự kế tiếp (cuối cùng) trong cấp. */
-    public int nextDisplayOrder(UnitType positionType) {
-        Integer max = entityManager.createQuery("select max(p.displayOrder) from Position p where p.positionType = :type", Integer.class)
+    /** Thứ tự kế tiếp (cuối cùng) trong cấp của giáo phận. */
+    public int nextDisplayOrder(UnitType positionType, java.util.UUID dioceseId) {
+        Integer max = entityManager.createQuery("select max(p.displayOrder) from Position p where p.positionType = :type and p.dioceseId = :dioceseId", Integer.class)
                 .setParameter("type", positionType)
+                .setParameter("dioceseId", dioceseId)
                 .getSingleResult();
         return max == null ? 1 : max + 1;
     }

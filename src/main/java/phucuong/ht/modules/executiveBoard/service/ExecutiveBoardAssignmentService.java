@@ -84,6 +84,7 @@ public class ExecutiveBoardAssignmentService {
         enforcePositionActive(position);
         enforceUnitType(position, request.getUnitType());
         ScopeData scopeData = resolveScopeData(request.getUnitType(), request.getUnitId());
+        enforcePositionBelongsToDiocese(position, scopeData);
         enforceTargetScope(authentication, request.getUnitType(), scopeData, "create");
         // Đóng băng: không gán chức vụ mới trong đơn vị đang bị khóa; kết thúc nhiệm kì (toggle) vẫn được phép.
         if (unitOperationalStatusService != null) {
@@ -232,6 +233,14 @@ public class ExecutiveBoardAssignmentService {
     private void validateDateRange(java.time.LocalDate startDate, java.time.LocalDate endDate) {
         if (startDate != null && endDate != null && endDate.isBefore(startDate)) {
             throw commonValidationHelper.validationError("Ngày kết thúc không được trước ngày bắt đầu");
+        }
+    }
+
+    /** Chức vụ của giáo phận nào chỉ gán được cho đơn vị thuộc giáo phận đó. */
+    private void enforcePositionBelongsToDiocese(Position position, ScopeData scopeData) {
+        UUID unitDioceseId = scopeData.diocese() == null ? null : scopeData.diocese().getId();
+        if (unitDioceseId == null || !unitDioceseId.equals(position.getDioceseId())) {
+            throw commonValidationHelper.validationError("Chức vụ này thuộc giáo phận khác, không gán được cho đơn vị này");
         }
     }
 
