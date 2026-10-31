@@ -95,10 +95,19 @@ jobs:
             docker logout ghcr.io
 
             echo "Chờ app healthy..."
+            healthy=false
             for i in $(seq 1 40); do
               status="$(docker inspect -f '{{.State.Health.Status}}' ht-app 2>/dev/null || echo starting)"
-              [ "$status" = "healthy" ] && echo "Deploy BE OK" && break
-              [ "$i" = "40" ] && { docker compose -f compose.prod.yaml logs --tail=200 app; exit 1; }
+              echo "[$i/40] ht-app: $status"
+              if [ "$status" = "healthy" ]; then
+                healthy=true
+                break
+              fi
               sleep 5
             done
+            if [ "$healthy" != "true" ]; then
+              docker compose -f compose.prod.yaml logs --tail=200 app
+              exit 1
+            fi
+            echo "Deploy BE OK"
             docker image prune -f
