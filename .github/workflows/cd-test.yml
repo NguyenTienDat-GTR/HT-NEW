@@ -1,0 +1,106 @@
+name: CD test
+
+# Đưa bản đang chọn lên môi trường TEST (https://test.<tên-miền>) để kiểm tra trước khi merge vào main.
+# Cách dùng: đẩy code lên nhánh `test`, hoặc Actions -> CD test -> Run workflow và chọn nhánh bất kỳ.
+on:
+  push:
+    branches: [test]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-test
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tên image (GHCR yêu cầu chữ thường)
+        id: vars
+        run: echo "repo=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.vars.outputs.repo }}:test
+          cache-from: type=gha,scope=test
+          cache-to: type=gha,mode=max,scope=test
+
+  deploy:
+    needs: build-push
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_DIR: ${{ vars.DEPLOY_DIR || '/home/ubuntu/ht' }}
+    steps:
+      - name: Gom file cấu hình test (lấy từ secret)
+        run: |
+          mkdir out
+          printf '%s\n' "$TEST_ENV_FILE" > out/env.test.deploy
+        env:
+          TEST_ENV_FILE: ${{ secrets.TEST_ENV_FILE }}
+
+      - name: Copy file lên server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "out/*"
+          strip_components: 1
+          target: ${{ env.DEPLOY_DIR }}
+
+      - name: Pull image và khởi động lại app-test
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: GHCR_USER,GHCR_TOKEN,DEPLOY_DIR
+          script_stop: true
+          script: |
+            set -e
+            cd "$DEPLOY_DIR"
+            mv env.test.deploy .env.test && chmod 600 .env.test
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+            docker compose -f compose.prod.yaml pull app-test
+            # --no-deps: không đụng tới postgres/redis/rabbitmq/app của production.
+            docker compose -f compose.prod.yaml up -d --no-deps --force-recreate app-test
+            docker logout ghcr.io
+
+            echo "Chờ app-test healthy..."
+            healthy=false
+            for i in $(seq 1 40); do
+              status="$(docker inspect -f '{{.State.Health.Status}}' ht-app-test 2>/dev/null || echo starting)"
+              echo "[$i/40] ht-app-test: $status"
+              if [ "$status" = "healthy" ]; then
+                healthy=true
+                break
+              fi
+              sleep 5
+            done
+            if [ "$healthy" != "true" ]; then
+              docker compose -f compose.prod.yaml logs --tail=200 app-test
+              exit 1
+            fi
+            echo "Deploy BE test OK"
+            docker image prune -f
