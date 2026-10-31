@@ -10,7 +10,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import phucuong.ht.common.exception.errorCode;
-import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.common.exception.ApiException;
 import phucuong.ht.modules.auth.model.request.ForgotPasswordOtpRequest;
 import phucuong.ht.modules.auth.model.request.ForgotPasswordResetRequest;
 import phucuong.ht.modules.auth.model.request.ForgotPasswordVerifyRequest;

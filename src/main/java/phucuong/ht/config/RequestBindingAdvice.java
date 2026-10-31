@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.InitBinder;
 import org.springframework.web.context.request.NativeWebRequest;
 import phucuong.ht.common.exception.errorCode;
 import phucuong.ht.common.repository.BaseSearchRequest;
-import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.common.exception.ApiException;
 
 import java.beans.PropertyEditorSupport;
 import java.util.LinkedHashMap;

@@ -1,6 +1,8 @@
 package phucuong.ht.modules.diocese.service;
 
 import phucuong.ht.config.EvictCaches;
+import phucuong.ht.common.security.UnitToggleSupport;
+import phucuong.ht.common.repository.SearchRequests;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
@@ -24,7 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 import phucuong.ht.common.utils.AuditActorNameResolver;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.config.CacheNames;
-import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.common.exception.ApiException;
 import phucuong.ht.modules.auth.repository.AccountRepository;
 import phucuong.ht.modules.diocese.helper.DioceseValidationHelper;
 import phucuong.ht.modules.diocese.model.entity.Diocese;
@@ -56,15 +58,7 @@ public class DioceseService {
     private final securityUtils securityUtils;
     private final AuditActorNameResolver auditActorNameResolver;
     @Autowired(required = false)
-    private UnitOperationalStatusService unitOperationalStatusService;
-    @Autowired(required = false)
-    private UnitStatusAuditService unitStatusAuditService;
-    @Autowired(required = false)
-    private ToggleNotificationRecipientResolver toggleNotificationRecipientResolver;
-    @Autowired(required = false)
-    private ToggleNotificationDispatcher toggleNotificationDispatcher;
-    @Autowired(required = false)
-    private RbacAuthRefreshNotifier authRefreshNotifier;
+    private UnitToggleSupport toggleSupport = UnitToggleSupport.noop();
     @Autowired(required = false)
     private phucuong.ht.modules.leaderLevel.service.LeaderLevelService leaderLevelService;
     @Autowired(required = false)
@@ -114,7 +108,7 @@ public class DioceseService {
 
     @Cacheable(cacheNames = CacheNames.DIOCESE_LIST, key = "@cacheScopeKeyHelper.listKey(#authentication, #request)")
     public Page<DioceseResponse> findAll(BaseSearchRequest request, Authentication authentication) {
-        BaseSearchRequest scopedRequest = copyRequest(request);
+        BaseSearchRequest scopedRequest = SearchRequests.copy(request);
 
         if (securityUtils.hasAuthority(authentication, DioceseAccessEvaluator.READ_ALL)) {
             return loadDiocesePage(scopedRequest);
@@ -157,7 +151,7 @@ public class DioceseService {
     @EvictCaches.ExecutiveAssignments
     public DioceseResponse update(UUID id, DioceseUpdateRequest request, Authentication authentication) {
         Diocese existingDiocese = dioceseValidationHelper.requireExistingDiocese(id);
-        requireUnitOperational(UnitType.DIOCESE, id);
+        toggleSupport.requireOperational(UnitType.DIOCESE, id);
         dioceseValidationHelper.validateUpdateInput(request);
         String auditActor = dioceseValidationHelper.getRequiredAuditActor(authentication);
         dioceseValidationHelper.validateUpdateNameUniqueness(id, request.getName(), existingDiocese.getName());
@@ -181,77 +175,29 @@ public class DioceseService {
     })
     public DioceseResponse toggleStatus(UUID id, StatusToggleRequest request, Authentication authentication) {
         dioceseValidationHelper.requireExistingDiocese(id);
-        requireUnitToggleAllowed(UnitType.DIOCESE, id);
-        Set<String> recipients = toggleNotificationRecipientResolver == null ? Set.of() : toggleNotificationRecipientResolver.byUnit(UnitType.DIOCESE, id);
+        toggleSupport.requireToggleAllowed(UnitType.DIOCESE, id);
+        Set<String> recipients = toggleSupport.recipients(UnitType.DIOCESE, id);
         dioceseValidationHelper.validateToggleConfirmation(request == null ? null : request.getConfirmationText());
-        UnitStatusAuditService.ToggleContext toggleContext = unitStatusAuditService == null ? null
-                : unitStatusAuditService.begin(UnitType.DIOCESE, id, request == null ? null : request.getReason());
+        UnitStatusAuditService.ToggleContext toggleContext = toggleSupport.begin(UnitType.DIOCESE, id, request == null ? null : request.getReason());
         String auditActor = dioceseValidationHelper.getRequiredAuditActor(authentication);
         Diocese updated = dioceseRepository.toggleStatus(id, auditActor);
-        if (toggleContext != null) {
-            unitStatusAuditService.finish(toggleContext, UnitType.DIOCESE, id, auditActor);
-        }
-        notifyUsers(recipients);
-        dispatchUnitToggle(recipients, unitLabel("Giáo phận", updated.getName()), Boolean.TRUE.equals(updated.getStatus()), auditActor);
+        toggleSupport.finish(toggleContext, UnitType.DIOCESE, id, auditActor);
+        toggleSupport.announce(recipients, "Giáo phận", updated.getName(), Boolean.TRUE.equals(updated.getStatus()), auditActor);
         return toDioceseResponse(updated);
     }
 
     public UnitToggleImpactResponse toggleImpact(UUID id) {
-        if (unitStatusAuditService == null) {
-            throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, errorCode.CONFLICT, "Chưa sẵn sàng tính tác động");
-        }
-        return unitStatusAuditService.impact(UnitType.DIOCESE, id);
+        return toggleSupport.impact(UnitType.DIOCESE, id);
     }
 
     public List<UnitStatusHistoryResponse> statusHistory(UUID id, int page, int size) {
-        if (unitStatusAuditService == null) {
-            return List.of();
-        }
-        return unitStatusAuditService.history(UnitType.DIOCESE, id, page, size);
+        return toggleSupport.history(UnitType.DIOCESE, id, page, size);
     }
 
-    private void requireUnitOperational(UnitType unitType, UUID id) {
-        if (unitOperationalStatusService != null) {
-            unitOperationalStatusService.requireUnitOperational(unitType, id);
-        }
-    }
 
-    private void requireUnitToggleAllowed(UnitType unitType, UUID id) {
-        if (unitOperationalStatusService != null) {
-            unitOperationalStatusService.requireUnitToggleAllowed(unitType, id);
-        }
-    }
 
-    private void notifyUsers(Set<String> recipients) {
-        if (authRefreshNotifier != null) {
-            authRefreshNotifier.notifyUsers(recipients, "UNIT_STATUS_TOGGLED");
-        }
-    }
 
-    private void dispatchUnitToggle(Set<String> recipients, String targetLabel, boolean enabled, String actor) {
-        if (toggleNotificationDispatcher != null) {
-            toggleNotificationDispatcher.dispatch(recipients, "UNIT_STATUS_TOGGLED", targetLabel, enabled, actor);
-        }
-    }
 
-    private String unitLabel(String unitType, String name) {
-        String normalizedName = name == null ? null : name.trim();
-        return normalizedName == null || normalizedName.isBlank() ? unitType : unitType + " " + normalizedName;
-    }
-
-    private BaseSearchRequest copyRequest(BaseSearchRequest request) {
-        BaseSearchRequest source = request == null ? new BaseSearchRequest() : request;
-        BaseSearchRequest copy = new BaseSearchRequest();
-        copy.setPage(source.getPage());
-        copy.setSize(source.getSize());
-        copy.setSearch(source.getSearch());
-        copy.setSearchFields(source.getSearchFields() == null ? List.of() : List.copyOf(source.getSearchFields()));
-        copy.setFilters(source.getFilters() == null ? new LinkedHashMap<>() : new LinkedHashMap<>(source.getFilters()));
-        copy.setStatus(source.getStatus());
-        copy.setSortBy(source.getSortBy());
-        copy.setSortDirection(source.getSortDirection());
-        return copy;
-    }
 
     private Page<DioceseResponse> loadDiocesePage(BaseSearchRequest request) {
         Page<Diocese> page = dioceseRepository.findAll(request);

@@ -11,7 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import phucuong.ht.common.exception.errorCode;
 import phucuong.ht.modules.auth.config.AuthProperties;
-import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.common.exception.ApiException;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;

@@ -16,7 +16,6 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 import phucuong.ht.common.dto.apiResponse;
-import phucuong.ht.modules.auth.exception.ApiException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;

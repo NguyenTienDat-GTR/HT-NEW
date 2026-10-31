@@ -7,7 +7,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import phucuong.ht.common.exception.errorCode;
 import phucuong.ht.modules.auth.config.AuthProperties;
-import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.common.exception.ApiException;
 import phucuong.ht.modules.auth.model.AuthUserDetails;
 
 import javax.crypto.SecretKey;

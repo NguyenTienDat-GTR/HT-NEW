@@ -10,6 +10,7 @@ import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.common.excel.ExcelRowData;
 import phucuong.ht.common.excel.ExcelSheetData;
 import phucuong.ht.common.excel.ExcelWorkbookReader;
+import phucuong.ht.common.excel.AbstractExcelImporter;
 import phucuong.ht.common.excel.AvatarImportCollector;
 import phucuong.ht.common.excel.AvatarPlan;
 import phucuong.ht.common.excel.AvatarWarning;
@@ -21,7 +22,7 @@ import phucuong.ht.common.security.UnitOperationalStatusService;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.config.CacheNames;
 import phucuong.ht.config.EvictCaches;
-import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.common.exception.ApiException;
 import phucuong.ht.modules.leader.helper.LeaderScopeHelper;
 import phucuong.ht.modules.leader.helper.LeaderValidationHelper;
 import phucuong.ht.modules.leader.model.entity.Leader;
@@ -50,7 +51,7 @@ import java.util.regex.Pattern;
  */
 @Service
 @RequiredArgsConstructor
-public class LeaderImportService {
+public class LeaderImportService extends AbstractExcelImporter<LeaderImportService.Row, LeaderImportService.ImportRun> {
 
     public static final String COL_HOLY_NAME = "Tên thánh";
     public static final String COL_FULL_NAME = "Họ và tên";
@@ -75,7 +76,7 @@ public class LeaderImportService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private UnitOperationalStatusService unitOperationalStatusService;
 
-    private record Row(ExcelRowData source, String holyName, String fullName, LocalDate birthDate, LeaderGender gender,
+    record Row(ExcelRowData source, String holyName, String fullName, LocalDate birthDate, LeaderGender gender,
                        String email, String phone, String level, Parish parish, String avatarFileName) {
     }
 
@@ -97,35 +98,52 @@ public class LeaderImportService {
 
     public ImportSummary importLeaders(java.nio.file.Path file, Authentication authentication, JobProgress progress, AvatarZip images) {
         String actor = leaderValidationHelper.getRequiredAuditActor(authentication);
-        List<Row> rows;
-        try (ExcelWorkbookReader reader = ExcelWorkbookReader.open(file)) {
-            ExcelSheetData sheet = reader.firstSheet();
-            ImportErrors errors = new ImportErrors();
-            sheet.requireColumns(errors, COL_HOLY_NAME, COL_FULL_NAME, COL_BIRTH_DATE, COL_GENDER, COL_EMAIL, COL_PHONE, COL_DEANERY, COL_PARISH);
-            errors.throwIfAny();
-            if (sheet.rows().isEmpty()) {
-                throw commonValidationHelper.validationError("File Excel không có dòng dữ liệu nào");
-            }
-            rows = parse(sheet, authentication, errors);
-            errors.throwIfAny();
-        }
-        progress.report(0, rows.size());
+        return runImport(file, progress, new ImportRun(authentication, actor, images));
+    }
 
-        OffsetDateTime now = OffsetDateTime.now();
-        List<AvatarPlan> avatarPlan = new ArrayList<>();
-        List<AvatarWarning> avatarWarnings = new ArrayList<>();
-        int written = 0;
-        for (Row item : rows) {
-            Leader leader = leaderRepository.save(buildLeader(new NewLeader(item.holyName(), item.fullName(), item.birthDate(), item.gender(), item.email(),
-                    item.phone(), item.level(), item.parish()), actor, now));
-            AvatarImportCollector.collect(images, avatarPlan, avatarWarnings, item.source().number(), leader.getId(), item.fullName(),
-                    item.avatarFileName(), item.parish().getDeanery().getDiocese().getId());
-            written++;
-            if (written % 200 == 0) {
-                progress.report(written, rows.size());
-            }
+    /** Trạng thái của một lần import (service dùng chung nhiều luồng nên không giữ trong field). */
+    static final class ImportRun {
+        private final Authentication authentication;
+        private final String actor;
+        private final AvatarZip images;
+        private final List<AvatarPlan> avatarPlan = new ArrayList<>();
+        private final List<AvatarWarning> avatarWarnings = new ArrayList<>();
+        private OffsetDateTime now;
+
+        ImportRun(Authentication authentication, String actor, AvatarZip images) {
+            this.authentication = authentication;
+            this.actor = actor;
+            this.images = images;
         }
-        return new ImportSummary(rows.size(), "Đã import " + rows.size() + " huynh trưởng", avatarPlan, avatarWarnings);
+    }
+
+    @Override
+    protected List<Row> readRows(ExcelWorkbookReader reader, ImportRun run, ImportErrors errors) {
+        ExcelSheetData sheet = reader.firstSheet();
+        sheet.requireColumns(errors, COL_HOLY_NAME, COL_FULL_NAME, COL_BIRTH_DATE, COL_GENDER, COL_EMAIL, COL_PHONE, COL_DEANERY, COL_PARISH);
+        errors.throwIfAny();
+        if (sheet.rows().isEmpty()) {
+            throw commonValidationHelper.validationError("File Excel không có dòng dữ liệu nào");
+        }
+        return parse(sheet, run.authentication, errors);
+    }
+
+    @Override
+    protected void beforeWrite(ImportRun run) {
+        run.now = OffsetDateTime.now();
+    }
+
+    @Override
+    protected void write(Row item, ImportRun run) {
+        Leader leader = leaderRepository.save(buildLeader(new NewLeader(item.holyName(), item.fullName(), item.birthDate(), item.gender(), item.email(),
+                item.phone(), item.level(), item.parish()), run.actor, run.now));
+        AvatarImportCollector.collect(run.images, run.avatarPlan, run.avatarWarnings, item.source().number(), leader.getId(), item.fullName(),
+                item.avatarFileName(), item.parish().getDeanery().getDiocese().getId());
+    }
+
+    @Override
+    protected ImportSummary summarize(int rowCount, ImportRun run) {
+        return new ImportSummary(rowCount, "Đã import " + rowCount + " huynh trưởng", run.avatarPlan, run.avatarWarnings);
     }
 
     private List<Row> parse(ExcelSheetData sheet, Authentication authentication, ImportErrors errors) {

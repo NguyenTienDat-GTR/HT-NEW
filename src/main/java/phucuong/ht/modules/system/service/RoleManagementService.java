@@ -1,6 +1,8 @@
 package phucuong.ht.modules.system.service;
 
 import lombok.RequiredArgsConstructor;
+import phucuong.ht.common.repository.InMemoryPager;
+import phucuong.ht.common.repository.SearchRequests;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -163,25 +165,11 @@ public class RoleManagementService {
         return authorizationHelper.isManageableBySuperAdmin(role);
     }
 
-    private BaseSearchRequest copyRequest(BaseSearchRequest request) {
-        BaseSearchRequest source = request == null ? new BaseSearchRequest() : request;
-        BaseSearchRequest copy = new BaseSearchRequest();
-        copy.setPage(source.getPage());
-        copy.setSize(source.getSize());
-        copy.setSearch(source.getSearch());
-        copy.setSearchFields(source.getSearchFields() == null ? List.of() : List.copyOf(source.getSearchFields()));
-        copy.setFilters(source.getFilters() == null ? new LinkedHashMap<>() : new LinkedHashMap<>(source.getFilters()));
-        copy.setStatus(source.getStatus());
-        copy.setSortBy(source.getSortBy());
-        copy.setSortDirection(source.getSortDirection());
-        return copy;
-    }
-
     private List<Role> loadAllMatching(BaseSearchRequest request) {
         List<Role> matches = new java.util.ArrayList<>();
         int page = 0;
         while (true) {
-            BaseSearchRequest batch = copyRequest(request);
+            BaseSearchRequest batch = SearchRequests.copy(request);
             batch.setPage(page);
             batch.setSize(BaseSearchRequest.MAX_PAGE_SIZE);
             Page<Role> result = systemRoleRepository.findAll(batch);
@@ -194,11 +182,7 @@ public class RoleManagementService {
     }
 
     private Page<RoleResponse> page(BaseSearchRequest request, List<Role> roles) {
-        int page = request == null ? 0 : request.getPage();
-        int size = request == null ? 10 : request.getSize();
-        int start = Math.min(page * size, roles.size());
-        int end = Math.min(start + size, roles.size());
-        return new PageImpl<>(roles.subList(start, end).stream().map(this::toResponse).toList(), PageRequest.of(page, size), roles.size());
+        return InMemoryPager.page(request, roles, this::toResponse);
     }
 
     private RoleResponse toResponse(Role role) {

@@ -16,7 +16,7 @@ import phucuong.ht.common.exception.errorCode;
 import phucuong.ht.common.security.UnitOperationalStatusService;
 import phucuong.ht.common.utils.jwtUtils;
 import phucuong.ht.modules.auth.config.AuthProperties;
-import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.common.exception.ApiException;
 import phucuong.ht.modules.auth.model.AuthUserDetails;
 import phucuong.ht.modules.auth.model.request.LoginRequest;
 import phucuong.ht.modules.auth.model.request.ChangePasswordRequest;

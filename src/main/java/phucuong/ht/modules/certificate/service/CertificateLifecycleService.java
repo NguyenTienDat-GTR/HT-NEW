@@ -198,14 +198,7 @@ public class CertificateLifecycleService {
     }
 
     private void publish(String eventType, Certificate certificate, String actor, Map<String, Object> payload) {
-        domainEventPublisher.publishAfterCommit(DomainEventMessage.builder()
-                .eventType(eventType)
-                .entityType("certificate")
-                .entityId(certificate.getCertificateCode())
-                .actor(actor)
-                .occurredAt(OffsetDateTime.now())
-                .payload(payload)
-                .build());
+        domainEventPublisher.publishAfterCommit(DomainEventMessage.of(eventType, "certificate", certificate.getCertificateCode(), actor, payload));
     }
 
     // Số chứng nhận đã duyệt / đang chờ mở lại của khóa, để cảnh báo trước khi vô hiệu hóa / bật lại khóa.

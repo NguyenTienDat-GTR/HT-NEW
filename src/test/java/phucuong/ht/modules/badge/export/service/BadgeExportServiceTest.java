@@ -7,7 +7,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.common.validation.CommonValidationHelper;
-import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.common.exception.ApiException;
 import phucuong.ht.modules.badge.config.model.entity.BadgeConfig;
 import phucuong.ht.modules.badge.config.repository.BadgeConfigRepository;
 import phucuong.ht.modules.badge.config.service.BadgePdfRenderer;

@@ -1,6 +1,7 @@
 package phucuong.ht.modules.system.service;
 
-import lombok.RequiredArgsConstructor;
+import phucuong.ht.common.repository.InMemoryPager;
+import phucuong.ht.common.security.AuthorityChecks;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -31,20 +32,7 @@ import java.time.OffsetDateTime;
 import java.util.*;
 
 @Service
-@RequiredArgsConstructor
 public class AccountRoleService {
-
-    private static final String ROLE_SUPER_ADMIN = "SUPER_ADMIN";
-    private static final String ROLE_ADMIN_DIOCESE = "ADMIN_DIOCESE";
-    private static final String ROLE_ADMIN_DEANERY = "ADMIN_DEANERY";
-    private static final String ROLE_ADMIN_PARISH = "ADMIN_PARISH";
-    private static final Set<String> SUPER_ADMIN_MANAGED_SYSTEM_ROLES = Set.of(ROLE_SUPER_ADMIN, ROLE_ADMIN_DIOCESE);
-    private static final Set<String> SYSTEM_ADMIN_ROLE_CODES = Set.of(ROLE_SUPER_ADMIN, ROLE_ADMIN_DIOCESE, ROLE_ADMIN_DEANERY, ROLE_ADMIN_PARISH);
-    private static final Map<String, Set<String>> SCOPED_ADMIN_ASSIGNABLE_SYSTEM_ROLES = Map.of(
-            ROLE_ADMIN_DIOCESE, Set.of(ROLE_ADMIN_DEANERY, ROLE_ADMIN_PARISH),
-            ROLE_ADMIN_DEANERY, Set.of(ROLE_ADMIN_PARISH),
-            ROLE_ADMIN_PARISH, Set.of()
-    );
 
     private final AccountRepository accountRepository;
     private final AccountRoleRepository accountRoleRepository;
@@ -52,6 +40,20 @@ public class AccountRoleService {
     private final CommonValidationHelper commonValidationHelper;
     private final AccountManagementAuthorizationHelper accountManagementAuthorizationHelper;
     private final phucuong.ht.common.utils.AuditActorNameResolver auditActorNameResolver;
+    private final RoleAssignmentPolicy assignmentPolicy;
+    public AccountRoleService(AccountRepository accountRepository, AccountRoleRepository accountRoleRepository, RoleRepository roleRepository,
+                              CommonValidationHelper commonValidationHelper, AccountManagementAuthorizationHelper accountManagementAuthorizationHelper,
+                              phucuong.ht.common.utils.AuditActorNameResolver auditActorNameResolver) {
+        this.accountRepository = accountRepository;
+        this.accountRoleRepository = accountRoleRepository;
+        this.roleRepository = roleRepository;
+        this.commonValidationHelper = commonValidationHelper;
+        this.accountManagementAuthorizationHelper = accountManagementAuthorizationHelper;
+        this.auditActorNameResolver = auditActorNameResolver;
+        this.assignmentPolicy = new RoleAssignmentPolicy(accountRepository, accountRoleRepository, roleRepository,
+                commonValidationHelper, accountManagementAuthorizationHelper);
+    }
+
     @Autowired(required = false)
     private UnitOperationalStatusService unitOperationalStatusService;
     @Autowired(required = false)
@@ -310,177 +312,22 @@ public class AccountRoleService {
     }
 
     private boolean canAssignRole(Authentication authentication, Role role) {
-        if (hasRole(authentication, ROLE_SUPER_ADMIN)) {
-            return isSuperAdminAssignableRole(role);
-        }
-        String actorRoleCode = hasAuthority(authentication, "system.account_role.assign.diocese") ? ROLE_ADMIN_DIOCESE
-                : hasAuthority(authentication, "system.account_role.assign.deanery") ? ROLE_ADMIN_DEANERY
-                : hasAuthority(authentication, "system.account_role.assign.parish") ? ROLE_ADMIN_PARISH : null;
-        if (actorRoleCode == null) {
-            return false;
-        }
-        if (!canAssignSystemRole(actorRoleCode, role)) {
-            return false;
-        }
-        return roleRepository.findByRoleCodeAndStatusTrue(actorRoleCode)
-                .map(actorRole -> {
-                    Integer actorOrder = actorHierarchyOrder(authentication, actorRoleCode);
-                    Integer targetOrder = role.getDisplayOrder();
-                    return actorOrder != null && targetOrder != null && targetOrder >= actorOrder;
-                })
-                .orElse(false);
+        return assignmentPolicy.canAssign(authentication, role);
     }
 
     private void enforceAssignmentScope(Authentication authentication, Account targetAccount, Role targetRole) {
         if (unitOperationalStatusService != null) {
             unitOperationalStatusService.requireAccountWritable(targetAccount.getUsername());
         }
-        if (currentUsername(authentication).equals(targetAccount.getUsername())) {
-            throw commonValidationHelper.forbidden("Quản trị viên không được tự gán vai trò cho tài khoản của mình");
-        }
-
-        if (hasRole(authentication, ROLE_SUPER_ADMIN)) {
-            enforceSuperAdminScope(targetAccount, targetRole);
-            return;
-        }
-
-        accountManagementAuthorizationHelper.requireTargetAccountNotAboveActor(authentication, targetAccount);
-
-        if (hasAuthority(authentication, "system.account_role.assign.diocese")) {
-            enforceScopedSystemRoleAssignment(ROLE_ADMIN_DIOCESE, targetRole);
-            UUID actorDioceseId = accountRepository.findActiveDioceseIdByUsername(currentUsername(authentication))
-                    .orElseThrow(() -> commonValidationHelper.forbidden("Tài khoản hiện tại không có scope giáo phận hợp lệ"));
-            UUID targetDioceseId = accountRepository.findActiveDioceseIdByUsername(targetAccount.getUsername())
-                    .orElseThrow(() -> commonValidationHelper.forbidden("Account đích chưa có scope giáo phận hợp lệ để gán vai trò"));
-            if (!actorDioceseId.equals(targetDioceseId)) {
-                throw commonValidationHelper.forbidden("Không thể gán vai trò cho account ngoài giáo phận hiện tại");
-            }
-            enforceHierarchy(authentication, targetRole, ROLE_ADMIN_DIOCESE);
-            return;
-        }
-
-        if (hasAuthority(authentication, "system.account_role.assign.deanery")) {
-            enforceScopedSystemRoleAssignment(ROLE_ADMIN_DEANERY, targetRole);
-            UUID actorDeaneryId = accountRepository.findActiveDeaneryIdByUsername(currentUsername(authentication))
-                    .orElseThrow(() -> commonValidationHelper.forbidden("Tài khoản hiện tại không có phạm vi giáo hạt hợp lệ"));
-            UUID targetDeaneryId = accountRepository.findActiveDeaneryIdByUsername(targetAccount.getUsername())
-                    .orElseThrow(() -> commonValidationHelper.forbidden("Tài khoản đích chưa có phạm vi giáo hạt hợp lệ để gán vai trò"));
-            if (!actorDeaneryId.equals(targetDeaneryId)) {
-                throw commonValidationHelper.forbidden("Không thể gán vai trò cho tài khoản ngoài giáo hạt hiện tại");
-            }
-            enforceHierarchy(authentication, targetRole, ROLE_ADMIN_DEANERY);
-            return;
-        }
-
-        if (hasAuthority(authentication, "system.account_role.assign.parish")) {
-            enforceScopedSystemRoleAssignment(ROLE_ADMIN_PARISH, targetRole);
-            UUID actorParishId = accountRepository.findActiveParishIdByUsername(currentUsername(authentication))
-                    .orElseThrow(() -> commonValidationHelper.forbidden("Tài khoản hiện tại không có phạm vi giáo xứ hợp lệ"));
-            UUID targetParishId = accountRepository.findActiveParishIdByUsername(targetAccount.getUsername())
-                    .orElseThrow(() -> commonValidationHelper.forbidden("Tài khoản đích chưa có phạm vi giáo xứ hợp lệ để gán vai trò"));
-            if (!actorParishId.equals(targetParishId)) {
-                throw commonValidationHelper.forbidden("Không thể gán vai trò cho tài khoản ngoài giáo xứ hiện tại");
-            }
-            enforceHierarchy(authentication, targetRole, ROLE_ADMIN_PARISH);
-            return;
-        }
-
-        throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền gán vai trò");
+        assignmentPolicy.enforce(authentication, targetAccount, targetRole);
     }
 
-    private void enforceScopedSystemRoleAssignment(String actorRoleCode, Role targetRole) {
-        if (!canAssignSystemRole(actorRoleCode, targetRole)) {
-            throw commonValidationHelper.forbidden("Không thể gán vai trò ngoài phạm vi phân cấp");
-        }
-    }
-
-    private boolean canAssignSystemRole(String actorRoleCode, Role targetRole) {
-        if (!SYSTEM_ADMIN_ROLE_CODES.contains(targetRole.getRoleCode()) && !Boolean.TRUE.equals(targetRole.getIsSystem())) {
-            return true;
-        }
-        return SCOPED_ADMIN_ASSIGNABLE_SYSTEM_ROLES.getOrDefault(actorRoleCode, Set.of()).contains(targetRole.getRoleCode());
-    }
-
-    private void enforceSuperAdminScope(Account targetAccount, Role targetRole) {
-        if (!isSuperAdminAssignableRole(targetRole)) {
-            throw commonValidationHelper.forbidden("SUPER_ADMIN chỉ được gán vai trò SUPER_ADMIN, ADMIN_DIOCESE hoặc vai trò custom do super-admin tạo");
-        }
-        if (!isSuperAdminManagedAccount(targetAccount, targetRole)) {
-            throw commonValidationHelper.forbidden("SUPER_ADMIN chỉ được gán vai trò cho tài khaonr SUPER_ADMIN, ADMIN_DIOCESE hoặc tài khoản có vai trò t tạo do super-admin tạo");
-        }
-        if (ROLE_SUPER_ADMIN.equals(targetRole.getRoleCode()) && !isRootAccount(targetAccount)) {
-            throw commonValidationHelper.forbidden("Vai trò SUPER_ADMIN chỉ được gán cho tài khoản không trực thuộc giáo phận/giáo hạt/giáo xứ");
-        }
-        if (ROLE_ADMIN_DIOCESE.equals(targetRole.getRoleCode()) && targetAccount.getDiocese() == null) {
-            throw commonValidationHelper.forbidden("Vai trò ADMIN_DIOCESE chỉ được gán cho tài khoản trực thuộc giáo phận");
-        }
-    }
-
-    private boolean isSuperAdminManagedAccount(Account targetAccount, Role targetRole) {
-        if (ROLE_SUPER_ADMIN.equals(targetRole.getRoleCode()) && isRootAccount(targetAccount)) {
-            return true;
-        }
-        if (ROLE_ADMIN_DIOCESE.equals(targetRole.getRoleCode()) && targetAccount.getDiocese() != null) {
-            return true;
-        }
-        List<String> activeRoleCodes = accountRoleRepository.findActiveRoleCodesByUsername(targetAccount.getUsername());
-        return !activeRoleCodes.isEmpty() && activeRoleCodes.stream().allMatch(this::isSuperAdminManagedRoleCode);
-    }
-
-    private boolean isSuperAdminManagedRoleCode(String roleCode) {
-        if (SUPER_ADMIN_MANAGED_SYSTEM_ROLES.contains(roleCode)) return true;
-        return roleRepository.findById(roleCode)
-                .map(this::isCustomRoleCreatedBySuperAdmin)
-                .orElse(false);
-    }
-
-    private boolean isSuperAdminAssignableRole(Role role) {
-        return SUPER_ADMIN_MANAGED_SYSTEM_ROLES.contains(role.getRoleCode()) || isCustomRoleCreatedBySuperAdmin(role);
-    }
-
-    private boolean isCustomRoleCreatedBySuperAdmin(Role role) {
-        return !Boolean.TRUE.equals(role.getIsSystem()) && "super-admin".equalsIgnoreCase(role.getCreatedBy());
-    }
-
-    private boolean isRootAccount(Account account) {
-        return account.getLeader() == null && account.getDiocese() == null && account.getDeanery() == null && account.getParish() == null;
-    }
-
-    private void enforceHierarchy(Authentication authentication, Role targetRole, String actorRoleCode) {
-        Integer actorOrder = actorHierarchyOrder(authentication, actorRoleCode);
-        Integer targetOrder = targetRole.getDisplayOrder();
-        if (actorOrder == null || targetOrder == null || targetOrder < actorOrder) {
-            throw commonValidationHelper.forbidden("Không thể gán vai trò cao hơn phạm vi của tài khoản hiện tại");
-        }
-    }
-
-    private Integer actorHierarchyOrder(Authentication authentication, String fallbackActorRoleCode) {
-        Integer actorOrder = accountManagementAuthorizationHelper.currentActorHighestRoleOrder(authentication);
-        if (actorOrder != null) {
-            return actorOrder;
-        }
-        return roleRepository.findByRoleCodeAndStatusTrue(fallbackActorRoleCode)
-                .map(Role::getDisplayOrder)
-                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy vai trò " + fallbackActorRoleCode));
-    }
-
-    private int roleOrder(Role role) {
+                                            private int roleOrder(Role role) {
         return role.getDisplayOrder() == null ? Integer.MAX_VALUE : role.getDisplayOrder();
     }
 
-    private boolean hasAuthority(Authentication authentication, String authority) {
-        return authentication != null && authentication.getAuthorities().stream()
-                .anyMatch(grantedAuthority -> authority.equals(grantedAuthority.getAuthority()));
-    }
 
-    private boolean hasRole(Authentication authentication, String roleCode) {
-        if (authentication == null || !(authentication.getPrincipal() instanceof AuthUserDetails principal)) {
-            return false;
-        }
-        return principal.getRoles().stream().anyMatch(roleCode::equals);
-    }
-
-    private String currentUsername(Authentication authentication) {
+        private String currentUsername(Authentication authentication) {
         if (authentication == null || !(authentication.getPrincipal() instanceof AuthUserDetails principal)) {
             throw commonValidationHelper.forbidden("Không xác định được tài khoản hiện tại");
         }
@@ -546,12 +393,7 @@ public class AccountRoleService {
     }
 
     private Page<AccountRoleResponse> page(BaseSearchRequest request, List<AccountRoleResponse> accountRoles) {
-        int page = request == null ? 0 : request.getPage();
-        int size = request == null ? 10 : request.getSize();
-        List<AccountRoleResponse> ordered = request == null ? accountRoles : phucuong.ht.common.utils.InMemorySortSupport.sort(accountRoles, request.getSortBy(), request.getSortDirection());
-        int start = Math.min(page * size, ordered.size());
-        int end = Math.min(start + size, ordered.size());
-        return new PageImpl<>(ordered.subList(start, end), PageRequest.of(page, size), ordered.size());
+        return InMemoryPager.sortedPage(request, accountRoles);
     }
 
     private String safe(String value) {

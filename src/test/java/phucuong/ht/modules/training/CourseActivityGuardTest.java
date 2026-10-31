@@ -1,7 +1,7 @@
 package phucuong.ht.modules.training;
 
 import org.junit.jupiter.api.Test;
-import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.common.exception.ApiException;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.modules.training.trainingCourse.model.entity.TrainingCourse;
 

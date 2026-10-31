@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import phucuong.ht.common.exception.errorCode;
 import phucuong.ht.common.utils.securityUtils;
-import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.common.exception.ApiException;
 
 import java.util.Objects;
 import java.util.UUID;

@@ -8,7 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import phucuong.ht.common.exception.errorCode;
 import phucuong.ht.common.utils.securityUtils;
-import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.common.exception.ApiException;
 import phucuong.ht.modules.certificate.config.security.CertificateConfigScopeResolver;
 import phucuong.ht.modules.certificate.config.security.CertificateConfigScopeResolver.ActorScope;
 import phucuong.ht.modules.media.config.MediaProperties;

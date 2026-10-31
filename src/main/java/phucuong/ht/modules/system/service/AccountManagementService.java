@@ -1,6 +1,7 @@
 package phucuong.ht.modules.system.service;
 
 import lombok.RequiredArgsConstructor;
+import phucuong.ht.common.repository.InMemoryPager;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -424,6 +425,7 @@ public class AccountManagementService {
     private AccountResponse response(Account account) {
         Leader leader = account.getLeader();
         List<AccountRole> activeRoles = activeRoleAssignments(account.getUsername());
+        AccountUnits units = AccountUnits.of(account, leader);
         return AccountResponse.builder()
                 .username(account.getUsername())
                 .leaderId(leader == null ? null : leader.getId())
@@ -434,12 +436,12 @@ public class AccountManagementService {
                 .roleCodes(roleCodes(activeRoles))
                 .roleNames(roleNames(activeRoles))
                 .secondaryRoleNames(secondaryRoleNames(activeRoles))
-                .dioceseId(resolveDioceseId(account, leader))
-                .dioceseName(resolveDioceseName(account, leader))
-                .deaneryId(resolveDeaneryId(account, leader))
-                .deaneryName(resolveDeaneryName(account, leader))
-                .parishId(resolveParishId(account, leader))
-                .parishName(resolveParishName(account, leader))
+                .dioceseId(units.dioceseId())
+                .dioceseName(units.dioceseName())
+                .deaneryId(units.deaneryId())
+                .deaneryName(units.deaneryName())
+                .parishId(units.parishId())
+                .parishName(units.parishName())
                 .authProvider(account.getAuthProvider())
                 .providerId(account.getProviderId())
                 .status(account.getStatus())
@@ -549,12 +551,7 @@ public class AccountManagementService {
     }
 
     private Page<AccountResponse> page(BaseSearchRequest request, List<AccountResponse> accounts) {
-        int page = request == null ? 0 : request.getPage();
-        int size = request == null ? 10 : request.getSize();
-        List<AccountResponse> ordered = request == null ? accounts : phucuong.ht.common.utils.InMemorySortSupport.sort(accounts, request.getSortBy(), request.getSortDirection());
-        int start = Math.min(page * size, ordered.size());
-        int end = Math.min(start + size, ordered.size());
-        return new PageImpl<>(ordered.subList(start, end), PageRequest.of(page, size), ordered.size());
+        return InMemoryPager.sortedPage(request, accounts);
     }
 
     private String safe(String value) {
@@ -606,66 +603,6 @@ public class AccountManagementService {
         if (accountRole == null || accountRole.getRole() == null) return null;
         Role role = accountRole.getRole();
         return role.getRoleName() == null || role.getRoleName().isBlank() ? role.getRoleCode() : role.getRoleName();
-    }
-
-    private UUID resolveDioceseId(Account account, Leader leader) {
-        if (account.getDiocese() != null) {
-            return account.getDiocese().getId();
-        }
-        if (leader == null || leader.getParish() == null || leader.getParish().getDeanery() == null || leader.getParish().getDeanery().getDiocese() == null) {
-            return null;
-        }
-        return leader.getParish().getDeanery().getDiocese().getId();
-    }
-
-    private String resolveDioceseName(Account account, Leader leader) {
-        if (account.getDiocese() != null) {
-            return account.getDiocese().getName();
-        }
-        if (leader == null || leader.getParish() == null || leader.getParish().getDeanery() == null || leader.getParish().getDeanery().getDiocese() == null) {
-            return null;
-        }
-        return leader.getParish().getDeanery().getDiocese().getName();
-    }
-
-    private UUID resolveDeaneryId(Account account, Leader leader) {
-        if (account.getDeanery() != null) {
-            return account.getDeanery().getId();
-        }
-        if (leader == null || leader.getParish() == null || leader.getParish().getDeanery() == null) {
-            return null;
-        }
-        return leader.getParish().getDeanery().getId();
-    }
-
-    private String resolveDeaneryName(Account account, Leader leader) {
-        if (account.getDeanery() != null) {
-            return account.getDeanery().getName();
-        }
-        if (leader == null || leader.getParish() == null || leader.getParish().getDeanery() == null) {
-            return null;
-        }
-        return leader.getParish().getDeanery().getName();
-    }
-
-    private UUID resolveParishId(Account account, Leader leader) {
-        if (account.getParish() != null) {
-            return account.getParish().getId();
-        }
-        if (leader == null || leader.getParish() == null) {
-            return null;
-        }
-        return leader.getParish().getId();
-    }
-
-    private String resolveParishName(Account account, Leader leader) {
-        if (account.getParish() != null) {
-            return account.getParish().getName();
-        }
-        if (leader == null || leader.getParish() == null) {
-            return null;
-        }
-        return leader.getParish().getName();
     }
 
     private String buildFullName(Leader leader) {

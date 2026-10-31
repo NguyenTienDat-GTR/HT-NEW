@@ -1,6 +1,10 @@
 package phucuong.ht.modules.certificate.service;
 
 import lombok.RequiredArgsConstructor;
+import phucuong.ht.modules.training.ApprovalTransitionPolicy;
+import phucuong.ht.common.security.AuthorityChecks;
+import phucuong.ht.common.utils.LeaderNames;
+import phucuong.ht.common.repository.SearchRequests;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
@@ -82,11 +86,11 @@ public class CertificateService {
 
     @Cacheable(cacheNames = CacheNames.CERTIFICATE_LIST, key = "@cacheScopeKeyHelper.listKey(#authentication, #request)")
     public Page<CertificateResponse> findAll(BaseSearchRequest request, Authentication authentication) {
-        BaseSearchRequest scopedRequest = copyRequest(request);
-        if (hasAuthority(authentication, "training.certificate.read.diocese")) {
+        BaseSearchRequest scopedRequest = SearchRequests.copy(request);
+        if (AuthorityChecks.hasAuthority(authentication, "training.certificate.read.diocese")) {
             UUID dioceseId = accountScopeValidationHelper.requireActiveDioceseId(authentication, "training.certificate.read.diocese");
             scopedRequest.getFilters().put(DIOCESE_FILTER_FIELD, dioceseId);
-        } else if (hasAuthority(authentication, "training.certificate.read.deanery")) {
+        } else if (AuthorityChecks.hasAuthority(authentication, "training.certificate.read.deanery")) {
             UUID deaneryId = accountScopeValidationHelper.requireActiveDeaneryId(authentication, "training.certificate.read.deanery");
             scopedRequest.getFilters().put(DEANERY_FILTER_FIELD, deaneryId);
         } else {
@@ -114,9 +118,9 @@ public class CertificateService {
     public List<Integer> issueYears(Authentication authentication) {
         UUID dioceseId = null;
         UUID deaneryId = null;
-        if (hasAuthority(authentication, "training.certificate.read.diocese")) {
+        if (AuthorityChecks.hasAuthority(authentication, "training.certificate.read.diocese")) {
             dioceseId = accountScopeValidationHelper.requireActiveDioceseId(authentication, "training.certificate.read.diocese");
-        } else if (hasAuthority(authentication, "training.certificate.read.deanery")) {
+        } else if (AuthorityChecks.hasAuthority(authentication, "training.certificate.read.deanery")) {
             deaneryId = accountScopeValidationHelper.requireActiveDeaneryId(authentication, "training.certificate.read.deanery");
         } else {
             throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền xem chứng chỉ");
@@ -242,7 +246,7 @@ public class CertificateService {
                 failures.add(bulkFailure(code, null, "Không tìm thấy chứng nhận"));
                 continue;
             }
-            String leaderName = buildFullName(found.get().getLeader());
+            String leaderName = LeaderNames.fullName(found.get().getLeader());
             if (!certificateAccessEvaluator.canApprove(authentication, code)) {
                 failures.add(bulkFailure(code, leaderName, "Không có quyền duyệt chứng nhận này"));
                 continue;
@@ -302,7 +306,7 @@ public class CertificateService {
             throw commonValidationHelper.conflict("Khóa huấn luyện đã kết thúc nên không từ chối chứng nhận được, chỉ xuất được PDF");
         }
         WorkflowApprovalStatus current = certificate.getApprovalStatus();
-        if (current != WorkflowApprovalStatus.PENDING && current != WorkflowApprovalStatus.SUBMITTED) {
+        if (!ApprovalTransitionPolicy.canReject(current)) {
             throw commonValidationHelper.conflict("Chỉ từ chối được chứng nhận đang chờ duyệt");
         }
         String reason = commonValidationHelper.normalizeOptionalText(rawReason);
@@ -455,24 +459,6 @@ public class CertificateService {
         }
     }
 
-    private BaseSearchRequest copyRequest(BaseSearchRequest request) {
-        BaseSearchRequest source = request == null ? new BaseSearchRequest() : request;
-        BaseSearchRequest copy = new BaseSearchRequest();
-        copy.setPage(source.getPage());
-        copy.setSize(source.getSize());
-        copy.setSearch(source.getSearch());
-        copy.setSearchFields(source.getSearchFields() == null ? List.of() : List.copyOf(source.getSearchFields()));
-        copy.setFilters(source.getFilters() == null ? new LinkedHashMap<>() : new LinkedHashMap<>(source.getFilters()));
-        copy.setStatus(source.getStatus());
-        copy.setSortBy(source.getSortBy());
-        copy.setSortDirection(source.getSortDirection());
-        return copy;
-    }
-
-    private boolean hasAuthority(Authentication authentication, String authority) {
-        return authentication != null && authentication.getAuthorities().stream()
-                .anyMatch(grantedAuthority -> authority.equals(grantedAuthority.getAuthority()));
-    }
 
     private CertificateResponse toResponse(Certificate certificate) {
         return responseBuilder(certificate, findParticipation(certificate)).build();
@@ -526,7 +512,7 @@ public class CertificateService {
                 .certificateName(certificate.getCertificateName())
                 .leaderId(certificate.getLeader() == null ? null : certificate.getLeader().getId())
                 .leaderHolyName(certificate.getLeader() == null ? null : certificate.getLeader().getHolyName())
-                .leaderFullName(buildFullName(certificate.getLeader()))
+                .leaderFullName(LeaderNames.fullName(certificate.getLeader()))
                 .courseCode(certificate.getCourse() == null ? null : certificate.getCourse().getCourseCode())
                 .courseName(certificate.getCourse() == null ? null : certificate.getCourse().getCourseName())
                 .courseFinished(certificate.getCourse() != null && certificate.getCourse().getFinishedAt() != null)
@@ -570,24 +556,7 @@ public class CertificateService {
                 .updatedByName(auditActorNameResolver.resolve(certificate.getUpdatedBy()));
     }
 
-    private String buildFullName(Leader leader) {
-        if (leader == null) {
-            return null;
-        }
-        if (leader.getLastName() == null || leader.getLastName().isBlank()) {
-            return leader.getFirstName();
-        }
-        return leader.getLastName() + " " + leader.getFirstName();
-    }
-
     private void publishEvent(String eventType, String entityType, String entityId, String actor, Map<String, Object> payload) {
-        domainEventPublisher.publishAfterCommit(DomainEventMessage.builder()
-                .eventType(eventType)
-                .entityType(entityType)
-                .entityId(entityId)
-                .actor(actor)
-                .occurredAt(OffsetDateTime.now())
-                .payload(payload)
-                .build());
+        domainEventPublisher.publishAfterCommit(DomainEventMessage.of(eventType, entityType, entityId, actor, payload));
     }
 }

@@ -1,6 +1,9 @@
 package phucuong.ht.modules.training.trainingCourse.service;
 
 import lombok.RequiredArgsConstructor;
+import phucuong.ht.common.security.AuthorityChecks;
+import phucuong.ht.common.utils.LeaderNames;
+import phucuong.ht.common.repository.SearchRequests;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
@@ -149,14 +152,14 @@ public class TrainingCourseService {
     @Cacheable(cacheNames = CacheNames.TRAINING_COURSE_LIST, key = "@cacheScopeKeyHelper.listKey(#authentication, #request)")
     @Transactional(readOnly = true)
     public Page<TrainingCourseResponse> findAll(BaseSearchRequest request, Authentication authentication) {
-        BaseSearchRequest scopedRequest = copyRequest(request);
-        if (hasAuthority(authentication, TrainingCourseAccessEvaluator.READ_DIOCESE)) {
+        BaseSearchRequest scopedRequest = SearchRequests.copy(request);
+        if (AuthorityChecks.hasAuthority(authentication, TrainingCourseAccessEvaluator.READ_DIOCESE)) {
             UUID dioceseId = accountScopeValidationHelper.requireActiveDioceseId(authentication, TrainingCourseAccessEvaluator.READ_DIOCESE);
             scopedRequest.getFilters().put(DIOCESE_FILTER_FIELD, dioceseId);
-        } else if (hasAuthority(authentication, TrainingCourseAccessEvaluator.READ_DEANERY)) {
+        } else if (AuthorityChecks.hasAuthority(authentication, TrainingCourseAccessEvaluator.READ_DEANERY)) {
             UUID deaneryId = accountScopeValidationHelper.requireActiveDeaneryId(authentication, TrainingCourseAccessEvaluator.READ_DEANERY);
             scopedRequest.getFilters().put(DEANERY_FILTER_FIELD, deaneryId);
-        } else if (hasAuthority(authentication, TrainingCourseAccessEvaluator.SUBMIT_PARISH)) {
+        } else if (AuthorityChecks.hasAuthority(authentication, TrainingCourseAccessEvaluator.SUBMIT_PARISH)) {
             return findOpenCoursesForParish(request, authentication);
         } else {
             throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền xem khóa huấn luyện");
@@ -204,9 +207,9 @@ public class TrainingCourseService {
             throw commonValidationHelper.forbidden("Không xác định được tài khoản hiện tại");
         }
         UnitType sender = trainingWorkflowSupport.resolveRegistrationSender(
-                hasAuthority(authentication, "training.participation.submit.parish"),
-                hasAuthority(authentication, "training.participation.submit.diocese"),
-                hasAuthority(authentication, "training.participation.submit.deanery"),
+                AuthorityChecks.hasAuthority(authentication, "training.participation.submit.parish"),
+                AuthorityChecks.hasAuthority(authentication, "training.participation.submit.diocese"),
+                AuthorityChecks.hasAuthority(authentication, "training.participation.submit.deanery"),
                 accountScopeValidationHelper.hasDirectDiocese(authentication),
                 accountScopeValidationHelper.hasDirectDeanery(authentication));
         if (sender == null) {
@@ -406,14 +409,7 @@ public class TrainingCourseService {
     }
 
     private void publishCourseStatusEvent(TrainingCourse course, boolean active, String actor) {
-        domainEventPublisher.publishAfterCommit(DomainEventMessage.builder()
-                .eventType(active ? "training.course.enabled" : "training.course.disabled")
-                .entityType("trainingCourse")
-                .entityId(course.getCourseCode())
-                .actor(actor)
-                .occurredAt(OffsetDateTime.now())
-                .payload(Map.of("courseCode", course.getCourseCode()))
-                .build());
+        domainEventPublisher.publishAfterCommit(DomainEventMessage.of(active ? "training.course.enabled" : "training.course.disabled", "trainingCourse", course.getCourseCode(), actor, Map.of("courseCode", course.getCourseCode())));
         certificateRealtimeNotifier.notifyChanged(active ? "COURSE_ENABLED" : "COURSE_DISABLED", course.getCourseCode(), null);
     }
 
@@ -592,14 +588,7 @@ public class TrainingCourseService {
         payload.put("deaneryManaged", deaneryManaged);
         payload.put("dioceseId", course.getDiocese() == null ? null : course.getDiocese().getId().toString());
         payload.put("deaneryId", course.getDeanery() == null ? null : course.getDeanery().getId().toString());
-        domainEventPublisher.publishAfterCommit(DomainEventMessage.builder()
-                .eventType(open ? EVENT_REGISTRATION_OPENED : EVENT_REGISTRATION_CLOSED)
-                .entityType("trainingCourse")
-                .entityId(course.getCourseCode())
-                .actor(actor)
-                .occurredAt(OffsetDateTime.now())
-                .payload(payload)
-                .build());
+        domainEventPublisher.publishAfterCommit(DomainEventMessage.of(open ? EVENT_REGISTRATION_OPENED : EVENT_REGISTRATION_CLOSED, "trainingCourse", course.getCourseCode(), actor, payload));
     }
 
     // Tài khoản trong phạm vi hiện tại có quyền duyệt danh sách đăng ký của loại khóa được chọn.
@@ -619,7 +608,7 @@ public class TrainingCourseService {
                 .map(username -> CourseRecipientCandidateResponse.builder()
                         .username(username)
                         .fullName(accountRepository.findActiveByUsername(username)
-                                .map(account -> fullName(account.getLeader()))
+                                .map(account -> LeaderNames.fullName(account.getLeader()))
                                 .orElse(null))
                         .roleName(roleNames(username))
                         .build())
@@ -717,34 +706,6 @@ public class TrainingCourseService {
         return names.isBlank() ? null : names;
     }
 
-    private String fullName(phucuong.ht.modules.leader.model.entity.Leader leader) {
-        if (leader == null) {
-            return null;
-        }
-        if (leader.getLastName() == null || leader.getLastName().isBlank()) {
-            return leader.getFirstName();
-        }
-        return leader.getLastName() + " " + leader.getFirstName();
-    }
-
-    private BaseSearchRequest copyRequest(BaseSearchRequest request) {
-        BaseSearchRequest source = request == null ? new BaseSearchRequest() : request;
-        BaseSearchRequest copy = new BaseSearchRequest();
-        copy.setPage(source.getPage());
-        copy.setSize(source.getSize());
-        copy.setSearch(source.getSearch());
-        copy.setSearchFields(source.getSearchFields() == null ? List.of() : List.copyOf(source.getSearchFields()));
-        copy.setFilters(source.getFilters() == null ? new LinkedHashMap<>() : new LinkedHashMap<>(source.getFilters()));
-        copy.setStatus(source.getStatus());
-        copy.setSortBy(source.getSortBy());
-        copy.setSortDirection(source.getSortDirection());
-        return copy;
-    }
-
-    private boolean hasAuthority(Authentication authentication, String authority) {
-        return authentication != null && authentication.getAuthorities().stream()
-                .anyMatch(grantedAuthority -> authority.equals(grantedAuthority.getAuthority()));
-    }
 
     private void validateRegistrationWindow(OffsetDateTime registrationStartAt, OffsetDateTime registrationEndAt) {
         if (registrationStartAt == null || registrationEndAt == null) {
@@ -786,14 +747,7 @@ public class TrainingCourseService {
     }
 
     private void publishCourseFinishedEvent(TrainingCourse course, String reason, String actor) {
-        domainEventPublisher.publishAfterCommit(DomainEventMessage.builder()
-                .eventType("training.course.finished")
-                .entityType("trainingCourse")
-                .entityId(course.getCourseCode())
-                .actor(actor)
-                .occurredAt(OffsetDateTime.now())
-                .payload(Map.of("courseCode", course.getCourseCode(), "reason", reason))
-                .build());
+        domainEventPublisher.publishAfterCommit(DomainEventMessage.of("training.course.finished", "trainingCourse", course.getCourseCode(), actor, Map.of("courseCode", course.getCourseCode(), "reason", reason)));
         certificateRealtimeNotifier.notifyChanged("COURSE_FINISHED", course.getCourseCode(), null);
     }
 

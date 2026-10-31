@@ -1,6 +1,8 @@
 package phucuong.ht.modules.parish.service;
 
 import phucuong.ht.config.EvictCaches;
+import phucuong.ht.common.security.UnitToggleSupport;
+import phucuong.ht.common.repository.SearchRequests;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
@@ -24,7 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 import phucuong.ht.common.utils.AuditActorNameResolver;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.config.CacheNames;
-import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.common.exception.ApiException;
 import phucuong.ht.modules.deanery.model.entity.Deanery;
 import phucuong.ht.modules.parish.helper.ParishScopeHelper;
 import phucuong.ht.modules.parish.helper.ParishValidationHelper;
@@ -63,15 +65,7 @@ public class ParishService {
     private final securityUtils securityUtils;
     private final AuditActorNameResolver auditActorNameResolver;
     @Autowired(required = false)
-    private UnitOperationalStatusService unitOperationalStatusService;
-    @Autowired(required = false)
-    private UnitStatusAuditService unitStatusAuditService;
-    @Autowired(required = false)
-    private ToggleNotificationRecipientResolver toggleNotificationRecipientResolver;
-    @Autowired(required = false)
-    private ToggleNotificationDispatcher toggleNotificationDispatcher;
-    @Autowired(required = false)
-    private RbacAuthRefreshNotifier authRefreshNotifier;
+    private UnitToggleSupport toggleSupport = UnitToggleSupport.noop();
 
     @EvictCaches.Analytics
     @Caching(evict = {
@@ -88,12 +82,12 @@ public class ParishService {
         String auditActor = parishValidationHelper.getRequiredAuditActor(authentication);
         try {
             Deanery deanery = parishValidationHelper.requireExistingDeanery(request.getDeaneryId());
-            requireUnitOperational(UnitType.DEANERY, deanery.getId());
+            toggleSupport.requireOperational(UnitType.DEANERY, deanery.getId());
             parishValidationHelper.validateCreateNameUniqueness(request.getName(), deanery.getId());
             ParishUnitType unitType = request.getUnitType() == null ? ParishUnitType.PARISH : request.getUnitType();
             Parish parent = parishValidationHelper.resolveParent(request, unitType, deanery.getId());
             if (parent != null) {
-                requireUnitOperational(UnitType.PARISH, parent.getId());
+                toggleSupport.requireOperational(UnitType.PARISH, parent.getId());
             }
             Parish parish = new Parish();
             parish.setUnitType(unitType);
@@ -120,7 +114,7 @@ public class ParishService {
 
     @Cacheable(cacheNames = CacheNames.PARISH_LIST, key = "@cacheScopeKeyHelper.listKey(#authentication, #request)")
     public Page<ParishResponse> findAll(BaseSearchRequest request, Authentication authentication) {
-        BaseSearchRequest scopedRequest = copyRequest(request);
+        BaseSearchRequest scopedRequest = SearchRequests.copy(request);
 
         if (securityUtils.hasAuthority(authentication, ParishAccessEvaluator.READ_ALL)) {
             return loadParishPageWithDeanery(scopedRequest);
@@ -172,13 +166,13 @@ public class ParishService {
     public ParishResponse update(UUID id, ParishUpdateRequest request, Authentication authentication) {
         parishValidationHelper.validateUpdateInput(request);
         Parish existingParish = parishValidationHelper.requireExistingParishWithDeaneryAndDiocese(id);
-        requireUnitOperational(UnitType.PARISH, id);
+        toggleSupport.requireOperational(UnitType.PARISH, id);
         String auditActor = parishValidationHelper.getRequiredAuditActor(authentication);
         parishValidationHelper.validateUpdateNameUniqueness(id, request.getName(), existingParish);
 
         if (request.getDeaneryId() != null) {
             Deanery targetDeanery = parishValidationHelper.requireExistingDeaneryWithDiocese(request.getDeaneryId());
-            requireUnitOperational(UnitType.DEANERY, targetDeanery.getId());
+            toggleSupport.requireOperational(UnitType.DEANERY, targetDeanery.getId());
             parishScopeHelper.enforceDeaneryChangeScope(authentication, existingParish, targetDeanery);
         }
 
@@ -206,13 +200,13 @@ public class ParishService {
         if (existing.getUnitType() == ParishUnitType.PARISH) {
             throw new ApiException(HttpStatus.BAD_REQUEST, errorCode.VALIDATION_ERROR, "Chỉ đổi giáo xứ cha cho giáo họ hoặc giáo điểm");
         }
-        requireUnitOperational(UnitType.PARISH, id);
+        toggleSupport.requireOperational(UnitType.PARISH, id);
         String auditActor = parishValidationHelper.getRequiredAuditActor(authentication);
         ParishCreateRequest probe = new ParishCreateRequest();
         probe.setParentParishId(request.getParentParishId());
         Parish parent = parishValidationHelper.resolveParent(probe, existing.getUnitType(), existing.getDeanery().getId());
         if (existing.getParentParish() == null || !existing.getParentParish().getId().equals(parent.getId())) {
-            requireUnitOperational(UnitType.PARISH, parent.getId());
+            toggleSupport.requireOperational(UnitType.PARISH, parent.getId());
             parishRepository.updateParent(id, parent.getId(), auditActor);
         }
         return toParishResponse(parishValidationHelper.requireExistingParishWithDeaneryAndDiocese(id));
@@ -234,7 +228,7 @@ public class ParishService {
         if (existing.getUnitType() == ParishUnitType.PARISH) {
             throw new ApiException(HttpStatus.BAD_REQUEST, errorCode.VALIDATION_ERROR, "Đơn vị này đã là giáo xứ");
         }
-        requireUnitOperational(UnitType.PARISH, id);
+        toggleSupport.requireOperational(UnitType.PARISH, id);
         String auditActor = parishValidationHelper.getRequiredAuditActor(authentication);
         parishRepository.promoteToParish(id, auditActor);
         return toParishResponse(parishValidationHelper.requireExistingParishWithDeaneryAndDiocese(id));
@@ -253,78 +247,30 @@ public class ParishService {
     })
     public ParishResponse toggleStatus(UUID id, StatusToggleRequest request, Authentication authentication) {
         parishValidationHelper.requireExistingParishWithDeaneryAndDiocese(id);
-        requireUnitToggleAllowed(UnitType.PARISH, id);
-        Set<String> recipients = toggleNotificationRecipientResolver == null ? Set.of() : toggleNotificationRecipientResolver.byUnit(UnitType.PARISH, id);
+        toggleSupport.requireToggleAllowed(UnitType.PARISH, id);
+        Set<String> recipients = toggleSupport.recipients(UnitType.PARISH, id);
         parishValidationHelper.validateToggleConfirmation(request == null ? null : request.getConfirmationText());
-        UnitStatusAuditService.ToggleContext toggleContext = unitStatusAuditService == null ? null
-                : unitStatusAuditService.begin(UnitType.PARISH, id, request == null ? null : request.getReason());
+        UnitStatusAuditService.ToggleContext toggleContext = toggleSupport.begin(UnitType.PARISH, id, request == null ? null : request.getReason());
         String auditActor = parishValidationHelper.getRequiredAuditActor(authentication);
         parishRepository.toggleStatus(id, auditActor);
-        if (toggleContext != null) {
-            unitStatusAuditService.finish(toggleContext, UnitType.PARISH, id, auditActor);
-        }
+        toggleSupport.finish(toggleContext, UnitType.PARISH, id, auditActor);
         ParishResponse response = toParishResponse(parishValidationHelper.requireExistingParishWithDeaneryAndDiocese(id));
-        notifyUsers(recipients);
-        dispatchUnitToggle(recipients, unitLabel("Giáo xứ", response.getName()), Boolean.TRUE.equals(response.getStatus()), auditActor);
+        toggleSupport.announce(recipients, "Giáo xứ", response.getName(), Boolean.TRUE.equals(response.getStatus()), auditActor);
         return response;
     }
 
     public UnitToggleImpactResponse toggleImpact(UUID id) {
-        if (unitStatusAuditService == null) {
-            throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, errorCode.CONFLICT, "Chưa sẵn sàng tính tác động");
-        }
-        return unitStatusAuditService.impact(UnitType.PARISH, id);
+        return toggleSupport.impact(UnitType.PARISH, id);
     }
 
     public List<UnitStatusHistoryResponse> statusHistory(UUID id, int page, int size) {
-        if (unitStatusAuditService == null) {
-            return List.of();
-        }
-        return unitStatusAuditService.history(UnitType.PARISH, id, page, size);
+        return toggleSupport.history(UnitType.PARISH, id, page, size);
     }
 
-    private void requireUnitOperational(UnitType unitType, UUID id) {
-        if (unitOperationalStatusService != null) {
-            unitOperationalStatusService.requireUnitOperational(unitType, id);
-        }
-    }
 
-    private void requireUnitToggleAllowed(UnitType unitType, UUID id) {
-        if (unitOperationalStatusService != null) {
-            unitOperationalStatusService.requireUnitToggleAllowed(unitType, id);
-        }
-    }
 
-    private void notifyUsers(Set<String> recipients) {
-        if (authRefreshNotifier != null) {
-            authRefreshNotifier.notifyUsers(recipients, "UNIT_STATUS_TOGGLED");
-        }
-    }
 
-    private void dispatchUnitToggle(Set<String> recipients, String targetLabel, boolean enabled, String actor) {
-        if (toggleNotificationDispatcher != null) {
-            toggleNotificationDispatcher.dispatch(recipients, "UNIT_STATUS_TOGGLED", targetLabel, enabled, actor);
-        }
-    }
 
-    private String unitLabel(String unitType, String name) {
-        String normalizedName = name == null ? null : name.trim();
-        return normalizedName == null || normalizedName.isBlank() ? unitType : unitType + " " + normalizedName;
-    }
-
-    private BaseSearchRequest copyRequest(BaseSearchRequest request) {
-        BaseSearchRequest source = request == null ? new BaseSearchRequest() : request;
-        BaseSearchRequest copy = new BaseSearchRequest();
-        copy.setPage(source.getPage());
-        copy.setSize(source.getSize());
-        copy.setSearch(source.getSearch());
-        copy.setSearchFields(source.getSearchFields() == null ? List.of() : List.copyOf(source.getSearchFields()));
-        copy.setFilters(source.getFilters() == null ? new LinkedHashMap<>() : new LinkedHashMap<>(source.getFilters()));
-        copy.setStatus(source.getStatus());
-        copy.setSortBy(source.getSortBy());
-        copy.setSortDirection(source.getSortDirection());
-        return copy;
-    }
 
     private Page<ParishResponse> loadParishPageWithDeanery(BaseSearchRequest request) {
         Page<Parish> page = parishRepository.findAll(request);

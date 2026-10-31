@@ -4,7 +4,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.common.validation.CommonValidationHelper;
-import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.common.exception.ApiException;
 import phucuong.ht.modules.training.courseInvitation.model.InvitationModels.JobResponse;
 import phucuong.ht.modules.training.courseInvitation.model.InvitationModels.Result;
 import phucuong.ht.modules.training.courseInvitation.model.InvitationModels.SendRequest;

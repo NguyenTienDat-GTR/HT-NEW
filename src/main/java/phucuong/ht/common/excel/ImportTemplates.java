@@ -55,7 +55,7 @@ public final class ImportTemplates {
                 new Column(LeaderImportService.COL_LEVEL, false, 26, Kind.LEVEL),
                 new Column(LeaderImportService.COL_DEANERY, true, 22, Kind.GENERAL),
                 new Column(LeaderImportService.COL_PARISH, true, 22, Kind.GENERAL),
-                new Column(LeaderImportService.COL_AVATAR_FILE, false, 28, Kind.GENERAL));
+                avatarColumn());
         List<List<Object>> samples = List.of(
                 List.of("Phêrô", "Nguyễn Văn An", LocalDate.of(1995, 3, 7), "Nam", "nguyen.van.an@example.com", "0901234567", "", "Tên giáo hạt", "Tên giáo xứ", "nguyen-van-an.jpg"),
                 List.of("Maria", "Trần Thị Bình", LocalDate.of(1998, 11, 21), "Nữ", "tran.thi.binh@example.com", "0912345678", "", "Tên giáo hạt", "Tên giáo xứ", ""));
@@ -69,7 +69,7 @@ public final class ImportTemplates {
                 "7. Giáo hạt và Giáo xứ (cột Giáo xứ cũng nhận tên giáo họ / giáo điểm) phải ĐÃ CÓ trong hệ thống (nhập đúng tên) và giáo xứ phải thuộc đúng giáo hạt đã nhập; nếu chưa có, dòng đó báo lỗi (hệ thống không tự tạo giáo hạt / giáo xứ).",
                 "8. Chỉ nhập được huynh trưởng cho giáo xứ trong phạm vi tài khoản của bạn. Chỉ cần một dòng lỗi thì toàn bộ file không được lưu; hệ thống báo rõ sheet, dòng, cột bị lỗi ở khay tác vụ để bạn sửa rồi import lại.",
                 "9. Mỗi lần import tối đa 5.000 dòng.",
-                "10. Ảnh là TÙY CHỌN: đặt ảnh JPG/PNG/WEBP (tối đa 5MB/ảnh) vào một file ZIP và ghi đúng tên ở cột \"Tên file ảnh\". Ảnh dọc tỉ lệ 2:3, tối thiểu khoảng 480x720, một người ở giữa, nhìn thẳng, rõ mặt và đủ sáng; ảnh sẽ được cắt giữa nếu chưa đúng tỉ lệ.");
+                avatarGuide(10, false));
         return build(LEADERS_SHEET, "Hướng dẫn import hồ sơ huynh trưởng", columns, samples, guide, levelNames);
     }
 
@@ -89,7 +89,7 @@ public final class ImportTemplates {
                 new Column(LeaderImportService.COL_DEANERY, true, 20, Kind.GENERAL),
                 new Column(LeaderImportService.COL_PARISH, true, 20, Kind.GENERAL),
                 new Column(PastCourseParticipantImportService.COL_NOTE, false, 30, Kind.GENERAL),
-                new Column(LeaderImportService.COL_AVATAR_FILE, false, 28, Kind.GENERAL));
+                avatarColumn());
         List<List<Object>> samples = List.of(
                 List.of("nguyen.van.an@example.com", "0901234567", 8.5, "Đạt", "Hoàn thành tốt khóa huấn luyện", "Phêrô", "Nguyễn Văn An", LocalDate.of(1995, 3, 7), "Nam", "", "Tên giáo hạt", "Tên giáo xứ", "Ghi chú tùy chọn", "nguyen-van-an.jpg"),
                 List.of("tran.thi.binh@example.com", "0912345678", 5, "Không đạt", "", "Maria", "Trần Thị Bình", LocalDate.of(1998, 11, 21), "Nữ", "", "Tên giáo hạt", "Tên giáo xứ", "", ""));
@@ -106,7 +106,7 @@ public final class ImportTemplates {
                 "10. Nếu khóa có \"Cấp độ đạt được\", học viên Đạt sẽ tự chuyển sang tab \"Duyệt chứng nhận\". Khi duyệt phải chọn ngày duyệt; sau khi duyệt, cấp độ được ghi vào lịch sử cấp độ (cấp hiện tại chỉ tăng nếu cấp mới cao hơn).",
                 "11. Chỉ cần một dòng lỗi thì toàn bộ file không được lưu (kể cả huynh trưởng mới); lỗi được báo rõ sheet, dòng, cột ở khay tác vụ để sửa rồi import lại. Mỗi lần import tối đa 5.000 dòng.",
                 "12. Cột \"Ghi chú\" là TÙY CHỌN (có thể bỏ trống, tối đa 1.000 ký tự): ghi chú của hồ sơ đăng ký, hiển thị ở danh sách tham dự và sửa được sau khi import.",
-                "13. Ảnh là TÙY CHỌN: đặt ảnh JPG/PNG/WEBP (tối đa 5MB/ảnh) vào một file ZIP và ghi đúng tên ở cột \"Tên file ảnh\". Ảnh dọc tỉ lệ 2:3, tối thiểu khoảng 480x720, một người ở giữa, nhìn thẳng, rõ mặt và đủ sáng; hồ sơ đã có ảnh sẽ giữ ảnh cũ.");
+                avatarGuide(13, false));
         return build(PARTICIPANTS_SHEET, "Hướng dẫn import danh sách tham dự khóa huấn luyện quá khứ", columns, samples, guide, levelNames);
     }
 
@@ -122,14 +122,15 @@ public final class ImportTemplates {
                 new Column(LeaderImportService.COL_LEVEL, false, 24, Kind.LEVEL),
                 new Column(LeaderImportService.COL_DEANERY, true, 20, Kind.GENERAL),
                 new Column(LeaderImportService.COL_PARISH, true, 20, Kind.GENERAL),
-                new Column(PastCourseParticipantImportService.COL_NOTE, false, 30, Kind.GENERAL));
+                new Column(PastCourseParticipantImportService.COL_NOTE, false, 30, Kind.GENERAL),
+                avatarColumn());
         List<Column> exceptionColumns = new java.util.ArrayList<>(columns);
         exceptionColumns.add(new Column(PastCourseParticipantImportService.COL_EXCEPTION_REASON, true, 40, Kind.GENERAL));
         List<List<Object>> exceptionSamples = List.of(
-                List.of("le.van.cuong@example.com", "0923456789", "Giuse", "Lê Văn Cường", LocalDate.of(2000, 5, 12), "Nam", "", "Tên giáo hạt", "Tên giáo xứ", "", "Chưa đủ số năm hoạt động nhưng được giáo xứ đề cử"));
+                List.of("le.van.cuong@example.com", "0923456789", "Giuse", "Lê Văn Cường", LocalDate.of(2000, 5, 12), "Nam", "", "Tên giáo hạt", "Tên giáo xứ", "", "", "Chưa đủ số năm hoạt động nhưng được giáo xứ đề cử"));
         List<List<Object>> samples = List.of(
-                List.of("nguyen.van.an@example.com", "0901234567", "Phêrô", "Nguyễn Văn An", LocalDate.of(1995, 3, 7), "Nam", "", "Tên giáo hạt", "Tên giáo xứ", "Ghi chú tùy chọn"),
-                List.of("tran.thi.binh@example.com", "0912345678", "Maria", "Trần Thị Bình", LocalDate.of(1998, 11, 21), "Nữ", "", "Tên giáo hạt", "Tên giáo xứ", ""));
+                List.of("nguyen.van.an@example.com", "0901234567", "Phêrô", "Nguyễn Văn An", LocalDate.of(1995, 3, 7), "Nam", "", "Tên giáo hạt", "Tên giáo xứ", "Ghi chú tùy chọn", "nguyen-van-an.jpg"),
+                List.of("tran.thi.binh@example.com", "0912345678", "Maria", "Trần Thị Bình", LocalDate.of(1998, 11, 21), "Nữ", "", "Tên giáo hạt", "Tên giáo xứ", "", ""));
         List<String> guide = List.of(
                 "1. Dùng cho khóa huấn luyện thường (không phải khóa quá khứ). Mở chi tiết khóa, vào tab \"Danh sách tham dự\" và bấm \"Nhập excel danh sách tham dự\".",
                 "2. Có hai sheet dữ liệu, điền từ dòng 2 và xóa các dòng ví dụ trước khi import: sheet \"" + PARTICIPANTS_SHEET + "\" (sheet đầu tiên) cho huynh trưởng ĐỦ điều kiện của khóa; sheet \"" + EXCEPTION_SHEET + "\" cho huynh trưởng KHÔNG đủ điều kiện của khóa (điều kiện hiển thị ở phần \"Điều kiện của khóa\" trong chi tiết khóa). Có thể bỏ trống một trong hai sheet.",
@@ -142,7 +143,8 @@ public final class ImportTemplates {
                 "9. Sheet \"" + EXCEPTION_SHEET + "\": huynh trưởng được đưa vào danh sách CHỜ DUYỆT đăng ký và gắn cờ ngoại lệ kèm lí do; người duyệt xử lý ở tab \"Duyệt đăng ký\". Huynh trưởng đã đủ điều kiện hoặc có cấp độ cao hơn cấp độ đạt được gần nhất của loại khóa thì báo lỗi.",
                 "10. Một huynh trưởng chỉ xuất hiện một lần trong cả file; huynh trưởng đã có hồ sơ đăng ký / tham dự của khóa sẽ báo lỗi. Điểm được chấm sau ở tab \"Chấm điểm\".",
                 "11. Chỉ cần một dòng lỗi thì toàn bộ file không được lưu (kể cả huynh trưởng mới); lỗi được báo rõ sheet, dòng, cột ở khay tác vụ để sửa rồi import lại. Mỗi lần import tối đa 5.000 dòng mỗi sheet.",
-                "12. Cột \"Ghi chú\" là TÙY CHỌN (có thể bỏ trống, tối đa 1.000 ký tự): ghi chú của hồ sơ đăng ký, hiển thị ở danh sách tham dự và sửa được sau khi import.");
+                "12. Cột \"Ghi chú\" là TÙY CHỌN (có thể bỏ trống, tối đa 1.000 ký tự): ghi chú của hồ sơ đăng ký, hiển thị ở danh sách tham dự và sửa được sau khi import.",
+                avatarGuide(13, true));
         return build(PARTICIPANTS_SHEET, "Hướng dẫn import danh sách tham dự khóa huấn luyện", columns, samples, guide, levelNames,
                 EXCEPTION_SHEET, exceptionColumns, exceptionSamples);
     }
@@ -160,10 +162,11 @@ public final class ImportTemplates {
                 new Column(LeaderImportService.COL_DEANERY, true, 20, Kind.GENERAL),
                 new Column(LeaderImportService.COL_PARISH, true, 20, Kind.GENERAL),
                 new Column(PastCourseParticipantImportService.COL_TEAM, true, 20, Kind.GENERAL),
-                new Column(PastCourseParticipantImportService.COL_NOTE, false, 30, Kind.GENERAL));
+                new Column(PastCourseParticipantImportService.COL_NOTE, false, 30, Kind.GENERAL),
+                avatarColumn());
         List<List<Object>> samples = List.of(
-                List.of("nguyen.van.an@example.com", "0901234567", "Phêrô", "Nguyễn Văn An", LocalDate.of(1995, 3, 7), "Nam", "", "Tên giáo hạt", "Tên giáo xứ", "Đội 1", "Ghi chú tùy chọn"),
-                List.of("tran.thi.binh@example.com", "0912345678", "Maria", "Trần Thị Bình", LocalDate.of(1998, 11, 21), "Nữ", "", "Tên giáo hạt", "Tên giáo xứ", "Đội 1", ""));
+                List.of("nguyen.van.an@example.com", "0901234567", "Phêrô", "Nguyễn Văn An", LocalDate.of(1995, 3, 7), "Nam", "", "Tên giáo hạt", "Tên giáo xứ", "Đội 1", "Ghi chú tùy chọn", "nguyen-van-an.jpg"),
+                List.of("tran.thi.binh@example.com", "0912345678", "Maria", "Trần Thị Bình", LocalDate.of(1998, 11, 21), "Nữ", "", "Tên giáo hạt", "Tên giáo xứ", "Đội 1", "", ""));
         List<String> guide = List.of(
                 "1. Dùng cho khóa huấn luyện thường (không phải khóa quá khứ). Mở chi tiết khóa, vào tab \"Chia đội\" và bấm \"Nhập excel chia đội\".",
                 "2. Chỉ có một sheet dữ liệu \"" + PARTICIPANTS_SHEET + "\" (sheet đầu tiên), không có sheet Ngoại lệ; điền từ dòng 2 và xóa các dòng ví dụ trước khi import.",
@@ -174,8 +177,21 @@ public final class ImportTemplates {
                 "7. Giáo hạt và Giáo xứ (cột Giáo xứ cũng nhận tên giáo họ / giáo điểm) phải ĐÃ CÓ trong hệ thống, giáo xứ phải thuộc đúng giáo hạt đã nhập và thuộc giáo phận (khóa giáo phận) hoặc giáo hạt (khóa giáo hạt) của khóa; giáo xứ phải đang hoạt động.",
                 "8. Một huynh trưởng chỉ xuất hiện một lần trong cả file; huynh trưởng đã có hồ sơ đăng ký / tham dự của khóa sẽ báo lỗi.",
                 "9. Chỉ cần một dòng lỗi thì toàn bộ file không được lưu (kể cả huynh trưởng mới); lỗi được báo rõ sheet, dòng, cột ở khay tác vụ để sửa rồi import lại. Mỗi lần import tối đa 5.000 dòng.",
-                "10. Cột \"Ghi chú\" là TÙY CHỌN (có thể bỏ trống, tối đa 1.000 ký tự): ghi chú của hồ sơ đăng ký, hiển thị ở danh sách tham dự và sửa được sau khi import.");
+                "10. Cột \"Ghi chú\" là TÙY CHỌN (có thể bỏ trống, tối đa 1.000 ký tự): ghi chú của hồ sơ đăng ký, hiển thị ở danh sách tham dự và sửa được sau khi import.",
+                avatarGuide(11, false));
         return build(PARTICIPANTS_SHEET, "Hướng dẫn import danh sách chia đội khóa huấn luyện", columns, samples, guide, levelNames);
+    }
+
+    /** Cột "Tên file ảnh" (tùy chọn) dùng chung cho mọi mẫu có ảnh đại diện kèm file ZIP. */
+    private static Column avatarColumn() {
+        return new Column(LeaderImportService.COL_AVATAR_FILE, false, 28, Kind.GENERAL);
+    }
+
+    /** Dòng hướng dẫn ảnh đại diện (chung cho mọi mẫu); bothSheets: mẫu có hai sheet dữ liệu và cột ảnh dùng được ở cả hai. */
+    private static String avatarGuide(int number, boolean bothSheets) {
+        return number + ". Ảnh là TÙY CHỌN" + (bothSheets ? " (dùng được ở cả hai sheet)" : "")
+                + ": đặt ảnh JPG/PNG/WEBP (tối đa 5MB/ảnh) vào một file ZIP, chọn file ZIP khi import và ghi đúng tên ở cột \"Tên file ảnh\". "
+                + "Ảnh dọc tỉ lệ 2:3, tối thiểu khoảng 480x720, một người ở giữa, nhìn thẳng, rõ mặt và đủ sáng; hồ sơ đã có ảnh sẽ giữ ảnh cũ.";
     }
 
     private static byte[] build(String dataSheetName, String guideTitle, List<Column> columns, List<List<Object>> samples,

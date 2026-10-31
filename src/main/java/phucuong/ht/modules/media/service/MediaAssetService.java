@@ -7,7 +7,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import phucuong.ht.common.exception.errorCode;
-import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.common.exception.ApiException;
 import phucuong.ht.modules.media.model.entity.MediaAsset;
 import phucuong.ht.modules.media.model.entity.MediaVariantInfo;
 import phucuong.ht.modules.media.model.enums.MediaCategory;

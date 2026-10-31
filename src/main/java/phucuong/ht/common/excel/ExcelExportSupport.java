@@ -4,7 +4,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import phucuong.ht.common.exception.errorCode;
 import phucuong.ht.common.repository.BaseSearchRequest;
-import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.common.exception.ApiException;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;

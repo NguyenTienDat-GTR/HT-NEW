@@ -18,7 +18,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import phucuong.ht.common.dto.apiResponse;
 import phucuong.ht.common.exception.errorCode;
 import phucuong.ht.common.utils.jwtUtils;
-import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.common.exception.ApiException;
 import phucuong.ht.modules.auth.service.AuthCookieService;
 import phucuong.ht.modules.auth.service.RedisTokenSessionService;
 

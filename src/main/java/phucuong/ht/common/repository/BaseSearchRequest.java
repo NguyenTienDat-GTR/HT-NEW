@@ -3,7 +3,7 @@ package phucuong.ht.common.repository;
 import lombok.Getter;
 import org.springframework.http.HttpStatus;
 import phucuong.ht.common.exception.errorCode;
-import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.common.exception.ApiException;
 
 import java.util.LinkedHashMap;
 import java.util.List;

@@ -1578,3 +1578,33 @@ Ma trận endpoint (`endpoint-contract-matrix.psv`) hiện có 124 route.
 - `ExcelAvatarProcessor` xóa cache huynh trưởng sau mỗi 25 ảnh gắn xong và luôn xóa ở cuối job (kể cả khi `finishAvatar` không cập nhật được), để danh sách thấy ảnh mới ngay.
 - Bỏ chú thích cache vô hiệu trên phương thức private `LeaderService.requireParishOperational`.
 - Test tích hợp (`ExcelImportExportIntegrationTest`): job ảnh xóa cache huynh trưởng (chi tiết hiện ảnh mới ngay); cache chờ commit và không xóa khi rollback; sửa huynh trưởng / giáo xứ / giáo hạt / giáo phận xóa đủ cache phụ thuộc; sửa cấp độ xóa cache khóa, chứng nhận, huynh trưởng, thống kê.
+
+## Refactor SOLID / design pattern (nhánh `refactor/solid-design-patterns`, 2026-10-30)
+
+- Không đổi API hay hành vi; test hiện có vẫn pass (964 test).
+- Helper dùng chung thay cho các bản private lặp ở nhiều service: `common/repository/SearchRequests.copy`, `common/repository/InMemoryPager`, `common/utils/LeaderNames.fullName`, `common/security/AuthorityChecks.hasAuthority`. Các bản có logic khác nhau được giữ nguyên.
+- `ApiException` chuyển từ `modules/auth/exception` sang `common/exception`.
+- Excel job: Strategy + Registry. `ExcelExportHandler` / `ExcelImportHandler` (một handler cho mỗi `ExcelJobKind`, khai báo trong `common/excel/job/handler`), `ExcelJobHandlerRegistry` kiểm tra đủ handler lúc khởi động; `ExcelJobHandlers` chỉ còn chuyển việc. Thêm loại xuất mới = thêm một bean handler.
+- `CourseParticipationService`: tách `ScoreCalculator` / `WeightedScoreCalculator` (điểm tổng kết), `ParticipationEligibilityChecker` (điều kiện tham dự); `modules/training/ApprovalTransitionPolicy` dùng chung cho hồ sơ tham dự và `CertificateService.rejectInternal`. Constructor của service đổi (thêm hai collaborator, bỏ `RankHistoryRepository`); chữ ký public không đổi.
+- Test thêm: `ExcelJobHandlerRegistryTest`, `WeightedScoreCalculatorTest`, `ApprovalTransitionPolicyTest`.
+- `common/utils/TextFolding` (filterText/filterBoolean/foldText/normalize/uniqueName) dùng chung cho `CertificateConfigService` và `BadgeConfigService`.
+- `common/security/UnitToggleSupport`: gom 5 collaborator tùy chọn và các bước kiểm tra/ghi lịch sử/thông báo khi khóa-mở giáo phận, giáo hạt, giáo xứ (thay các field và hàm private lặp ở ba service). `modules/system/service/AccountUnits` thay 6 hàm `resolveDiocese/Deanery/Parish` của `AccountManagementService`.
+- Test thêm: `TextFoldingTest`, `UnitToggleSupportTest`, `AccountUnitsTest`; toàn bộ 977 test pass.
+- `DomainEventMessage.of(...)` thay 6 chỗ dựng sự kiện bằng builder lặp (`CertificateService`, `CertificateLifecycleService`, `CourseParticipationService`, `TrainingCourseService`); test `DomainEventMessageTest`. Toàn bộ 978 test pass.
+- `RegistrationSubmissionNotifier`: tách khỏi `CourseParticipationService` việc báo người duyệt/giáo xứ khi gửi danh sách đăng ký và phát sự kiện `batch_submitted`; service giữ `announceSubmission` làm hàm chuyển tiếp cho `CrossDeaneryService`. Constructor của service đổi (thay `TrainingNotificationRecipientResolver` + `TrainingNotificationService` bằng một notifier). Test `RegistrationSubmissionNotifierTest`; toàn bộ 979 test pass.
+- Thư viện cấu hình chứng nhận/thẻ: `CertificateConfig` và `BadgeConfig` cùng implement `common/layoutconfig/LayoutConfig`, hai repo implement `LayoutConfigStore`; `LayoutConfigRules` (đặt cấu hình chung, kiểm tra quyền sửa, chặn xóa cấu hình chung, danh sách nhìn thấy) thay phần chép lặp trong hai service. Test `LayoutConfigRulesTest`; toàn bộ 984 test pass.
+- `RegistrationDecisionNotifier` (thông báo duyệt/từ chối/xóa hồ sơ + gửi email thông tin tham dự) tách khỏi `CourseParticipationService`; hai collaborator tùy chọn chuyển vào đó.
+- `common/excel/AbstractExcelImporter` (Template Method: đọc/kiểm tra, báo tiến độ, ghi từng dòng, tổng kết); `LeaderImportService` và `PastCourseParticipantImportService` kế thừa, trạng thái mỗi lần chạy nằm trong `ImportRun`.
+- `config/audit/AuditScopeSource` (Strategy) + `AuditScopeSources` thay `switch` theo loại tài nguyên trong `AuditScopeResolver`.
+- `RoleAssignmentPolicy`: toàn bộ luật gán vai trò tách khỏi `AccountRoleService`; ba cấp giáo phận/giáo hạt/giáo xứ dùng chung một luật qua bảng `Level`. Constructor của `AccountRoleService` không đổi.
+- Test thêm: `RegistrationDecisionNotifierTest`, `AbstractExcelImporterTest`, `AuditScopeResolverTest`, `RoleAssignmentPolicyTest`. Toàn bộ 997 test pass.
+- Không làm: Strategy theo `UnitType` cho `CrossDeaneryService`/`TrainingWorkflowSupport`/`CourseParticipationService` — nhánh theo cấp ở đó gắn chặt với quy trình nghiệp vụ, gom lại dễ đổi hành vi mà không có test bao phủ.
+
+## Ảnh đại diện kèm Excel danh sách tham dự khóa thường (2026-10-30)
+
+- Import danh sách tham dự khóa thường nhận cột tùy chọn "Tên file ảnh" và file ZIP ảnh giống khóa quá khứ: `PastCourseParticipantImportService` đọc cột này cho mọi khóa trừ import chia đội (`withTeam`), hồ sơ đã có ảnh giữ ảnh cũ, ảnh lỗi chỉ tạo cảnh báo.
+- `ImportTemplates.regularParticipants`: thêm cột "Tên file ảnh" ở sheet "Danh sách tham dự" và sheet "Ngoại lệ", thêm dòng hướng dẫn số 13. File Excel mẫu cũ (không có cột ảnh) vẫn import được. Mẫu chia đội không đổi.
+- Test: `ImportTemplatesTest` (mẫu khóa thường có cột ảnh ở cả hai sheet, mẫu chia đội không có).
+- Import chia đội cũng nhận ảnh: endpoint `/teams/import` nhận phần `images`, `ExcelImportHandlerConfig` truyền ZIP cho `IMPORT_TEAM_PARTICIPANTS`, mẫu chia đội có cột "Tên file ảnh". `PastCourseParticipantImportService.importParticipants(..., withTeam, images)` là phương thức public có đủ `@Transactional`/`@CacheEvict`.
+- Dọn trùng lặp: `ImportTemplates.avatarColumn()` / `avatarGuide(...)` thay 4 bản định nghĩa cột và dòng hướng dẫn ảnh; việc gom ảnh của một dòng nằm ở `collectAvatar(...)` thay vì trong thân vòng ghi.
+

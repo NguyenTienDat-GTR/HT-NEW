@@ -13,7 +13,7 @@ import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.method.support.ModelAndViewContainer;
 import phucuong.ht.common.exception.errorCode;
 import phucuong.ht.common.repository.BaseSearchRequest;
-import phucuong.ht.modules.auth.exception.ApiException;
+import phucuong.ht.common.exception.ApiException;
 
 import java.util.Arrays;
 import java.util.LinkedHashMap;
