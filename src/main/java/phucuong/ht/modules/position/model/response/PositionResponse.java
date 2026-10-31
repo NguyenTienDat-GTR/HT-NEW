@@ -10,6 +10,7 @@ import java.time.OffsetDateTime;
 @Builder
 public class PositionResponse {
     private String positionCode;
+    private java.util.UUID dioceseId;
     private String positionName;
     private UnitType positionType;
     private Integer displayOrder;

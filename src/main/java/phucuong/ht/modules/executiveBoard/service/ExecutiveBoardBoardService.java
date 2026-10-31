@@ -47,7 +47,10 @@ public class ExecutiveBoardBoardService {
         BaseSearchRequest request = new BaseSearchRequest();
         request.setSize(BaseSearchRequest.MAX_PAGE_SIZE);
         request.setStatus(Boolean.TRUE);
-        request.setFilters(new LinkedHashMap<>(Map.of("positionType", unitType)));
+        LinkedHashMap<String, Object> filters = new LinkedHashMap<>(Map.of("positionType", unitType));
+        // Mỗi giáo phận có danh sách chức vụ riêng: chỉ hiện chức vụ của giáo phận chứa đơn vị này.
+        dioceseIdOf(unitType, unitId).ifPresent(dioceseId -> filters.put("dioceseId", dioceseId));
+        request.setFilters(filters);
         List<Position> positions = positionRepository.findAll(request).getContent().stream()
                 .sorted(Comparator.comparing(Position::getDisplayOrder, Comparator.nullsLast(Comparator.naturalOrder()))
                         .thenComparing(Position::getPositionName, String.CASE_INSENSITIVE_ORDER))
@@ -70,6 +73,14 @@ public class ExecutiveBoardBoardService {
         seats.add(chaplainSeat(unitType, unitId));
         positions.forEach(position -> seats.add(toSeat(position, byPosition.get(position.getPositionCode()), occupied.contains(position.getPositionCode()))));
         return seats;
+    }
+
+    private java.util.Optional<UUID> dioceseIdOf(UnitType unitType, UUID unitId) {
+        return switch (unitType) {
+            case DIOCESE -> java.util.Optional.of(unitId);
+            case DEANERY -> deaneryRepository.findDioceseIdByDeaneryId(unitId);
+            case PARISH -> parishRepository.findDioceseIdByParishId(unitId);
+        };
     }
 
     private ExecutiveBoardSeatResponse chaplainSeat(UnitType unitType, UUID unitId) {
