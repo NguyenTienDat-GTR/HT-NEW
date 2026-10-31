@@ -31,7 +31,8 @@ public class DioceseRepository extends BaseRepo<Diocese, UUID> {
                         "select d from Diocese d where lower(d.siteSubdomain) = :sub", Diocese.class)
                 .setParameter("sub", siteSubdomain.toLowerCase())
                 .setMaxResults(1)
-                .getResultStream()
+                .getResultList()
+                .stream()
                 .findFirst();
     }
 
