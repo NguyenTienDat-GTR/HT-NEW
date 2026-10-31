@@ -56,6 +56,15 @@ class DioceseServiceTest {
     @Mock
     private phucuong.ht.common.utils.AuditActorNameResolver auditActorNameResolver;
 
+    @Mock
+    private phucuong.ht.modules.auth.service.SiteHostPolicy siteHostPolicy;
+
+    @org.junit.jupiter.api.BeforeEach
+    void stubSiteBaseDomain() {
+        // Mock trả null cho String; production luôn trả chuỗi (rỗng khi chưa cấu hình tên miền chính).
+        org.mockito.Mockito.lenient().when(siteHostPolicy.baseDomain()).thenReturn("");
+    }
+
     @InjectMocks
     private DioceseService dioceseService;
 
