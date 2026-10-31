@@ -42,3 +42,5 @@ out/
 
 # Ảnh lưu cục bộ (provider "local" khi phát triển)
 /uploads/media/
+
+!.env.example

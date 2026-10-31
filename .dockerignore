@@ -1,0 +1,8 @@
+build
+.gradle
+.git
+.github
+uploads
+.env*
+docs
+deploy
