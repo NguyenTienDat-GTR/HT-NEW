@@ -238,9 +238,37 @@ class PositionReadScopeTest {
     }
 
     @Test
+    void dioceseAdminCannotUpdateOrToggleDeaneryPositions() {
+        lenient().when(accountRepository.findActiveDioceseIdByUsername("pc-admin")).thenReturn(Optional.of(PHU_CUONG));
+        lenient().when(accountRepository.findDirectActiveDioceseIdByUsername("pc-admin")).thenReturn(Optional.of(PHU_CUONG));
+        when(positionRepository.findById("A-1")).thenReturn(Optional.of(deaneryPosition("A-1", DEANERY_A)));
+        var update = new phucuong.ht.modules.position.model.request.PositionUpdateRequest();
+        update.setPositionName("Đổi tên");
+        var authentication = admin("pc-admin", "organization.position.update.deanery");
+
+        org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class, () -> service().update("A-1", update, authentication));
+        org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class,
+                () -> service().toggleStatus("A-1", new phucuong.ht.common.model.request.StatusToggleRequest(), authentication));
+    }
+
+    @Test
+    void owningDeaneryCanUpdateItsOwnPosition() {
+        lenient().when(accountRepository.findActiveDioceseIdByUsername("de-a")).thenReturn(Optional.of(PHU_CUONG));
+        lenient().when(accountRepository.findDirectActiveDeaneryIdByUsername("de-a")).thenReturn(Optional.of(DEANERY_A));
+        Position owned = deaneryPosition("A-1", DEANERY_A);
+        when(positionRepository.findById("A-1")).thenReturn(Optional.of(owned));
+        var update = new phucuong.ht.modules.position.model.request.PositionUpdateRequest();
+        update.setPositionName("Phó chủ nhiệm");
+
+        var response = service().update("A-1", update, admin("de-a", "organization.position.update.deanery"));
+
+        assertEquals("Phó chủ nhiệm", response.getPositionName());
+    }
+
+    @Test
     void positionTypeCannotBeChangedAfterCreation() {
         lenient().when(accountRepository.findActiveDioceseIdByUsername("de-a")).thenReturn(Optional.of(PHU_CUONG));
-        lenient().when(accountRepository.findActiveDeaneryIdByUsername("de-a")).thenReturn(Optional.of(DEANERY_A));
+        lenient().when(accountRepository.findDirectActiveDeaneryIdByUsername("de-a")).thenReturn(Optional.of(DEANERY_A));
         when(positionRepository.findById("A-1")).thenReturn(Optional.of(deaneryPosition("A-1", DEANERY_A)));
         var update = new phucuong.ht.modules.position.model.request.PositionUpdateRequest();
         update.setPositionType(UnitType.PARISH);

@@ -101,7 +101,7 @@ public class PositionService {
     public PositionResponse update(String positionCode, PositionUpdateRequest request, Authentication authentication) {
         Position position = positionRepository.findById(positionCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy chức vụ " + positionCode));
-        requireAccess(position, authentication);
+        requireManage(position, authentication);
         if (request.getPositionType() != null && request.getPositionType() != position.getPositionType()) {
             throw commonValidationHelper.validationError("Không đổi được cấp của chức vụ đã tạo");
         }
@@ -126,7 +126,7 @@ public class PositionService {
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái chức vụ");
         Position existing = positionRepository.findById(positionCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy chức vụ " + positionCode));
-        requireAccess(existing, authentication);
+        requireManage(existing, authentication);
         return toDetailResponse(positionRepository.toggleStatus(positionCode, actor));
     }
 
@@ -176,9 +176,11 @@ public class PositionService {
         return ownership.canAccess(ownership.viewer(securityUtils.currentUsername(authentication)), position);
     }
 
-    private void requireAccess(Position position, Authentication authentication) {
-        if (!canAccess(position, authentication)) {
-            throw commonValidationHelper.forbidden("Chức vụ này thuộc đơn vị khác");
+    /** Cấp trên chỉ xem được chức vụ của đơn vị bên dưới, không sửa hay đổi trạng thái. */
+    private void requireManage(Position position, Authentication authentication) {
+        PositionOwnership ownership = ownership();
+        if (!ownership.canManage(ownership.viewer(securityUtils.currentUsername(authentication)), position)) {
+            throw commonValidationHelper.forbidden("Chỉ đơn vị sở hữu mới được sửa chức vụ này");
         }
     }
 

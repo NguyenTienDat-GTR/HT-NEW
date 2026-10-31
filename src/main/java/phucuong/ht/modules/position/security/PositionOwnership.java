@@ -9,7 +9,7 @@ import java.util.UUID;
 
 /**
  * Chức vụ thuộc riêng từng đơn vị: giáo phận, giáo hạt và giáo xứ tự tạo chức vụ cho cấp của mình.
- * Tài khoản chỉ quản lý chức vụ của đơn vị mình; cấp trên trực tiếp (giáo phận, giáo hạt) được xem và sửa chức vụ của đơn vị bên dưới.
+ * Chỉ đơn vị sở hữu được tạo, sửa và đổi trạng thái chức vụ; cấp trên trực tiếp (giáo phận, giáo hạt) chỉ được xem chức vụ của đơn vị bên dưới.
  */
 public final class PositionOwnership {
 
@@ -44,6 +44,14 @@ public final class PositionOwnership {
             case DEANERY -> viewer.directDeanery();
             case PARISH -> viewer.ownParish();
         };
+    }
+
+    /** Chỉ đơn vị sở hữu mới được sửa hoặc đổi trạng thái chức vụ; cấp trên chỉ được xem. */
+    public boolean canManage(Viewer viewer, Position position) {
+        if (position.getPositionType() == null || position.getUnitId() == null) {
+            return false;
+        }
+        return position.getUnitId().equals(ownerUnitForCreate(viewer, position.getPositionType()));
     }
 
     public boolean canAccess(Viewer viewer, Position position) {
