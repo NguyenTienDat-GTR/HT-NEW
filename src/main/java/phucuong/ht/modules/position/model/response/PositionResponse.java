@@ -11,6 +11,7 @@ import java.time.OffsetDateTime;
 public class PositionResponse {
     private String positionCode;
     private java.util.UUID dioceseId;
+    private java.util.UUID unitId;
     private String positionName;
     private UnitType positionType;
     private Integer displayOrder;

@@ -84,7 +84,7 @@ public class ExecutiveBoardAssignmentService {
         enforcePositionActive(position);
         enforceUnitType(position, request.getUnitType());
         ScopeData scopeData = resolveScopeData(request.getUnitType(), request.getUnitId());
-        enforcePositionBelongsToDiocese(position, scopeData);
+        enforcePositionBelongsToUnit(position, request.getUnitId());
         enforceTargetScope(authentication, request.getUnitType(), scopeData, "create");
         // Đóng băng: không gán chức vụ mới trong đơn vị đang bị khóa; kết thúc nhiệm kì (toggle) vẫn được phép.
         if (unitOperationalStatusService != null) {
@@ -236,11 +236,10 @@ public class ExecutiveBoardAssignmentService {
         }
     }
 
-    /** Chức vụ của giáo phận nào chỉ gán được cho đơn vị thuộc giáo phận đó. */
-    private void enforcePositionBelongsToDiocese(Position position, ScopeData scopeData) {
-        UUID unitDioceseId = scopeData.diocese() == null ? null : scopeData.diocese().getId();
-        if (unitDioceseId == null || !unitDioceseId.equals(position.getDioceseId())) {
-            throw commonValidationHelper.validationError("Chức vụ này thuộc giáo phận khác, không gán được cho đơn vị này");
+    /** Mỗi đơn vị có danh sách chức vụ riêng: chỉ gán được chức vụ do chính đơn vị đó tạo. */
+    private void enforcePositionBelongsToUnit(Position position, UUID unitId) {
+        if (!unitId.equals(position.getUnitId())) {
+            throw commonValidationHelper.validationError("Chức vụ này thuộc đơn vị khác, không gán được cho đơn vị này");
         }
     }
 
