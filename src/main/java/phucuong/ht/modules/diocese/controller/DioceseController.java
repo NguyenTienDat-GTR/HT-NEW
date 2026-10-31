@@ -12,6 +12,7 @@ import phucuong.ht.common.dto.apiResponse;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.modules.diocese.model.request.DioceseCreateRequest;
+import phucuong.ht.modules.diocese.model.request.DioceseSiteSubdomainRequest;
 import phucuong.ht.modules.diocese.model.request.DioceseUpdateRequest;
 import phucuong.ht.modules.diocese.model.response.DioceseResponse;
 import phucuong.ht.modules.diocese.service.DioceseService;
@@ -65,6 +66,22 @@ public class DioceseController {
     ) {
         return apiResponse.success("Cập nhật giáo phận thành công", dioceseService.update(id, request, authentication));
     }
+    @PutMapping("/{id}/site-subdomain")
+    @PreAuthorize("@dioceseAccessEvaluator.canManageSiteSubdomain(authentication)")
+    public apiResponse<DioceseResponse> grantSiteSubdomain(
+            @PathVariable UUID id,
+            @Valid @RequestBody DioceseSiteSubdomainRequest request,
+            Authentication authentication
+    ) {
+        return apiResponse.success("Cấp subdomain cho giáo phận thành công", dioceseService.grantSiteSubdomain(id, request, authentication));
+    }
+
+    @DeleteMapping("/{id}/site-subdomain")
+    @PreAuthorize("@dioceseAccessEvaluator.canManageSiteSubdomain(authentication)")
+    public apiResponse<DioceseResponse> revokeSiteSubdomain(@PathVariable UUID id, Authentication authentication) {
+        return apiResponse.success("Thu hồi subdomain của giáo phận thành công", dioceseService.revokeSiteSubdomain(id, authentication));
+    }
+
     @PatchMapping("/{id}/toggle-status")
     @PreAuthorize("@dioceseAccessEvaluator.canToggle(authentication, #id)")
     public apiResponse<DioceseResponse> toggleStatus(

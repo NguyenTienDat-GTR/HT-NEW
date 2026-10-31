@@ -46,6 +46,12 @@ https:// {
 	}
 	encode gzip
 
+	# Hỏi BE trước MỖI request (BE nhớ kết quả ~15 giây): subdomain bị thu hồi thì ngừng phục vụ ngay,
+	# dù chứng chỉ đã cấp trước đó vẫn còn trong bộ nhớ của Caddy.
+	forward_auth app:{$SERVER_PORT} {
+		uri /internal/site-hosts/check?domain={host}
+	}
+
 	@ws path /ws/*
 	reverse_proxy @ws app:{$SERVER_PORT} {
 		header_up X-Site-Host {host}

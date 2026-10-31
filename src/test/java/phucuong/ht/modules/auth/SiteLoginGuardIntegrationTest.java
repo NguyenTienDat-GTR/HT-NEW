@@ -13,9 +13,16 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 import phucuong.ht.common.exception.ApiException;
+import phucuong.ht.modules.auth.model.AuthUserDetails;
+import phucuong.ht.modules.auth.service.SiteHostPolicy;
 import phucuong.ht.modules.auth.service.SiteLoginGuard;
+import phucuong.ht.modules.diocese.model.request.DioceseSiteSubdomainRequest;
+import phucuong.ht.modules.diocese.service.DioceseService;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import phucuong.ht.modules.diocese.repository.DioceseRepository;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -80,6 +87,8 @@ class SiteLoginGuardIntegrationTest {
     @Autowired private JdbcTemplate jdbc;
     @Autowired private DioceseRepository dioceseRepository;
     @Autowired private SiteLoginGuard siteLoginGuard;
+    @Autowired private SiteHostPolicy siteHostPolicy;
+    @Autowired private DioceseService dioceseService;
 
     @Test
     void findsDioceseBySubdomainIgnoringCaseAndGuardRestrictsLoginToOwnDiocese() {
@@ -100,6 +109,47 @@ class SiteLoginGuardIntegrationTest {
         assertEquals(HttpStatus.FORBIDDEN, rejected.getStatus());
         assertDoesNotThrow(() -> siteLoginGuard.assertCanLogin("site_test_global", "saigon.example.com"));
         assertDoesNotThrow(() -> siteLoginGuard.assertCanLogin("site_test_pc", "example.com"));
+    }
+
+    @Test
+    void superAdminGrantsAndRevokesSubdomainAndPolicyFollowsImmediately() {
+        UUID id = insertDiocese("Giáo phận cấp subdomain (site test)", null);
+        UUID other = insertDiocese("Giáo phận khác (site test)", "dacoten");
+        Authentication superAdmin = superAdmin();
+
+        assertEquals(1, jdbc.queryForObject(
+                "select count(*) from role_permission where role_code='SUPER_ADMIN' and permission_code='organization.diocese.site_subdomain.manage.all' and status = true", Integer.class));
+        assertEquals(false, siteHostPolicy.isServableDioceseHost("capmoi.example.com"));
+
+        var granted = dioceseService.grantSiteSubdomain(id, request("  CapMoi "), superAdmin);
+        assertEquals("capmoi", granted.getSiteSubdomain());
+        assertEquals("https://capmoi.example.com", granted.getSiteUrl());
+        assertEquals("example.com", granted.getSiteBaseDomain());
+        assertTrue(siteHostPolicy.isServableDioceseHost("capmoi.example.com"));
+
+        ApiException conflict = assertThrows(ApiException.class, () -> dioceseService.grantSiteSubdomain(id, request("dacoten"), superAdmin));
+        assertEquals(HttpStatus.CONFLICT, conflict.getStatus());
+        assertThrows(ApiException.class, () -> dioceseService.grantSiteSubdomain(id, request("test"), superAdmin));
+        assertThrows(ApiException.class, () -> dioceseService.grantSiteSubdomain(id, request("a_b"), superAdmin));
+        assertDoesNotThrow(() -> dioceseService.grantSiteSubdomain(id, request("capmoi"), superAdmin));
+
+        var revoked = dioceseService.revokeSiteSubdomain(id, superAdmin);
+        assertEquals(null, revoked.getSiteSubdomain());
+        assertEquals(null, revoked.getSiteUrl());
+        assertEquals(false, siteHostPolicy.isServableDioceseHost("capmoi.example.com"));
+        assertEquals(other, dioceseRepository.findBySiteSubdomain("dacoten").orElseThrow().getId());
+    }
+
+    private static DioceseSiteSubdomainRequest request(String subdomain) {
+        DioceseSiteSubdomainRequest request = new DioceseSiteSubdomainRequest();
+        request.setSiteSubdomain(subdomain);
+        return request;
+    }
+
+    private static Authentication superAdmin() {
+        AuthUserDetails principal = AuthUserDetails.tokenPrincipal("site_test_super", null, List.of("SUPER_ADMIN"),
+                List.of("organization.diocese.site_subdomain.manage.all"));
+        return new UsernamePasswordAuthenticationToken(principal, "n/a", principal.getAuthorities());
     }
 
     private UUID insertDiocese(String name, String subdomain) {
