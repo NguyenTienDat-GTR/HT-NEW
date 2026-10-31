@@ -58,6 +58,8 @@ GET /api/dioceses/{id}|200|401|403|400|404|N/A: read-only endpoint does not muta
 GET /api/dioceses/{id}/status-history|200|401|403|400|404|N/A: read-only endpoint does not mutate state
 GET /api/dioceses/{id}/toggle-impact|200|401|403|400|404|N/A: read-only endpoint does not mutate state
 PUT /api/dioceses/{id}|200|401|403|400|404|409
+PUT /api/dioceses/{id}/site-subdomain|200|401|403|400|404|409
+DELETE /api/dioceses/{id}/site-subdomain|200|401|403|N/A: path identifier is a validated UUID and there is no body|404|N/A: revoking an unset subdomain is idempotent
 PATCH /api/dioceses/{id}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict
 
 # Executive board assignments
@@ -297,3 +299,6 @@ GET /api/media/albums/{kind}|200|401|403|N/A: kind is validated as an enum and t
 POST /api/media/albums/{kind}|200|401|403|400|N/A: the album is resolved from the authenticated unit|409
 DELETE /api/media/albums/{kind}/{itemId}|200|401|403|N/A: path identifiers are validated UUIDs and enum|404|N/A: deleting an album image has no conflicting state
 GET /api/media/admin/status|200|401|403|N/A: endpoint has no request parameters to validate|N/A: aggregate endpoint has no individual resource lookup|N/A: read-only endpoint does not mutate state
+
+# Internal (chỉ Caddy gọi trong mạng Docker, không qua /api)
+GET /internal/site-hosts/check|200|N/A: internal endpoint called by the reverse proxy without a user session|N/A: internal endpoint called by the reverse proxy without a user session|400|404|N/A: read-only endpoint does not mutate state

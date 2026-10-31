@@ -36,6 +36,25 @@ public class DioceseRepository extends BaseRepo<Diocese, UUID> {
                 .findFirst();
     }
 
+    public boolean existsBySiteSubdomainAndIdNot(String siteSubdomain, UUID id) {
+        return findBySiteSubdomain(siteSubdomain)
+                .map(diocese -> !diocese.getId().equals(id))
+                .orElse(false);
+    }
+
+    @Transactional
+    public Diocese updateSiteSubdomain(UUID id, String siteSubdomain, String auditActor) {
+        Diocese diocese = entityManager.find(Diocese.class, id, LockModeType.PESSIMISTIC_WRITE);
+        if (diocese == null) {
+            throw new IllegalArgumentException("Diocese not found: " + id);
+        }
+        diocese.setSiteSubdomain(siteSubdomain);
+        diocese.setUpdatedBy(auditActor);
+        diocese.setUpdatedAt(java.time.OffsetDateTime.now());
+        entityManager.flush();
+        return diocese;
+    }
+
     public boolean existsByName(String name) {
         return existsByField("name", name);
     }
