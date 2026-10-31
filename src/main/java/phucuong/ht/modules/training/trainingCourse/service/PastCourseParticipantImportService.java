@@ -103,12 +103,7 @@ public class PastCourseParticipantImportService extends AbstractExcelImporter<Pa
                           boolean exception, String exceptionReason, String teamName, String note, String avatarFileName) {
     }
 
-    @Caching(evict = {
-            @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_LIST, allEntries = true),
-            @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, allEntries = true),
-            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_LIST, allEntries = true),
-            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_DETAIL, allEntries = true)
-    })
+    @EvictCaches.TrainingCourseData
     @EvictCaches.Analytics
     @EvictCaches.Leaders
     @Transactional
@@ -116,34 +111,11 @@ public class PastCourseParticipantImportService extends AbstractExcelImporter<Pa
         return importParticipants(courseCode, file, authentication, progress, false, null);
     }
 
-    public ImportSummary importParticipants(String courseCode, java.nio.file.Path file, Authentication authentication,
-                                            JobProgress progress, AvatarZip images) {
-        return importParticipants(courseCode, file, authentication, progress, false, images);
-    }
-
     /**
      * withTeam = true: import danh sách chia đội của khóa thường. File giống danh sách tham dự nhưng thêm cột "Tên đội", không có sheet Ngoại lệ,
      * mọi hồ sơ vào thẳng danh sách tham dự (đã duyệt đăng ký, không kiểm tra điều kiện của khóa) và gắn đội.
      */
-    @Caching(evict = {
-            @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_LIST, allEntries = true),
-            @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, allEntries = true),
-            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_LIST, allEntries = true),
-            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_DETAIL, allEntries = true)
-    })
-    @EvictCaches.Analytics
-    @EvictCaches.Leaders
-    @Transactional
-    public ImportSummary importParticipants(String courseCode, java.nio.file.Path file, Authentication authentication, JobProgress progress, boolean withTeam) {
-        return importParticipants(courseCode, file, authentication, progress, withTeam, null);
-    }
-
-    @Caching(evict = {
-            @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_LIST, allEntries = true),
-            @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, allEntries = true),
-            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_LIST, allEntries = true),
-            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_DETAIL, allEntries = true)
-    })
+    @EvictCaches.TrainingCourseData
     @EvictCaches.Analytics
     @EvictCaches.Leaders
     @Transactional
@@ -298,7 +270,6 @@ public class PastCourseParticipantImportService extends AbstractExcelImporter<Pa
         if (passed && certificateRequired) {
             courseParticipationService.ensureSuggestedCertificateExists(participation, actor);
         }
-    
     }
 
     /** Ghi nhận ảnh của dòng vào kế hoạch gắn ảnh: hồ sơ đã có ảnh thì giữ ảnh cũ (chỉ cảnh báo), còn lại đưa vào kế hoạch. */
@@ -337,12 +308,7 @@ public class PastCourseParticipantImportService extends AbstractExcelImporter<Pa
 
     // Xóa một học viên khỏi khóa quá khứ (sửa nhầm khi import). Học viên đã có chứng nhận được duyệt thì phải thu hồi trước.
     // Khác khóa thường: ở khóa quá khứ hồ sơ được xóa hẳn (không có luồng duyệt lại), kèm chứng nhận đề xuất chưa duyệt.
-    @Caching(evict = {
-            @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_LIST, allEntries = true),
-            @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, allEntries = true),
-            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_LIST, allEntries = true),
-            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_DETAIL, allEntries = true)
-    })
+    @EvictCaches.TrainingCourseData
     @EvictCaches.Analytics
     @Transactional
     public void removeParticipant(String courseCode, String participationId, Authentication authentication) {

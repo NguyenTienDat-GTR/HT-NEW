@@ -49,6 +49,19 @@ public final class EvictCaches {
     public @interface Leaders {
     }
 
+    // Danh sách / chi tiết khóa huấn luyện và chứng nhận: đổi hồ sơ tham dự làm các số liệu này cũ.
+    @Target(ElementType.METHOD)
+    @Retention(RetentionPolicy.RUNTIME)
+    @Documented
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_DETAIL, allEntries = true)
+    })
+    public @interface TrainingCourseData {
+    }
+
     // Số liệu thống kê tổng hợp từ huynh trưởng, khóa, hồ sơ tham dự và chứng nhận.
     @Target(ElementType.METHOD)
     @Retention(RetentionPolicy.RUNTIME)
