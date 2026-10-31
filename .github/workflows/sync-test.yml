@@ -1,0 +1,40 @@
+name: Sync test with main
+
+# Sau mỗi lần phát hành (merge test -> main bằng merge commit), main đi trước test đúng một commit merge.
+# Workflow này tua `test` lên đúng commit của `main` (fast-forward, không tạo commit mới) để hai nhánh luôn giống nhau.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-test
+  cancel-in-progress: false
+
+jobs:
+  fast-forward-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fast-forward test to main
+        run: |
+          git fetch origin test
+          main_sha=$(git rev-parse origin/main)
+          test_sha=$(git rev-parse origin/test)
+          if [ "$main_sha" = "$test_sha" ]; then
+            echo "test đã trùng main ($main_sha), không cần làm gì."
+            exit 0
+          fi
+          # Chỉ tua khi test là tổ tiên của main; nếu test đang có commit chưa phát hành thì giữ nguyên để không mất công việc.
+          if git merge-base --is-ancestor "$test_sha" "$main_sha"; then
+            git push origin "$main_sha:refs/heads/test"
+            echo "Đã tua test: $test_sha -> $main_sha"
+          else
+            echo "::warning::test có commit chưa nằm trong main, bỏ qua tua. Hãy phát hành test vào main rồi chạy lại workflow này."
+          fi
