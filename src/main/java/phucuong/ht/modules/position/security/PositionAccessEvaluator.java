@@ -5,6 +5,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.common.utils.securityUtils;
+import phucuong.ht.modules.auth.repository.AccountRepository;
 import phucuong.ht.modules.position.model.entity.Position;
 import phucuong.ht.modules.position.repository.PositionRepository;
 
@@ -14,9 +15,10 @@ public class PositionAccessEvaluator {
 
     private final securityUtils securityUtils;
     private final PositionRepository positionRepository;
+    private final AccountRepository accountRepository;
 
     public boolean canCreate(Authentication authentication, UnitType positionType) {
-        return hasAuthorityForType(authentication, positionType, "create");
+        return hasAuthorityForType(authentication, positionType, "create") && currentDioceseId(authentication) != null;
     }
 
     public boolean canList(Authentication authentication) {
@@ -27,7 +29,7 @@ public class PositionAccessEvaluator {
 
     public boolean canRead(Authentication authentication, String positionCode) {
         return positionRepository.findById(positionCode)
-                .map(position -> hasAuthorityForType(authentication, position.getPositionType(), "read"))
+                .map(position -> hasAuthorityForType(authentication, position.getPositionType(), "read") && ownsPosition(authentication, position))
                 .orElse(false);
     }
 
@@ -38,14 +40,29 @@ public class PositionAccessEvaluator {
     public boolean canUpdate(Authentication authentication, String positionCode, UnitType targetType) {
         return positionRepository.findById(positionCode)
                 .map(position -> hasAuthorityForType(authentication, position.getPositionType(), "update")
+                        && ownsPosition(authentication, position)
                         && (targetType == null || hasAuthorityForType(authentication, targetType, "update")))
                 .orElse(false);
     }
 
     public boolean canToggle(Authentication authentication, String positionCode) {
         return positionRepository.findById(positionCode)
-                .map(position -> hasAuthorityForType(authentication, position.getPositionType(), "toggle"))
+                .map(position -> hasAuthorityForType(authentication, position.getPositionType(), "toggle") && ownsPosition(authentication, position))
                 .orElse(false);
+    }
+
+    /** Chức vụ thuộc riêng từng giáo phận: chỉ tài khoản của giáo phận đó được xem và sửa. */
+    private boolean ownsPosition(Authentication authentication, Position position) {
+        java.util.UUID dioceseId = currentDioceseId(authentication);
+        return dioceseId != null && dioceseId.equals(position.getDioceseId());
+    }
+
+    private java.util.UUID currentDioceseId(Authentication authentication) {
+        String username = securityUtils.currentUsername(authentication);
+        if (username == null || username.isBlank()) {
+            return null;
+        }
+        return accountRepository.findActiveDioceseIdByUsername(username).orElse(null);
     }
 
     private boolean hasAuthorityForType(Authentication authentication, UnitType unitType, String action) {
