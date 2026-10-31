@@ -91,7 +91,10 @@ jobs:
             mv env.deploy .env && chmod 600 .env
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
             docker compose -f compose.prod.yaml pull app
-            docker compose -f compose.prod.yaml up -d --remove-orphans postgres redis rabbitmq app caddy
+            docker compose -f compose.prod.yaml up -d --remove-orphans postgres redis rabbitmq app
+            # Caddyfile được thay bằng file mới mỗi lần deploy nhưng container giữ file cũ (bind mount theo inode),
+            # nên phải tạo lại container để nạp cấu hình và biến SITE_HOSTS mới. Chứng chỉ nằm trong volume nên không mất.
+            docker compose -f compose.prod.yaml up -d --force-recreate caddy
             docker logout ghcr.io
 
             echo "Chờ app healthy..."
