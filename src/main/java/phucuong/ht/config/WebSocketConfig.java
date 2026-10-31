@@ -53,7 +53,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws/notifications")
-                .setAllowedOrigins(resolveAllowedOrigins());
+                .setAllowedOriginPatterns(resolveAllowedOrigins());
     }
 
     @Override
@@ -66,10 +66,19 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                 .map(String::trim)
                 .filter(origin -> !origin.isBlank())
                 .toArray(String[]::new);
-        if (origins.length == 0 || Arrays.asList(origins).contains("*")) {
-            throw new IllegalStateException("APP_WEBSOCKET_ALLOWED_ORIGINS must contain exact origins");
+        if (origins.length == 0 || Arrays.stream(origins).anyMatch(WebSocketConfig::isUnsafeOrigin)) {
+            throw new IllegalStateException(
+                    "APP_WEBSOCKET_ALLOWED_ORIGINS must contain exact origins or https://*.<domain> subdomain patterns");
         }
         return origins;
+    }
+
+    /** Chỉ cho phép origin chính xác hoặc mẫu subdomain dạng scheme://*.domain; cấm "*" và mẫu rộng như https://*. */
+    static boolean isUnsafeOrigin(String origin) {
+        if (!origin.contains("*")) {
+            return false;
+        }
+        return !origin.matches("^https?://\\*\\.[A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)+(:\\d+)?$");
     }
 
     static final class NotificationInboundChannelInterceptor implements ChannelInterceptor {

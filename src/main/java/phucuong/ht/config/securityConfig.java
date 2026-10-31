@@ -55,6 +55,7 @@ public class securityConfig {
                 "/api/auth/logout",
                 "/api/auth/forgot-password/**",
                 "/actuator/health",
+                "/internal/site-hosts/check",
                 "/ws/notifications",
                 "/swagger-auth-token.js",
                 "/swagger-ui.html",
@@ -68,6 +69,7 @@ public class securityConfig {
                 "/api/auth/logout",
                 "/api/auth/forgot-password/**",
                 "/actuator/health",
+                "/internal/site-hosts/check",
                 "/ws/notifications"
         };
 

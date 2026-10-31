@@ -108,6 +108,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         return path.startsWith("/actuator")
+                || path.startsWith("/internal/site-hosts/")
                 || path.startsWith("/api/auth/login")
                 || path.startsWith("/api/auth/refresh")
                 || path.startsWith("/api/auth/logout")

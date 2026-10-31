@@ -53,7 +53,7 @@ public class SiteLoginGuard {
         }
     }
 
-    Optional<String> subdomainOf(String siteHost) {
+    public Optional<String> subdomainOf(String siteHost) {
         if (baseDomain.isEmpty() || !StringUtils.hasText(siteHost)) {
             return Optional.empty();
         }
