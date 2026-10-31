@@ -14,13 +14,20 @@ public class PositionRepository extends BaseRepo<Position, String> {
         super(entityManager, Position.class);
     }
 
-    /** Thứ tự kế tiếp (cuối cùng) trong cấp của giáo phận. */
-    public int nextDisplayOrder(UnitType positionType, java.util.UUID dioceseId) {
-        Integer max = entityManager.createQuery("select max(p.displayOrder) from Position p where p.positionType = :type and p.dioceseId = :dioceseId", Integer.class)
+    /** Thứ tự kế tiếp (cuối cùng) trong danh sách chức vụ của đơn vị. */
+    public int nextDisplayOrder(UnitType positionType, java.util.UUID unitId) {
+        Integer max = entityManager.createQuery("select max(p.displayOrder) from Position p where p.positionType = :type and p.unitId = :unitId", Integer.class)
                 .setParameter("type", positionType)
-                .setParameter("dioceseId", dioceseId)
+                .setParameter("unitId", unitId)
                 .getSingleResult();
         return max == null ? 1 : max + 1;
+    }
+
+    public java.util.Optional<java.util.UUID> deaneryIdOfParish(java.util.UUID parishId) {
+        return entityManager.createQuery("select pa.deanery.id from Parish pa where pa.id = :id", java.util.UUID.class)
+                .setParameter("id", parishId)
+                .getResultStream()
+                .findFirst();
     }
 
     @Transactional

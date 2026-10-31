@@ -102,6 +102,7 @@ class ExecutiveBoardAssignmentServiceTest {
         position.setPositionType(UnitType.DEANERY);
         position.setStatus(Boolean.TRUE);
         position.setDioceseId(diocese.getId());
+        position.setUnitId(deaneryId);
 
         when(leaderRepository.findByIdWithParish(leaderId)).thenReturn(Optional.of(leader));
         when(positionRepository.findById("POS-1")).thenReturn(Optional.of(position));
@@ -169,7 +170,7 @@ class ExecutiveBoardAssignmentServiceTest {
     }
 
     @Test
-    void createShouldRejectPositionOfAnotherDiocese() {
+    void createShouldRejectPositionOfAnotherUnit() {
         CommonValidationHelper commonValidationHelper = new CommonValidationHelper(new securityUtils());
         ExecutiveBoardAssignmentService service = new ExecutiveBoardAssignmentService(
                 assignmentRepository,
@@ -202,7 +203,8 @@ class ExecutiveBoardAssignmentServiceTest {
         position.setPositionCode("POS-OTHER");
         position.setPositionType(UnitType.DEANERY);
         position.setStatus(Boolean.TRUE);
-        position.setDioceseId(UUID.randomUUID());
+        position.setDioceseId(diocese.getId());
+        position.setUnitId(UUID.randomUUID());
 
         when(leaderRepository.findByIdWithParish(leaderId)).thenReturn(Optional.of(new Leader()));
         when(positionRepository.findById("POS-OTHER")).thenReturn(Optional.of(position));
@@ -217,6 +219,6 @@ class ExecutiveBoardAssignmentServiceTest {
         var authentication = new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
 
         var exception = assertThrows(Exception.class, () -> service.create(request, authentication));
-        org.junit.jupiter.api.Assertions.assertTrue(exception.getMessage().contains("giáo phận khác"), exception.getMessage());
+        org.junit.jupiter.api.Assertions.assertTrue(exception.getMessage().contains("đơn vị khác"), exception.getMessage());
     }
 }

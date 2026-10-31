@@ -25,6 +25,7 @@ import phucuong.ht.modules.position.model.request.PositionCreateRequest;
 import phucuong.ht.modules.position.model.request.PositionUpdateRequest;
 import phucuong.ht.modules.position.model.response.PositionResponse;
 import phucuong.ht.modules.position.repository.PositionRepository;
+import phucuong.ht.modules.position.security.PositionOwnership;
 
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
@@ -49,12 +50,18 @@ public class PositionService {
     public PositionResponse create(PositionCreateRequest request, Authentication authentication) {
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tạo chức vụ");
         UUID dioceseId = requireCurrentDioceseId(authentication, "Tài khoản không thuộc giáo phận nào nên không tạo được chức vụ");
+        PositionOwnership ownership = ownership();
+        UUID unitId = ownership.ownerUnitForCreate(ownership.viewer(securityUtils.currentUsername(authentication)), request.getPositionType());
+        if (unitId == null) {
+            throw commonValidationHelper.forbidden("Tài khoản không thuộc đơn vị cấp này nên không tạo được chức vụ");
+        }
         OffsetDateTime now = OffsetDateTime.now();
         Position position = new Position();
         position.setDioceseId(dioceseId);
+        position.setUnitId(unitId);
         position.setPositionName(commonValidationHelper.normalizeRequiredText(request.getPositionName()));
         position.setPositionType(request.getPositionType());
-        position.setDisplayOrder(request.getDisplayOrder() != null ? request.getDisplayOrder() : positionRepository.nextDisplayOrder(request.getPositionType(), dioceseId));
+        position.setDisplayOrder(request.getDisplayOrder() != null ? request.getDisplayOrder() : positionRepository.nextDisplayOrder(request.getPositionType(), unitId));
         position.setStatus(Boolean.TRUE);
         position.setCreatedAt(now);
         position.setUpdatedAt(now);
@@ -66,10 +73,11 @@ public class PositionService {
 
     @Cacheable(cacheNames = CacheNames.POSITION_LIST, key = "@cacheScopeKeyHelper.listKey(#authentication, #request)")
     public Page<PositionResponse> findAll(BaseSearchRequest request, Authentication authentication) {
-        UUID dioceseId = currentDioceseId(authentication);
+        PositionOwnership ownership = ownership();
+        PositionOwnership.Viewer viewer = ownership.viewer(securityUtils.currentUsername(authentication));
         List<Position> readable = loadAllMatching(request).stream()
                 .filter(position -> canReadType(authentication, position.getPositionType()))
-                .filter(position -> belongsTo(position, dioceseId))
+                .filter(position -> ownership.canAccess(viewer, position))
                 .toList();
         return page(request, readable);
     }
@@ -78,7 +86,7 @@ public class PositionService {
     public PositionResponse findById(String positionCode, Authentication authentication) {
         Position position = positionRepository.findById(positionCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy chức vụ " + positionCode));
-        if (!canReadType(authentication, position.getPositionType()) || !belongsTo(position, currentDioceseId(authentication))) {
+        if (!canReadType(authentication, position.getPositionType()) || !canAccess(position, authentication)) {
             throw commonValidationHelper.forbidden("Bạn không có quyền xem chức vụ này");
         }
         return toDetailResponse(position);
@@ -93,12 +101,12 @@ public class PositionService {
     public PositionResponse update(String positionCode, PositionUpdateRequest request, Authentication authentication) {
         Position position = positionRepository.findById(positionCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy chức vụ " + positionCode));
-        requireOwnDiocese(position, authentication);
+        requireAccess(position, authentication);
+        if (request.getPositionType() != null && request.getPositionType() != position.getPositionType()) {
+            throw commonValidationHelper.validationError("Không đổi được cấp của chức vụ đã tạo");
+        }
         if (request.getPositionName() != null) {
             position.setPositionName(commonValidationHelper.normalizeRequiredText(request.getPositionName()));
-        }
-        if (request.getPositionType() != null) {
-            position.setPositionType(request.getPositionType());
         }
         if (request.getDisplayOrder() != null) {
             position.setDisplayOrder(request.getDisplayOrder());
@@ -118,7 +126,7 @@ public class PositionService {
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người đổi trạng thái chức vụ");
         Position existing = positionRepository.findById(positionCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy chức vụ " + positionCode));
-        requireOwnDiocese(existing, authentication);
+        requireAccess(existing, authentication);
         return toDetailResponse(positionRepository.toggleStatus(positionCode, actor));
     }
 
@@ -159,13 +167,18 @@ public class PositionService {
         return dioceseId;
     }
 
-    private static boolean belongsTo(Position position, UUID dioceseId) {
-        return dioceseId != null && dioceseId.equals(position.getDioceseId());
+    private PositionOwnership ownership() {
+        return new PositionOwnership(accountRepository, positionRepository);
     }
 
-    private void requireOwnDiocese(Position position, Authentication authentication) {
-        if (!belongsTo(position, currentDioceseId(authentication))) {
-            throw commonValidationHelper.forbidden("Chức vụ này thuộc giáo phận khác");
+    private boolean canAccess(Position position, Authentication authentication) {
+        PositionOwnership ownership = ownership();
+        return ownership.canAccess(ownership.viewer(securityUtils.currentUsername(authentication)), position);
+    }
+
+    private void requireAccess(Position position, Authentication authentication) {
+        if (!canAccess(position, authentication)) {
+            throw commonValidationHelper.forbidden("Chức vụ này thuộc đơn vị khác");
         }
     }
 
@@ -192,6 +205,7 @@ public class PositionService {
         return PositionResponse.builder()
                 .positionCode(position.getPositionCode())
                 .dioceseId(position.getDioceseId())
+                .unitId(position.getUnitId())
                 .positionName(position.getPositionName())
                 .positionType(position.getPositionType())
                 .displayOrder(position.getDisplayOrder())

@@ -17,8 +17,16 @@ public class PositionAccessEvaluator {
     private final PositionRepository positionRepository;
     private final AccountRepository accountRepository;
 
+    private PositionOwnership ownership() {
+        return new PositionOwnership(accountRepository, positionRepository);
+    }
+
     public boolean canCreate(Authentication authentication, UnitType positionType) {
-        return hasAuthorityForType(authentication, positionType, "create") && currentDioceseId(authentication) != null;
+        if (!hasAuthorityForType(authentication, positionType, "create")) {
+            return false;
+        }
+        PositionOwnership ownership = ownership();
+        return ownership.ownerUnitForCreate(ownership.viewer(securityUtils.currentUsername(authentication)), positionType) != null;
     }
 
     public boolean canList(Authentication authentication) {
@@ -51,18 +59,10 @@ public class PositionAccessEvaluator {
                 .orElse(false);
     }
 
-    /** Chức vụ thuộc riêng từng giáo phận: chỉ tài khoản của giáo phận đó được xem và sửa. */
+    /** Chức vụ thuộc riêng từng đơn vị: chỉ tài khoản của đơn vị đó (hoặc cấp trên trực tiếp) được xem và sửa. */
     private boolean ownsPosition(Authentication authentication, Position position) {
-        java.util.UUID dioceseId = currentDioceseId(authentication);
-        return dioceseId != null && dioceseId.equals(position.getDioceseId());
-    }
-
-    private java.util.UUID currentDioceseId(Authentication authentication) {
-        String username = securityUtils.currentUsername(authentication);
-        if (username == null || username.isBlank()) {
-            return null;
-        }
-        return accountRepository.findActiveDioceseIdByUsername(username).orElse(null);
+        PositionOwnership ownership = ownership();
+        return ownership.canAccess(ownership.viewer(securityUtils.currentUsername(authentication)), position);
     }
 
     private boolean hasAuthorityForType(Authentication authentication, UnitType unitType, String action) {
