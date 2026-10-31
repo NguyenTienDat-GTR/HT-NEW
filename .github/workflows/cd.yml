@@ -58,7 +58,9 @@ jobs:
         run: |
           mkdir out
           printf '%s\n' "$PROD_ENV_FILE" > out/env.deploy
-          cp compose.prod.yaml deploy/Caddyfile out/
+          cp compose.prod.yaml out/
+          # Gửi với tên khác rồi ghi đè TẠI CHỖ trên server: giữ nguyên inode để container Caddy thấy file mới.
+          cp deploy/Caddyfile out/Caddyfile.new
         env:
           PROD_ENV_FILE: ${{ secrets.PROD_ENV_FILE }}
 
@@ -92,9 +94,11 @@ jobs:
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
             docker compose -f compose.prod.yaml pull app
             docker compose -f compose.prod.yaml up -d --remove-orphans postgres redis rabbitmq app
-            # Caddyfile được thay bằng file mới mỗi lần deploy nhưng container giữ file cũ (bind mount theo inode),
-            # nên phải tạo lại container để nạp cấu hình và biến SITE_HOSTS mới. Chứng chỉ nằm trong volume nên không mất.
-            docker compose -f compose.prod.yaml up -d --force-recreate caddy
+            # Caddyfile là bind mount một file (theo inode): ghi đè tại chỗ rồi nạp lại bằng `caddy reload`, không cần
+            # tạo lại container nên không đứt kết nối. `up -d caddy` chỉ tạo lại khi biến môi trường của Caddy đổi.
+            cat Caddyfile.new > Caddyfile && rm -f Caddyfile.new
+            docker compose -f compose.prod.yaml up -d caddy
+            docker exec ht-caddy caddy reload --config /etc/caddy/Caddyfile || docker compose -f compose.prod.yaml up -d --force-recreate caddy
             docker logout ghcr.io
 
             echo "Chờ app healthy..."
