@@ -17,6 +17,7 @@ public class DioceseAccessEvaluator {
     public static final String READ_ALL = "organization.diocese.read.all";
     public static final String UPDATE_ALL = "organization.diocese.update.all";
     public static final String TOGGLE_ALL = "organization.diocese.toggle.all";
+    public static final String MANAGE_SITE_SUBDOMAIN_ALL = "organization.diocese.site_subdomain.manage.all";
     public static final String READ_DIOCESE = "organization.diocese.read.diocese";
     public static final String UPDATE_DIOCESE = "organization.diocese.update.diocese";
 
@@ -48,6 +49,12 @@ public class DioceseAccessEvaluator {
     public boolean canToggle(Authentication authentication, UUID dioceseId) {
         return hasRole(authentication, "SUPER_ADMIN")
                 && hasAuthority(authentication, TOGGLE_ALL);
+    }
+
+    /** Cấp / đổi / thu hồi subdomain của giáo phận: chỉ SUPER_ADMIN có quyền riêng này. */
+    public boolean canManageSiteSubdomain(Authentication authentication) {
+        return hasRole(authentication, "SUPER_ADMIN")
+                && hasAuthority(authentication, MANAGE_SITE_SUBDOMAIN_ALL);
     }
 
     private boolean hasScopedAccess(Authentication authentication, UUID dioceseId, String scopedAuthority) {

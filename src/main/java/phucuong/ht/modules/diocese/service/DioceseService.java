@@ -31,7 +31,10 @@ import phucuong.ht.modules.auth.repository.AccountRepository;
 import phucuong.ht.modules.diocese.helper.DioceseValidationHelper;
 import phucuong.ht.modules.diocese.model.entity.Diocese;
 import phucuong.ht.modules.diocese.model.request.DioceseCreateRequest;
+import phucuong.ht.modules.diocese.model.request.DioceseSiteSubdomainRequest;
 import phucuong.ht.modules.diocese.model.request.DioceseUpdateRequest;
+import phucuong.ht.modules.diocese.helper.SiteSubdomainRules;
+import phucuong.ht.modules.auth.service.SiteHostPolicy;
 import phucuong.ht.modules.diocese.model.response.DioceseResponse;
 import phucuong.ht.modules.diocese.repository.DioceseRepository;
 import phucuong.ht.modules.diocese.security.DioceseAccessEvaluator;
@@ -57,6 +60,7 @@ public class DioceseService {
     private final AccountRepository accountRepository;
     private final securityUtils securityUtils;
     private final AuditActorNameResolver auditActorNameResolver;
+    private final SiteHostPolicy siteHostPolicy;
     @Autowired(required = false)
     private UnitToggleSupport toggleSupport = UnitToggleSupport.noop();
     @Autowired(required = false)
@@ -186,6 +190,48 @@ public class DioceseService {
         return toDioceseResponse(updated);
     }
 
+    /** Cấp hoặc đổi subdomain (trang riêng) của giáo phận. Không @Transactional: repository tự commit rồi mới xóa bộ nhớ đệm chính sách. */
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true)
+    })
+    public DioceseResponse grantSiteSubdomain(UUID id, DioceseSiteSubdomainRequest request, Authentication authentication) {
+        requireSiteFeatureEnabled();
+        dioceseValidationHelper.requireExistingDiocese(id);
+        String subdomain = SiteSubdomainRules.normalize(request == null ? null : request.getSiteSubdomain());
+        if (dioceseRepository.existsBySiteSubdomainAndIdNot(subdomain, id)) {
+            throw new ApiException(HttpStatus.CONFLICT, errorCode.CONFLICT, "Subdomain \"" + subdomain + "\" đã được cấp cho giáo phận khác");
+        }
+        String auditActor = dioceseValidationHelper.getRequiredAuditActor(authentication);
+        try {
+            Diocese updated = dioceseRepository.updateSiteSubdomain(id, subdomain, auditActor);
+            siteHostPolicy.invalidate();
+            return toDioceseResponse(updated);
+        } catch (DataIntegrityViolationException exception) {
+            throw new ApiException(HttpStatus.CONFLICT, errorCode.CONFLICT, "Subdomain \"" + subdomain + "\" đã được cấp cho giáo phận khác");
+        }
+    }
+
+    /** Thu hồi subdomain: trang riêng ngừng được phục vụ ngay (tối đa vài chục giây do bộ nhớ đệm của proxy). */
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true)
+    })
+    public DioceseResponse revokeSiteSubdomain(UUID id, Authentication authentication) {
+        dioceseValidationHelper.requireExistingDiocese(id);
+        String auditActor = dioceseValidationHelper.getRequiredAuditActor(authentication);
+        Diocese updated = dioceseRepository.updateSiteSubdomain(id, null, auditActor);
+        siteHostPolicy.invalidate();
+        return toDioceseResponse(updated);
+    }
+
+    private void requireSiteFeatureEnabled() {
+        if (siteHostPolicy.baseDomain().isBlank()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, errorCode.VALIDATION_ERROR,
+                    "Hệ thống chưa cấu hình tên miền chính (APP_SITE_BASE_DOMAIN) nên chưa cấp được subdomain");
+        }
+    }
+
     public UnitToggleImpactResponse toggleImpact(UUID id) {
         return toggleSupport.impact(UnitType.DIOCESE, id);
     }
@@ -251,6 +297,11 @@ public class DioceseService {
                 .deaneryCount(deaneryCount)
                 .parishCount(parishCount)
                 .leaderCount(leaderCount)
+                .siteSubdomain(diocese.getSiteSubdomain())
+                .siteBaseDomain(siteHostPolicy.baseDomain().isBlank() ? null : siteHostPolicy.baseDomain())
+                .siteUrl(diocese.getSiteSubdomain() == null || siteHostPolicy.baseDomain().isBlank()
+                        ? null
+                        : "https://" + diocese.getSiteSubdomain() + "." + siteHostPolicy.baseDomain())
                 .build();
     }
 }

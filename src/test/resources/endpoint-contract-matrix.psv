@@ -58,6 +58,8 @@ GET /api/dioceses/{id}|200|401|403|400|404|N/A: read-only endpoint does not muta
 GET /api/dioceses/{id}/status-history|200|401|403|400|404|N/A: read-only endpoint does not mutate state
 GET /api/dioceses/{id}/toggle-impact|200|401|403|400|404|N/A: read-only endpoint does not mutate state
 PUT /api/dioceses/{id}|200|401|403|400|404|409
+PUT /api/dioceses/{id}/site-subdomain|200|401|403|400|404|409
+DELETE /api/dioceses/{id}/site-subdomain|200|401|403|N/A: path identifier is a validated UUID and there is no body|404|N/A: revoking an unset subdomain is idempotent
 PATCH /api/dioceses/{id}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict
 
 # Executive board assignments

@@ -29,4 +29,7 @@ public class DioceseResponse {
     private final Long deaneryCount;
     private final Long parishCount;
     private final Long leaderCount;
+    private final String siteSubdomain;
+    private final String siteBaseDomain;
+    private final String siteUrl;
 }
