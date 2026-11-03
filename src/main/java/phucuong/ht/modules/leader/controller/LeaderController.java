@@ -10,6 +10,7 @@ import phucuong.ht.common.dto.apiResponse;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.modules.leader.model.request.LeaderCreateRequest;
+import phucuong.ht.modules.leader.model.request.LeaderTransferRequest;
 import phucuong.ht.modules.leader.model.request.LeaderUpdateRequest;
 import phucuong.ht.modules.leader.model.response.LeaderResponse;
 import phucuong.ht.modules.leader.service.LeaderService;
@@ -97,6 +98,16 @@ public class LeaderController {
             Authentication authentication
     ) {
         return apiResponse.success("Cập nhật Huynh Trưởng thành công", leaderService.update(id, request, authentication));
+    }
+
+    @PostMapping("/{id}/transfer")
+    @PreAuthorize("@leaderAccessEvaluator.canTransfer(authentication, #id)")
+    public apiResponse<LeaderResponse> transfer(
+            @PathVariable UUID id,
+            @Valid @RequestBody LeaderTransferRequest request,
+            Authentication authentication
+    ) {
+        return apiResponse.success("Chuyển giáo xứ cho huynh trưởng thành công", leaderService.transfer(id, request, authentication));
     }
 
     @PatchMapping("/{id}/toggle-status")
