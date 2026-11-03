@@ -1,6 +1,5 @@
 package phucuong.ht.modules.certificate.config.model.request;
 
-import jakarta.validation.constraints.NotEmpty;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -10,6 +9,8 @@ import java.util.List;
 @Setter
 public class CertificateExportPdfRequest {
 
-    @NotEmpty(message = "Cần chọn ít nhất một chứng nhận để xuất PDF")
+    // Danh sách chứng nhận được chọn. Bỏ trống kèm courseCode thì xuất mọi chứng nhận đã duyệt của khóa đó.
     private List<String> certificateCodes;
+
+    private String courseCode;
 }
