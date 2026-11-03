@@ -60,6 +60,9 @@ class LeaderServiceTest {
     @org.mockito.Mock
     private phucuong.ht.modules.media.service.MediaUrls mediaUrls;
 
+    @org.mockito.Mock
+    private LeaderTransferNotifier leaderTransferNotifier;
+
     @InjectMocks
     private LeaderService leaderService;
 
@@ -282,11 +285,14 @@ class LeaderServiceTest {
         Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
         when(leaderValidationHelper.requireExistingLeaderWithParish(leaderId)).thenReturn(existing, existing);
         when(leaderValidationHelper.getRequiredAuditActor(authentication)).thenReturn("ADMIN1");
+        Parish targetParish = parish(newParishId);
+        when(leaderValidationHelper.requireExistingParish(newParishId)).thenReturn(targetParish);
 
         leaderService.update(leaderId, request, authentication);
 
         verify(leaderScopeHelper).enforceTransferScope(authentication, newParishId);
         verify(leaderRepository).setParish(leaderId, newParishId);
+        verify(leaderTransferNotifier).announce(existing, existing.getParish(), targetParish, "ADMIN1");
     }
 
     @Test
