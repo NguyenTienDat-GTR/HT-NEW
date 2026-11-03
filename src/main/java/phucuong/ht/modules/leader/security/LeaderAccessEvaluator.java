@@ -24,6 +24,8 @@ public class LeaderAccessEvaluator {
     public static final String UPDATE_DIOCESE = "organization.leader.update.diocese";
     public static final String UPDATE_DEANERY = "organization.leader.update.deanery";
     public static final String UPDATE_PARISH = "organization.leader.update.parish";
+    public static final String TRANSFER_DIOCESE = "organization.leader.transfer.diocese";
+    public static final String TRANSFER_DEANERY = "organization.leader.transfer.deanery";
     public static final String TOGGLE_PARISH = "organization.leader.toggle.parish";
 
     private final AccountRepository accountRepository;
@@ -52,6 +54,12 @@ public class LeaderAccessEvaluator {
         return (hasRole(authentication, "ADMIN_DIOCESE") && hasDioceseScopedAccess(authentication, id, UPDATE_DIOCESE))
                 || (hasRole(authentication, "ADMIN_DEANERY") && hasDeaneryScopedAccess(authentication, id, UPDATE_DEANERY))
                 || (hasRole(authentication, "ADMIN_PARISH") && hasParishScopedAccess(authentication, id, UPDATE_PARISH));
+    }
+
+    // Quyền chuyển giáo xứ tách riêng khỏi quyền sửa; quản trị giáo xứ không có quyền này.
+    public boolean canTransfer(Authentication authentication, UUID id) {
+        return (hasRole(authentication, "ADMIN_DIOCESE") && hasDioceseScopedAccess(authentication, id, TRANSFER_DIOCESE))
+                || (hasRole(authentication, "ADMIN_DEANERY") && hasDeaneryScopedAccess(authentication, id, TRANSFER_DEANERY));
     }
 
     public boolean canToggle(Authentication authentication, UUID id) {

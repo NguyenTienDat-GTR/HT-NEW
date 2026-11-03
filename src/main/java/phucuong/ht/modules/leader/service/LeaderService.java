@@ -24,6 +24,7 @@ import phucuong.ht.modules.leader.helper.LeaderValidationHelper;
 import phucuong.ht.modules.leader.model.entity.Leader;
 import phucuong.ht.modules.leader.model.request.LeaderCreateRequest;
 import phucuong.ht.modules.leader.model.request.LeaderSelfUpdateRequest;
+import phucuong.ht.modules.leader.model.request.LeaderTransferRequest;
 import phucuong.ht.modules.leader.model.request.LeaderUpdateRequest;
 import phucuong.ht.modules.leader.model.response.LeaderResponse;
 import phucuong.ht.modules.leader.repository.LeaderRepository;
@@ -37,6 +38,7 @@ import phucuong.ht.modules.rankHistory.model.response.RankHistoryResponse;
 import phucuong.ht.modules.rankHistory.repository.RankHistoryRepository;
 
 import java.time.OffsetDateTime;
+import org.slf4j.LoggerFactory;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -58,6 +60,7 @@ public class LeaderService {
     private final MediaAssetService mediaAssetService;
     private final MediaUrls mediaUrls;
     private final phucuong.ht.common.utils.AuditActorNameResolver auditActorNameResolver;
+    private final LeaderTransferNotifier leaderTransferNotifier;
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private phucuong.ht.common.security.UnitOperationalStatusService unitOperationalStatusService;
 
@@ -218,13 +221,12 @@ public class LeaderService {
         leaderValidationHelper.validateUpdatePhoneUniqueness(id, request.getPhoneNumber(), existingLeader.getPhoneNumber());
 
         UUID currentParishId = existingLeader.getParish() == null ? null : existingLeader.getParish().getId();
-        boolean transferringParish = request.getParishId() != null && !request.getParishId().equals(currentParishId);
-        if (request.getParishId() != null) {
-            leaderValidationHelper.requireExistingParish(request.getParishId());
-            leaderScopeHelper.enforceUpdateParishScope(authentication, existingLeader, request.getParishId());
+        // Đổi giáo xứ là chức năng riêng (quyền riêng) qua transfer(); sửa hồ sơ không được đổi giáo xứ.
+        if (request.getParishId() != null && !request.getParishId().equals(currentParishId)) {
+            throw badRequest("Muốn đổi giáo xứ của huynh trưởng, hãy dùng chức năng Chuyển giáo xứ");
         }
-        // Đóng băng: không sửa hồ sơ trong đơn vị bị khóa; riêng chuyển sang giáo xứ đang hoạt động thì được phép.
-        requireParishOperational(transferringParish ? request.getParishId() : currentParishId);
+        // Đóng băng: không sửa hồ sơ trong đơn vị bị khóa.
+        requireParishOperational(currentParishId);
 
         // Ảnh đại diện: gắn ảnh mới vào thư mục giáo phận (trước khi lưu hồ sơ) rồi mới đổi tham chiếu.
         UUID oldAssetId = existingLeader.getImageAssetId();
@@ -236,9 +238,8 @@ public class LeaderService {
         }
         UUID newAssetId = null;
         if (requestedAssetId != null && !requestedAssetId.equals(oldAssetId)) {
-            UUID targetParishId = request.getParishId() != null ? request.getParishId() : currentParishId;
             newAssetId = mediaAssetService.attach(requestedAssetId, MediaCategory.LEADER_AVATAR,
-                    leaderValidationHelper.findDioceseIdOfParish(targetParishId), auditActor);
+                    leaderValidationHelper.findDioceseIdOfParish(currentParishId), auditActor);
         }
         // Việc đổi tham chiếu ảnh làm riêng bên dưới, không để BaseRepo sao chép tự động.
         request.setImageAssetId(null);
@@ -253,6 +254,40 @@ public class LeaderService {
         } catch (DataIntegrityViolationException exception) {
             throw new ApiException(HttpStatus.CONFLICT, errorCode.CONFLICT, "Dữ liệu Huynh Trưởng bị trùng hoặc xung đột với dữ liệu hiện có");
         }
+    }
+
+    /**
+     * Chuyển huynh trưởng sang giáo xứ khác: chức năng riêng, cần quyền chuyển (giáo phận / giáo hạt) và giáo xứ đích phải nằm trong phạm vi của người thao tác.
+     * Giáo xứ đích phải đang hoạt động. Xong thì báo cho tài khoản xem hồ sơ huynh trưởng của giáo xứ nguồn và đích.
+     */
+    @EvictCaches.Analytics
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DIOCESE_DETAIL, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DEANERY_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DEANERY_DETAIL, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.PARISH_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.PARISH_DETAIL, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.LEADER_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.LEADER_DETAIL, allEntries = true)
+    })
+    @EvictCaches.Certificates
+    @EvictCaches.ExecutiveAssignments
+    public LeaderResponse transfer(UUID id, LeaderTransferRequest request, Authentication authentication) {
+        Leader existingLeader = leaderValidationHelper.requireExistingLeaderWithParish(id);
+        String auditActor = leaderValidationHelper.getRequiredAuditActor(authentication);
+        Parish source = existingLeader.getParish();
+        if (request.getParishId().equals(source == null ? null : source.getId())) {
+            throw badRequest("Huynh trưởng đang thuộc giáo xứ này");
+        }
+        Parish target = leaderValidationHelper.requireExistingParish(request.getParishId());
+        leaderScopeHelper.enforceTransferScope(authentication, target.getId());
+        // Giáo xứ nguồn bị khóa vẫn được chuyển đi; giáo xứ đích phải đang hoạt động.
+        requireParishOperational(target.getId());
+
+        leaderRepository.setParish(id, target.getId(), auditActor);
+        announceTransfer(existingLeader, target, auditActor);
+        return toLeaderResponse(leaderValidationHelper.requireExistingLeaderWithParish(id));
     }
 
     /**
@@ -314,6 +349,10 @@ public class LeaderService {
         }
     }
 
+    private ApiException badRequest(String message) {
+        return new ApiException(HttpStatus.BAD_REQUEST, errorCode.VALIDATION_ERROR, message);
+    }
+
     private ApiException avatarCannotBeRemoved() {
         return new ApiException(HttpStatus.BAD_REQUEST, errorCode.VALIDATION_ERROR, "Không thể xóa ảnh đại diện, chỉ có thể thay bằng ảnh khác");
     }
@@ -347,6 +386,15 @@ public class LeaderService {
         String auditActor = leaderValidationHelper.getRequiredAuditActor(authentication);
         leaderRepository.toggleStatus(id, auditActor);
         return toLeaderResponse(leaderValidationHelper.requireExistingLeaderWithParish(id));
+    }
+
+    // Thông báo chuyển giáo xứ chỉ là phụ: lỗi gửi thông báo không làm hỏng việc chuyển đã lưu.
+    private void announceTransfer(Leader leader, Parish target, String actor) {
+        try {
+            leaderTransferNotifier.announce(leader, leader.getParish(), target, actor);
+        } catch (RuntimeException exception) {
+            LoggerFactory.getLogger(LeaderService.class).warn("Không gửi được thông báo chuyển giáo xứ của huynh trưởng {}", leader.getId(), exception);
+        }
     }
 
     private void requireParishOperational(UUID parishId) {

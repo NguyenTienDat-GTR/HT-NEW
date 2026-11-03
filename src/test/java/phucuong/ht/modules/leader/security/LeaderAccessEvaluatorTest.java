@@ -186,6 +186,23 @@ class LeaderAccessEvaluatorTest {
         assertTrue(leaderAccessEvaluator.canToggle(authentication, leaderId));
     }
 
+    @Test
+    void canTransferRequiresTransferAuthorityInScopeAndDeniesParishAdmin() {
+        UUID leaderId = UUID.randomUUID();
+        UUID deaneryId = UUID.randomUUID();
+        Authentication deanery = authentication("admin-deanery", null, List.of("ADMIN_DEANERY"), List.of(LeaderAccessEvaluator.TRANSFER_DEANERY));
+        when(accountRepository.findActiveDeaneryIdByUsername("admin-deanery")).thenReturn(Optional.of(deaneryId));
+        when(leaderRepository.findDeaneryIdByLeaderId(leaderId)).thenReturn(Optional.of(deaneryId));
+        assertTrue(leaderAccessEvaluator.canTransfer(deanery, leaderId));
+
+        // Có quyền sửa nhưng không có quyền chuyển thì không được chuyển.
+        Authentication updateOnly = authentication("admin-deanery", null, List.of("ADMIN_DEANERY"), List.of(LeaderAccessEvaluator.UPDATE_DEANERY));
+        assertFalse(leaderAccessEvaluator.canTransfer(updateOnly, leaderId));
+
+        Authentication parish = authentication("admin-parish", null, List.of("ADMIN_PARISH"), List.of(LeaderAccessEvaluator.UPDATE_PARISH));
+        assertFalse(leaderAccessEvaluator.canTransfer(parish, leaderId));
+    }
+
     private Authentication authentication(String username, String leaderId, List<String> roles, List<String> permissions) {
         AuthUserDetails principal = AuthUserDetails.tokenPrincipal(username, leaderId, roles, permissions);
         return new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
