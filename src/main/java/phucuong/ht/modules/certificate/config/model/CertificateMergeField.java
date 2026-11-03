@@ -24,10 +24,10 @@ public enum CertificateMergeField {
     COURSE_START_DATE("courseStartDate", "Ngày bắt đầu", "Khóa huấn luyện"),
     COURSE_END_DATE("courseEndDate", "Ngày kết thúc", "Khóa huấn luyện"),
     COURSE_PERIOD("coursePeriod", "Thời gian tổ chức", "Khóa huấn luyện"),
+    COURSE_LOCATION("courseLocation", "Địa điểm", "Khóa huấn luyện"),
     RESULTING_LEVEL("resultingLevel", "Cấp độ đạt được", "Khóa huấn luyện"),
 
     CERTIFICATE_CODE("certificateCode", "Mã chứng nhận", "Chứng nhận"),
-    CERTIFICATE_NAME("certificateName", "Tên chứng nhận", "Chứng nhận"),
     RESULT("result", "Kết quả", "Chứng nhận"),
     ISSUE_DATE("issueDate", "Ngày cấp", "Chứng nhận");
 
