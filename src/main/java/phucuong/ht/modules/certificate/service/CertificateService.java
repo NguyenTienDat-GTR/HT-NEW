@@ -100,6 +100,32 @@ public class CertificateService {
         return new PageImpl<>(page.getContent().stream().map(this::toResponse).toList(), page.getPageable(), page.getTotalElements());
     }
 
+    // Mã mọi chứng nhận đã duyệt của một khóa trong phạm vi tài khoản được xem (dùng khi xuất PDF mà không chọn hồ sơ nào).
+    public List<String> findApprovedCodesByCourse(String courseCode, Authentication authentication) {
+        List<Map<String, Object>> groups = accountScopeResolver.scopes(authentication, "training.certificate.read.diocese", "training.certificate.read.deanery", null)
+                .groups(Map.of(AccountScopeResolver.Level.DIOCESE, DIOCESE_FILTER_FIELD, AccountScopeResolver.Level.DEANERY, DEANERY_FILTER_FIELD));
+        if (groups.isEmpty()) {
+            throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền xem chứng chỉ");
+        }
+        List<String> codes = new java.util.ArrayList<>();
+        int pageNumber = 0;
+        Page<Certificate> page;
+        do {
+            BaseSearchRequest request = new BaseSearchRequest();
+            request.setPage(pageNumber++);
+            request.setSize(BaseSearchRequest.MAX_PAGE_SIZE);
+            request.setSortBy("certificateCode");
+            request.setFilters(new java.util.LinkedHashMap<>(Map.of("course.courseCode", courseCode)));
+            request.setScopeAnyOf(groups);
+            page = certificateRepository.findAll(request);
+            page.getContent().stream()
+                    .filter(certificate -> certificate.getApprovalStatus() == WorkflowApprovalStatus.APPROVED)
+                    .map(Certificate::getCertificateCode)
+                    .forEach(codes::add);
+        } while (page.hasNext());
+        return codes;
+    }
+
     // Chứng nhận của một huynh trưởng (kể cả đã thu hồi), mới cấp nhất trước. Quyền kiểm tra ở controller theo phạm vi quản lý huynh trưởng.
     @Cacheable(cacheNames = CacheNames.CERTIFICATE_LIST, key = "@cacheScopeKeyHelper.detailKey(#authentication, 'leader-certificates:' + #leaderId)")
     public List<CertificateResponse> findByLeader(UUID leaderId, Authentication authentication) {
