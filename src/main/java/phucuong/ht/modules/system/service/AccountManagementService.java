@@ -77,6 +77,7 @@ public class AccountManagementService {
         if (roleCodes.isEmpty()) {
             throw validation.validationError("Vui lòng chọn ít nhất một vai trò");
         }
+        AccountRoleCombinationPolicy.require(roleCodes, validation);
         String primaryRoleCode = resolveCreatePrimaryRole(request, roleCodes);
         List<Role> roles = roleCodes.stream()
                 .map(roleCode -> roleRepository.findByRoleCodeAndStatusTrue(roleCode)

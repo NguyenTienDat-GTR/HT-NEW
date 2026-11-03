@@ -242,39 +242,30 @@ public abstract class BaseRepo<T extends BaseModel, ID> {
 
         Map<String, Object> filters = request.getFilters() == null ? Map.of() : request.getFilters();
         for (Map.Entry<String, Object> entry : filters.entrySet()) {
-            String fieldPath = normalizeFieldPath(entry.getKey());
-            Object filterValue = entry.getValue();
-            if (!StringUtils.hasText(fieldPath) || filterValue == null) {
-                continue;
+            Predicate predicate = filterPredicate(cb, root, entry.getKey(), entry.getValue());
+            if (predicate != null) {
+                predicates.add(predicate);
             }
+        }
 
-            // Lọc theo năm của một trường ngày: `issueDate:year` = 2026 (hoặc danh sách năm) -> trong khoảng 01/01 - 31/12.
-            if (fieldPath.endsWith(YearFilterPredicate.SUFFIX)) {
-                predicates.add(YearFilterPredicate.build(cb, resolvePath(root, fieldPath.substring(0, fieldPath.length() - YearFilterPredicate.SUFFIX.length())), filterValue));
-                continue;
-            }
-
-            // Lọc theo năm trong khoảng ngày: `startDate+endDate:overlapYear` = 2026 -> bản ghi có khoảng ngày giao với năm đó.
-            if (fieldPath.endsWith(YearFilterPredicate.OVERLAP_SUFFIX)) {
-                String[] bounds = fieldPath.substring(0, fieldPath.length() - YearFilterPredicate.OVERLAP_SUFFIX.length()).split("\\+");
-                if (bounds.length != 2) {
-                    throw new IllegalArgumentException("Bộ lọc năm theo khoảng ngày cần dạng trườngBắtĐầu+trườngKếtThúc:overlapYear");
+        // Phạm vi theo quyền: hợp (OR) các nhóm điều kiện; mỗi nhóm là tập điều kiện cùng đúng (AND).
+        List<Map<String, Object>> scopeGroups = request.getScopeAnyOf() == null ? List.of() : request.getScopeAnyOf();
+        if (!scopeGroups.isEmpty()) {
+            List<Predicate> groupPredicates = new ArrayList<>();
+            for (Map<String, Object> group : scopeGroups) {
+                List<Predicate> conditions = new ArrayList<>();
+                for (Map.Entry<String, Object> entry : group.entrySet()) {
+                    Predicate predicate = filterPredicate(cb, root, entry.getKey(), entry.getValue());
+                    if (predicate != null) {
+                        conditions.add(predicate);
+                    }
                 }
-                predicates.add(YearFilterPredicate.buildOverlap(cb, resolvePath(root, bounds[0].trim()), resolvePath(root, bounds[1].trim()), filterValue));
-                continue;
-            }
-
-            Path<?> path = resolvePath(root, fieldPath);
-            if (filterValue instanceof Collection<?> collection) {
-                List<Object> converted = new ArrayList<>();
-                for (Object item : collection) {
-                    converted.add(convertValue(item, path.getJavaType()));
+                if (!conditions.isEmpty()) {
+                    groupPredicates.add(cb.and(conditions.toArray(Predicate[]::new)));
                 }
-                predicates.add(path.in(converted));
-                continue;
             }
-
-            predicates.add(cb.equal(path, convertValue(filterValue, path.getJavaType())));
+            // Có phạm vi nhưng không nhóm nào dùng được: không được trả dữ liệu ngoài phạm vi.
+            predicates.add(groupPredicates.isEmpty() ? cb.disjunction() : cb.or(groupPredicates.toArray(Predicate[]::new)));
         }
 
         if (StringUtils.hasText(request.getSearch()) && request.getSearchFields() != null && !request.getSearchFields().isEmpty()) {
@@ -300,6 +291,41 @@ public abstract class BaseRepo<T extends BaseModel, ID> {
         }
 
         return predicates;
+    }
+
+    /**
+     * Builds one filter predicate from a key/value pair; returns null when the entry carries no usable value.
+     */
+    private Predicate filterPredicate(CriteriaBuilder cb, Root<T> root, String key, Object filterValue) {
+        String fieldPath = normalizeFieldPath(key);
+        if (!StringUtils.hasText(fieldPath) || filterValue == null) {
+            return null;
+        }
+
+        // Lọc theo năm của một trường ngày: `issueDate:year` = 2026 (hoặc danh sách năm) -> trong khoảng 01/01 - 31/12.
+        if (fieldPath.endsWith(YearFilterPredicate.SUFFIX)) {
+            return YearFilterPredicate.build(cb, resolvePath(root, fieldPath.substring(0, fieldPath.length() - YearFilterPredicate.SUFFIX.length())), filterValue);
+        }
+
+        // Lọc theo năm trong khoảng ngày: `startDate+endDate:overlapYear` = 2026 -> bản ghi có khoảng ngày giao với năm đó.
+        if (fieldPath.endsWith(YearFilterPredicate.OVERLAP_SUFFIX)) {
+            String[] bounds = fieldPath.substring(0, fieldPath.length() - YearFilterPredicate.OVERLAP_SUFFIX.length()).split("\\+");
+            if (bounds.length != 2) {
+                throw new IllegalArgumentException("Bộ lọc năm theo khoảng ngày cần dạng trườngBắtĐầu+trườngKếtThúc:overlapYear");
+            }
+            return YearFilterPredicate.buildOverlap(cb, resolvePath(root, bounds[0].trim()), resolvePath(root, bounds[1].trim()), filterValue);
+        }
+
+        Path<?> path = resolvePath(root, fieldPath);
+        if (filterValue instanceof Collection<?> collection) {
+            List<Object> converted = new ArrayList<>();
+            for (Object item : collection) {
+                converted.add(convertValue(item, path.getJavaType()));
+            }
+            return path.in(converted);
+        }
+
+        return cb.equal(path, convertValue(filterValue, path.getJavaType()));
     }
 
     /**

@@ -191,6 +191,7 @@ POST /api/training/courses|200|401|403|400|404|409
 GET /api/training/courses|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
 GET /api/training/courses/recipient-candidates|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
 GET /api/training/courses/registrable|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/training/courses/registration-senders|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
 GET /api/training/courses/{courseCode}|200|401|403|N/A: course code is an opaque string|404|N/A: read-only endpoint does not mutate state
 PUT /api/training/courses/{courseCode}|200|401|403|400|404|409
 PATCH /api/training/courses/{courseCode}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict

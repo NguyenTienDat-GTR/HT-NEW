@@ -11,6 +11,9 @@ import java.util.UUID;
 @Setter
 public class TrainingRegistrationRequest {
 
+    // Tư cách gửi (DIOCESE | DEANERY | PARISH) khi tài khoản có nhiều tư cách; bỏ trống thì hệ thống chọn tư cách phù hợp với khóa.
+    private phucuong.ht.common.enums.UnitType senderType;
+
     // Danh sách đăng ký thường: chỉ gồm huynh trưởng đủ điều kiện. Có thể rỗng nếu chỉ gửi danh sách ngoại lệ.
     private List<UUID> leaderIds;
 

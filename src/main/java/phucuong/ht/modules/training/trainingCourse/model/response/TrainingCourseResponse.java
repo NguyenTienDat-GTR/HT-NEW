@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.UUID;
 
 @Getter
-@Builder
+@Builder(toBuilder = true)
 public class TrainingCourseResponse {
 
     // Giáo hạt mà khóa giáo phận dành cho.
@@ -22,6 +22,8 @@ public class TrainingCourseResponse {
     }
 
     private String courseCode;
+    // Tài khoản đang xem có thuộc đơn vị sở hữu khóa không (null: không xác định). Không sở hữu thì điểm đạt và thành phần điểm bị ẩn.
+    private Boolean viewerOwnsCourse;
     private String courseName;
     private String courseTypeCode;
     private String courseTypeName;

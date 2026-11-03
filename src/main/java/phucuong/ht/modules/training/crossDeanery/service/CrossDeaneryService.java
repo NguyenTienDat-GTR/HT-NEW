@@ -83,6 +83,7 @@ public class CrossDeaneryService {
     private final CourseActivityGuard courseActivityGuard;
     private final CommonValidationHelper commonValidationHelper;
     private final AccountScopeValidationHelper accountScopeValidationHelper;
+    private final phucuong.ht.modules.training.RegistrationSenderResolver registrationSenderResolver;
     private final securityUtils securityUtils;
     private final LeaderLevelService leaderLevelService;
     private final TrainingNotificationRecipientResolver notificationRecipientResolver;
@@ -466,7 +467,7 @@ public class CrossDeaneryService {
     }
 
     private Sender resolveSender(Authentication authentication) {
-        if (securityUtils.hasAuthority(authentication, CourseParticipationAccessEvaluator.SUBMIT_DEANERY) && accountScopeValidationHelper.hasDirectDeanery(authentication)) {
+        if (registrationSenderResolver.available(authentication).contains(UnitType.DEANERY)) {
             UUID id = accountScopeValidationHelper.requireActiveDeaneryId(authentication, CourseParticipationAccessEvaluator.SUBMIT_DEANERY);
             Deanery deanery = deaneryRepository.findById(id).orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy giáo hạt " + id));
             return new Sender(UnitType.DEANERY, id, null, deanery.getName(), deanery);

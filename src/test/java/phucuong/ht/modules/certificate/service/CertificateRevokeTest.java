@@ -88,7 +88,7 @@ class CertificateRevokeTest {
         service = new CertificateService(
                 certificateRepository, mock(TrainingCourseRepository.class), mock(LeaderRepository.class),
                 participationRepository, lifecycle, new CourseActivityGuard(validationHelper), new TrainingWorkflowSupport(),
-                mock(AccountScopeValidationHelper.class), validationHelper, eventPublisher,
+                mock(AccountScopeValidationHelper.class), mock(phucuong.ht.common.security.AccountScopeResolver.class), validationHelper, eventPublisher,
                 mock(CertificateRealtimeNotifier.class), mock(CertificateAccessEvaluator.class), courseFinishService, org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class));
 
         leader = new Leader();

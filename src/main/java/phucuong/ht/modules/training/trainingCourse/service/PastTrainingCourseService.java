@@ -133,16 +133,44 @@ public class PastTrainingCourseService {
     public record Owner(UUID dioceseId, UUID deaneryId) {
     }
 
+    /** Đơn vị sở hữu dùng khi tạo khóa mới: ưu tiên giáo phận, thiếu thì giáo hạt. */
     public Owner resolveActorOwner(Authentication authentication) {
         if (securityUtils.hasAuthority(authentication, TrainingCourseAccessEvaluator.CREATE_PAST_DIOCESE)) {
             return new Owner(accountScopeValidationHelper.requireActiveDioceseId(authentication, TrainingCourseAccessEvaluator.CREATE_PAST_DIOCESE), null);
         }
+        return deaneryOwner(authentication);
+    }
+
+    private Owner deaneryOwner(Authentication authentication) {
         UUID deaneryId = accountScopeValidationHelper.requireActiveDeaneryId(authentication, TrainingCourseAccessEvaluator.CREATE_PAST_DEANERY);
         var deanery = deaneryRepository.getRequired(deaneryId);
         if (deanery.getDiocese() == null) {
             throw commonValidationHelper.conflict("Giáo hạt chưa thuộc giáo phận nào");
         }
         return new Owner(deanery.getDiocese().getId(), deaneryId);
+    }
+
+    /** Mọi đơn vị sở hữu khóa quá khứ mà tài khoản được thao tác (giáo phận và/hoặc giáo hạt, theo từng quyền). */
+    private java.util.List<Owner> resolveActorOwners(Authentication authentication) {
+        java.util.List<Owner> owners = new java.util.ArrayList<>();
+        if (securityUtils.hasAuthority(authentication, TrainingCourseAccessEvaluator.CREATE_PAST_DIOCESE)) {
+            owners.add(new Owner(accountScopeValidationHelper.requireActiveDioceseId(authentication, TrainingCourseAccessEvaluator.CREATE_PAST_DIOCESE), null));
+        }
+        if (securityUtils.hasAuthority(authentication, TrainingCourseAccessEvaluator.CREATE_PAST_DEANERY)) {
+            if (owners.isEmpty()) {
+                owners.add(deaneryOwner(authentication));
+            } else {
+                try {
+                    owners.add(deaneryOwner(authentication));
+                } catch (phucuong.ht.common.exception.ApiException noDeanery) {
+                    // Có quyền giáo phận nhưng không có giáo hạt hiệu lực: chỉ dùng phạm vi giáo phận.
+                }
+            }
+        }
+        if (owners.isEmpty()) {
+            owners.add(resolveActorOwner(authentication));
+        }
+        return owners;
     }
 
     /** Giáo phận chứa đơn vị sở hữu khóa (khóa giáo hạt lấy theo giáo hạt). */
@@ -159,12 +187,14 @@ public class PastTrainingCourseService {
         if (!course.isPast()) {
             throw commonValidationHelper.conflict("Đây không phải khóa huấn luyện quá khứ");
         }
-        Owner owner = resolveActorOwner(authentication);
-        boolean owned = owner.deaneryId() != null
+        java.util.List<Owner> owners = resolveActorOwners(authentication);
+        boolean owned = owners.stream().anyMatch(owner -> owner.deaneryId() != null
                 ? course.getDeanery() != null && owner.deaneryId().equals(course.getDeanery().getId())
-                : course.getDeanery() == null && course.getDiocese() != null && owner.dioceseId().equals(course.getDiocese().getId());
+                : course.getDeanery() == null && course.getDiocese() != null && owner.dioceseId().equals(course.getDiocese().getId()));
         if (!owned) {
-            throw commonValidationHelper.forbidden(owner.deaneryId() != null
+            throw commonValidationHelper.forbidden(owners.size() > 1
+                    ? "Không thể thao tác khóa huấn luyện ngoài phạm vi của tài khoản"
+                    : owners.get(0).deaneryId() != null
                     ? "Không thể thao tác khóa huấn luyện ngoài giáo hạt hiện tại"
                     : "Không thể thao tác khóa huấn luyện ngoài giáo phận hiện tại");
         }
