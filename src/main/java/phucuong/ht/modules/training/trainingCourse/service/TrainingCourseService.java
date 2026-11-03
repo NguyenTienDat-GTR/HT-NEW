@@ -178,8 +178,9 @@ public class TrainingCourseService {
         // Số tham dự viên đã duyệt của cả trang trong một truy vấn.
         Map<String, Long> approvedCounts = courseParticipationRepository.countApprovedByCourseCodes(
                 page.getContent().stream().map(TrainingCourse::getCourseCode).toList());
+        Viewer viewer = viewerOf(authentication);
         List<TrainingCourseResponse> content = page.getContent().stream()
-                .map(course -> toResponse(course, null, approvedCounts.getOrDefault(course.getCourseCode(), 0L)))
+                .map(course -> forViewer(toResponse(course, null, approvedCounts.getOrDefault(course.getCourseCode(), 0L)), course, viewer))
                 .toList();
         return new PageImpl<>(content, page.getPageable(), page.getTotalElements());
     }
@@ -225,8 +226,9 @@ public class TrainingCourseService {
         if (dioceseId == null && deaneryId == null) {
             throw commonValidationHelper.forbidden("Tài khoản hiện tại không có phạm vi hợp lệ để đăng ký khóa huấn luyện");
         }
+        Viewer viewer = viewerOf(authentication);
         return trainingCourseRepository.findOpenForRegistration(dioceseId, deaneryId).stream()
-                .map(this::toResponse)
+                .map(course -> forViewer(toResponse(course), course, viewer))
                 .toList();
     }
 
@@ -246,9 +248,44 @@ public class TrainingCourseService {
     @Cacheable(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, key = "@cacheScopeKeyHelper.detailKey(#authentication, #courseCode)")
     @Transactional(readOnly = true)
     public TrainingCourseResponse findById(String courseCode, Authentication authentication) {
-        return toResponse(trainingCourseRepository.findByCodeWithType(courseCode)
-                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy khóa huấn luyện " + courseCode)),
-                courseParticipationRepository.existsByCourseCode(courseCode));
+        TrainingCourse course = trainingCourseRepository.findByCodeWithType(courseCode)
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy khóa huấn luyện " + courseCode));
+        return forViewer(toResponse(course, courseParticipationRepository.existsByCourseCode(courseCode)), course, viewerOf(authentication));
+    }
+
+    // Quyền cấp khóa (training.course.*) theo cấp và đơn vị của người xem: dùng để biết có thuộc đơn vị sở hữu khóa hay không.
+    private record Viewer(boolean dioceseCourseRole, boolean deaneryCourseRole, UUID dioceseId, UUID deaneryId) {
+    }
+
+    private Viewer viewerOf(Authentication authentication) {
+        String username = securityUtils.currentUsername(authentication);
+        if (authentication == null || username == null || username.isBlank()) {
+            return new Viewer(false, false, null, null);
+        }
+        boolean diocese = false;
+        boolean deanery = false;
+        for (org.springframework.security.core.GrantedAuthority granted : authentication.getAuthorities()) {
+            String authority = granted.getAuthority();
+            if (authority == null || !authority.startsWith("training.course.")) {
+                continue;
+            }
+            diocese |= authority.endsWith(".diocese");
+            deanery |= authority.endsWith(".deanery");
+        }
+        return new Viewer(diocese, deanery,
+                diocese ? accountRepository.findActiveDioceseIdByUsername(username).orElse(null) : null,
+                deanery ? accountRepository.findActiveDeaneryIdByUsername(username).orElse(null) : null);
+    }
+
+    // Điểm đạt và thành phần điểm chỉ dành cho đơn vị sở hữu khóa (giáo phận với khóa giáo phận, giáo hạt với khóa giáo hạt).
+    private TrainingCourseResponse forViewer(TrainingCourseResponse response, TrainingCourse course, Viewer viewer) {
+        boolean owns = trainingWorkflowSupport.isDeaneryManaged(course)
+                ? viewer.deaneryCourseRole() && viewer.deaneryId() != null && course.getDeanery() != null && viewer.deaneryId().equals(course.getDeanery().getId())
+                : viewer.dioceseCourseRole() && viewer.dioceseId() != null && course.getDiocese() != null && viewer.dioceseId().equals(course.getDiocese().getId());
+        if (owns) {
+            return response.toBuilder().viewerOwnsCourse(true).build();
+        }
+        return response.toBuilder().viewerOwnsCourse(false).passingScore(null).scoreComponents(null).build();
     }
 
     @Caching(evict = {
@@ -802,7 +839,8 @@ public class TrainingCourseService {
                 .courseName(course.getCourseName())
                 .courseTypeCode(courseType == null ? null : courseType.getTypeCode())
                 .courseTypeName(courseType == null ? null : courseType.getTypeName())
-                .managementUnitType(courseType == null ? null : courseType.getManagementUnitType())
+                .managementUnitType(courseType != null && courseType.getManagementUnitType() != null ? courseType.getManagementUnitType()
+                        : trainingWorkflowSupport.isDeaneryManaged(course) ? UnitType.DEANERY : UnitType.DIOCESE)
                 .hostYear(course.getHostYear())
                 .yearsActive(course.getYearsActive() == null ? 0 : course.getYearsActive())
                 .hasParticipations(hasParticipations)

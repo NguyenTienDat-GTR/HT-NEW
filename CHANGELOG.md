@@ -11,6 +11,7 @@
   - `GET /api/training/courses/registration-senders` liệt kê các tư cách.
   - `GET /api/training/courses/registrable`, `GET .../registration-candidates` và `POST .../registrations` nhận `senderType` (tùy chọn); bỏ trống thì chọn tư cách phù hợp với khóa.
 - Mỗi tài khoản tối đa 3 vai trò (tạo tài khoản, gán, gán hàng loạt, đổi vai trò, bật lại vai trò). SUPER_ADMIN và ADMIN_DIOCESE vẫn phải là vai trò duy nhất, nay kiểm tra cả ở `AccountRoleService`.
+- Thông tin khóa: luôn trả cấp quản lý (`managementUnitType`, khóa quá khứ suy từ đơn vị sở hữu) và cờ `viewerOwnsCourse`; điểm đạt và thành phần điểm chỉ trả cho đơn vị sở hữu khóa (danh sách, chi tiết và khóa đang mở đăng ký).
 
 ### Phiên bản hệ thống
 - Phiên bản 1.0.0 (`build.gradle`, `springBoot { buildInfo() }`).

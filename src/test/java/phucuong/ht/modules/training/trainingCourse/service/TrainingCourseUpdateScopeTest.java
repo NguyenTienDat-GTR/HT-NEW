@@ -311,6 +311,66 @@ class TrainingCourseUpdateScopeTest {
                 authentication("nobody", "training.certificate.read.deanery")));
     }
 
+    private TrainingCourse dioceseCourse(String code, UUID dioceseId) {
+        Diocese diocese = new Diocese();
+        diocese.setId(dioceseId);
+        TrainingCourse course = new TrainingCourse();
+        course.setCourseCode(code);
+        course.setCourseName("Khóa giáo phận");
+        course.setCourseType(courseType("REGULAR", UnitType.DIOCESE));
+        course.setDiocese(diocese);
+        course.setPassingScore(java.math.BigDecimal.valueOf(5));
+        return course;
+    }
+
+    @Test
+    void courseDetailShowsPassingScoreAndScoreComponentsOnlyToTheOwningUnit() {
+        UUID dioceseId = UUID.randomUUID();
+        TrainingCourse course = dioceseCourse("KH-GP", dioceseId);
+        when(trainingCourseRepository.findByCodeWithType("KH-GP")).thenReturn(Optional.of(course));
+        when(accountRepository.findActiveDioceseIdByUsername("diocese-admin")).thenReturn(Optional.of(dioceseId));
+
+        var response = service().findById("KH-GP", authentication("diocese-admin", "training.course.read.diocese"));
+
+        assertEquals(Boolean.TRUE, response.getViewerOwnsCourse());
+        assertEquals(java.math.BigDecimal.valueOf(5), response.getPassingScore());
+        org.junit.jupiter.api.Assertions.assertNotNull(response.getScoreComponents());
+        assertEquals(UnitType.DIOCESE, response.getManagementUnitType());
+    }
+
+    @Test
+    void courseDetailHidesPassingScoreAndScoreComponentsFromDeaneryAndParishAdminsOfTheSameDiocese() {
+        UUID dioceseId = UUID.randomUUID();
+        UUID deaneryId = UUID.randomUUID();
+        TrainingCourse course = dioceseCourse("KH-GP", dioceseId);
+        when(trainingCourseRepository.findByCodeWithType("KH-GP")).thenReturn(Optional.of(course));
+        when(accountRepository.findActiveDeaneryIdByUsername("multi-role")).thenReturn(Optional.of(deaneryId));
+
+        var response = service().findById("KH-GP", authentication("multi-role",
+                "training.course.read.deanery", "training.course.update.deanery", "training.participation.submit.parish"));
+
+        assertEquals(Boolean.FALSE, response.getViewerOwnsCourse());
+        org.junit.jupiter.api.Assertions.assertNull(response.getPassingScore());
+        org.junit.jupiter.api.Assertions.assertNull(response.getScoreComponents());
+        assertEquals("Khóa giáo phận", response.getCourseName());
+        assertEquals(UnitType.DIOCESE, response.getManagementUnitType());
+    }
+
+    @Test
+    void courseDetailKeepsScoreInfoForTheOwningDeaneryOfADeaneryCourse() {
+        UUID deaneryId = UUID.randomUUID();
+        TrainingCourse course = deaneryCourse("KH-GH", deaneryId);
+        course.setPassingScore(java.math.BigDecimal.valueOf(6));
+        when(trainingCourseRepository.findByCodeWithType("KH-GH")).thenReturn(Optional.of(course));
+        when(accountRepository.findActiveDeaneryIdByUsername("deanery-admin")).thenReturn(Optional.of(deaneryId));
+
+        var response = service().findById("KH-GH", authentication("deanery-admin", "training.course.read.deanery"));
+
+        assertEquals(Boolean.TRUE, response.getViewerOwnsCourse());
+        assertEquals(java.math.BigDecimal.valueOf(6), response.getPassingScore());
+        assertEquals(UnitType.DEANERY, response.getManagementUnitType());
+    }
+
     private TrainingCourseType courseType(String code, UnitType managementUnitType) {
         TrainingCourseType type = new TrainingCourseType();
         type.setTypeCode(code);
