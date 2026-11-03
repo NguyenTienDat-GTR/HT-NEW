@@ -29,6 +29,8 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -252,6 +254,43 @@ class AccountRoleServiceTest {
 
         assertEquals(1, responses.size());
         assertEquals("ADMIN_PARISH", responses.get(0).getRoleCode());
+    }
+
+    @Test
+    void bulkAssignRejectsAnAccountThatWouldHoldMoreThanThreeRoles() {
+        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()), accountManagementAuthorizationHelper, org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class));
+        Account account = dioceseAccount("target", UUID.randomUUID());
+        AccountRoleBulkRequest request = new AccountRoleBulkRequest();
+        request.setUsername("target");
+        request.setRoleCodes(List.of("ADMIN_PARISH", "CUSTOM_B"));
+
+        when(accountRepository.findById("target")).thenReturn(Optional.of(account));
+        when(accountRoleRepository.findActiveRoleCodesByUsername("target")).thenReturn(List.of("ADMIN_DEANERY", "CUSTOM_A"));
+
+        RuntimeException error = assertThrows(RuntimeException.class, () -> accountRoleService.bulkAssign(
+                request,
+                authentication("super-admin", List.of("SUPER_ADMIN"), List.of("system.account_role.assign.all"))
+        ));
+        assertEquals("Mỗi tài khoản tối đa 3 vai trò", error.getMessage());
+        verify(accountRoleRepository, never()).save(any(AccountRole.class));
+    }
+
+    @Test
+    void bulkAssignRejectsAddingARoleToAnAccountThatHoldsAdminDiocese() {
+        accountRoleService = new AccountRoleService(accountRepository, accountRoleRepository, roleRepository, new CommonValidationHelper(new securityUtils()), accountManagementAuthorizationHelper, org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class));
+        Account account = dioceseAccount("target", UUID.randomUUID());
+        AccountRoleBulkRequest request = new AccountRoleBulkRequest();
+        request.setUsername("target");
+        request.setRoleCodes(List.of("ADMIN_PARISH"));
+
+        when(accountRepository.findById("target")).thenReturn(Optional.of(account));
+        when(accountRoleRepository.findActiveRoleCodesByUsername("target")).thenReturn(List.of("ADMIN_DIOCESE"));
+
+        assertThrows(RuntimeException.class, () -> accountRoleService.bulkAssign(
+                request,
+                authentication("super-admin", List.of("SUPER_ADMIN"), List.of("system.account_role.assign.all"))
+        ));
+        verify(accountRoleRepository, never()).save(any(AccountRole.class));
     }
 
     @Test

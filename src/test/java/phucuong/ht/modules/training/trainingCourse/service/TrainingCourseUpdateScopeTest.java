@@ -259,6 +259,8 @@ class TrainingCourseUpdateScopeTest {
                 deaneryRepository,
                 new TrainingWorkflowSupport(),
                 accountScopeValidationHelper,
+                new phucuong.ht.common.security.AccountScopeResolver(new securityUtils(), accountRepository),
+                org.mockito.Mockito.mock(phucuong.ht.modules.training.RegistrationSenderResolver.class),
                 new CommonValidationHelper(new securityUtils()),
                 new securityUtils(),
                 new phucuong.ht.modules.training.courseScoreComponent.service.CourseScoreComponentService(courseScoreComponentRepository, new CommonValidationHelper(new securityUtils())),
@@ -274,6 +276,39 @@ class TrainingCourseUpdateScopeTest {
                 org.mockito.Mockito.mock(phucuong.ht.modules.leaderLevel.service.LeaderLevelService.class),
                 org.mockito.Mockito.mock(phucuong.ht.modules.certificate.service.CertificateRealtimeNotifier.class)
         , org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class));
+    }
+
+    @Test
+    void findAllMergesDeaneryCoursesWithOpenDioceseAndDeaneryCoursesForMultiRoleAccounts() {
+        UUID dioceseId = UUID.randomUUID();
+        UUID deaneryId = UUID.randomUUID();
+        when(accountRepository.findActiveDioceseIdByUsername("multi-role")).thenReturn(Optional.of(dioceseId));
+        when(accountRepository.findActiveDeaneryIdByUsername("multi-role")).thenReturn(Optional.of(deaneryId));
+        when(trainingCourseRepository.findAll(any(phucuong.ht.common.repository.BaseSearchRequest.class)))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of()));
+        org.mockito.ArgumentCaptor<phucuong.ht.common.repository.BaseSearchRequest> captor =
+                org.mockito.ArgumentCaptor.forClass(phucuong.ht.common.repository.BaseSearchRequest.class);
+
+        service().findAll(new phucuong.ht.common.repository.BaseSearchRequest(),
+                authentication("multi-role", TrainingCourseAccessEvaluator.READ_DEANERY, TrainingCourseAccessEvaluator.SUBMIT_PARISH));
+
+        verify(trainingCourseRepository).findAll(captor.capture());
+        java.util.Map<String, Object> ownDeaneryCourses = java.util.Map.of("deanery.id", deaneryId);
+        java.util.Map<String, Object> openDioceseCourses = new java.util.LinkedHashMap<>();
+        openDioceseCourses.put("diocese.id", dioceseId);
+        openDioceseCourses.put("status", Boolean.TRUE);
+        openDioceseCourses.put("registrationStatus", CourseRegistrationStatus.OPEN);
+        java.util.Map<String, Object> openDeaneryCourses = new java.util.LinkedHashMap<>();
+        openDeaneryCourses.put("deanery.id", deaneryId);
+        openDeaneryCourses.put("status", Boolean.TRUE);
+        openDeaneryCourses.put("registrationStatus", CourseRegistrationStatus.OPEN);
+        assertEquals(List.of(ownDeaneryCourses, openDioceseCourses, openDeaneryCourses), captor.getValue().getScopeAnyOf());
+    }
+
+    @Test
+    void findAllRejectsAccountsWithoutAnyCourseReadPermission() {
+        assertThrows(RuntimeException.class, () -> service().findAll(new phucuong.ht.common.repository.BaseSearchRequest(),
+                authentication("nobody", "training.certificate.read.deanery")));
     }
 
     private TrainingCourseType courseType(String code, UnitType managementUnitType) {

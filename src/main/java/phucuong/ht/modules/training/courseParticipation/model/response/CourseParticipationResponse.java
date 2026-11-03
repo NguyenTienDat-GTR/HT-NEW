@@ -61,6 +61,9 @@ public class CourseParticipationResponse {
     private String deaneryName;
     // Cấp quản lý khóa (DEANERY/DIOCESE): quyết định endpoint duyệt phù hợp.
     private phucuong.ht.common.enums.UnitType managementUnitType;
+    // Đơn vị sở hữu khóa (giáo phận hoặc giáo hạt): để giao diện chỉ hiện thao tác duyệt/chấm điểm trên hồ sơ của khóa thuộc đúng cấp của tài khoản.
+    private java.util.UUID courseDioceseId;
+    private java.util.UUID courseDeaneryId;
     private WorkflowApprovalStatus certificateApprovalStatus;
     private OffsetDateTime certificateRequestedAt;
     private OffsetDateTime certificateApprovedAt;

@@ -30,7 +30,11 @@ public class SearchService {
 
     private enum Level { ALL, DIOCESE, DEANERY, PARISH }
 
-    private record Scope(Level level, UUID id) {
+    private record Scope(Level level, UUID id, UUID deaneryId) {
+        Scope(Level level, UUID id) {
+            this(level, id, null);
+        }
+
     }
 
     private final SearchRepository searchRepository;
@@ -71,6 +75,7 @@ public class SearchService {
         if (scope.isEmpty()) return;
         Map<String, Object> params = new HashMap<>(base);
         if (scope.get().level() != Level.ALL) params.put("scopeId", scope.get().id());
+        if (scope.get().deaneryId() != null) params.put("deaneryId", scope.get().deaneryId());
         List<QuickSearchItem> items = searchRepository.rows(sql.apply(scope.get()), params, limit).stream()
                 .map(row -> new QuickSearchItem((String) row[0], (String) row[1], (String) row[2], (Boolean) row[3]))
                 .toList();
@@ -87,7 +92,12 @@ public class SearchService {
                 case DEANERY -> accountRepository.findActiveDeaneryIdByUsername(username);
                 case PARISH -> accountRepository.findActiveParishIdByUsername(username);
             };
-            if (id.isPresent()) return Optional.of(new Scope(level, id.get()));
+            if (id.isPresent()) {
+                // Quyền cấp giáo phận kèm quyền cấp giáo hạt: khóa của giáo hạt không thuộc trực tiếp giáo phận nên phải gộp thêm.
+                UUID deaneryId = level == Level.DIOCESE && securityUtils.hasAuthority(authentication, permission + ".read.deanery")
+                        ? accountRepository.findActiveDeaneryIdByUsername(username).orElse(null) : null;
+                return Optional.of(new Scope(level, id.get(), deaneryId));
+            }
         }
         return Optional.empty();
     }
@@ -152,7 +162,9 @@ public class SearchService {
     private static String courseSql(Scope s) {
         String name = "immutable_unaccent(c.course_name)";
         String code = "immutable_unaccent(c.course_code)";
-        String scope = s.level() == Level.DIOCESE ? " and c.diocese_id = :scopeId" : " and c.deanery_id = :scopeId";
+        String scope = s.level() == Level.DIOCESE
+                ? (s.deaneryId() != null ? " and (c.diocese_id = :scopeId or c.deanery_id = :deaneryId)" : " and c.diocese_id = :scopeId")
+                : " and c.deanery_id = :scopeId";
         return "select c.course_code, c.course_name, concat_ws(' - ', c.course_code, c.location), c.status from training_course c where "
                 + match(name, code) + scope + " order by " + rank(name) + " desc, c.start_date desc";
     }

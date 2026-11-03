@@ -5,7 +5,7 @@ plugins {
 }
 
 group = 'phu-cuong'
-version = '0.0.1-SNAPSHOT'
+version = '1.0.0'
 
 java {
     toolchain {
@@ -119,4 +119,9 @@ tasks.withType(Test).configureEach {
     // Mỗi context Spring được cache giữ một pool riêng; giới hạn pool để nhiều context không làm Postgres hết kết nối.
     systemProperty 'spring.datasource.hikari.maximum-pool-size', '2'
     systemProperty 'spring.datasource.hikari.minimum-idle', '0'
+}
+
+// Ghi build-info.properties để /api/app/version trả đúng phiên bản và thời điểm build.
+springBoot {
+    buildInfo()
 }
