@@ -27,7 +27,6 @@ public enum CertificateMergeField {
     RESULTING_LEVEL("resultingLevel", "Cấp độ đạt được", "Khóa huấn luyện"),
 
     CERTIFICATE_CODE("certificateCode", "Mã chứng nhận", "Chứng nhận"),
-    CERTIFICATE_NAME("certificateName", "Tên chứng nhận", "Chứng nhận"),
     RESULT("result", "Kết quả", "Chứng nhận"),
     ISSUE_DATE("issueDate", "Ngày cấp", "Chứng nhận");
 
