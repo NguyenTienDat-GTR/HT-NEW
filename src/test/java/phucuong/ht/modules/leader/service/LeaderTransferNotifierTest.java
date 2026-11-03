@@ -10,6 +10,7 @@ import phucuong.ht.modules.notification.service.TrainingNotificationCommand;
 import phucuong.ht.modules.notification.service.TrainingNotificationRecipientResolver;
 import phucuong.ht.modules.notification.service.TrainingNotificationService;
 import phucuong.ht.modules.parish.model.entity.Parish;
+import phucuong.ht.modules.parish.repository.ParishPlace;
 import phucuong.ht.modules.parish.repository.ParishRepository;
 
 import java.util.List;
@@ -47,6 +48,8 @@ class LeaderTransferNotifierTest {
         when(recipientResolver.resolveRecipients(null, LeaderAccessEvaluator.READ_PARISH, UnitType.PARISH, fromId)).thenReturn(List.of("parish-a", "mover"));
         when(recipientResolver.resolveRecipients(null, LeaderAccessEvaluator.READ_PARISH, UnitType.PARISH, toId)).thenReturn(List.of("parish-b"));
         when(actorNameResolver.resolve("mover")).thenReturn("Nguyễn Văn Mover");
+        when(parishRepository.findPlaceById(fromId)).thenReturn(Optional.of(new ParishPlace("Giáo xứ", "A", "Thủ Dầu Một", "Phú Cường")));
+        when(parishRepository.findPlaceById(toId)).thenReturn(Optional.of(new ParishPlace("Giáo họ", "B", "Thủ Dầu Một", "Phú Cường")));
 
         notifier.announce(leader, from, to, "mover");
 
@@ -55,9 +58,8 @@ class LeaderTransferNotifierTest {
         verify(notificationService).notifyUsers(recipients.capture(), command.capture());
         assertEquals(List.of("parish-a", "parish-b"), recipients.getValue());
         assertEquals(LeaderTransferNotifier.EVENT_TYPE, command.getValue().eventType());
-        assertTrue(command.getValue().message().contains("Giáo xứ A"));
-        assertTrue(command.getValue().message().contains("Giáo xứ B"));
-        assertTrue(command.getValue().message().contains("Nguyễn Văn Mover"));
+        assertEquals("Giuse Nguyễn Văn Hùng được chuyển từ Giáo xứ A (Giáo hạt Thủ Dầu Một, Giáo phận Phú Cường) sang Giáo họ B (Giáo hạt Thủ Dầu Một, Giáo phận Phú Cường), do Nguyễn Văn Mover thực hiện",
+                command.getValue().message());
         verify(recipientResolver, never()).resolveRecipients(any(), eq(LeaderAccessEvaluator.READ_DEANERY), eq(UnitType.DEANERY), any());
     }
 
@@ -104,6 +106,7 @@ class LeaderTransferNotifierTest {
         leader.setId(UUID.randomUUID());
         leader.setFirstName("Hùng");
         leader.setLastName("Nguyễn Văn");
+        leader.setHolyName("Giuse");
         return leader;
     }
 }

@@ -16,6 +16,7 @@ import phucuong.ht.modules.leader.helper.LeaderValidationHelper;
 import phucuong.ht.modules.leader.model.entity.Leader;
 import phucuong.ht.modules.leader.model.enums.LeaderGender;
 import phucuong.ht.modules.leader.model.request.LeaderCreateRequest;
+import phucuong.ht.modules.leader.model.request.LeaderTransferRequest;
 import phucuong.ht.modules.leader.model.request.LeaderUpdateRequest;
 import phucuong.ht.modules.leader.model.response.LeaderResponse;
 import phucuong.ht.modules.leader.repository.LeaderRepository;
@@ -274,43 +275,58 @@ class LeaderServiceTest {
     }
 
     @Test
-    void updateShouldPersistParishWhenTransferring() {
+    void transferShouldPersistParishAndAnnounce() {
         UUID oldParishId = UUID.randomUUID();
         UUID newParishId = UUID.randomUUID();
         UUID leaderId = UUID.randomUUID();
-        LeaderUpdateRequest request = new LeaderUpdateRequest();
+        LeaderTransferRequest request = new LeaderTransferRequest();
         request.setParishId(newParishId);
         Leader existing = leader(leaderId, parish(oldParishId));
-        existing.setEmail("leader@example.com");
         Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
         when(leaderValidationHelper.requireExistingLeaderWithParish(leaderId)).thenReturn(existing, existing);
         when(leaderValidationHelper.getRequiredAuditActor(authentication)).thenReturn("ADMIN1");
         Parish targetParish = parish(newParishId);
         when(leaderValidationHelper.requireExistingParish(newParishId)).thenReturn(targetParish);
 
-        leaderService.update(leaderId, request, authentication);
+        leaderService.transfer(leaderId, request, authentication);
 
         verify(leaderScopeHelper).enforceTransferScope(authentication, newParishId);
-        verify(leaderRepository).setParish(leaderId, newParishId);
+        verify(leaderRepository).setParish(leaderId, newParishId, "ADMIN1");
         verify(leaderTransferNotifier).announce(existing, existing.getParish(), targetParish, "ADMIN1");
     }
 
     @Test
-    void updateShouldNotTouchParishWhenUnchanged() {
+    void transferToSameParishShouldBeRejected() {
         UUID parishId = UUID.randomUUID();
         UUID leaderId = UUID.randomUUID();
-        LeaderUpdateRequest request = new LeaderUpdateRequest();
+        LeaderTransferRequest request = new LeaderTransferRequest();
         request.setParishId(parishId);
         Leader existing = leader(leaderId, parish(parishId));
-        existing.setEmail("leader@example.com");
         Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
-        when(leaderValidationHelper.requireExistingLeaderWithParish(leaderId)).thenReturn(existing, existing);
+        when(leaderValidationHelper.requireExistingLeaderWithParish(leaderId)).thenReturn(existing);
         when(leaderValidationHelper.getRequiredAuditActor(authentication)).thenReturn("ADMIN1");
 
-        leaderService.update(leaderId, request, authentication);
+        org.junit.jupiter.api.Assertions.assertThrows(phucuong.ht.common.exception.ApiException.class,
+                () -> leaderService.transfer(leaderId, request, authentication));
 
-        verify(leaderRepository, org.mockito.Mockito.never()).setParish(any(), any());
-        verify(leaderScopeHelper, org.mockito.Mockito.never()).enforceTransferScope(any(), any());
+        verify(leaderRepository, org.mockito.Mockito.never()).setParish(any(), any(), any());
+    }
+
+    @Test
+    void updateShouldRejectParishChange() {
+        UUID leaderId = UUID.randomUUID();
+        LeaderUpdateRequest request = new LeaderUpdateRequest();
+        request.setParishId(UUID.randomUUID());
+        Leader existing = leader(leaderId, parish(UUID.randomUUID()));
+        existing.setEmail("leader@example.com");
+        Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
+        when(leaderValidationHelper.requireExistingLeaderWithParish(leaderId)).thenReturn(existing);
+        when(leaderValidationHelper.getRequiredAuditActor(authentication)).thenReturn("ADMIN1");
+
+        org.junit.jupiter.api.Assertions.assertThrows(phucuong.ht.common.exception.ApiException.class,
+                () -> leaderService.update(leaderId, request, authentication));
+
+        verify(leaderRepository, org.mockito.Mockito.never()).setParish(any(), any(), any());
     }
 
     @Test

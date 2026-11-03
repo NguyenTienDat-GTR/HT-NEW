@@ -56,6 +56,12 @@ public class LeaderAccessEvaluator {
                 || (hasRole(authentication, "ADMIN_PARISH") && hasParishScopedAccess(authentication, id, UPDATE_PARISH));
     }
 
+    // Quyền chuyển giáo xứ tách riêng khỏi quyền sửa; quản trị giáo xứ không có quyền này.
+    public boolean canTransfer(Authentication authentication, UUID id) {
+        return (hasRole(authentication, "ADMIN_DIOCESE") && hasDioceseScopedAccess(authentication, id, TRANSFER_DIOCESE))
+                || (hasRole(authentication, "ADMIN_DEANERY") && hasDeaneryScopedAccess(authentication, id, TRANSFER_DEANERY));
+    }
+
     public boolean canToggle(Authentication authentication, UUID id) {
         return hasRole(authentication, "ADMIN_PARISH") && hasParishScopedAccess(authentication, id, TOGGLE_PARISH);
     }

@@ -23,11 +23,13 @@ public class LeaderRepository extends BaseRepo<Leader, UUID> {
         return leader;
     }
 
-    /** Chuyển huynh trưởng sang giáo xứ khác. BaseRepo.update không tự gán được quan hệ qua `parishId` nên phải gán riêng. */
+    /** Chuyển huynh trưởng sang giáo xứ khác (BaseRepo.update không gán được quan hệ qua `parishId` nên gán riêng). */
     @Transactional
-    public void setParish(UUID id, UUID parishId) {
-        entityManager.createQuery("update Leader l set l.parish.id = :parishId where l.id = :id")
+    public void setParish(UUID id, UUID parishId, String actor) {
+        entityManager.createQuery("update Leader l set l.parish.id = :parishId, l.updatedAt = :now, l.updatedBy = :actor where l.id = :id")
                 .setParameter("parishId", parishId)
+                .setParameter("now", java.time.OffsetDateTime.now())
+                .setParameter("actor", actor)
                 .setParameter("id", id)
                 .executeUpdate();
     }

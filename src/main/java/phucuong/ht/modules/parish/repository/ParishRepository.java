@@ -148,6 +148,25 @@ public class ParishRepository extends BaseRepo<Parish, UUID> {
                 .getResultList();
     }
 
+    // Loại đơn vị, tên, giáo hạt và giáo phận của một đơn vị cơ sở (dùng để hiển thị trong thông báo).
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public Optional<ParishPlace> findPlaceById(UUID parishId) {
+        List<Object[]> rows = entityManager.createQuery(
+                        """
+                                select p.unitType, p.name, p.deanery.name, p.deanery.diocese.name
+                                from Parish p
+                                where p.id = :parishId
+                                """,
+                        Object[].class
+                )
+                .setParameter("parishId", parishId)
+                .setMaxResults(1)
+                .getResultList();
+        return rows.stream().findFirst().map(row -> new ParishPlace(
+                ((phucuong.ht.modules.parish.model.enums.ParishUnitType) row[0]).getLabel(),
+                (String) row[1], (String) row[2], (String) row[3]));
+    }
+
     public Optional<UUID> findDeaneryIdByParishId(UUID parishId) {
         List<UUID> results = entityManager.createQuery(
                         """
