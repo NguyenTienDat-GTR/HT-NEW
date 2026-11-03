@@ -23,6 +23,15 @@ public class LeaderRepository extends BaseRepo<Leader, UUID> {
         return leader;
     }
 
+    /** Chuyển huynh trưởng sang giáo xứ khác. BaseRepo.update không tự gán được quan hệ qua `parishId` nên phải gán riêng. */
+    @Transactional
+    public void setParish(UUID id, UUID parishId) {
+        entityManager.createQuery("update Leader l set l.parish.id = :parishId where l.id = :id")
+                .setParameter("parishId", parishId)
+                .setParameter("id", id)
+                .executeUpdate();
+    }
+
     /** Đặt (hoặc gỡ, khi assetId = null) ảnh đại diện và xóa dữ liệu base64 cũ nếu còn. */
     @Transactional
     public void setImageAsset(UUID id, UUID assetId) {

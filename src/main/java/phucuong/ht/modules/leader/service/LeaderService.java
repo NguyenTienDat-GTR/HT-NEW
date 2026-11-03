@@ -219,9 +219,9 @@ public class LeaderService {
 
         UUID currentParishId = existingLeader.getParish() == null ? null : existingLeader.getParish().getId();
         boolean transferringParish = request.getParishId() != null && !request.getParishId().equals(currentParishId);
-        if (request.getParishId() != null) {
+        if (transferringParish) {
             leaderValidationHelper.requireExistingParish(request.getParishId());
-            leaderScopeHelper.enforceUpdateParishScope(authentication, existingLeader, request.getParishId());
+            leaderScopeHelper.enforceTransferScope(authentication, request.getParishId());
         }
         // Đóng băng: không sửa hồ sơ trong đơn vị bị khóa; riêng chuyển sang giáo xứ đang hoạt động thì được phép.
         requireParishOperational(transferringParish ? request.getParishId() : currentParishId);
@@ -245,6 +245,9 @@ public class LeaderService {
 
         try {
             leaderRepository.update(id, request, auditActor);
+            if (transferringParish) {
+                leaderRepository.setParish(id, request.getParishId());
+            }
             if (newAssetId != null) {
                 leaderRepository.setImageAsset(id, newAssetId);
                 mediaAssetService.release(oldAssetId);

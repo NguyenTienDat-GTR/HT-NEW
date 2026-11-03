@@ -24,6 +24,8 @@ public class LeaderAccessEvaluator {
     public static final String UPDATE_DIOCESE = "organization.leader.update.diocese";
     public static final String UPDATE_DEANERY = "organization.leader.update.deanery";
     public static final String UPDATE_PARISH = "organization.leader.update.parish";
+    public static final String TRANSFER_DIOCESE = "organization.leader.transfer.diocese";
+    public static final String TRANSFER_DEANERY = "organization.leader.transfer.deanery";
     public static final String TOGGLE_PARISH = "organization.leader.toggle.parish";
 
     private final AccountRepository accountRepository;

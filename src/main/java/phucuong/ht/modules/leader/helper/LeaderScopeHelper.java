@@ -7,7 +7,6 @@ import org.springframework.util.StringUtils;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.modules.auth.repository.AccountRepository;
-import phucuong.ht.modules.leader.model.entity.Leader;
 import phucuong.ht.modules.leader.model.request.LeaderCreateRequest;
 import phucuong.ht.modules.leader.security.LeaderAccessEvaluator;
 import phucuong.ht.modules.parish.repository.ParishRepository;
@@ -56,28 +55,27 @@ public class LeaderScopeHelper {
         );
     }
 
-    public void enforceUpdateParishScope(Authentication authentication, Leader existingLeader, UUID requestedParishId) {
-        if (requestedParishId == null || existingLeader == null || existingLeader.getParish() == null) return;
-        // Quản trị giáo phận / giáo hạt được chuyển huynh trưởng sang giáo xứ khác nhưng phải còn trong phạm vi của mình.
-        if (securityUtils.hasAuthority(authentication, LeaderAccessEvaluator.UPDATE_DIOCESE)) {
-            UUID actorScopeId = getRequiredActiveDioceseId(authentication, LeaderAccessEvaluator.UPDATE_DIOCESE);
-            UUID targetScopeId = parishRepository.findDioceseIdByParishId(requestedParishId)
+    /**
+     * Chuyển huynh trưởng sang giáo xứ khác cần quyền chuyển riêng (tách khỏi quyền chỉnh sửa) và giáo xứ đích phải còn trong phạm vi của người thao tác.
+     * Quản trị giáo xứ không có quyền chuyển. Chỉ gọi khi giáo xứ đích khác giáo xứ hiện tại.
+     */
+    public void enforceTransferScope(Authentication authentication, UUID targetParishId) {
+        if (targetParishId == null) return;
+        if (securityUtils.hasAuthority(authentication, LeaderAccessEvaluator.TRANSFER_DIOCESE)) {
+            UUID actorScopeId = getRequiredActiveDioceseId(authentication, LeaderAccessEvaluator.TRANSFER_DIOCESE);
+            UUID targetScopeId = parishRepository.findDioceseIdByParishId(targetParishId)
                     .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy giáo xứ"));
             requireSameScope(actorScopeId, targetScopeId, "giáo phận");
             return;
         }
-        if (securityUtils.hasAuthority(authentication, LeaderAccessEvaluator.UPDATE_DEANERY)) {
-            UUID actorScopeId = getRequiredActiveDeaneryId(authentication, LeaderAccessEvaluator.UPDATE_DEANERY);
-            UUID targetScopeId = parishRepository.findDeaneryIdByParishId(requestedParishId)
+        if (securityUtils.hasAuthority(authentication, LeaderAccessEvaluator.TRANSFER_DEANERY)) {
+            UUID actorScopeId = getRequiredActiveDeaneryId(authentication, LeaderAccessEvaluator.TRANSFER_DEANERY);
+            UUID targetScopeId = parishRepository.findDeaneryIdByParishId(targetParishId)
                     .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy giáo xứ"));
             requireSameScope(actorScopeId, targetScopeId, "giáo hạt");
             return;
         }
-        UUID activeParishId = getRequiredActiveParishId(authentication, LeaderAccessEvaluator.UPDATE_PARISH);
-        UUID currentParishId = existingLeader.getParish().getId();
-        if (!activeParishId.equals(currentParishId) || !activeParishId.equals(requestedParishId)) {
-            throw commonValidationHelper.forbidden("Không thể chuyển Huynh Trưởng ra ngoài giáo xứ hiện tại");
-        }
+        throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền chuyển Huynh Trưởng sang giáo xứ khác");
     }
 
     public UUID getRequiredActiveParishId(Authentication authentication, String permissionCode) {
