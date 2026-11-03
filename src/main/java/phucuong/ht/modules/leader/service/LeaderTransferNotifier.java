@@ -11,6 +11,7 @@ import phucuong.ht.modules.notification.service.TrainingNotificationCommand;
 import phucuong.ht.modules.notification.service.TrainingNotificationRecipientResolver;
 import phucuong.ht.modules.notification.service.TrainingNotificationService;
 import phucuong.ht.modules.parish.model.entity.Parish;
+import phucuong.ht.modules.parish.repository.ParishPlace;
 import phucuong.ht.modules.parish.repository.ParishRepository;
 
 import java.util.LinkedHashSet;
@@ -61,10 +62,17 @@ public class LeaderTransferNotifier {
         trainingNotificationService.notifyUsers(List.copyOf(recipients), TrainingNotificationCommand.builder()
                 .eventType(EVENT_TYPE)
                 .title("Huynh trưởng được chuyển giáo xứ")
-                .message(LeaderNames.fullName(leader) + " được chuyển từ " + from.getName() + " sang " + to.getName() + ", do " + actorName + " thực hiện")
+                .message(LeaderNames.displayName(leader) + " được chuyển từ " + describe(from) + " sang " + describe(to) + ", do " + actorName + " thực hiện")
                 .senderUnitType(UnitType.PARISH)
                 .senderUnitId(to.getId())
                 .actor(actor)
                 .build());
+    }
+
+    // Mỗi đơn vị kèm nhãn loại (Giáo xứ / Giáo họ / Giáo điểm), giáo hạt và giáo phận chứa nó; không tra được thì dùng nhãn Giáo xứ + tên.
+    private String describe(Parish parish) {
+        return parishRepository.findPlaceById(parish.getId())
+                .map(ParishPlace::describe)
+                .orElseGet(() -> "Giáo xứ " + parish.getName());
     }
 }

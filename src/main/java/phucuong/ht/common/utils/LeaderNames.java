@@ -17,4 +17,13 @@ public final class LeaderNames {
         }
         return leader.getLastName() + " " + leader.getFirstName();
     }
+
+    /** Tên hiển thị trong thông báo/thông điệp: tên thánh đứng đầu rồi tới họ tên ("Giuse Nguyễn Văn A"); thiếu tên thánh thì chỉ họ tên. */
+    public static String displayName(Leader leader) {
+        String fullName = fullName(leader);
+        if (leader == null || leader.getHolyName() == null || leader.getHolyName().isBlank()) {
+            return fullName;
+        }
+        return fullName == null ? leader.getHolyName().trim() : leader.getHolyName().trim() + " " + fullName;
+    }
 }
