@@ -716,6 +716,7 @@ public class CertificateConfigService {
             v.put("courseEndDate", end);
             // Thời gian tổ chức: "từ ... đến ..." (rút gọn khi thiếu một đầu).
             v.put("coursePeriod", !start.isEmpty() && !end.isEmpty() ? ("từ " + start + " đến " + end) : (start + end));
+            v.put("courseLocation", nullToEmpty(course.getLocation()));
             var courseType = course.getCourseType();
             // Cấp độ đạt được: hồ sơ ngoại lệ theo cấp người duyệt đã chọn, còn lại theo loại khóa.
             String achieved = l == null ? null : courseParticipationRepository.findByLeaderIdAndCourseCode(l.getId(), course.getCourseCode())
