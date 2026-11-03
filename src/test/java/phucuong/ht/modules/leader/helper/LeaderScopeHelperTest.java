@@ -60,20 +60,38 @@ class LeaderScopeHelperTest {
     }
 
     @Test
-    void enforceUpdateParishScopeShouldRejectMoveOutsideActiveParish() {
-        UUID activeParishId = UUID.randomUUID();
-        Leader leader = new Leader();
-        Parish parish = new Parish();
-        parish.setId(UUID.randomUUID());
-        leader.setParish(parish);
+    void enforceTransferScopeShouldRejectWithoutTransferAuthority() {
         Authentication authentication = mock(Authentication.class);
-        when(securityUtils.currentUsername(authentication)).thenReturn("admin-parish");
-        when(accountRepository.findActiveParishIdByUsername("admin-parish")).thenReturn(Optional.of(activeParishId));
 
         ApiException exception = assertThrows(ApiException.class,
-                () -> helper.enforceUpdateParishScope(authentication, leader, activeParishId));
+                () -> helper.enforceTransferScope(authentication, UUID.randomUUID()));
 
-        assertEquals("Không thể chuyển Huynh Trưởng ra ngoài giáo xứ hiện tại", exception.getMessage());
+        assertEquals("Tài khoản hiện tại không có quyền chuyển Huynh Trưởng sang giáo xứ khác", exception.getMessage());
+    }
+
+    @Test
+    void enforceTransferScopeShouldAllowParishInsideDeanery() {
+        UUID deaneryId = UUID.randomUUID();
+        UUID parishId = UUID.randomUUID();
+        Authentication authentication = mock(Authentication.class);
+        when(securityUtils.hasAuthority(authentication, LeaderAccessEvaluator.TRANSFER_DEANERY)).thenReturn(true);
+        when(securityUtils.currentUsername(authentication)).thenReturn("admin-deanery");
+        when(accountRepository.findActiveDeaneryIdByUsername("admin-deanery")).thenReturn(Optional.of(deaneryId));
+        when(parishRepository.findDeaneryIdByParishId(parishId)).thenReturn(Optional.of(deaneryId));
+
+        assertDoesNotThrow(() -> helper.enforceTransferScope(authentication, parishId));
+    }
+
+    @Test
+    void enforceTransferScopeShouldRejectParishOutsideDeanery() {
+        UUID parishId = UUID.randomUUID();
+        Authentication authentication = mock(Authentication.class);
+        when(securityUtils.hasAuthority(authentication, LeaderAccessEvaluator.TRANSFER_DEANERY)).thenReturn(true);
+        when(securityUtils.currentUsername(authentication)).thenReturn("admin-deanery");
+        when(accountRepository.findActiveDeaneryIdByUsername("admin-deanery")).thenReturn(Optional.of(UUID.randomUUID()));
+        when(parishRepository.findDeaneryIdByParishId(parishId)).thenReturn(Optional.of(UUID.randomUUID()));
+
+        assertThrows(ApiException.class, () -> helper.enforceTransferScope(authentication, parishId));
     }
 
     @Test

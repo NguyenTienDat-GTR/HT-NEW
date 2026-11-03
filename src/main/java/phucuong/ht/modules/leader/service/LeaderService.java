@@ -37,6 +37,7 @@ import phucuong.ht.modules.rankHistory.model.response.RankHistoryResponse;
 import phucuong.ht.modules.rankHistory.repository.RankHistoryRepository;
 
 import java.time.OffsetDateTime;
+import org.slf4j.LoggerFactory;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -58,6 +59,7 @@ public class LeaderService {
     private final MediaAssetService mediaAssetService;
     private final MediaUrls mediaUrls;
     private final phucuong.ht.common.utils.AuditActorNameResolver auditActorNameResolver;
+    private final LeaderTransferNotifier leaderTransferNotifier;
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private phucuong.ht.common.security.UnitOperationalStatusService unitOperationalStatusService;
 
@@ -219,9 +221,10 @@ public class LeaderService {
 
         UUID currentParishId = existingLeader.getParish() == null ? null : existingLeader.getParish().getId();
         boolean transferringParish = request.getParishId() != null && !request.getParishId().equals(currentParishId);
-        if (request.getParishId() != null) {
-            leaderValidationHelper.requireExistingParish(request.getParishId());
-            leaderScopeHelper.enforceUpdateParishScope(authentication, existingLeader, request.getParishId());
+        Parish targetParish = null;
+        if (transferringParish) {
+            targetParish = leaderValidationHelper.requireExistingParish(request.getParishId());
+            leaderScopeHelper.enforceTransferScope(authentication, request.getParishId());
         }
         // Đóng băng: không sửa hồ sơ trong đơn vị bị khóa; riêng chuyển sang giáo xứ đang hoạt động thì được phép.
         requireParishOperational(transferringParish ? request.getParishId() : currentParishId);
@@ -245,6 +248,10 @@ public class LeaderService {
 
         try {
             leaderRepository.update(id, request, auditActor);
+            if (transferringParish) {
+                leaderRepository.setParish(id, request.getParishId());
+                announceTransfer(existingLeader, targetParish, auditActor);
+            }
             if (newAssetId != null) {
                 leaderRepository.setImageAsset(id, newAssetId);
                 mediaAssetService.release(oldAssetId);
@@ -347,6 +354,15 @@ public class LeaderService {
         String auditActor = leaderValidationHelper.getRequiredAuditActor(authentication);
         leaderRepository.toggleStatus(id, auditActor);
         return toLeaderResponse(leaderValidationHelper.requireExistingLeaderWithParish(id));
+    }
+
+    // Thông báo chuyển giáo xứ chỉ là phụ: lỗi gửi thông báo không làm hỏng việc chuyển đã lưu.
+    private void announceTransfer(Leader leader, Parish target, String actor) {
+        try {
+            leaderTransferNotifier.announce(leader, leader.getParish(), target, actor);
+        } catch (RuntimeException exception) {
+            LoggerFactory.getLogger(LeaderService.class).warn("Không gửi được thông báo chuyển giáo xứ của huynh trưởng {}", leader.getId(), exception);
+        }
     }
 
     private void requireParishOperational(UUID parishId) {

@@ -60,6 +60,9 @@ class LeaderServiceTest {
     @org.mockito.Mock
     private phucuong.ht.modules.media.service.MediaUrls mediaUrls;
 
+    @org.mockito.Mock
+    private LeaderTransferNotifier leaderTransferNotifier;
+
     @InjectMocks
     private LeaderService leaderService;
 
@@ -268,6 +271,46 @@ class LeaderServiceTest {
         assertEquals(existing.getLastName(), result.getLastName());
         assertEquals("signed-url", result.getImageUrl());
         verify(leaderRepository).setImageAsset(leaderId, newAssetId);
+    }
+
+    @Test
+    void updateShouldPersistParishWhenTransferring() {
+        UUID oldParishId = UUID.randomUUID();
+        UUID newParishId = UUID.randomUUID();
+        UUID leaderId = UUID.randomUUID();
+        LeaderUpdateRequest request = new LeaderUpdateRequest();
+        request.setParishId(newParishId);
+        Leader existing = leader(leaderId, parish(oldParishId));
+        existing.setEmail("leader@example.com");
+        Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
+        when(leaderValidationHelper.requireExistingLeaderWithParish(leaderId)).thenReturn(existing, existing);
+        when(leaderValidationHelper.getRequiredAuditActor(authentication)).thenReturn("ADMIN1");
+        Parish targetParish = parish(newParishId);
+        when(leaderValidationHelper.requireExistingParish(newParishId)).thenReturn(targetParish);
+
+        leaderService.update(leaderId, request, authentication);
+
+        verify(leaderScopeHelper).enforceTransferScope(authentication, newParishId);
+        verify(leaderRepository).setParish(leaderId, newParishId);
+        verify(leaderTransferNotifier).announce(existing, existing.getParish(), targetParish, "ADMIN1");
+    }
+
+    @Test
+    void updateShouldNotTouchParishWhenUnchanged() {
+        UUID parishId = UUID.randomUUID();
+        UUID leaderId = UUID.randomUUID();
+        LeaderUpdateRequest request = new LeaderUpdateRequest();
+        request.setParishId(parishId);
+        Leader existing = leader(leaderId, parish(parishId));
+        existing.setEmail("leader@example.com");
+        Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
+        when(leaderValidationHelper.requireExistingLeaderWithParish(leaderId)).thenReturn(existing, existing);
+        when(leaderValidationHelper.getRequiredAuditActor(authentication)).thenReturn("ADMIN1");
+
+        leaderService.update(leaderId, request, authentication);
+
+        verify(leaderRepository, org.mockito.Mockito.never()).setParish(any(), any());
+        verify(leaderScopeHelper, org.mockito.Mockito.never()).enforceTransferScope(any(), any());
     }
 
     @Test
