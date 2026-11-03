@@ -17,6 +17,7 @@ import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.utils.AuditActorNameResolver;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.common.validation.AccountScopeValidationHelper;
+import phucuong.ht.common.security.AccountScopeResolver;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.config.CacheNames;
 import phucuong.ht.modules.deanery.model.entity.Deanery;
@@ -60,6 +61,7 @@ public class ExecutiveBoardAssignmentService {
     private final DeaneryRepository deaneryRepository;
     private final ParishRepository parishRepository;
     private final AccountScopeValidationHelper accountScopeValidationHelper;
+    private final AccountScopeResolver accountScopeResolver;
     private final CommonValidationHelper commonValidationHelper;
     private final securityUtils securityUtils;
     private final AuditActorNameResolver auditActorNameResolver;
@@ -119,21 +121,17 @@ public class ExecutiveBoardAssignmentService {
     @Cacheable(cacheNames = CacheNames.EXECUTIVE_ASSIGNMENT_LIST, key = "@cacheScopeKeyHelper.listKey(#authentication, #request)")
     public Page<ExecutiveBoardAssignmentResponse> findAll(BaseSearchRequest request, Authentication authentication) {
         BaseSearchRequest scopedRequest = SearchRequests.copy(request);
-        if (securityUtils.hasAuthority(authentication, ExecutiveBoardAssignmentAccessEvaluator.READ_DIOCESE)) {
-            UUID dioceseId = accountScopeValidationHelper.requireActiveDioceseId(authentication, ExecutiveBoardAssignmentAccessEvaluator.READ_DIOCESE);
-            scopedRequest.getFilters().put(DIOCESE_FILTER_FIELD, dioceseId);
-            scopedRequest.getFilters().put(UNIT_TYPE_FILTER_FIELD, UnitType.DIOCESE);
-        } else if (securityUtils.hasAuthority(authentication, ExecutiveBoardAssignmentAccessEvaluator.READ_DEANERY)) {
-            UUID deaneryId = accountScopeValidationHelper.requireActiveDeaneryId(authentication, ExecutiveBoardAssignmentAccessEvaluator.READ_DEANERY);
-            scopedRequest.getFilters().put(DEANERY_FILTER_FIELD, deaneryId);
-            scopedRequest.getFilters().put(UNIT_TYPE_FILTER_FIELD, UnitType.DEANERY);
-        } else if (securityUtils.hasAuthority(authentication, ExecutiveBoardAssignmentAccessEvaluator.READ_PARISH)) {
-            UUID parishId = accountScopeValidationHelper.requireActiveParishId(authentication, ExecutiveBoardAssignmentAccessEvaluator.READ_PARISH);
-            scopedRequest.getFilters().put(PARISH_FILTER_FIELD, parishId);
-            scopedRequest.getFilters().put(UNIT_TYPE_FILTER_FIELD, UnitType.PARISH);
-        } else {
+        // Phân công của mọi đơn vị tài khoản có quyền xem (giáo phận, giáo hạt, giáo xứ), mỗi đơn vị một nhóm (loại đơn vị + đơn vị).
+        List<Map<String, Object>> groups = readScopes(authentication).stream().map(scope -> {
+            Map<String, Object> group = new java.util.LinkedHashMap<>();
+            group.put(unitFilterField(scope.level()), scope.unitId());
+            group.put(UNIT_TYPE_FILTER_FIELD, unitTypeOf(scope.level()));
+            return group;
+        }).toList();
+        if (groups.isEmpty()) {
             throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền xem phân công chức vụ");
         }
+        scopedRequest.setScopeAnyOf(groups);
 
         Page<ExecutiveBoardAssignment> page = assignmentRepository.findAll(scopedRequest);
         if (page.isEmpty()) {
@@ -183,28 +181,45 @@ public class ExecutiveBoardAssignmentService {
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy phân công chức vụ " + id)));
     }
 
+    private List<AccountScopeResolver.Scope> readScopes(Authentication authentication) {
+        return accountScopeResolver.scopes(authentication,
+                ExecutiveBoardAssignmentAccessEvaluator.READ_DIOCESE,
+                ExecutiveBoardAssignmentAccessEvaluator.READ_DEANERY,
+                ExecutiveBoardAssignmentAccessEvaluator.READ_PARISH).scopes();
+    }
+
+    private static String unitFilterField(AccountScopeResolver.Level level) {
+        return switch (level) {
+            case DIOCESE -> DIOCESE_FILTER_FIELD;
+            case DEANERY -> DEANERY_FILTER_FIELD;
+            case PARISH -> PARISH_FILTER_FIELD;
+        };
+    }
+
+    private static UnitType unitTypeOf(AccountScopeResolver.Level level) {
+        return switch (level) {
+            case DIOCESE -> UnitType.DIOCESE;
+            case DEANERY -> UnitType.DEANERY;
+            case PARISH -> UnitType.PARISH;
+        };
+    }
+
     /**
      * Các năm có phân công của đơn vị trong phạm vi tài khoản, mới nhất trước. Phân công chưa kết thúc tính tới năm hiện tại.
      */
     public List<Map<String, Object>> findYears(Authentication authentication) {
-        UnitType unitType;
-        UUID unitId;
-        if (securityUtils.hasAuthority(authentication, ExecutiveBoardAssignmentAccessEvaluator.READ_DIOCESE)) {
-            unitType = UnitType.DIOCESE;
-            unitId = accountScopeValidationHelper.requireActiveDioceseId(authentication, ExecutiveBoardAssignmentAccessEvaluator.READ_DIOCESE);
-        } else if (securityUtils.hasAuthority(authentication, ExecutiveBoardAssignmentAccessEvaluator.READ_DEANERY)) {
-            unitType = UnitType.DEANERY;
-            unitId = accountScopeValidationHelper.requireActiveDeaneryId(authentication, ExecutiveBoardAssignmentAccessEvaluator.READ_DEANERY);
-        } else if (securityUtils.hasAuthority(authentication, ExecutiveBoardAssignmentAccessEvaluator.READ_PARISH)) {
-            unitType = UnitType.PARISH;
-            unitId = accountScopeValidationHelper.requireActiveParishId(authentication, ExecutiveBoardAssignmentAccessEvaluator.READ_PARISH);
-        } else {
+        List<AccountScopeResolver.Scope> readScopes = readScopes(authentication);
+        if (readScopes.isEmpty()) {
             throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền xem phân công chức vụ");
         }
 
         int currentYear = LocalDate.now().getYear();
         java.util.TreeSet<Integer> years = new java.util.TreeSet<>(java.util.Comparator.reverseOrder());
-        for (Object[] range : assignmentRepository.findDateRangesByUnit(unitType, unitId)) {
+        List<Object[]> ranges = new java.util.ArrayList<>();
+        for (AccountScopeResolver.Scope scope : readScopes) {
+            ranges.addAll(assignmentRepository.findDateRangesByUnit(unitTypeOf(scope.level()), scope.unitId()));
+        }
+        for (Object[] range : ranges) {
             LocalDate start = (LocalDate) range[0];
             LocalDate end = (LocalDate) range[1];
             if (start == null && end == null) {

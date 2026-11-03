@@ -69,6 +69,7 @@ public class AccountRoleService {
         Role targetRole = requireActiveRole(request.getRoleCode());
 
         enforceAssignmentScope(authentication, account, targetRole);
+        requireRoleCombination(account.getUsername(), List.of(targetRole.getRoleCode()), Set.of());
 
         OffsetDateTime now = OffsetDateTime.now();
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người gán vai trò");
@@ -96,6 +97,8 @@ public class AccountRoleService {
         if (primaryRoleCode != null && !roleCodes.contains(primaryRoleCode)) {
             throw commonValidationHelper.validationError("Vai trò chính phải nằm trong danh sách vai trò đã chọn");
         }
+
+        requireRoleCombination(account.getUsername(), roleCodes, Set.of());
 
         OffsetDateTime now = OffsetDateTime.now();
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người gán vai trò");
@@ -164,6 +167,12 @@ public class AccountRoleService {
         Account account = request.getUsername() == null ? entity.getAccount() : requireAccount(request.getUsername());
         Role role = request.getRoleCode() == null ? entity.getRole() : requireActiveRole(request.getRoleCode());
         enforceAssignmentScope(authentication, account, role);
+        if (Boolean.TRUE.equals(entity.getStatus())) {
+            Set<String> replaced = entity.getAccount() != null && entity.getAccount().getUsername().equals(account.getUsername()) && entity.getRole() != null
+                    ? Set.of(entity.getRole().getRoleCode())
+                    : Set.of();
+            requireRoleCombination(account.getUsername(), List.of(role.getRoleCode()), replaced);
+        }
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật vai trò tài khoản");
         OffsetDateTime now = OffsetDateTime.now();
         if (Boolean.TRUE.equals(request.getIsPrimary())) {
@@ -185,6 +194,9 @@ public class AccountRoleService {
         commonValidationHelper.requireStatusToggleConfirmation(request == null ? null : request.getConfirmationText());
         AccountRole entity = require(id);
         enforceAssignmentScope(authentication, entity.getAccount(), entity.getRole());
+        if (!Boolean.TRUE.equals(entity.getStatus())) {
+            requireRoleCombination(entity.getAccount().getUsername(), List.of(entity.getRole().getRoleCode()), Set.of());
+        }
         String targetUsername = entity.getAccount().getUsername();
         Set<String> recipients = toggleNotificationRecipientResolver == null ? Set.of() : toggleNotificationRecipientResolver.byAccount(targetUsername);
         boolean disablingPrimaryRole = Boolean.TRUE.equals(entity.getStatus()) && Boolean.TRUE.equals(entity.getIsPrimary());
@@ -199,6 +211,14 @@ public class AccountRoleService {
             toggleNotificationDispatcher.dispatch(recipients, "ACCOUNT_ROLE_TOGGLED", roleLabel(entity.getRole()), Boolean.TRUE.equals(entity.getStatus()), currentUsername(authentication));
         }
         return toResponse(entity);
+    }
+
+    // Vai trò đang hiệu lực của tài khoản sau khi thêm addedRoleCodes (và bỏ removedRoleCodes) phải đúng quy tắc kết hợp vai trò.
+    private void requireRoleCombination(String username, Collection<String> addedRoleCodes, Set<String> removedRoleCodes) {
+        Set<String> resulting = new LinkedHashSet<>(accountRoleRepository.findActiveRoleCodesByUsername(username));
+        resulting.removeAll(removedRoleCodes);
+        resulting.addAll(addedRoleCodes);
+        AccountRoleCombinationPolicy.require(resulting, commonValidationHelper);
     }
 
     private void notifyAccountRoleChanged(String username, String reason) {

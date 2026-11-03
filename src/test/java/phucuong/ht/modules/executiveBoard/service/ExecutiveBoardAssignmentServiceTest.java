@@ -71,6 +71,7 @@ class ExecutiveBoardAssignmentServiceTest {
                 deaneryRepository,
                 parishRepository,
                 accountScopeValidationHelper,
+                org.mockito.Mockito.mock(phucuong.ht.common.security.AccountScopeResolver.class),
                 commonValidationHelper,
                 new securityUtils(),
                 org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class)
@@ -165,7 +166,7 @@ class ExecutiveBoardAssignmentServiceTest {
     private ExecutiveBoardAssignmentService newService() {
         return new ExecutiveBoardAssignmentService(
                 assignmentRepository, leaderRepository, positionRepository, dioceseRepository, deaneryRepository, parishRepository,
-                accountScopeValidationHelper, new CommonValidationHelper(new securityUtils()), new securityUtils(),
+                accountScopeValidationHelper, org.mockito.Mockito.mock(phucuong.ht.common.security.AccountScopeResolver.class), new CommonValidationHelper(new securityUtils()), new securityUtils(),
                 org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class));
     }
 
@@ -180,6 +181,7 @@ class ExecutiveBoardAssignmentServiceTest {
                 deaneryRepository,
                 parishRepository,
                 accountScopeValidationHelper,
+                org.mockito.Mockito.mock(phucuong.ht.common.security.AccountScopeResolver.class),
                 commonValidationHelper,
                 new securityUtils(),
                 org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class)

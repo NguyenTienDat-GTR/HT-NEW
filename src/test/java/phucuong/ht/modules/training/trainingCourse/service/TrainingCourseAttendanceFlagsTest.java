@@ -150,6 +150,8 @@ class TrainingCourseAttendanceFlagsTest {
                 deaneryRepository,
                 new TrainingWorkflowSupport(),
                 accountScopeValidationHelper,
+                org.mockito.Mockito.mock(phucuong.ht.common.security.AccountScopeResolver.class),
+                org.mockito.Mockito.mock(phucuong.ht.modules.training.RegistrationSenderResolver.class),
                 new CommonValidationHelper(new securityUtils()),
                 new securityUtils(),
                 courseScoreComponentService,

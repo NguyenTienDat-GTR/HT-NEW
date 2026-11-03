@@ -119,13 +119,14 @@ public class CourseParticipationController {
             @RequestParam(required = false) UUID parishId,
             @RequestParam(required = false) String leaderLevel,
             @RequestParam(required = false) List<UUID> excludeLeaderIds,
+            @RequestParam(required = false) phucuong.ht.common.enums.UnitType senderType,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             Authentication authentication
     ) {
         boolean eligibleOnly = !"EXCEPTION".equalsIgnoreCase(mode);
         return apiResponse.success("Lấy danh sách huynh trưởng lập danh sách đăng ký thành công",
-                courseParticipationService.findRegistrationCandidates(courseCode, eligibleOnly, search, deaneryId, parishId, leaderLevel, excludeLeaderIds, Math.max(page, 0), Math.min(Math.max(size, 1), BaseSearchRequest.MAX_PAGE_SIZE), authentication));
+                courseParticipationService.findRegistrationCandidates(courseCode, eligibleOnly, search, deaneryId, parishId, leaderLevel, excludeLeaderIds, senderType, Math.max(page, 0), Math.min(Math.max(size, 1), BaseSearchRequest.MAX_PAGE_SIZE), authentication));
     }
 
     @PostMapping("/courses/{courseCode}/registrations")

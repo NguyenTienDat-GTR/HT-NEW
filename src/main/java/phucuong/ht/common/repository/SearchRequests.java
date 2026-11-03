@@ -20,6 +20,7 @@ public final class SearchRequests {
         copy.setSearch(source.getSearch());
         copy.setSearchFields(source.getSearchFields() == null ? List.of() : List.copyOf(source.getSearchFields()));
         copy.setFilters(source.getFilters() == null ? new LinkedHashMap<>() : new LinkedHashMap<>(source.getFilters()));
+        copy.setScopeAnyOf(source.getScopeAnyOf());
         copy.setStatus(source.getStatus());
         copy.setSortBy(source.getSortBy());
         copy.setSortDirection(source.getSortDirection());

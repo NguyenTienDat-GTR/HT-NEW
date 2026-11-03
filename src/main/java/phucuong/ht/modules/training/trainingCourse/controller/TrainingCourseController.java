@@ -153,8 +153,16 @@ public class TrainingCourseController {
 
     @GetMapping("/registrable")
     @PreAuthorize("@trainingCourseAccessEvaluator.canListRegistrable(authentication)")
-    public apiResponse<java.util.List<TrainingCourseResponse>> findRegistrable(Authentication authentication) {
-        return apiResponse.success("Lấy danh sách khóa đang mở đăng ký thành công", trainingCourseService.findRegistrable(authentication));
+    public apiResponse<java.util.List<TrainingCourseResponse>> findRegistrable(
+            @RequestParam(required = false) phucuong.ht.common.enums.UnitType senderType,
+            Authentication authentication) {
+        return apiResponse.success("Lấy danh sách khóa đang mở đăng ký thành công", trainingCourseService.findRegistrable(senderType, authentication));
+    }
+
+    @GetMapping("/registration-senders")
+    @PreAuthorize("@trainingCourseAccessEvaluator.canListRegistrable(authentication)")
+    public apiResponse<java.util.List<phucuong.ht.modules.training.RegistrationSenderResolver.Option>> registrationSenders(Authentication authentication) {
+        return apiResponse.success("Lấy danh sách tư cách gửi đăng ký thành công", trainingCourseService.registrationSenders(authentication));
     }
 
     @GetMapping("/recipient-candidates")

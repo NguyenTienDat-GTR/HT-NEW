@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.validation.AccountScopeValidationHelper;
+import phucuong.ht.common.security.AccountScopeResolver;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.config.CacheNames;
 import phucuong.ht.config.DomainEventMessage;
@@ -74,6 +75,7 @@ public class CertificateService {
     private final CourseActivityGuard courseActivityGuard;
     private final TrainingWorkflowSupport trainingWorkflowSupport;
     private final AccountScopeValidationHelper accountScopeValidationHelper;
+    private final AccountScopeResolver accountScopeResolver;
     private final CommonValidationHelper commonValidationHelper;
     private final DomainEventPublisher domainEventPublisher;
     private final CertificateRealtimeNotifier certificateRealtimeNotifier;
@@ -87,15 +89,13 @@ public class CertificateService {
     @Cacheable(cacheNames = CacheNames.CERTIFICATE_LIST, key = "@cacheScopeKeyHelper.listKey(#authentication, #request)")
     public Page<CertificateResponse> findAll(BaseSearchRequest request, Authentication authentication) {
         BaseSearchRequest scopedRequest = SearchRequests.copy(request);
-        if (AuthorityChecks.hasAuthority(authentication, "training.certificate.read.diocese")) {
-            UUID dioceseId = accountScopeValidationHelper.requireActiveDioceseId(authentication, "training.certificate.read.diocese");
-            scopedRequest.getFilters().put(DIOCESE_FILTER_FIELD, dioceseId);
-        } else if (AuthorityChecks.hasAuthority(authentication, "training.certificate.read.deanery")) {
-            UUID deaneryId = accountScopeValidationHelper.requireActiveDeaneryId(authentication, "training.certificate.read.deanery");
-            scopedRequest.getFilters().put(DEANERY_FILTER_FIELD, deaneryId);
-        } else {
+        // Chứng chỉ của khóa giáo phận và khóa giáo hạt, theo từng quyền xem mà tài khoản có.
+        List<Map<String, Object>> groups = accountScopeResolver.scopes(authentication, "training.certificate.read.diocese", "training.certificate.read.deanery", null)
+                .groups(Map.of(AccountScopeResolver.Level.DIOCESE, DIOCESE_FILTER_FIELD, AccountScopeResolver.Level.DEANERY, DEANERY_FILTER_FIELD));
+        if (groups.isEmpty()) {
             throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền xem chứng chỉ");
         }
+        scopedRequest.setScopeAnyOf(groups);
         Page<Certificate> page = certificateRepository.findAll(scopedRequest);
         return new PageImpl<>(page.getContent().stream().map(this::toResponse).toList(), page.getPageable(), page.getTotalElements());
     }
@@ -116,15 +116,12 @@ public class CertificateService {
     // không cắt theo số năm gần đây nên không mất các năm cũ, và tự có năm mới khi có chứng nhận cấp trong năm đó.
     @Transactional(readOnly = true)
     public List<Integer> issueYears(Authentication authentication) {
-        UUID dioceseId = null;
-        UUID deaneryId = null;
-        if (AuthorityChecks.hasAuthority(authentication, "training.certificate.read.diocese")) {
-            dioceseId = accountScopeValidationHelper.requireActiveDioceseId(authentication, "training.certificate.read.diocese");
-        } else if (AuthorityChecks.hasAuthority(authentication, "training.certificate.read.deanery")) {
-            deaneryId = accountScopeValidationHelper.requireActiveDeaneryId(authentication, "training.certificate.read.deanery");
-        } else {
+        AccountScopeResolver.ScopeSet scopes = accountScopeResolver.scopes(authentication, "training.certificate.read.diocese", "training.certificate.read.deanery", null);
+        if (scopes.isEmpty()) {
             throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền xem chứng chỉ");
         }
+        UUID dioceseId = scopes.unitId(AccountScopeResolver.Level.DIOCESE);
+        UUID deaneryId = scopes.unitId(AccountScopeResolver.Level.DEANERY);
         return certificateRepository.findDistinctIssueDates(dioceseId, deaneryId).stream()
                 .map(java.time.LocalDate::getYear)
                 .distinct()

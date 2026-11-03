@@ -23,27 +23,6 @@ public class TrainingWorkflowSupport {
         return course.getCourseType() != null ? isDeaneryManaged(course.getCourseType()) : course.getDeanery() != null;
     }
 
-    // Đơn vị gửi đăng ký: ưu tiên phạm vi gắn trực tiếp của tài khoản (vai trò giáo phận cũng có thể giữ quyền gửi của giáo xứ).
-    public UnitType resolveRegistrationSender(
-            boolean submitParish, boolean submitDiocese, boolean submitDeanery, boolean directDiocese, boolean directDeanery) {
-        if (submitDiocese && directDiocese) {
-            return UnitType.DIOCESE;
-        }
-        if (submitDeanery && directDeanery) {
-            return UnitType.DEANERY;
-        }
-        if (submitParish) {
-            return UnitType.PARISH;
-        }
-        if (submitDiocese) {
-            return UnitType.DIOCESE;
-        }
-        if (submitDeanery) {
-            return UnitType.DEANERY;
-        }
-        return null;
-    }
-
     // Giáo phận sở hữu khóa: khóa giáo phận lưu trực tiếp, khóa giáo hạt lấy theo giáo hạt. Dùng để tra danh mục cấp độ.
     public java.util.UUID dioceseIdOf(phucuong.ht.modules.training.trainingCourse.model.entity.TrainingCourse course) {
         if (course == null) {

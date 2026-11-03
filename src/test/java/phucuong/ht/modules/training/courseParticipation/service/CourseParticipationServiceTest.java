@@ -100,19 +100,22 @@ class CourseParticipationServiceTest {
     @InjectMocks
     private CourseParticipationService courseParticipationService;
 
+    // Đơn vị hiệu lực của tài khoản: mặc định có đủ giáo phận, giáo hạt, giáo xứ; test cần id cụ thể thì stub lại.
+    private final phucuong.ht.modules.auth.repository.AccountRepository scopeAccountRepository = scopeAccountRepository();
+
     @Test
     void findAllShouldScopeParishAdminToLeadersInOwnParish() {
         courseParticipationService = buildService();
         UUID parishId = UUID.randomUUID();
         ArgumentCaptor<BaseSearchRequest> requestCaptor = ArgumentCaptor.forClass(BaseSearchRequest.class);
 
-        when(accountScopeValidationHelper.requireActiveParishId(any(), any())).thenReturn(parishId);
+        when(scopeAccountRepository.findActiveParishIdByUsername("admin-parish")).thenReturn(Optional.of(parishId));
         when(courseParticipationRepository.findAll(any(BaseSearchRequest.class))).thenReturn(new PageImpl<>(List.of()));
 
         courseParticipationService.findAll(new BaseSearchRequest(), authentication("admin-parish", CourseParticipationAccessEvaluator.READ_PARISH));
 
         verify(courseParticipationRepository).findAll(requestCaptor.capture());
-        assertEquals(parishId, requestCaptor.getValue().getFilters().get("leader.parish.id"));
+        assertEquals(List.of(java.util.Map.of("leader.parish.id", parishId)), requestCaptor.getValue().getScopeAnyOf());
     }
 
     @Test
@@ -805,6 +808,15 @@ class CourseParticipationServiceTest {
         org.junit.jupiter.api.Assertions.assertTrue(service.isEligible("LEVEL_1", null, leaderId, course));
     }
 
+    private static phucuong.ht.modules.auth.repository.AccountRepository scopeAccountRepository() {
+        phucuong.ht.modules.auth.repository.AccountRepository repository = org.mockito.Mockito.mock(
+                phucuong.ht.modules.auth.repository.AccountRepository.class, org.mockito.Mockito.withSettings().strictness(org.mockito.quality.Strictness.LENIENT));
+        when(repository.findActiveDioceseIdByUsername(any())).thenReturn(Optional.of(UUID.randomUUID()));
+        when(repository.findActiveDeaneryIdByUsername(any())).thenReturn(Optional.of(UUID.randomUUID()));
+        when(repository.findActiveParishIdByUsername(any())).thenReturn(Optional.of(UUID.randomUUID()));
+        return repository;
+    }
+
     private CourseParticipationService buildService() {
         TrainingWorkflowSupport workflowSupport = new TrainingWorkflowSupport();
         return new CourseParticipationService(
@@ -816,6 +828,8 @@ class CourseParticipationServiceTest {
                 workflowSupport,
                 courseScoreComponentRepository,
                 accountScopeValidationHelper,
+                new phucuong.ht.common.security.AccountScopeResolver(new securityUtils(), scopeAccountRepository),
+                new phucuong.ht.modules.training.RegistrationSenderResolver(new securityUtils(), scopeAccountRepository, trainingCourseRepository, workflowSupport, commonValidationHelper),
                 commonValidationHelper,
                 certificateRepository,
                 certificateCodeGenerator,

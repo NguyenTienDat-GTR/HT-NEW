@@ -36,6 +36,7 @@ import phucuong.ht.modules.training.trainingCourse.model.response.CourseStatusIm
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.common.validation.AccountScopeValidationHelper;
+import phucuong.ht.common.security.AccountScopeResolver;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.config.CacheNames;
 import phucuong.ht.modules.deanery.model.entity.Deanery;
@@ -80,6 +81,8 @@ public class TrainingCourseService {
     private final DeaneryRepository deaneryRepository;
     private final TrainingWorkflowSupport trainingWorkflowSupport;
     private final AccountScopeValidationHelper accountScopeValidationHelper;
+    private final AccountScopeResolver accountScopeResolver;
+    private final phucuong.ht.modules.training.RegistrationSenderResolver registrationSenderResolver;
     private final CommonValidationHelper commonValidationHelper;
     private final securityUtils securityUtils;
     private final CourseScoreComponentService courseScoreComponentService;
@@ -153,17 +156,23 @@ public class TrainingCourseService {
     @Transactional(readOnly = true)
     public Page<TrainingCourseResponse> findAll(BaseSearchRequest request, Authentication authentication) {
         BaseSearchRequest scopedRequest = SearchRequests.copy(request);
-        if (AuthorityChecks.hasAuthority(authentication, TrainingCourseAccessEvaluator.READ_DIOCESE)) {
-            UUID dioceseId = accountScopeValidationHelper.requireActiveDioceseId(authentication, TrainingCourseAccessEvaluator.READ_DIOCESE);
-            scopedRequest.getFilters().put(DIOCESE_FILTER_FIELD, dioceseId);
-        } else if (AuthorityChecks.hasAuthority(authentication, TrainingCourseAccessEvaluator.READ_DEANERY)) {
-            UUID deaneryId = accountScopeValidationHelper.requireActiveDeaneryId(authentication, TrainingCourseAccessEvaluator.READ_DEANERY);
-            scopedRequest.getFilters().put(DEANERY_FILTER_FIELD, deaneryId);
-        } else if (AuthorityChecks.hasAuthority(authentication, TrainingCourseAccessEvaluator.SUBMIT_PARISH)) {
-            return findOpenCoursesForParish(request, authentication);
-        } else {
-            throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền xem khóa huấn luyện");
+        // Tài khoản nhiều role xem được hợp các khóa: khóa giáo phận (quyền giáo phận), khóa giáo hạt (quyền giáo hạt)
+        // và các khóa đang mở đăng ký trong giáo phận/giáo hạt của mình (quyền gửi đăng ký của giáo xứ).
+        List<Map<String, Object>> groups = new ArrayList<>(accountScopeResolver.scopes(authentication, "training.course.read")
+                .groups(Map.of(AccountScopeResolver.Level.DIOCESE, DIOCESE_FILTER_FIELD, AccountScopeResolver.Level.DEANERY, DEANERY_FILTER_FIELD)));
+        boolean canSeeOpen = AuthorityChecks.hasAuthority(authentication, TrainingCourseAccessEvaluator.SUBMIT_PARISH);
+        if (canSeeOpen) {
+            groups.addAll(openCourseGroups(authentication));
         }
+        if (groups.isEmpty()) {
+            boolean anyAuthority = canSeeOpen
+                    || AuthorityChecks.hasAuthority(authentication, TrainingCourseAccessEvaluator.READ_DIOCESE)
+                    || AuthorityChecks.hasAuthority(authentication, TrainingCourseAccessEvaluator.READ_DEANERY);
+            throw commonValidationHelper.forbidden(anyAuthority
+                    ? "Tài khoản hiện tại không có phạm vi hợp lệ để xem khóa huấn luyện"
+                    : "Tài khoản hiện tại không có quyền xem khóa huấn luyện");
+        }
+        scopedRequest.setScopeAnyOf(groups);
 
         Page<TrainingCourse> page = trainingCourseRepository.findAll(scopedRequest);
         // Số tham dự viên đã duyệt của cả trang trong một truy vấn.
@@ -175,55 +184,55 @@ public class TrainingCourseService {
         return new PageImpl<>(content, page.getPageable(), page.getTotalElements());
     }
 
-    // Giáo xứ chỉ xem được các khóa đang mở đăng ký trong phạm vi; tìm kiếm theo tên khóa/địa điểm.
-    private Page<TrainingCourseResponse> findOpenCoursesForParish(BaseSearchRequest request, Authentication authentication) {
+    // Khóa đang mở đăng ký (còn hoạt động) thuộc giáo phận hoặc giáo hạt của tài khoản.
+    private List<Map<String, Object>> openCourseGroups(Authentication authentication) {
         String username = securityUtils.currentUsername(authentication);
         if (username == null || username.isBlank()) {
             throw commonValidationHelper.forbidden("Không xác định được tài khoản hiện tại");
         }
-        UUID dioceseId = accountRepository.findActiveDioceseIdByUsername(username).orElse(null);
-        UUID deaneryId = accountRepository.findActiveDeaneryIdByUsername(username).orElse(null);
-        if (dioceseId == null && deaneryId == null) {
-            throw commonValidationHelper.forbidden("Tài khoản hiện tại không có phạm vi hợp lệ để xem khóa huấn luyện");
-        }
-        String keyword = request.getSearch() == null ? "" : request.getSearch().trim().toLowerCase(java.util.Locale.ROOT);
-        List<TrainingCourseResponse> matched = trainingCourseRepository.findOpenForRegistration(dioceseId, deaneryId).stream()
-                .filter(course -> keyword.isEmpty()
-                        || (course.getCourseName() != null && course.getCourseName().toLowerCase(java.util.Locale.ROOT).contains(keyword))
-                        || (course.getLocation() != null && course.getLocation().toLowerCase(java.util.Locale.ROOT).contains(keyword)))
-                .map(this::toResponse)
-                .toList();
-        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(request.getPage(), request.getSize());
-        int from = Math.min(request.getPage() * request.getSize(), matched.size());
-        int to = Math.min(from + request.getSize(), matched.size());
-        return new PageImpl<>(matched.subList(from, to), pageable, matched.size());
+        List<Map<String, Object>> groups = new ArrayList<>();
+        accountRepository.findActiveDioceseIdByUsername(username).ifPresent(id -> groups.add(openCourseGroup(DIOCESE_FILTER_FIELD, id)));
+        accountRepository.findActiveDeaneryIdByUsername(username).ifPresent(id -> groups.add(openCourseGroup(DEANERY_FILTER_FIELD, id)));
+        return groups;
+    }
+
+    private Map<String, Object> openCourseGroup(String ownerField, UUID ownerId) {
+        Map<String, Object> group = new LinkedHashMap<>();
+        group.put(ownerField, ownerId);
+        group.put("status", Boolean.TRUE);
+        group.put("registrationStatus", CourseRegistrationStatus.OPEN);
+        return group;
     }
 
     // Khóa đang mở đăng ký trong phạm vi tài khoản (kể cả tài khoản giáo xứ, không cần quyền xem danh sách khóa).
+    // senderType bỏ trống: hợp các khóa của mọi tư cách tài khoản có; có giá trị: chỉ khóa của tư cách đó.
     @Transactional(readOnly = true)
-    public List<TrainingCourseResponse> findRegistrable(Authentication authentication) {
+    public List<TrainingCourseResponse> findRegistrable(UnitType senderType, Authentication authentication) {
         String username = securityUtils.currentUsername(authentication);
         if (username == null || username.isBlank()) {
             throw commonValidationHelper.forbidden("Không xác định được tài khoản hiện tại");
         }
-        UnitType sender = trainingWorkflowSupport.resolveRegistrationSender(
-                AuthorityChecks.hasAuthority(authentication, "training.participation.submit.parish"),
-                AuthorityChecks.hasAuthority(authentication, "training.participation.submit.diocese"),
-                AuthorityChecks.hasAuthority(authentication, "training.participation.submit.deanery"),
-                accountScopeValidationHelper.hasDirectDiocese(authentication),
-                accountScopeValidationHelper.hasDirectDeanery(authentication));
-        if (sender == null) {
+        List<UnitType> senders = senderType == null
+                ? registrationSenderResolver.available(authentication)
+                : List.of(registrationSenderResolver.resolve(authentication, senderType));
+        if (senders.isEmpty()) {
             throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền gửi đăng ký khóa huấn luyện");
         }
         // Giáo xứ và giáo hạt: khóa giáo phận của giáo phận mình + khóa giáo hạt của giáo hạt mình; giáo phận: chỉ khóa giáo phận của mình.
+        boolean onlyDiocese = senders.stream().allMatch(sender -> sender == UnitType.DIOCESE);
         UUID dioceseId = accountRepository.findActiveDioceseIdByUsername(username).orElse(null);
-        UUID deaneryId = sender == UnitType.DIOCESE ? null : accountRepository.findActiveDeaneryIdByUsername(username).orElse(null);
+        UUID deaneryId = onlyDiocese ? null : accountRepository.findActiveDeaneryIdByUsername(username).orElse(null);
         if (dioceseId == null && deaneryId == null) {
             throw commonValidationHelper.forbidden("Tài khoản hiện tại không có phạm vi hợp lệ để đăng ký khóa huấn luyện");
         }
         return trainingCourseRepository.findOpenForRegistration(dioceseId, deaneryId).stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    // Các tư cách tài khoản có thể dùng để gửi đăng ký (giáo phận, giáo hạt, giáo xứ).
+    public List<phucuong.ht.modules.training.RegistrationSenderResolver.Option> registrationSenders(Authentication authentication) {
+        return registrationSenderResolver.options(authentication);
     }
 
     // Chi tiết khóa không qua cache (dùng ngay sau khi tạo/sửa để trả dữ liệu mới nhất).

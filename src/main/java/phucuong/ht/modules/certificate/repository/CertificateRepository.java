@@ -235,10 +235,12 @@ public class CertificateRepository extends BaseRepo<Certificate, String> {
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public List<java.time.LocalDate> findDistinctIssueDates(UUID dioceseId, UUID deaneryId) {
         StringBuilder jpql = new StringBuilder("select distinct c.issueDate from Certificate c where c.issueDate is not null");
-        if (dioceseId != null) {
+        // Có cả giáo phận và giáo hạt: lấy hợp (khóa của giáo phận hoặc khóa của giáo hạt).
+        if (dioceseId != null && deaneryId != null) {
+            jpql.append(" and (c.course.diocese.id = :dioceseId or c.course.deanery.id = :deaneryId)");
+        } else if (dioceseId != null) {
             jpql.append(" and c.course.diocese.id = :dioceseId");
-        }
-        if (deaneryId != null) {
+        } else if (deaneryId != null) {
             jpql.append(" and c.course.deanery.id = :deaneryId");
         }
         var query = entityManager.createQuery(jpql.toString(), java.time.LocalDate.class);

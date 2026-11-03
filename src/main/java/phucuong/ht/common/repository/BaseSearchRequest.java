@@ -27,6 +27,9 @@ public class BaseSearchRequest {
 
     private Map<String, Object> filters = new LinkedHashMap<>();
 
+    // Phạm vi dữ liệu do máy chủ đặt (không nhận từ client): các nhóm điều kiện nối bằng OR, trong mỗi nhóm nối bằng AND.
+    private List<Map<String, Object>> scopeAnyOf = List.of();
+
     private Boolean status;
 
     private String sortBy;
@@ -68,6 +71,10 @@ public class BaseSearchRequest {
             throw invalid("filters không được vượt quá " + MAX_FILTERS + " trường");
         }
         this.filters = normalized;
+    }
+
+    public void setScopeAnyOf(List<Map<String, Object>> scopeAnyOf) {
+        this.scopeAnyOf = scopeAnyOf == null ? List.of() : scopeAnyOf.stream().map(group -> (Map<String, Object>) new LinkedHashMap<>(group)).toList();
     }
 
     public void setStatus(Boolean status) {

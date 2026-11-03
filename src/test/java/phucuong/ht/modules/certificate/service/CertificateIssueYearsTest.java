@@ -4,7 +4,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import phucuong.ht.common.security.AccountScopeResolver;
 import phucuong.ht.common.utils.securityUtils;
+import phucuong.ht.modules.auth.repository.AccountRepository;
 import phucuong.ht.common.validation.AccountScopeValidationHelper;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.config.DomainEventPublisher;
@@ -32,17 +34,19 @@ class CertificateIssueYearsTest {
 
     private CertificateRepository certificateRepository;
     private AccountScopeValidationHelper scopeHelper;
+    private AccountRepository accountRepository;
     private CertificateService service;
 
     @BeforeEach
     void setUp() {
         certificateRepository = mock(CertificateRepository.class);
         scopeHelper = mock(AccountScopeValidationHelper.class);
+        accountRepository = mock(AccountRepository.class);
         CommonValidationHelper validationHelper = new CommonValidationHelper(new securityUtils());
         service = new CertificateService(
                 certificateRepository, mock(TrainingCourseRepository.class), mock(LeaderRepository.class),
                 mock(CourseParticipationRepository.class), mock(CertificateLifecycleService.class), new CourseActivityGuard(validationHelper),
-                new TrainingWorkflowSupport(), scopeHelper, validationHelper, mock(DomainEventPublisher.class),
+                new TrainingWorkflowSupport(), scopeHelper, new AccountScopeResolver(new securityUtils(), accountRepository), validationHelper, mock(DomainEventPublisher.class),
                 mock(CertificateRealtimeNotifier.class), mock(CertificateAccessEvaluator.class), mock(CourseFinishService.class), org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class));
     }
 
@@ -53,7 +57,7 @@ class CertificateIssueYearsTest {
     @Test
     void returnsEveryIssueYearThatExistsNewestFirstWithoutDuplicates() {
         UUID diocese = UUID.randomUUID();
-        when(scopeHelper.requireActiveDioceseId(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("training.certificate.read.diocese"))).thenReturn(diocese);
+        when(accountRepository.findActiveDioceseIdByUsername("admin")).thenReturn(java.util.Optional.of(diocese));
         // Gồm cả năm rất cũ: không bị cắt theo số năm gần đây.
         when(certificateRepository.findDistinctIssueDates(diocese, null)).thenReturn(List.of(
                 LocalDate.of(2024, 5, 1), LocalDate.of(2026, 1, 1), LocalDate.of(2024, 12, 31), LocalDate.of(2009, 3, 3)));
@@ -66,10 +70,23 @@ class CertificateIssueYearsTest {
     @Test
     void deaneryAccountsAreScopedToTheirDeanery() {
         UUID deanery = UUID.randomUUID();
-        when(scopeHelper.requireActiveDeaneryId(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("training.certificate.read.deanery"))).thenReturn(deanery);
+        when(accountRepository.findActiveDeaneryIdByUsername("admin")).thenReturn(java.util.Optional.of(deanery));
         when(certificateRepository.findDistinctIssueDates(isNull(), org.mockito.ArgumentMatchers.eq(deanery))).thenReturn(List.of(LocalDate.of(2025, 7, 7)));
 
         assertEquals(List.of(2025), service.issueYears(authentication("training.certificate.read.deanery")));
+    }
+
+    @Test
+    void accountsWithDioceseAndDeaneryPermissionsSeeTheUnionOfBothScopes() {
+        UUID diocese = UUID.randomUUID();
+        UUID deanery = UUID.randomUUID();
+        when(accountRepository.findActiveDioceseIdByUsername("admin")).thenReturn(java.util.Optional.of(diocese));
+        when(accountRepository.findActiveDeaneryIdByUsername("admin")).thenReturn(java.util.Optional.of(deanery));
+        when(certificateRepository.findDistinctIssueDates(diocese, deanery)).thenReturn(List.of(LocalDate.of(2024, 5, 1), LocalDate.of(2025, 2, 2)));
+        Authentication both = new UsernamePasswordAuthenticationToken("admin", null,
+                List.of(() -> "training.certificate.read.diocese", () -> "training.certificate.read.deanery"));
+
+        assertEquals(List.of(2025, 2024), service.issueYears(both));
     }
 
     @Test

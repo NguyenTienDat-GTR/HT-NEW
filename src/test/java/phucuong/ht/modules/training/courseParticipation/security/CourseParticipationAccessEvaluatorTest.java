@@ -121,7 +121,9 @@ class CourseParticipationAccessEvaluatorTest {
             CourseParticipationRepository participationRepository
     ) {
         return new CourseParticipationAccessEvaluator(
-                new securityUtils(), accountRepository, courseRepository, participationRepository, new TrainingWorkflowSupport());
+                new securityUtils(), accountRepository, courseRepository, participationRepository, new TrainingWorkflowSupport(),
+                new phucuong.ht.modules.training.RegistrationSenderResolver(new securityUtils(), accountRepository, courseRepository, new TrainingWorkflowSupport(),
+                        new phucuong.ht.common.validation.CommonValidationHelper(new securityUtils())));
     }
 
     private TrainingCourse course(String code, UnitType managementUnitType) {

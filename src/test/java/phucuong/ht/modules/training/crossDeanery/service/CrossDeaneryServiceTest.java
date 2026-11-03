@@ -153,7 +153,7 @@ class CrossDeaneryServiceTest {
         });
 
         service = new CrossDeaneryService(requestRepository, courseRepository, participationRepository, participationService, leaderRepository,
-                parishRepository, deaneryRepository, new TrainingWorkflowSupport(), mock(CourseActivityGuard.class), validation, scope, security,
+                parishRepository, deaneryRepository, new TrainingWorkflowSupport(), mock(CourseActivityGuard.class), validation, scope, org.mockito.Mockito.mock(phucuong.ht.modules.training.RegistrationSenderResolver.class), security,
                 mock(LeaderLevelService.class), resolver, notificationService, names, accountRepository, accessRepository, mock(CrossDeaneryCourseInfoBuilder.class));
     }
 

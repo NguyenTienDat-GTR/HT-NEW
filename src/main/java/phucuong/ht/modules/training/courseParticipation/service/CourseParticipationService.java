@@ -14,6 +14,7 @@ import phucuong.ht.common.repository.SearchRequests;
 import phucuong.ht.common.security.AuthorityChecks;
 import phucuong.ht.common.utils.LeaderNames;
 import phucuong.ht.common.validation.AccountScopeValidationHelper;
+import phucuong.ht.common.security.AccountScopeResolver;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.config.CacheNames;
 import phucuong.ht.config.DomainEventMessage;
@@ -68,6 +69,8 @@ public class CourseParticipationService {
     private final TrainingWorkflowSupport trainingWorkflowSupport;
     private final TrainingCourseScoreComponentRepository courseScoreComponentRepository;
     private final AccountScopeValidationHelper accountScopeValidationHelper;
+    private final AccountScopeResolver accountScopeResolver;
+    private final phucuong.ht.modules.training.RegistrationSenderResolver registrationSenderResolver;
     private final CommonValidationHelper commonValidationHelper;
     private final CertificateRepository certificateRepository;
     private final CertificateCodeGenerator certificateCodeGenerator;
@@ -89,19 +92,19 @@ public class CourseParticipationService {
     @Transactional(readOnly = true)
     public Page<CourseParticipationResponse> findAll(BaseSearchRequest request, Authentication authentication) {
         BaseSearchRequest scoped = SearchRequests.copy(request);
-        if (AuthorityChecks.hasAuthority(authentication, CourseParticipationAccessEvaluator.READ_DIOCESE)
-                || AuthorityChecks.hasAuthority(authentication, CourseParticipationAccessEvaluator.APPROVE_DIOCESE)
-                || AuthorityChecks.hasAuthority(authentication, CourseParticipationAccessEvaluator.SCORE_DIOCESE)) {
-            scoped.getFilters().put("course.diocese.id", accountScopeValidationHelper.requireActiveDioceseId(authentication, CourseParticipationAccessEvaluator.APPROVE_DIOCESE));
-        } else if (AuthorityChecks.hasAuthority(authentication, CourseParticipationAccessEvaluator.READ_DEANERY)
-                || AuthorityChecks.hasAuthority(authentication, CourseParticipationAccessEvaluator.APPROVE_DEANERY)
-                || AuthorityChecks.hasAuthority(authentication, CourseParticipationAccessEvaluator.SCORE_DEANERY)) {
-            scoped.getFilters().put("course.deanery.id", accountScopeValidationHelper.requireActiveDeaneryId(authentication, CourseParticipationAccessEvaluator.APPROVE_DEANERY));
-        } else if (AuthorityChecks.hasAuthority(authentication, CourseParticipationAccessEvaluator.READ_PARISH)) {
-            scoped.getFilters().put("leader.parish.id", accountScopeValidationHelper.requireActiveParishId(authentication, CourseParticipationAccessEvaluator.READ_PARISH));
-        } else {
+        // Hồ sơ trong phạm vi giáo phận, giáo hạt hoặc giáo xứ của tài khoản (hợp của mọi cấp tài khoản có quyền).
+        List<java.util.Map<String, Object>> groups = accountScopeResolver.scopesAny(authentication,
+                        List.of(CourseParticipationAccessEvaluator.READ_DIOCESE, CourseParticipationAccessEvaluator.APPROVE_DIOCESE, CourseParticipationAccessEvaluator.SCORE_DIOCESE),
+                        List.of(CourseParticipationAccessEvaluator.READ_DEANERY, CourseParticipationAccessEvaluator.APPROVE_DEANERY, CourseParticipationAccessEvaluator.SCORE_DEANERY),
+                        List.of(CourseParticipationAccessEvaluator.READ_PARISH))
+                .groups(java.util.Map.of(
+                        AccountScopeResolver.Level.DIOCESE, "course.diocese.id",
+                        AccountScopeResolver.Level.DEANERY, "course.deanery.id",
+                        AccountScopeResolver.Level.PARISH, "leader.parish.id"));
+        if (groups.isEmpty()) {
             throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền xem hồ sơ đào tạo");
         }
+        scoped.setScopeAnyOf(groups);
         Page<CourseParticipation> page = courseParticipationRepository.findAll(scoped);
         return new PageImpl<>(toResponses(page.getContent()), page.getPageable(), page.getTotalElements());
     }
@@ -163,7 +166,7 @@ public class CourseParticipationService {
         UnitType senderType;
         UUID senderId;
         String senderName;
-        senderType = resolveSenderType(authentication);
+        senderType = registrationSenderResolver.resolveForCourse(authentication, request.getSenderType(), course);
         if (senderType == UnitType.PARISH) {
             senderId = accountScopeValidationHelper.requireActiveParishId(authentication, CourseParticipationAccessEvaluator.SUBMIT_PARISH);
             Parish parish = parishRepository.findByIdWithDeaneryAndDiocese(senderId)
@@ -264,6 +267,7 @@ public class CourseParticipationService {
             UUID parishId,
             String leaderLevel,
             List<UUID> excludeLeaderIds,
+            UnitType requestedSender,
             int page,
             int size,
             Authentication authentication
@@ -274,7 +278,7 @@ public class CourseParticipationService {
         UUID scopeDeaneryId = null;
         UUID scopeParishId = null;
         boolean deaneryManaged = trainingWorkflowSupport.isDeaneryManaged(course);
-        UnitType senderType = resolveSenderType(authentication);
+        UnitType senderType = registrationSenderResolver.resolveForCourse(authentication, requestedSender, course);
         if (senderType == UnitType.PARISH) {
             scopeParishId = accountScopeValidationHelper.requireActiveParishId(authentication, CourseParticipationAccessEvaluator.SUBMIT_PARISH);
         } else if (senderType == UnitType.DIOCESE) {
@@ -331,20 +335,6 @@ public class CourseParticipationService {
                 .map(TrainingCourseType::getResultingLevel)
                 .orElse(courseType.getRequiredCurrentLevel());
         return nearest != null && levelOrder.higher(leaderLevel, nearest);
-    }
-
-    private UnitType resolveSenderType(Authentication authentication) {
-        UnitType type = trainingWorkflowSupport.resolveRegistrationSender(
-                AuthorityChecks.hasAuthority(authentication, CourseParticipationAccessEvaluator.SUBMIT_PARISH),
-                AuthorityChecks.hasAuthority(authentication, CourseParticipationAccessEvaluator.SUBMIT_DIOCESE),
-                AuthorityChecks.hasAuthority(authentication, CourseParticipationAccessEvaluator.SUBMIT_DEANERY),
-                accountScopeValidationHelper.hasDirectDiocese(authentication),
-                accountScopeValidationHelper.hasDirectDeanery(authentication)
-        );
-        if (type == null) {
-            throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền gửi đăng ký khóa huấn luyện");
-        }
-        return type;
     }
 
     private boolean matchesKeyword(Leader leader, String keyword) {
@@ -974,6 +964,8 @@ public class CourseParticipationService {
                 .deaneryId(participation.getLeader() == null || participation.getLeader().getParish() == null || participation.getLeader().getParish().getDeanery() == null ? null : participation.getLeader().getParish().getDeanery().getId())
                 .deaneryName(participation.getLeader() == null || participation.getLeader().getParish() == null || participation.getLeader().getParish().getDeanery() == null ? null : participation.getLeader().getParish().getDeanery().getName())
                 .managementUnitType(participation.getCourse() == null || participation.getCourse().getCourseType() == null ? null : participation.getCourse().getCourseType().getManagementUnitType())
+                .courseDioceseId(participation.getCourse() == null || participation.getCourse().getDiocese() == null ? null : participation.getCourse().getDiocese().getId())
+                .courseDeaneryId(participation.getCourse() == null || participation.getCourse().getDeanery() == null ? null : participation.getCourse().getDeanery().getId())
                 .certificateApprovalStatus(participation.getCertificateApprovalStatus())
                 .certificateRequestedAt(participation.getCertificateRequestedAt())
                 .certificateApprovedAt(participation.getCertificateApprovedAt())

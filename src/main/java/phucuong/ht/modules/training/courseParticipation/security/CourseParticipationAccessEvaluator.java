@@ -34,36 +34,16 @@ public class CourseParticipationAccessEvaluator {
     private final TrainingCourseRepository trainingCourseRepository;
     private final CourseParticipationRepository courseParticipationRepository;
     private final TrainingWorkflowSupport trainingWorkflowSupport;
+    private final phucuong.ht.modules.training.RegistrationSenderResolver registrationSenderResolver;
 
-    // Gửi đăng ký: giáo xứ (khóa giáo phận/giáo hạt trong phạm vi), giáo phận (chỉ khóa giáo phận), giáo hạt (chỉ khóa giáo hạt).
+    // Gửi đăng ký: cho phép khi có ít nhất một tư cách (giáo phận, giáo hạt, giáo xứ) mà khóa nằm trong phạm vi của tư cách đó.
     public boolean canRegister(Authentication authentication, String courseCode) {
         String username = securityUtils.currentUsername(authentication);
         if (username == null || username.isBlank()) {
             return false;
         }
         return trainingCourseRepository.findByCodeWithType(courseCode)
-                .map(course -> {
-                    boolean deaneryManaged = trainingWorkflowSupport.isDeaneryManaged(course);
-                    UnitType sender = trainingWorkflowSupport.resolveRegistrationSender(
-                            securityUtils.hasAuthority(authentication, SUBMIT_PARISH),
-                            securityUtils.hasAuthority(authentication, SUBMIT_DIOCESE),
-                            securityUtils.hasAuthority(authentication, SUBMIT_DEANERY),
-                            accountRepository.findDirectActiveDioceseIdByUsername(username).isPresent(),
-                            accountRepository.findDirectActiveDeaneryIdByUsername(username).isPresent());
-                    if (sender == UnitType.PARISH) {
-                        return accountRepository.findActiveParishIdByUsername(username).isPresent()
-                                && (deaneryManaged ? scopedDeanery(authentication, courseCode) : scopedDiocese(authentication, courseCode));
-                    }
-                    if (sender == UnitType.DIOCESE) {
-                        return !deaneryManaged && directDioceseOwnsCourse(authentication, courseCode);
-                    }
-                    if (sender == UnitType.DEANERY) {
-                        return deaneryManaged
-                                ? directDeaneryOwnsCourse(authentication, courseCode)
-                                : directDeaneryInCourseDiocese(authentication, courseCode);
-                    }
-                    return false;
-                })
+                .map(course -> !registrationSenderResolver.availableForCourse(authentication, course).isEmpty())
                 .orElse(false);
     }
 
@@ -253,16 +233,6 @@ public class CourseParticipationAccessEvaluator {
                 .orElse(false);
     }
 
-    private boolean directDeaneryInCourseDiocese(Authentication authentication, String courseCode) {
-        String username = securityUtils.currentUsername(authentication);
-        if (username == null || username.isBlank()
-                || accountRepository.findDirectActiveDeaneryIdByUsername(username).isEmpty()) {
-            return false;
-        }
-        return accountRepository.findActiveDioceseIdByUsername(username)
-                .flatMap(activeId -> trainingCourseRepository.findDioceseIdByCourseCode(courseCode).map(activeId::equals))
-                .orElse(false);
-    }
 
     // Duyệt: phạm vi của tài khoản (gắn trực tiếp hoặc theo huynh trưởng) phải chứa khóa; cấp duyệt do quyền quyết định.
     private boolean deaneryScopeOwnsCourse(Authentication authentication, String courseCode) {
@@ -285,23 +255,5 @@ public class CourseParticipationAccessEvaluator {
                 .orElse(false);
     }
 
-    private boolean directDeaneryOwnsCourse(Authentication authentication, String courseCode) {
-        String username = securityUtils.currentUsername(authentication);
-        if (username == null || username.isBlank()) {
-            return false;
-        }
-        return accountRepository.findDirectActiveDeaneryIdByUsername(username)
-                .flatMap(activeId -> trainingCourseRepository.findDeaneryIdByCourseCode(courseCode).map(activeId::equals))
-                .orElse(false);
-    }
 
-    private boolean directDioceseOwnsCourse(Authentication authentication, String courseCode) {
-        String username = securityUtils.currentUsername(authentication);
-        if (username == null || username.isBlank()) {
-            return false;
-        }
-        return accountRepository.findDirectActiveDioceseIdByUsername(username)
-                .flatMap(activeId -> trainingCourseRepository.findDioceseIdByCourseCode(courseCode).map(activeId::equals))
-                .orElse(false);
-    }
 }
