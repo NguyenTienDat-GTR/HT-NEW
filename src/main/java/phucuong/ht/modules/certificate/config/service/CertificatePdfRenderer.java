@@ -87,11 +87,24 @@ public class CertificatePdfRenderer {
         return switch (fam) {
             case "serif" -> "fonts/DejaVuSerif" + (bold && italic ? "-BoldItalic" : bold ? "-Bold" : italic ? "-Italic" : "") + ".ttf";
             case "bevietnam" -> "fonts/BeVietnamPro" + (bold && italic ? "-BoldItalic" : bold ? "-Bold" : italic ? "-Italic" : "-Regular") + ".ttf";
+            case "roboto" -> styled("Roboto", bold, italic);
+            case "montserrat" -> styled("Montserrat", bold, italic);
+            case "lora" -> styled("Lora", bold, italic);
+            case "playfair" -> styled("PlayfairDisplay", bold, italic);
+            case "notoserif" -> styled("NotoSerif", bold, italic);
+            case "tinos" -> styled("Tinos", bold, italic);
+            case "dancing" -> "fonts/DancingScript-" + (bold ? "Bold" : "Regular") + ".ttf";
+            case "greatvibes" -> "fonts/GreatVibes-Regular.ttf";
             case "lobster" -> "fonts/Lobster-Regular.ttf";
             case "pacifico" -> "fonts/Pacifico-Regular.ttf";
             case "patrickhand" -> "fonts/PatrickHand-Regular.ttf";
             default -> "fonts/DejaVuSans" + (bold && italic ? "-BoldOblique" : bold ? "-Bold" : italic ? "-Oblique" : "") + ".ttf";
         };
+    }
+
+    // Họ chữ có đủ bốn kiểu Regular / Bold / Italic / BoldItalic.
+    private static String styled(String base, boolean bold, boolean italic) {
+        return "fonts/" + base + (bold && italic ? "-BoldItalic" : bold ? "-Bold" : italic ? "-Italic" : "-Regular") + ".ttf";
     }
 
     private void renderPage(PDDocument document, RenderPage page, Map<String, PDType0Font> fontCache) throws Exception {

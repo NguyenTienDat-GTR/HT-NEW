@@ -69,7 +69,9 @@ class BadgeConfigServiceTest {
             return assetId != null ? "url:" + assetId : invocation.getArgument(1);
         });
         service = new BadgeConfigService(repository, scopeResolver, validationHelper, securityUtils, mediaAssets, mediaFolders, mediaUrls,
-                mock(phucuong.ht.modules.media.album.BackgroundAlbumService.class));
+                mock(phucuong.ht.modules.media.album.BackgroundAlbumService.class),
+                new BadgePdfRenderer(new phucuong.ht.modules.certificate.config.service.CertificatePdfRenderer()),
+                mock(phucuong.ht.common.layoutconfig.LayoutConfigVersionService.class));
 
         when(repository.persist(any())).thenAnswer(invocation -> {
             BadgeConfig config = invocation.getArgument(0);
@@ -108,6 +110,33 @@ class BadgeConfigServiceTest {
         when(accountRepository.findActiveDioceseIdByUsername("admin-deanery")).thenReturn(Optional.of(dioceseId));
         return new UsernamePasswordAuthenticationToken("admin-deanery", null,
                 java.util.Arrays.stream(authorities).map(a -> (org.springframework.security.core.GrantedAuthority) () -> a).toList());
+    }
+
+    @Test
+    void previewPdfRendersTheUnsavedDraftWithSampleData() {
+        BadgeConfigUpsertRequest content = request("Mẫu nháp");
+        content.setFrontLayout(List.of(field("holyName", 0.5, 0.5)));
+        content.setHasBack(true);
+        content.setBackLayout(List.of(field("teamName", 0.5, 0.5)));
+        phucuong.ht.modules.badge.config.model.request.BadgePreviewPdfRequest preview = new phucuong.ht.modules.badge.config.model.request.BadgePreviewPdfRequest();
+        preview.setConfig(content);
+        preview.setValues(Map.of("holyName", "Augustinô", "teamName", "Đội 1"));
+
+        var export = service.previewPdf(preview, superAdmin);
+
+        assertEquals("xem-truoc-the-tham-du.pdf", export.filename());
+        assertEquals(2, export.pageCount());
+        assertEquals(10, export.badgeCount());
+        assertTrue(export.content().length > 100);
+    }
+
+    @Test
+    void previewPdfRejectsACardThatDoesNotFitLikeSaving() {
+        BadgeConfigUpsertRequest content = request("Quá lớn");
+        content.setCardWidthMm(250.0);
+        phucuong.ht.modules.badge.config.model.request.BadgePreviewPdfRequest preview = new phucuong.ht.modules.badge.config.model.request.BadgePreviewPdfRequest();
+        preview.setConfig(content);
+        assertThrows(ApiException.class, () -> service.previewPdf(preview, superAdmin));
     }
 
     private BadgeConfigUpsertRequest request(String name) {

@@ -84,17 +84,29 @@ class MediaImageProcessorTest {
     }
 
     @Test
+    void backgroundIsNeverUpscaledAndKeepsItsOriginalSizeWhenWithinTheCap() throws IOException {
+        // Ảnh A4 ngang 300 dpi (3508 px) nằm trong giới hạn: master giữ nguyên kích thước, không bị thu nhỏ hay phóng to.
+        byte[] source = image(3508, 2480, "jpg", BufferedImage.TYPE_INT_RGB);
+        Map<String, MediaImageProcessor.Processed> variants = byName(processor.process(source, MediaCategory.BADGE_BACKGROUND));
+        assertEquals(3508, variants.get(MediaVariants.MASTER).width());
+        assertEquals(2480, variants.get(MediaVariants.MASTER).height());
+        // Bản xem trước nhỏ hơn nhiều: đo độ nét phải dựa vào master chứ không phải bản này.
+        assertEquals(1600, variants.get(MediaVariants.PREVIEW).width());
+    }
+
+    @Test
     void backgroundKeepsAspectRatioAndCapsLongEdge() throws IOException {
-        byte[] source = image(5000, 3500, "jpg", BufferedImage.TYPE_INT_RGB);
+        // Ảnh dài và mỏng để thử giới hạn 4961 px mà không tốn bộ nhớ của JVM chạy test.
+        byte[] source = image(6000, 1200, "jpg", BufferedImage.TYPE_INT_RGB);
         Map<String, MediaImageProcessor.Processed> variants = byName(processor.process(source, MediaCategory.CERTIFICATE_BACKGROUND));
 
         MediaImageProcessor.Processed master = variants.get(MediaVariants.MASTER);
         MediaImageProcessor.Processed preview = variants.get(MediaVariants.PREVIEW);
-        assertEquals(3508, master.width());
+        assertEquals(4961, master.width());
         assertEquals(1600, preview.width());
-        // Giữ tỉ lệ 5000:3500 (sai số làm tròn ±1 điểm ảnh).
-        assertTrue(Math.abs(master.height() - 3508 * 3500 / 5000) <= 1);
-        assertTrue(Math.abs(preview.height() - 1600 * 3500 / 5000) <= 1);
+        // Giữ tỉ lệ 6000:1200 (sai số làm tròn ±1 điểm ảnh).
+        assertTrue(Math.abs(master.height() - 4961 * 1200 / 6000) <= 1);
+        assertTrue(Math.abs(preview.height() - 1600 * 1200 / 6000) <= 1);
         assertTrue(preview.data().length < master.data().length);
     }
 

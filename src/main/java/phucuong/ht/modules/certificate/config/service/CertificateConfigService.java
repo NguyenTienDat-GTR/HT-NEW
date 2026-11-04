@@ -41,6 +41,7 @@ import phucuong.ht.modules.training.trainingCourse.model.entity.TrainingCourse;
 
 import phucuong.ht.modules.media.model.enums.MediaCategory;
 import phucuong.ht.modules.media.service.DataUrls;
+import phucuong.ht.modules.certificate.config.model.request.CertificatePreviewPdfRequest;
 import phucuong.ht.modules.media.service.MediaAssetService;
 import phucuong.ht.modules.media.service.MediaFolderService;
 import phucuong.ht.modules.media.service.MediaUrls;
@@ -92,6 +93,7 @@ public class CertificateConfigService {
     private final MediaFolderService mediaFolderService;
     private final MediaUrls mediaUrls;
     private final phucuong.ht.modules.media.album.BackgroundAlbumService albumService;
+    private final phucuong.ht.common.layoutconfig.LayoutConfigVersionService versionService;
 
     public record PdfExport(byte[] content, String filename) {
     }
@@ -233,12 +235,51 @@ public class CertificateConfigService {
         CertificateConfig config = requireEditable(id, actor);
         String audit = securityUtils.currentAuditActor(authentication);
         OffsetDateTime now = OffsetDateTime.now();
+        // Ghi lại bản hiện tại trước khi đổi để người dùng xem lịch sử và khôi phục.
+        versionService.record(phucuong.ht.common.layoutconfig.LayoutConfigVersionService.CERTIFICATE, id, snapshotOf(config), audit);
 
         if (TextFolding.normalize(request.getName()) != null) {
             config.setName(uniqueName(config.getScopeKey(), request.getName(), config.getName()));
         }
         applyContent(config, request, now, audit, actor);
         return toResponse(configRepository.merge(config), actor, usageByConfig(actor, authentication).getOrDefault(id, List.of()));
+    }
+
+    // Nội dung cấu hình tại một thời điểm (không có ảnh đã ký, chỉ mã ảnh) để lưu lịch sử phiên bản.
+    private java.util.Map<String, Object> snapshotOf(CertificateConfig config) {
+        java.util.Map<String, Object> snapshot = new java.util.LinkedHashMap<>();
+        snapshot.put("name", config.getName());
+        snapshot.put("paperSize", config.getPaperSize());
+        snapshot.put("orientation", config.getOrientation());
+        snapshot.put("backgroundAssetId", config.getBackgroundAssetId() == null ? null : config.getBackgroundAssetId().toString());
+        snapshot.put("fieldLayout", config.getFieldLayout() == null ? List.of() : config.getFieldLayout());
+        return snapshot;
+    }
+
+    // Lịch sử các bản đã lưu của một cấu hình (mới nhất trước); quyền như xem cấu hình đó.
+    @Transactional(readOnly = true)
+    public List<phucuong.ht.common.layoutconfig.LayoutConfigVersionResponse> versions(UUID id, Authentication authentication) {
+        get(id, authentication);
+        return versionService.list(phucuong.ht.common.layoutconfig.LayoutConfigVersionService.CERTIFICATE, id).stream()
+                .map(version -> {
+                    java.util.Map<String, Object> snapshot = new java.util.LinkedHashMap<>(version.snapshot());
+                    snapshot.put("backgroundImage", usableUrl(snapshot.get("backgroundAssetId"), MediaCategory.CERTIFICATE_BACKGROUND));
+                    return new phucuong.ht.common.layoutconfig.LayoutConfigVersionResponse(version.id(), version.versionNo(), version.createdAt(), version.createdBy(), snapshot);
+                })
+                .toList();
+    }
+
+    // URL ảnh đã ký nếu ảnh còn tồn tại; ảnh đã bị gỡ khỏi cấu hình sau các lần lưu thì trả null.
+    private String usableUrl(Object assetId, MediaCategory category) {
+        if (assetId == null) {
+            return null;
+        }
+        UUID id = UUID.fromString(assetId.toString());
+        var asset = mediaAssetService.find(id);
+        if (asset == null || asset.getStatus() == phucuong.ht.modules.media.model.enums.MediaStatus.DELETED) {
+            return null;
+        }
+        return mediaUrls.display(id, category);
     }
 
     // Đặt cấu hình làm cấu hình chung của phạm vi chứa nó; cấu hình chung cũ trở thành cấu hình thường.
@@ -262,6 +303,7 @@ public class CertificateConfigService {
         CertificateConfig config = requireEditable(id, actor);
         LayoutConfigRules.requireNotDefault(config, validationHelper);
         mediaAssetService.release(config.getBackgroundAssetId());
+        versionService.deleteAll(phucuong.ht.common.layoutconfig.LayoutConfigVersionService.CERTIFICATE, id);
         configRepository.remove(config.getId());
     }
 
@@ -476,6 +518,56 @@ public class CertificateConfigService {
                 .build();
     }
 
+    private static final int PREVIEW_MAX_ITEMS = 200;
+    private static final int PREVIEW_MAX_VALUES = 100;
+    private static final int PREVIEW_MAX_VALUE_LENGTH = 500;
+
+    // PDF xem trước của bố cục đang soạn (kể cả chưa lưu) với dữ liệu mẫu: cùng bộ vẽ với PDF thật nên phông, cỡ chữ, vị trí khớp bản in.
+    @Transactional(readOnly = true)
+    public PdfExport previewPdf(CertificatePreviewPdfRequest request, Authentication authentication) {
+        ActorScope actor = scopeResolver.resolve(authentication);
+        List<CertificateLayoutItem> layout = request.getFieldLayout() == null ? List.of() : request.getFieldLayout();
+        if (layout.size() > PREVIEW_MAX_ITEMS) {
+            throw validationHelper.validationError("Bố cục tối đa " + PREVIEW_MAX_ITEMS + " phần tử");
+        }
+        Map<String, String> values = new LinkedHashMap<>();
+        if (request.getValues() != null) {
+            if (request.getValues().size() > PREVIEW_MAX_VALUES) {
+                throw validationHelper.validationError("Dữ liệu mẫu có quá nhiều trường");
+            }
+            request.getValues().forEach((key, value) -> values.put(key, value == null ? ""
+                    : value.length() > PREVIEW_MAX_VALUE_LENGTH ? value.substring(0, PREVIEW_MAX_VALUE_LENGTH) : value));
+        }
+        byte[] background = null;
+        if (request.getBackgroundAssetId() != null) {
+            // Ảnh album của đơn vị khác không dùng được dù biết mã ảnh (giống khi lưu cấu hình).
+            albumService.assertUsable(request.getBackgroundAssetId(), actor);
+            background = mediaAssetService.loadMaster(request.getBackgroundAssetId());
+        }
+        List<CertificatePdfRenderer.RenderQr> qrCodes = new ArrayList<>();
+        BitMatrix sampleQr = qrItems(layout).isEmpty() ? null : PreviewSamples.qr(values.getOrDefault("certificateCode", "MAU-XEM-TRUOC"));
+        for (CertificateLayoutItem qr : qrItems(layout)) {
+            qrCodes.add(new CertificatePdfRenderer.RenderQr(sampleQr, valueOr(qr.getX(), 0.5), valueOr(qr.getY(), 0.5), qrSize(qr)));
+        }
+        List<CertificatePdfRenderer.RenderPhoto> photos = new ArrayList<>();
+        List<CertificateLayoutItem> photoItems = photoItems(layout);
+        if (!photoItems.isEmpty()) {
+            byte[] photo = PreviewSamples.photoPng();
+            for (CertificateLayoutItem item : photoItems) {
+                photos.add(new CertificatePdfRenderer.RenderPhoto(photo, valueOr(item.getX(), 0.5), valueOr(item.getY(), 0.5), photoSize(item), item.photoAspect()));
+            }
+        }
+        float[] dims = pageDimensions(request.getPaperSize(), request.getOrientation());
+        byte[] content;
+        try {
+            content = pdfRenderer.renderPdf(List.of(new CertificatePdfRenderer.RenderPage(
+                    background, toRenderItems(layout, values), qrCodes, photos, dims[0], dims[1])));
+        } catch (Exception e) {
+            throw validationHelper.validationError("Không thể tạo PDF xem trước: " + e.getMessage());
+        }
+        return new PdfExport(content, "xem-truoc-chung-nhan.pdf");
+    }
+
     @Transactional(readOnly = true)
     public PdfExport exportPdf(List<String> certificateCodes) {
         List<Certificate> certificates = new ArrayList<>();
@@ -609,14 +701,14 @@ public class CertificateConfigService {
         if (layout == null) {
             return List.of();
         }
-        return layout.stream().filter(item -> QR_TYPE.equalsIgnoreCase(item.getType())).toList();
+        return layout.stream().filter(item -> item.isPrinted() && QR_TYPE.equalsIgnoreCase(item.getType())).toList();
     }
 
     private List<CertificateLayoutItem> photoItems(List<CertificateLayoutItem> layout) {
         if (layout == null) {
             return List.of();
         }
-        return layout.stream().filter(item -> PHOTO_TYPE.equalsIgnoreCase(item.getType())).toList();
+        return layout.stream().filter(item -> item.isPrinted() && PHOTO_TYPE.equalsIgnoreCase(item.getType())).toList();
     }
 
     // Cạnh ảnh huynh trưởng theo tỉ lệ chiều cao trang.
@@ -629,6 +721,14 @@ public class CertificateConfigService {
     private double qrSize(CertificateLayoutItem item) {
         double size = item.getSize() == null || item.getSize() <= 0 ? 0.15 : item.getSize();
         return Math.min(0.9, Math.max(0.03, size));
+    }
+
+    private static Integer widthOf(int[] size) {
+        return size == null ? null : size[0];
+    }
+
+    private static Integer heightOf(int[] size) {
+        return size == null ? null : size[1];
     }
 
     private static double valueOr(Double value, double fallback) {
@@ -657,6 +757,9 @@ public class CertificateConfigService {
             return items;
         }
         for (CertificateLayoutItem item : layout) {
+            if (!item.isPrinted()) {
+                continue;
+            }
             if (QR_TYPE.equalsIgnoreCase(item.getType()) || PHOTO_TYPE.equalsIgnoreCase(item.getType())) {
                 continue; // Mã QR và ảnh vẽ riêng (xem RenderQr, RenderPhoto).
             }
@@ -700,8 +803,11 @@ public class CertificateConfigService {
             var parish = l.getParish();
             var deanery = parish == null ? null : parish.getDeanery();
             var diocese = deanery == null ? null : deanery.getDiocese();
-            // Giáo xứ dùng tên giáo xứ (name), không phải xứ đoàn (chapterName).
-            v.put("leaderParishName", parish == null ? "" : nullToEmpty(parish.getName()));
+            // Giáo xứ dùng tên giáo xứ (giáo xứ mẹ nếu là giáo họ / giáo điểm), không phải xứ đoàn (chapterName).
+            var unitNames = phucuong.ht.modules.parish.model.ParishUnitNames.of(parish);
+            v.put("leaderParishName", unitNames.parishName());
+            v.put("leaderSubUnitName", unitNames.subUnitName());
+            v.put("leaderUnitFullName", unitNames.fullName());
             v.put("leaderDeaneryName", deanery == null ? "" : nullToEmpty(deanery.getName()));
             v.put("leaderDioceseName", diocese == null ? "" : nullToEmpty(diocese.getName()));
             v.put("leaderLevel", levelNames.getOrDefault(l.getLeaderLevel(), nullToEmpty(l.getLeaderLevel())));
@@ -716,6 +822,7 @@ public class CertificateConfigService {
             v.put("courseEndDate", end);
             // Thời gian tổ chức: "từ ... đến ..." (rút gọn khi thiếu một đầu).
             v.put("coursePeriod", !start.isEmpty() && !end.isEmpty() ? ("từ " + start + " đến " + end) : (start + end));
+            v.put("courseLocation", nullToEmpty(course.getLocation()));
             var courseType = course.getCourseType();
             // Cấp độ đạt được: hồ sơ ngoại lệ theo cấp người duyệt đã chọn, còn lại theo loại khóa.
             String achieved = l == null ? null : courseParticipationRepository.findByLeaderIdAndCourseCode(l.getId(), course.getCourseCode())
@@ -777,6 +884,8 @@ public class CertificateConfigService {
         return summaryBuilder(config, actor, usedBy)
                 .backgroundImage(mediaUrls.displayOrLegacy(config.getBackgroundAssetId(), config.getLegacyBackgroundData(), MediaCategory.CERTIFICATE_BACKGROUND))
                 .backgroundAssetId(config.getBackgroundAssetId())
+                .backgroundWidthPx(widthOf(mediaAssetService.masterSize(config.getBackgroundAssetId())))
+                .backgroundHeightPx(heightOf(mediaAssetService.masterSize(config.getBackgroundAssetId())))
                 .fieldLayout(config.getFieldLayout())
                 .build();
     }

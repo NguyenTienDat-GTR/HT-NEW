@@ -13,7 +13,10 @@ public enum CertificateMergeField {
     LEADER_FULL_NAME("leaderFullName", "Tên thánh, họ và tên", "Huynh trưởng"),
     LEADER_BIRTH_DATE("leaderBirthDate", "Ngày sinh", "Huynh trưởng"),
     LEADER_GENDER("leaderGender", "Giới tính", "Huynh trưởng"),
-    LEADER_PARISH_NAME("leaderParishName", "Giáo xứ / giáo họ / giáo điểm", "Huynh trưởng"),
+    LEADER_PARISH_NAME("leaderParishName", "Giáo xứ", "Huynh trưởng"),
+    // Chỉ có giá trị khi huynh trưởng thuộc giáo họ / giáo điểm; giáo xứ để trống nên không in gì.
+    LEADER_SUB_UNIT_NAME("leaderSubUnitName", "Giáo họ / giáo điểm", "Huynh trưởng"),
+    LEADER_UNIT_FULL_NAME("leaderUnitFullName", "Đơn vị (giáo họ / giáo điểm kèm giáo xứ)", "Huynh trưởng"),
     LEADER_DEANERY_NAME("leaderDeaneryName", "Giáo hạt", "Huynh trưởng"),
     LEADER_DIOCESE_NAME("leaderDioceseName", "Giáo phận", "Huynh trưởng"),
     LEADER_LEVEL("leaderLevel", "Cấp hiện tại", "Huynh trưởng"),
@@ -24,10 +27,10 @@ public enum CertificateMergeField {
     COURSE_START_DATE("courseStartDate", "Ngày bắt đầu", "Khóa huấn luyện"),
     COURSE_END_DATE("courseEndDate", "Ngày kết thúc", "Khóa huấn luyện"),
     COURSE_PERIOD("coursePeriod", "Thời gian tổ chức", "Khóa huấn luyện"),
+    COURSE_LOCATION("courseLocation", "Địa điểm", "Khóa huấn luyện"),
     RESULTING_LEVEL("resultingLevel", "Cấp độ đạt được", "Khóa huấn luyện"),
 
     CERTIFICATE_CODE("certificateCode", "Mã chứng nhận", "Chứng nhận"),
-    CERTIFICATE_NAME("certificateName", "Tên chứng nhận", "Chứng nhận"),
     RESULT("result", "Kết quả", "Chứng nhận"),
     ISSUE_DATE("issueDate", "Ngày cấp", "Chứng nhận");
 

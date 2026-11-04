@@ -51,7 +51,8 @@ public class MediaImageProcessor {
     private static final int THUMB_HEIGHT = 180;
     private static final int MEDIUM_WIDTH = 480;
     private static final int MEDIUM_HEIGHT = 720;
-    private static final int MASTER_MAX_EDGE = 3508;
+    // Ảnh nền được in nên master giữ đủ nét cho A3 ở 300 dpi (cạnh dài 4961 px); ảnh nhỏ hơn thì giữ nguyên, không phóng to.
+    private static final int MASTER_MAX_EDGE = 4961;
     private static final int PREVIEW_MAX_EDGE = 1600;
 
     private final MediaProperties properties;
@@ -87,7 +88,7 @@ public class MediaImageProcessor {
             float quality = switch (variant) {
                 case MediaVariants.THUMB -> 0.80f;
                 case MediaVariants.MEDIUM -> 0.82f;
-                case MediaVariants.MASTER -> 0.90f;
+                case MediaVariants.MASTER -> 0.95f;
                 default -> 0.80f;
             };
             byte[] bytes = encodeJpeg(scaled, quality);

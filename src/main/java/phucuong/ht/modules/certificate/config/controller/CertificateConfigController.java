@@ -9,10 +9,12 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import phucuong.ht.common.dto.apiResponse;
+import phucuong.ht.common.layoutconfig.LayoutConfigVersionResponse;
 import phucuong.ht.modules.certificate.config.model.request.CertificateConfigAssignRequest;
 import phucuong.ht.modules.certificate.config.model.request.CertificateConfigUpsertRequest;
 import phucuong.ht.modules.certificate.config.model.response.CertificateConfigAssignmentResponse;
 import phucuong.ht.modules.certificate.config.model.request.CertificateExportPdfRequest;
+import phucuong.ht.modules.certificate.config.model.request.CertificatePreviewPdfRequest;
 import phucuong.ht.modules.certificate.config.model.response.CertificateConfigResponse;
 import phucuong.ht.modules.certificate.config.model.response.CertificateFieldCatalogItem;
 import phucuong.ht.modules.certificate.config.model.response.CertifiedCourseTypeResponse;
@@ -20,6 +22,8 @@ import phucuong.ht.modules.certificate.config.model.response.CertificatePdfJobRe
 import phucuong.ht.modules.certificate.config.model.response.CertificatePreviewResponse;
 import phucuong.ht.modules.certificate.config.service.CertificateConfigService;
 import phucuong.ht.modules.certificate.config.service.CertificatePdfJobService;
+import phucuong.ht.common.validation.CommonValidationHelper;
+import phucuong.ht.modules.certificate.service.CertificateService;
 
 import java.nio.charset.StandardCharsets;
 import java.net.URLEncoder;
@@ -36,6 +40,8 @@ public class CertificateConfigController {
 
     private final CertificateConfigService service;
     private final CertificatePdfJobService pdfJobService;
+    private final CertificateService certificateService;
+    private final CommonValidationHelper validationHelper;
 
     @GetMapping("/config")
     @PreAuthorize("@certificateConfigAccessEvaluator.canRead(authentication)")
@@ -54,6 +60,13 @@ public class CertificateConfigController {
     @PreAuthorize("@certificateConfigAccessEvaluator.canRead(authentication)")
     public apiResponse<CertificateConfigResponse> detail(@PathVariable UUID id, Authentication authentication) {
         return apiResponse.success("Lấy chi tiết cấu hình chứng nhận thành công", service.get(id, authentication));
+    }
+
+    // Lịch sử các bản đã lưu của một cấu hình (mới nhất trước); quyền như xem cấu hình.
+    @GetMapping("/config/{id}/versions")
+    @PreAuthorize("@certificateConfigAccessEvaluator.canRead(authentication)")
+    public apiResponse<List<LayoutConfigVersionResponse>> versions(@PathVariable UUID id, Authentication authentication) {
+        return apiResponse.success("Lấy lịch sử phiên bản cấu hình chứng nhận thành công", service.versions(id, authentication));
     }
 
     @GetMapping("/config/fields")
@@ -117,6 +130,14 @@ public class CertificateConfigController {
         return apiResponse.<Void>success("Xóa cấu hình chứng nhận thành công", null);
     }
 
+    // Xuất PDF xem trước của bố cục đang soạn với dữ liệu mẫu; quyền như xem cấu hình chứng nhận.
+    @PostMapping("/config/preview-pdf")
+    @PreAuthorize("@certificateConfigAccessEvaluator.canRead(authentication)")
+    public ResponseEntity<byte[]> previewPdf(@RequestBody CertificatePreviewPdfRequest request, Authentication authentication) {
+        CertificateConfigService.PdfExport export = service.previewPdf(request, authentication);
+        return pdfResponse(export.content(), export.filename());
+    }
+
     // Xem trước chứng nhận với cấu hình đang áp dụng và dữ liệu thật; quyền như xem chi tiết chứng nhận.
     @GetMapping("/{certificateCode}/preview")
     @PreAuthorize("@certificateAccessEvaluator.canRead(authentication, #certificateCode)")
@@ -127,16 +148,16 @@ public class CertificateConfigController {
     // Xuất PDF chứng nhận đồng bộ (giữ cho tương thích). Yêu cầu quyền đọc chứng nhận.
     @PostMapping("/export-pdf")
     @PreAuthorize("@certificateAccessEvaluator.canList(authentication)")
-    public ResponseEntity<byte[]> exportPdf(@Valid @RequestBody CertificateExportPdfRequest request) {
-        CertificateConfigService.PdfExport export = service.exportPdf(request.getCertificateCodes());
+    public ResponseEntity<byte[]> exportPdf(@Valid @RequestBody CertificateExportPdfRequest request, Authentication authentication) {
+        CertificateConfigService.PdfExport export = service.exportPdf(resolveCodes(request, authentication));
         return pdfResponse(export.content(), export.filename());
     }
 
     // Xuất PDF chạy nền: tạo job, trả jobId ngay (không khóa request dù vài trăm chứng nhận).
     @PostMapping("/export-pdf/jobs")
     @PreAuthorize("@certificateAccessEvaluator.canList(authentication)")
-    public apiResponse<CertificatePdfJobResponse> submitExport(@Valid @RequestBody CertificateExportPdfRequest request) {
-        CertificatePdfJobService.Job job = pdfJobService.submit(request.getCertificateCodes());
+    public apiResponse<CertificatePdfJobResponse> submitExport(@Valid @RequestBody CertificateExportPdfRequest request, Authentication authentication) {
+        CertificatePdfJobService.Job job = pdfJobService.submit(resolveCodes(request, authentication));
         return apiResponse.success("Đã nhận yêu cầu xuất PDF", toJobResponse(job));
     }
 
@@ -159,6 +180,23 @@ public class CertificateConfigController {
             return ResponseEntity.notFound().build();
         }
         return pdfResponse(job.getContent(), job.getFilename());
+    }
+
+    // Có chọn hồ sơ thì xuất đúng các chứng nhận đó; không chọn mà có mã khóa thì xuất mọi chứng nhận đã duyệt của khóa.
+    private List<String> resolveCodes(CertificateExportPdfRequest request, Authentication authentication) {
+        List<String> codes = request.getCertificateCodes();
+        if (codes != null && !codes.isEmpty()) {
+            return codes;
+        }
+        String courseCode = request.getCourseCode();
+        if (courseCode == null || courseCode.isBlank()) {
+            throw validationHelper.validationError("Cần chọn ít nhất một chứng nhận để xuất PDF");
+        }
+        List<String> approved = certificateService.findApprovedCodesByCourse(courseCode.trim(), authentication);
+        if (approved.isEmpty()) {
+            throw validationHelper.validationError("Khóa huấn luyện chưa có chứng nhận đã duyệt để xuất PDF");
+        }
+        return approved;
     }
 
     private CertificatePdfJobResponse toJobResponse(CertificatePdfJobService.Job job) {

@@ -69,4 +69,15 @@ public class CertificateLayoutItem {
     private Boolean italic;
 
     private Boolean underline;
+
+    // Chỉ dùng trong trình soạn: khóa phần tử để khỏi kéo nhầm (vẫn in bình thường).
+    private Boolean locked;
+
+    // Ẩn phần tử: không hiện trong trình soạn xem trước và không in ra PDF.
+    private Boolean hidden;
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public boolean isPrinted() {
+        return !Boolean.TRUE.equals(hidden);
+    }
 }

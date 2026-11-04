@@ -24,6 +24,9 @@ public class CertificateConfigResponse {
     // URL ảnh nền đã ký (hết hạn sau một thời gian) và id asset để gửi lại khi lưu.
     private String backgroundImage;
     private java.util.UUID backgroundAssetId;
+    // Kích thước (px) của ảnh nền gốc dùng để in; ảnh xem trước nhỏ hơn nên không dùng để đánh giá độ nét. Null với ảnh cũ chưa chuyển lên cloud.
+    private Integer backgroundWidthPx;
+    private Integer backgroundHeightPx;
     private List<CertificateLayoutItem> fieldLayout;
     private Boolean status;
     private OffsetDateTime updatedAt;

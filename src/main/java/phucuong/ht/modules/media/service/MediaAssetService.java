@@ -266,6 +266,18 @@ public class MediaAssetService {
         return data;
     }
 
+    /** Kích thước thật (px) của biến thể master, là ảnh sẽ được in; null nếu không có ảnh. Biến thể xem trước nhỏ hơn nên không dùng để đánh giá độ nét. */
+    public int[] masterSize(UUID assetId) {
+        if (assetId == null) {
+            return null;
+        }
+        MediaAsset asset = find(assetId);
+        if (asset == null || asset.getStatus() == MediaStatus.DELETED) {
+            return null;
+        }
+        return asset.variant(MediaVariants.MASTER).map(v -> new int[]{v.width(), v.height()}).orElse(null);
+    }
+
     /** Byte ảnh dùng để render PDF (biến thể master). Trả null nếu không có ảnh. */
     public byte[] loadMaster(UUID assetId) {
         if (assetId == null) {

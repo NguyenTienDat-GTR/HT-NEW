@@ -38,6 +38,7 @@ public class CertificateRepository extends BaseRepo<Certificate, String> {
                                 from Certificate c
                                 left join fetch c.leader l
                                 left join fetch l.parish p
+                                left join fetch p.parentParish pp
                                 left join fetch p.deanery de
                                 left join fetch de.diocese d
                                 left join fetch c.course tc
@@ -148,6 +149,7 @@ public class CertificateRepository extends BaseRepo<Certificate, String> {
                                 from Certificate certificate
                                 left join fetch certificate.leader l
                                 left join fetch l.parish p
+                                left join fetch p.parentParish pp
                                 left join fetch p.deanery de
                                 left join fetch de.diocese
                                 left join fetch certificate.course tc
@@ -171,6 +173,7 @@ public class CertificateRepository extends BaseRepo<Certificate, String> {
                                 from Certificate certificate
                                 left join fetch certificate.leader l
                                 left join fetch l.parish p
+                                left join fetch p.parentParish pp
                                 left join fetch p.deanery de
                                 left join fetch de.diocese
                                 left join fetch certificate.course tc
