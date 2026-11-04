@@ -38,6 +38,11 @@ public class BadgeConfigResponse {
     private String backBackground;
     private java.util.UUID frontBackgroundAssetId;
     private java.util.UUID backBackgroundAssetId;
+    // Kích thước (px) của ảnh nền gốc dùng để in (xem CertificateConfigResponse).
+    private Integer frontBackgroundWidthPx;
+    private Integer frontBackgroundHeightPx;
+    private Integer backBackgroundWidthPx;
+    private Integer backBackgroundHeightPx;
     private List<CertificateLayoutItem> frontLayout;
     private List<CertificateLayoutItem> backLayout;
     private Boolean status;

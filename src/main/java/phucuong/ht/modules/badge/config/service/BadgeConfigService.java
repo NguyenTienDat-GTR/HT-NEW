@@ -477,6 +477,10 @@ public class BadgeConfigService {
                 .backBackground(mediaUrls.displayOrLegacy(config.getBackBackgroundAssetId(), config.getLegacyBackBackground(), MediaCategory.BADGE_BACKGROUND))
                 .frontBackgroundAssetId(config.getFrontBackgroundAssetId())
                 .backBackgroundAssetId(config.getBackBackgroundAssetId())
+                .frontBackgroundWidthPx(widthOf(mediaAssetService.masterSize(config.getFrontBackgroundAssetId())))
+                .frontBackgroundHeightPx(heightOf(mediaAssetService.masterSize(config.getFrontBackgroundAssetId())))
+                .backBackgroundWidthPx(widthOf(mediaAssetService.masterSize(config.getBackBackgroundAssetId())))
+                .backBackgroundHeightPx(heightOf(mediaAssetService.masterSize(config.getBackBackgroundAssetId())))
                 .frontLayout(config.getFrontLayout())
                 .backLayout(config.getBackLayout())
                 .build();
@@ -516,6 +520,14 @@ public class BadgeConfigService {
         double[] paper = BadgeSheetLayout.paperMm(config.getPaperSize(), config.getPaperOrientation());
         return BadgeSheetLayout.compute(paper[0], paper[1], config.getCardWidthMm().doubleValue(),
                 config.getCardHeightMm().doubleValue(), config.getMarginMm().doubleValue(), config.getGapMm().doubleValue());
+    }
+
+    private static Integer widthOf(int[] size) {
+        return size == null ? null : size[0];
+    }
+
+    private static Integer heightOf(int[] size) {
+        return size == null ? null : size[1];
     }
 
     private static BigDecimal mm(double value) {

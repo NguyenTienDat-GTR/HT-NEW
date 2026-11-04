@@ -723,6 +723,14 @@ public class CertificateConfigService {
         return Math.min(0.9, Math.max(0.03, size));
     }
 
+    private static Integer widthOf(int[] size) {
+        return size == null ? null : size[0];
+    }
+
+    private static Integer heightOf(int[] size) {
+        return size == null ? null : size[1];
+    }
+
     private static double valueOr(Double value, double fallback) {
         return value == null ? fallback : value;
     }
@@ -876,6 +884,8 @@ public class CertificateConfigService {
         return summaryBuilder(config, actor, usedBy)
                 .backgroundImage(mediaUrls.displayOrLegacy(config.getBackgroundAssetId(), config.getLegacyBackgroundData(), MediaCategory.CERTIFICATE_BACKGROUND))
                 .backgroundAssetId(config.getBackgroundAssetId())
+                .backgroundWidthPx(widthOf(mediaAssetService.masterSize(config.getBackgroundAssetId())))
+                .backgroundHeightPx(heightOf(mediaAssetService.masterSize(config.getBackgroundAssetId())))
                 .fieldLayout(config.getFieldLayout())
                 .build();
     }

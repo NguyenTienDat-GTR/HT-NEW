@@ -40,7 +40,8 @@ public class BackgroundAlbumService {
     private final securityUtils securityUtils;
     private final JdbcTemplate jdbc;
 
-    public record AlbumItemView(UUID id, UUID assetId, String url, OffsetDateTime createdAt) {
+    /** widthPx / heightPx: kích thước ảnh gốc dùng để in (không phải ảnh xem trước đã thu nhỏ). */
+    public record AlbumItemView(UUID id, UUID assetId, String url, OffsetDateTime createdAt, Integer widthPx, Integer heightPx) {
     }
 
     public record AlbumView(int maxItems, List<AlbumItemView> items) {
@@ -138,6 +139,8 @@ public class BackgroundAlbumService {
     }
 
     private AlbumItemView view(BackgroundAlbumItem item, AlbumKind kind) {
-        return new AlbumItemView(item.getId(), item.getAssetId(), mediaUrls.display(item.getAssetId(), kind.getCategory()), item.getCreatedAt());
+        int[] size = assets.masterSize(item.getAssetId());
+        return new AlbumItemView(item.getId(), item.getAssetId(), mediaUrls.display(item.getAssetId(), kind.getCategory()), item.getCreatedAt(),
+                size == null ? null : size[0], size == null ? null : size[1]);
     }
 }
