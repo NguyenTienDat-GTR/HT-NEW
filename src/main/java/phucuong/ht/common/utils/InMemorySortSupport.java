@@ -18,8 +18,12 @@ public final class InMemorySortSupport {
     }
 
     public static <T> List<T> sort(List<T> items, String sortBy, String sortDirection) {
-        if (items == null || items.size() < 2 || !StringUtils.hasText(sortBy)) {
+        if (items == null || items.size() < 2) {
             return items;
+        }
+        if (!StringUtils.hasText(sortBy)) {
+            // Mặc định: bản ghi tạo gần nhất đứng trước (nếu phần tử có createdAt).
+            return isReadable(items.get(0), "createdAt") ? sort(items, "createdAt", "DESC") : items;
         }
         Comparator<T> comparator = null;
         for (String property : sortBy.split("\\+")) {
