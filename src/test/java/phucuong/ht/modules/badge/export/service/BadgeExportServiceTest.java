@@ -487,6 +487,8 @@ class BadgeExportServiceTest {
         assertEquals("Trần Thị Hoa", values.get("leaderName"));
         assertEquals("Maria Trần Thị Hoa", values.get("leaderFullName"));
         assertEquals("Giáo xứ Chánh Tòa", values.get("leaderParishName"));
+        assertEquals("", values.get("leaderSubUnitName"));
+        assertEquals("Giáo xứ Chánh Tòa", values.get("leaderUnitFullName"));
         assertEquals("Giáo hạt Thủ Dầu Một", values.get("leaderDeaneryName"));
         assertEquals("Giáo phận Phú Cường", values.get("leaderDioceseName"));
         assertEquals("Đội 7", values.get("teamName"));

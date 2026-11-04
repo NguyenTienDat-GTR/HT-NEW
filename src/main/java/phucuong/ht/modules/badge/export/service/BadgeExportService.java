@@ -141,7 +141,7 @@ public class BadgeExportService {
         return new PdfExport(content, filename(course, request.teamName(), participants.size()), participants.size(), sheets.size());
     }
 
-    private BadgePdfRenderer.Sheet sheet(BadgeSheetLayout.Grid grid, BadgeConfig config, List<BadgePdfRenderer.Side> sides,
+    public static BadgePdfRenderer.Sheet sheet(BadgeSheetLayout.Grid grid, BadgeConfig config, List<BadgePdfRenderer.Side> sides,
                                          boolean mirrorColumns, boolean mirrorRows) {
         List<BadgePdfRenderer.Placed> placed = new ArrayList<>();
         for (int i = 0; i < sides.size(); i++) {
@@ -152,7 +152,7 @@ public class BadgeExportService {
                 Boolean.TRUE.equals(config.getCropMarks()), placed);
     }
 
-    private BadgePdfRenderer.Side side(byte[] background, List<CertificateLayoutItem> layout, Map<String, String> values, BitMatrix qr, byte[] photo) {
+    public static BadgePdfRenderer.Side side(byte[] background, List<CertificateLayoutItem> layout, Map<String, String> values, BitMatrix qr, byte[] photo) {
         List<CertificatePdfRenderer.RenderItem> items = new ArrayList<>();
         List<CertificatePdfRenderer.RenderPhoto> photos = new ArrayList<>();
         List<CertificatePdfRenderer.RenderQr> qrCodes = new ArrayList<>();
@@ -192,7 +192,7 @@ public class BadgeExportService {
     }
 
     // Cạnh ảnh huynh trưởng theo tỉ lệ chiều cao thẻ.
-    private double photoSize(CertificateLayoutItem item) {
+    private static double photoSize(CertificateLayoutItem item) {
         double size = item.getSize() == null || item.getSize() <= 0 ? 0.5 : item.getSize();
         return Math.min(0.95, Math.max(0.05, size));
     }
@@ -207,7 +207,7 @@ public class BadgeExportService {
     }
 
     // Cạnh mã QR theo tỉ lệ chiều cao thẻ; giới hạn để mã luôn đủ lớn để quét và không tràn thẻ.
-    private double qrSize(CertificateLayoutItem item) {
+    private static double qrSize(CertificateLayoutItem item) {
         double size = item.getSize() == null || item.getSize() <= 0 ? 0.3 : item.getSize();
         return Math.min(0.9, Math.max(0.1, size));
     }
@@ -286,8 +286,11 @@ public class BadgeExportService {
         v.put("holyName", nullToEmpty(leader.getHolyName()).trim());
         v.put("leaderName", CourseParticipantSupport.plainName(leader));
         v.put("leaderFullName", CourseParticipantSupport.fullName(leader));
-        // Giáo xứ dùng tên giáo xứ (name), không phải xứ đoàn (chapterName).
-        v.put("leaderParishName", parish == null ? "" : nullToEmpty(parish.getName()));
+        // Giáo xứ dùng tên giáo xứ (giáo xứ mẹ nếu là giáo họ / giáo điểm), không phải xứ đoàn (chapterName).
+        var unitNames = phucuong.ht.modules.parish.model.ParishUnitNames.of(parish);
+        v.put("leaderParishName", unitNames.parishName());
+        v.put("leaderSubUnitName", unitNames.subUnitName());
+        v.put("leaderUnitFullName", unitNames.fullName());
         v.put("leaderDeaneryName", deanery == null ? "" : nullToEmpty(deanery.getName()));
         v.put("leaderDioceseName", diocese == null ? "" : nullToEmpty(diocese.getName()));
         v.put("teamName", nullToEmpty(participation.getTeamName()));

@@ -41,6 +41,7 @@ import phucuong.ht.modules.training.trainingCourse.model.entity.TrainingCourse;
 
 import phucuong.ht.modules.media.model.enums.MediaCategory;
 import phucuong.ht.modules.media.service.DataUrls;
+import phucuong.ht.modules.certificate.config.model.request.CertificatePreviewPdfRequest;
 import phucuong.ht.modules.media.service.MediaAssetService;
 import phucuong.ht.modules.media.service.MediaFolderService;
 import phucuong.ht.modules.media.service.MediaUrls;
@@ -476,6 +477,56 @@ public class CertificateConfigService {
                 .build();
     }
 
+    private static final int PREVIEW_MAX_ITEMS = 200;
+    private static final int PREVIEW_MAX_VALUES = 100;
+    private static final int PREVIEW_MAX_VALUE_LENGTH = 500;
+
+    // PDF xem trước của bố cục đang soạn (kể cả chưa lưu) với dữ liệu mẫu: cùng bộ vẽ với PDF thật nên phông, cỡ chữ, vị trí khớp bản in.
+    @Transactional(readOnly = true)
+    public PdfExport previewPdf(CertificatePreviewPdfRequest request, Authentication authentication) {
+        ActorScope actor = scopeResolver.resolve(authentication);
+        List<CertificateLayoutItem> layout = request.getFieldLayout() == null ? List.of() : request.getFieldLayout();
+        if (layout.size() > PREVIEW_MAX_ITEMS) {
+            throw validationHelper.validationError("Bố cục tối đa " + PREVIEW_MAX_ITEMS + " phần tử");
+        }
+        Map<String, String> values = new LinkedHashMap<>();
+        if (request.getValues() != null) {
+            if (request.getValues().size() > PREVIEW_MAX_VALUES) {
+                throw validationHelper.validationError("Dữ liệu mẫu có quá nhiều trường");
+            }
+            request.getValues().forEach((key, value) -> values.put(key, value == null ? ""
+                    : value.length() > PREVIEW_MAX_VALUE_LENGTH ? value.substring(0, PREVIEW_MAX_VALUE_LENGTH) : value));
+        }
+        byte[] background = null;
+        if (request.getBackgroundAssetId() != null) {
+            // Ảnh album của đơn vị khác không dùng được dù biết mã ảnh (giống khi lưu cấu hình).
+            albumService.assertUsable(request.getBackgroundAssetId(), actor);
+            background = mediaAssetService.loadMaster(request.getBackgroundAssetId());
+        }
+        List<CertificatePdfRenderer.RenderQr> qrCodes = new ArrayList<>();
+        BitMatrix sampleQr = qrItems(layout).isEmpty() ? null : PreviewSamples.qr(values.getOrDefault("certificateCode", "MAU-XEM-TRUOC"));
+        for (CertificateLayoutItem qr : qrItems(layout)) {
+            qrCodes.add(new CertificatePdfRenderer.RenderQr(sampleQr, valueOr(qr.getX(), 0.5), valueOr(qr.getY(), 0.5), qrSize(qr)));
+        }
+        List<CertificatePdfRenderer.RenderPhoto> photos = new ArrayList<>();
+        List<CertificateLayoutItem> photoItems = photoItems(layout);
+        if (!photoItems.isEmpty()) {
+            byte[] photo = PreviewSamples.photoPng();
+            for (CertificateLayoutItem item : photoItems) {
+                photos.add(new CertificatePdfRenderer.RenderPhoto(photo, valueOr(item.getX(), 0.5), valueOr(item.getY(), 0.5), photoSize(item), item.photoAspect()));
+            }
+        }
+        float[] dims = pageDimensions(request.getPaperSize(), request.getOrientation());
+        byte[] content;
+        try {
+            content = pdfRenderer.renderPdf(List.of(new CertificatePdfRenderer.RenderPage(
+                    background, toRenderItems(layout, values), qrCodes, photos, dims[0], dims[1])));
+        } catch (Exception e) {
+            throw validationHelper.validationError("Không thể tạo PDF xem trước: " + e.getMessage());
+        }
+        return new PdfExport(content, "xem-truoc-chung-nhan.pdf");
+    }
+
     @Transactional(readOnly = true)
     public PdfExport exportPdf(List<String> certificateCodes) {
         List<Certificate> certificates = new ArrayList<>();
@@ -700,8 +751,11 @@ public class CertificateConfigService {
             var parish = l.getParish();
             var deanery = parish == null ? null : parish.getDeanery();
             var diocese = deanery == null ? null : deanery.getDiocese();
-            // Giáo xứ dùng tên giáo xứ (name), không phải xứ đoàn (chapterName).
-            v.put("leaderParishName", parish == null ? "" : nullToEmpty(parish.getName()));
+            // Giáo xứ dùng tên giáo xứ (giáo xứ mẹ nếu là giáo họ / giáo điểm), không phải xứ đoàn (chapterName).
+            var unitNames = phucuong.ht.modules.parish.model.ParishUnitNames.of(parish);
+            v.put("leaderParishName", unitNames.parishName());
+            v.put("leaderSubUnitName", unitNames.subUnitName());
+            v.put("leaderUnitFullName", unitNames.fullName());
             v.put("leaderDeaneryName", deanery == null ? "" : nullToEmpty(deanery.getName()));
             v.put("leaderDioceseName", diocese == null ? "" : nullToEmpty(diocese.getName()));
             v.put("leaderLevel", levelNames.getOrDefault(l.getLeaderLevel(), nullToEmpty(l.getLeaderLevel())));
