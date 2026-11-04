@@ -13,6 +13,7 @@ import phucuong.ht.modules.certificate.config.model.request.CertificateConfigAss
 import phucuong.ht.modules.certificate.config.model.request.CertificateConfigUpsertRequest;
 import phucuong.ht.modules.certificate.config.model.response.CertificateConfigAssignmentResponse;
 import phucuong.ht.modules.certificate.config.model.request.CertificateExportPdfRequest;
+import phucuong.ht.modules.certificate.config.model.request.CertificatePreviewPdfRequest;
 import phucuong.ht.modules.certificate.config.model.response.CertificateConfigResponse;
 import phucuong.ht.modules.certificate.config.model.response.CertificateFieldCatalogItem;
 import phucuong.ht.modules.certificate.config.model.response.CertifiedCourseTypeResponse;
@@ -119,6 +120,14 @@ public class CertificateConfigController {
     public apiResponse<Void> delete(@PathVariable UUID id, Authentication authentication) {
         service.delete(id, authentication);
         return apiResponse.<Void>success("Xóa cấu hình chứng nhận thành công", null);
+    }
+
+    // Xuất PDF xem trước của bố cục đang soạn với dữ liệu mẫu; quyền như xem cấu hình chứng nhận.
+    @PostMapping("/config/preview-pdf")
+    @PreAuthorize("@certificateConfigAccessEvaluator.canRead(authentication)")
+    public ResponseEntity<byte[]> previewPdf(@RequestBody CertificatePreviewPdfRequest request, Authentication authentication) {
+        CertificateConfigService.PdfExport export = service.previewPdf(request, authentication);
+        return pdfResponse(export.content(), export.filename());
     }
 
     // Xem trước chứng nhận với cấu hình đang áp dụng và dữ liệu thật; quyền như xem chi tiết chứng nhận.

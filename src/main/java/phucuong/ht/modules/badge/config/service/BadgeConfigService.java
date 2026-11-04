@@ -14,6 +14,10 @@ import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.modules.badge.config.model.BadgeMergeField;
 import phucuong.ht.modules.badge.config.model.entity.BadgeConfig;
+import phucuong.ht.modules.badge.config.model.request.BadgePreviewPdfRequest;
+import phucuong.ht.modules.badge.export.service.BadgeExportService;
+import phucuong.ht.modules.certificate.config.service.PreviewSamples;
+import com.google.zxing.common.BitMatrix;
 import phucuong.ht.modules.badge.config.model.request.BadgeConfigUpsertRequest;
 import phucuong.ht.modules.badge.config.model.response.BadgeConfigResponse;
 import phucuong.ht.modules.badge.config.repository.BadgeConfigRepository;
@@ -36,6 +40,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -66,6 +71,7 @@ public class BadgeConfigService {
     private final MediaFolderService mediaFolderService;
     private final MediaUrls mediaUrls;
     private final phucuong.ht.modules.media.album.BackgroundAlbumService albumService;
+    private final BadgePdfRenderer pdfRenderer;
 
     private ActorScope actorOf(Authentication authentication) {
         return scopeResolver.resolve(authentication, BadgeConfigAccessEvaluator.PREFIX, "Bạn không có quyền với cấu hình thẻ tham dự");
@@ -203,6 +209,31 @@ public class BadgeConfigService {
 
     // Kiểm tra và áp nội dung cấu hình. Mọi sai lệch trả 400 kèm thông báo tiếng Việt cụ thể.
     void applyContent(BadgeConfig config, BadgeConfigUpsertRequest request, OffsetDateTime now, String audit, ActorScope actor) {
+        boolean hasBack = applySheet(config, request);
+        UUID dioceseId = mediaFolderService.dioceseOfScopeKey(config.getScopeKey());
+        boolean clearFront = Boolean.TRUE.equals(request.getClearFrontBackground());
+        UUID previousFront = config.getFrontBackgroundAssetId();
+        UUID nextFront = swapBackground(previousFront, request.getFrontBackgroundAssetId(), dioceseId, audit, actor);
+        if (!Objects.equals(nextFront, previousFront) || clearFront) {
+            config.setLegacyFrontBackground(null);
+        }
+        config.setFrontBackgroundAssetId(nextFront);
+        config.setFrontLayout(checkLayout(request.getFrontLayout(), "mặt trước"));
+        // Không có mặt sau thì bỏ hẳn nội dung mặt sau.
+        boolean clearBack = Boolean.TRUE.equals(request.getClearBackBackground()) || !hasBack;
+        UUID previousBack = config.getBackBackgroundAssetId();
+        UUID nextBack = swapBackground(previousBack, hasBack ? request.getBackBackgroundAssetId() : null, dioceseId, audit, actor);
+        if (!Objects.equals(nextBack, previousBack) || clearBack) {
+            config.setLegacyBackBackground(null);
+        }
+        config.setBackBackgroundAssetId(nextBack);
+        config.setBackLayout(hasBack ? checkLayout(request.getBackLayout(), "mặt sau") : new ArrayList<>());
+        config.setUpdatedAt(now);
+        config.setUpdatedBy(audit);
+    }
+
+    // Kiểm tra và áp khổ giấy, khổ thẻ, lề, khoảng cách; trả về thẻ có mặt sau hay không.
+    private boolean applySheet(BadgeConfig config, BadgeConfigUpsertRequest request) {
         String paperSize = TextFolding.normalize(request.getPaperSize()) == null ? "A4" : request.getPaperSize().trim().toUpperCase(Locale.ROOT);
         if (!BadgeSheetLayout.isKnownPaper(paperSize)) {
             throw validationHelper.validationError("Khổ giấy không hợp lệ: " + request.getPaperSize() + " (chọn A3, A4, A5, Letter hoặc Legal)");
@@ -237,26 +268,77 @@ public class BadgeConfigService {
         config.setGapMm(mm(gap));
         config.setCropMarks(request.getCropMarks() == null || request.getCropMarks());
         config.setHasBack(hasBack);
-        UUID dioceseId = mediaFolderService.dioceseOfScopeKey(config.getScopeKey());
-        boolean clearFront = Boolean.TRUE.equals(request.getClearFrontBackground());
-        UUID previousFront = config.getFrontBackgroundAssetId();
-        UUID nextFront = swapBackground(previousFront, request.getFrontBackgroundAssetId(), dioceseId, audit, actor);
-        if (!Objects.equals(nextFront, previousFront) || clearFront) {
-            config.setLegacyFrontBackground(null);
+        return hasBack;
+    }
+
+    private static final int PREVIEW_MAX_VALUES = 100;
+    private static final int PREVIEW_MAX_VALUE_LENGTH = 500;
+
+    // PDF xem trước của cấu hình thẻ đang soạn: một tờ giấy xếp đầy thẻ mẫu (kèm tờ mặt sau nếu có), cùng bộ vẽ với PDF thật.
+    @Transactional(readOnly = true)
+    public BadgeExportService.PdfExport previewPdf(BadgePreviewPdfRequest request, Authentication authentication) {
+        ActorScope actor = actorOf(authentication);
+        if (request.getConfig() == null) {
+            throw validationHelper.validationError("Thiếu nội dung cấu hình thẻ để xem trước");
         }
-        config.setFrontBackgroundAssetId(nextFront);
-        config.setFrontLayout(checkLayout(request.getFrontLayout(), "mặt trước"));
-        // Không có mặt sau thì bỏ hẳn nội dung mặt sau.
-        boolean clearBack = Boolean.TRUE.equals(request.getClearBackBackground()) || !hasBack;
-        UUID previousBack = config.getBackBackgroundAssetId();
-        UUID nextBack = swapBackground(previousBack, hasBack ? request.getBackBackgroundAssetId() : null, dioceseId, audit, actor);
-        if (!Objects.equals(nextBack, previousBack) || clearBack) {
-            config.setLegacyBackBackground(null);
+        BadgeConfigUpsertRequest content = request.getConfig();
+        BadgeConfig draft = draftOf(content);
+        BadgeSheetLayout.Grid grid = gridOf(draft);
+        Map<String, String> values = new LinkedHashMap<>();
+        if (request.getValues() != null) {
+            if (request.getValues().size() > PREVIEW_MAX_VALUES) {
+                throw validationHelper.validationError("Dữ liệu mẫu có quá nhiều trường");
+            }
+            request.getValues().forEach((key, value) -> values.put(key, value == null ? ""
+                    : value.length() > PREVIEW_MAX_VALUE_LENGTH ? value.substring(0, PREVIEW_MAX_VALUE_LENGTH) : value));
         }
-        config.setBackBackgroundAssetId(nextBack);
-        config.setBackLayout(hasBack ? checkLayout(request.getBackLayout(), "mặt sau") : new ArrayList<>());
-        config.setUpdatedAt(now);
-        config.setUpdatedBy(audit);
+        boolean hasBack = Boolean.TRUE.equals(draft.getHasBack());
+        byte[] frontBackground = previewBackground(content.getFrontBackgroundAssetId(), actor);
+        byte[] backBackground = hasBack ? previewBackground(content.getBackBackgroundAssetId(), actor) : null;
+        BitMatrix qr = PreviewSamples.qr("MAU-XEM-TRUOC");
+        byte[] photo = PreviewSamples.photoPng();
+
+        List<BadgePdfRenderer.Side> fronts = new ArrayList<>();
+        List<BadgePdfRenderer.Side> backs = new ArrayList<>();
+        BadgePdfRenderer.Side front = BadgeExportService.side(frontBackground, draft.getFrontLayout(), values, qr, photo);
+        BadgePdfRenderer.Side back = hasBack ? BadgeExportService.side(backBackground, draft.getBackLayout(), values, qr, photo) : null;
+        for (int i = 0; i < grid.perPage(); i++) {
+            fronts.add(front);
+            if (hasBack) {
+                backs.add(back);
+            }
+        }
+        List<BadgePdfRenderer.Sheet> sheets = new ArrayList<>();
+        sheets.add(BadgeExportService.sheet(grid, draft, fronts, false, false));
+        if (hasBack) {
+            boolean mirrorColumns = BadgeSheetLayout.mirrorColumns(grid.paperWidthMm(), grid.paperHeightMm(), BadgeSheetLayout.FlipEdge.parse(null));
+            sheets.add(BadgeExportService.sheet(grid, draft, backs, mirrorColumns, !mirrorColumns));
+        }
+        byte[] pdf;
+        try {
+            pdf = pdfRenderer.render(sheets);
+        } catch (Exception e) {
+            throw validationHelper.validationError("Không thể tạo PDF xem trước thẻ: " + e.getMessage());
+        }
+        return new BadgeExportService.PdfExport(pdf, "xem-truoc-the-tham-du.pdf", grid.perPage(), sheets.size());
+    }
+
+    private byte[] previewBackground(UUID assetId, ActorScope actor) {
+        if (assetId == null) {
+            return null;
+        }
+        // Ảnh album của đơn vị khác không dùng được dù biết mã ảnh (giống khi lưu cấu hình).
+        albumService.assertUsable(assetId, actor);
+        return mediaAssetService.loadMaster(assetId);
+    }
+
+    // Bản nháp (không lưu) từ nội dung đang soạn để dựng PDF xem trước: kiểm tra giống khi lưu nhưng không gắn / gỡ ảnh nền.
+    public BadgeConfig draftOf(BadgeConfigUpsertRequest request) {
+        BadgeConfig draft = new BadgeConfig();
+        boolean hasBack = applySheet(draft, request);
+        draft.setFrontLayout(checkLayout(request.getFrontLayout(), "mặt trước"));
+        draft.setBackLayout(hasBack ? checkLayout(request.getBackLayout(), "mặt sau") : new ArrayList<>());
+        return draft;
     }
 
     private String orientation(String value, String fallback, String label) {

@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.*;
 import phucuong.ht.common.dto.apiResponse;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.modules.badge.config.model.request.BadgeConfigUpsertRequest;
+import phucuong.ht.modules.badge.config.model.request.BadgePreviewPdfRequest;
 import phucuong.ht.modules.badge.config.model.response.BadgeConfigResponse;
 import phucuong.ht.modules.badge.config.service.BadgeConfigService;
 import phucuong.ht.modules.certificate.config.model.response.CertificateFieldCatalogItem;
@@ -47,6 +48,18 @@ public class BadgeConfigController {
     @PreAuthorize("@badgeConfigAccessEvaluator.canRead(authentication)")
     public apiResponse<BadgeConfigResponse> detail(@PathVariable UUID id, Authentication authentication) {
         return apiResponse.success("Lấy chi tiết cấu hình thẻ tham dự thành công", service.get(id, authentication));
+    }
+
+    // Xuất PDF xem trước của cấu hình đang soạn với dữ liệu mẫu; quyền như xem cấu hình thẻ.
+    @PostMapping("/preview-pdf")
+    @PreAuthorize("@badgeConfigAccessEvaluator.canRead(authentication)")
+    public org.springframework.http.ResponseEntity<byte[]> previewPdf(@RequestBody BadgePreviewPdfRequest request, Authentication authentication) {
+        var export = service.previewPdf(request, authentication);
+        String encoded = java.net.URLEncoder.encode(export.filename(), java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20");
+        return org.springframework.http.ResponseEntity.ok()
+                .contentType(org.springframework.http.MediaType.APPLICATION_PDF)
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"badge-preview.pdf\"; filename*=UTF-8''" + encoded)
+                .body(export.content());
     }
 
     @PostMapping
