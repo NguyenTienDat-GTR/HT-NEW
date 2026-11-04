@@ -1,5 +1,7 @@
 package phucuong.ht.modules.diocese.controller;
 
+import phucuong.ht.modules.privacy.model.PrivacyConsentSource;
+import phucuong.ht.modules.privacy.service.PrivacyConsentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -25,13 +27,17 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class DioceseController {
 
+    private final PrivacyConsentService privacyConsent;
+
     private final DioceseService dioceseService;
     private final phucuong.ht.common.excel.job.ExcelJobService excelJobService;
 
     @PostMapping
     @PreAuthorize("@dioceseAccessEvaluator.canCreate(authentication)")
     public apiResponse<DioceseResponse> create(@Valid @RequestBody DioceseCreateRequest request, Authentication authentication) {
-        return apiResponse.success("Tạo giáo phận thành công", dioceseService.create(request, authentication));
+        DioceseResponse created = dioceseService.create(request, authentication);
+        privacyConsent.recordAttestation(authentication, null, PrivacyConsentSource.ORG_FORM);
+        return apiResponse.success("Tạo giáo phận thành công", created);
     }
 
     @GetMapping
@@ -64,7 +70,9 @@ public class DioceseController {
             @Valid @RequestBody DioceseUpdateRequest request,
             Authentication authentication
     ) {
-        return apiResponse.success("Cập nhật giáo phận thành công", dioceseService.update(id, request, authentication));
+        DioceseResponse updated = dioceseService.update(id, request, authentication);
+        privacyConsent.recordAttestation(authentication, null, PrivacyConsentSource.ORG_FORM);
+        return apiResponse.success("Cập nhật giáo phận thành công", updated);
     }
     @PutMapping("/{id}/site-subdomain")
     @PreAuthorize("@dioceseAccessEvaluator.canManageSiteSubdomain(authentication)")

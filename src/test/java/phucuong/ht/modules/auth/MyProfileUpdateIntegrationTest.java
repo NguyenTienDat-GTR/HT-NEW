@@ -110,7 +110,13 @@ class MyProfileUpdateIntegrationTest {
 
     private MockHttpServletRequestBuilder updateRequest(Authentication auth, Map<String, Object> body) throws Exception {
         return put("/api/auth/me/profile").with(authentication(auth)).contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(body));
+                .content(objectMapper.writeValueAsString(withConsent(body)));
+    }
+
+    private static Map<String, Object> withConsent(Map<String, Object> body) {
+        Map<String, Object> copy = new java.util.HashMap<>(body);
+        copy.putIfAbsent("privacyConsent", true);
+        return copy;
     }
 
     private Map<String, Object> row(String sql, Object... args) {
@@ -244,7 +250,7 @@ class MyProfileUpdateIntegrationTest {
         UUID first = uploadAccountAvatar(admin, out.toByteArray());
 
         MvcResult result = mockMvc.perform(put("/api/auth/me/avatar").with(authentication(admin)).contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(Map.of("imageAssetId", first.toString()))))
+                        .content(objectMapper.writeValueAsString(Map.of("imageAssetId", first.toString(), "privacyConsent", true))))
                 .andExpect(status().isOk()).andReturn();
         JsonNode data = objectMapper.readTree(result.getResponse().getContentAsString()).get("data");
         assertEquals(first.toString(), data.get("imageAssetId").asText());
@@ -255,7 +261,7 @@ class MyProfileUpdateIntegrationTest {
         // Thay ảnh: ảnh cũ được giải phóng.
         UUID second = uploadAccountAvatar(admin, out.toByteArray());
         mockMvc.perform(put("/api/auth/me/avatar").with(authentication(admin)).contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(Map.of("imageAssetId", second.toString()))))
+                        .content(objectMapper.writeValueAsString(Map.of("imageAssetId", second.toString(), "privacyConsent", true))))
                 .andExpect(status().isOk());
         assertEquals(second, row("select image_asset_id from account where username = 'no.leader'").get("image_asset_id"));
         assertEquals("DELETED", row("select status from media_asset where id = ?", first).get("status"));
@@ -264,7 +270,7 @@ class MyProfileUpdateIntegrationTest {
         mockMvc.perform(put("/api/auth/me/avatar").with(authentication(admin)).contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(status().isBadRequest());
         mockMvc.perform(put("/api/auth/me/avatar").with(authentication(me("me", myLeaderId))).contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(Map.of("imageAssetId", second.toString()))))
+                        .content(objectMapper.writeValueAsString(Map.of("imageAssetId", second.toString(), "privacyConsent", true))))
                 .andExpect(status().isBadRequest());
     }
 

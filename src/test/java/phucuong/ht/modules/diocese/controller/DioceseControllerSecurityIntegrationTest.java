@@ -76,6 +76,7 @@ class DioceseControllerSecurityIntegrationTest {
     void shouldAllowScopedAdminToUpdateOwnDiocese() throws Exception {
         UUID dioceseId = UUID.randomUUID();
         DioceseUpdateRequest request = new DioceseUpdateRequest();
+        request.setSubjectConsentConfirmed(true);
         request.setName("Updated Diocese");
         when(dioceseAccessEvaluator.canUpdate(any(), eq(dioceseId))).thenReturn(true);
         when(dioceseService.update(eq(dioceseId), any(DioceseUpdateRequest.class), any())).thenReturn(sampleDiocese(dioceseId));
@@ -92,6 +93,7 @@ class DioceseControllerSecurityIntegrationTest {
     void shouldAllowSuperAdminCreateAndToggle() throws Exception {
         UUID dioceseId = UUID.randomUUID();
         DioceseCreateRequest createRequest = new DioceseCreateRequest();
+        createRequest.setSubjectConsentConfirmed(true);
         createRequest.setName("New Diocese");
         createRequest.setUnionName("Union");
         StatusToggleRequest toggleRequest = new StatusToggleRequest();
@@ -119,6 +121,7 @@ class DioceseControllerSecurityIntegrationTest {
     @Test
     void shouldRejectInvalidVietnamesePhoneNumber() throws Exception {
         DioceseCreateRequest createRequest = new DioceseCreateRequest();
+        createRequest.setSubjectConsentConfirmed(true);
         createRequest.setName("New Diocese");
         createRequest.setUnionName("Union");
         createRequest.setPhoneNumber("09123456789");

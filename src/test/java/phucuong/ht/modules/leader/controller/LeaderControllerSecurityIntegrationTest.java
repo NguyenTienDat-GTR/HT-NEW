@@ -79,6 +79,7 @@ class LeaderControllerSecurityIntegrationTest {
         UUID leaderId = UUID.randomUUID();
         UUID parishId = UUID.randomUUID();
         LeaderCreateRequest createRequest = new LeaderCreateRequest();
+        createRequest.setSubjectConsentConfirmed(true);
         createRequest.setHolyName("Phaolo");
         createRequest.setFullName("Nguyen An");
         createRequest.setBirthDate(java.time.LocalDate.of(2000, 1, 1));
@@ -90,6 +91,7 @@ class LeaderControllerSecurityIntegrationTest {
         createRequest.setParishId(parishId);
 
         LeaderUpdateRequest updateRequest = new LeaderUpdateRequest();
+        updateRequest.setSubjectConsentConfirmed(true);
         updateRequest.setImageAssetId(UUID.randomUUID());
         updateRequest.setGender(LeaderGender.NU);
 
@@ -150,6 +152,7 @@ class LeaderControllerSecurityIntegrationTest {
     @Test
     void shouldRejectInvalidVietnamesePhoneNumber() throws Exception {
         LeaderCreateRequest request = new LeaderCreateRequest();
+        request.setSubjectConsentConfirmed(true);
         request.setHolyName("Phaolo");
         request.setFullName("Nguyen An");
         request.setBirthDate(java.time.LocalDate.of(2000, 1, 1));

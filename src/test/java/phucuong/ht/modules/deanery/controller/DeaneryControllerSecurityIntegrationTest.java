@@ -94,6 +94,7 @@ class DeaneryControllerSecurityIntegrationTest {
         UUID deaneryId = UUID.randomUUID();
         UUID dioceseId = UUID.randomUUID();
         DeaneryUpdateRequest request = new DeaneryUpdateRequest();
+        request.setSubjectConsentConfirmed(true);
         request.setName("Updated Deanery");
         when(deaneryAccessEvaluator.canUpdate(any(), eq(deaneryId))).thenReturn(true);
         when(deaneryService.update(eq(deaneryId), any(DeaneryUpdateRequest.class), any())).thenReturn(sampleDeanery(deaneryId, dioceseId));
@@ -111,6 +112,7 @@ class DeaneryControllerSecurityIntegrationTest {
         UUID deaneryId = UUID.randomUUID();
         UUID dioceseId = UUID.randomUUID();
         DeaneryCreateRequest createRequest = new DeaneryCreateRequest();
+        createRequest.setSubjectConsentConfirmed(true);
         createRequest.setName("New Deanery");
         createRequest.setAssociationName("Association");
         createRequest.setDioceseId(dioceseId);
