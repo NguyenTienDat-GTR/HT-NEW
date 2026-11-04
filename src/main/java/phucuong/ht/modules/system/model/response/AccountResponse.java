@@ -14,6 +14,11 @@ public class AccountResponse {
     private UUID leaderId;
     private String leaderHolyName;
     private String leaderFullName;
+    private String leaderLevel;
+    /** Giáo xứ của huynh trưởng (giáo xứ mẹ nếu thuộc giáo họ / giáo điểm). */
+    private String leaderParishName;
+    /** "Giáo họ X" / "Giáo điểm Y"; rỗng nếu huynh trưởng thuộc giáo xứ. */
+    private String leaderSubUnitName;
     private String primaryRoleCode;
     private String primaryRoleName;
     private List<String> roleCodes;
