@@ -9,6 +9,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import phucuong.ht.common.dto.apiResponse;
+import phucuong.ht.common.layoutconfig.LayoutConfigVersionResponse;
 import phucuong.ht.modules.certificate.config.model.request.CertificateConfigAssignRequest;
 import phucuong.ht.modules.certificate.config.model.request.CertificateConfigUpsertRequest;
 import phucuong.ht.modules.certificate.config.model.response.CertificateConfigAssignmentResponse;
@@ -59,6 +60,13 @@ public class CertificateConfigController {
     @PreAuthorize("@certificateConfigAccessEvaluator.canRead(authentication)")
     public apiResponse<CertificateConfigResponse> detail(@PathVariable UUID id, Authentication authentication) {
         return apiResponse.success("Lấy chi tiết cấu hình chứng nhận thành công", service.get(id, authentication));
+    }
+
+    // Lịch sử các bản đã lưu của một cấu hình (mới nhất trước); quyền như xem cấu hình.
+    @GetMapping("/config/{id}/versions")
+    @PreAuthorize("@certificateConfigAccessEvaluator.canRead(authentication)")
+    public apiResponse<List<LayoutConfigVersionResponse>> versions(@PathVariable UUID id, Authentication authentication) {
+        return apiResponse.success("Lấy lịch sử phiên bản cấu hình chứng nhận thành công", service.versions(id, authentication));
     }
 
     @GetMapping("/config/fields")

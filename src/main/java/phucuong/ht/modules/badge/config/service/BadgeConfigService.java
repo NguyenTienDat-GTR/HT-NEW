@@ -12,6 +12,8 @@ import org.springframework.transaction.annotation.Transactional;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.common.validation.CommonValidationHelper;
+import phucuong.ht.common.layoutconfig.LayoutConfigVersionResponse;
+import phucuong.ht.common.layoutconfig.LayoutConfigVersionService;
 import phucuong.ht.modules.badge.config.model.BadgeMergeField;
 import phucuong.ht.modules.badge.config.model.entity.BadgeConfig;
 import phucuong.ht.modules.badge.config.model.request.BadgePreviewPdfRequest;
@@ -72,6 +74,7 @@ public class BadgeConfigService {
     private final MediaUrls mediaUrls;
     private final phucuong.ht.modules.media.album.BackgroundAlbumService albumService;
     private final BadgePdfRenderer pdfRenderer;
+    private final LayoutConfigVersionService versionService;
 
     private ActorScope actorOf(Authentication authentication) {
         return scopeResolver.resolve(authentication, BadgeConfigAccessEvaluator.PREFIX, "Bạn không có quyền với cấu hình thẻ tham dự");
@@ -168,12 +171,63 @@ public class BadgeConfigService {
         BadgeConfig config = requireEditable(id, actor);
         String audit = securityUtils.currentAuditActor(authentication);
         OffsetDateTime now = OffsetDateTime.now();
+        // Ghi lại bản hiện tại trước khi đổi để người dùng xem lịch sử và khôi phục.
+        versionService.record(LayoutConfigVersionService.BADGE, id, snapshotOf(config), audit);
 
         if (TextFolding.normalize(request.getName()) != null) {
             config.setName(uniqueName(config.getScopeKey(), request.getName(), config.getName()));
         }
         applyContent(config, request, now, audit, actor);
         return toResponse(configRepository.merge(config), actor);
+    }
+
+    // Nội dung cấu hình tại một thời điểm (chỉ mã ảnh, không có URL đã ký) để lưu lịch sử phiên bản.
+    private Map<String, Object> snapshotOf(BadgeConfig config) {
+        Map<String, Object> snapshot = new java.util.LinkedHashMap<>();
+        snapshot.put("name", config.getName());
+        snapshot.put("paperSize", config.getPaperSize());
+        snapshot.put("paperOrientation", config.getPaperOrientation());
+        snapshot.put("cardWidthMm", config.getCardWidthMm());
+        snapshot.put("cardHeightMm", config.getCardHeightMm());
+        snapshot.put("cardOrientation", config.getCardOrientation());
+        snapshot.put("marginMm", config.getMarginMm());
+        snapshot.put("gapMm", config.getGapMm());
+        snapshot.put("cropMarks", config.getCropMarks());
+        snapshot.put("hasBack", config.getHasBack());
+        snapshot.put("frontBackgroundAssetId", config.getFrontBackgroundAssetId() == null ? null : config.getFrontBackgroundAssetId().toString());
+        snapshot.put("backBackgroundAssetId", config.getBackBackgroundAssetId() == null ? null : config.getBackBackgroundAssetId().toString());
+        snapshot.put("frontLayout", config.getFrontLayout() == null ? List.of() : config.getFrontLayout());
+        snapshot.put("backLayout", config.getBackLayout() == null ? List.of() : config.getBackLayout());
+        return snapshot;
+    }
+
+    // Lịch sử các bản đã lưu của một cấu hình thẻ (mới nhất trước); quyền như xem cấu hình đó.
+    @Transactional(readOnly = true)
+    public List<LayoutConfigVersionResponse> versions(UUID id, Authentication authentication) {
+        BadgeConfig config = configRepository.findById(id)
+                .filter(found -> actorOf(authentication).canSee(found.getScopeKey()))
+                .orElseThrow(() -> validationHelper.notFound("Không tìm thấy cấu hình thẻ tham dự"));
+        return versionService.list(LayoutConfigVersionService.BADGE, config.getId()).stream()
+                .map(version -> {
+                    Map<String, Object> snapshot = new java.util.LinkedHashMap<>(version.snapshot());
+                    snapshot.put("frontBackground", usableUrl(snapshot.get("frontBackgroundAssetId")));
+                    snapshot.put("backBackground", usableUrl(snapshot.get("backBackgroundAssetId")));
+                    return new LayoutConfigVersionResponse(version.id(), version.versionNo(), version.createdAt(), version.createdBy(), snapshot);
+                })
+                .toList();
+    }
+
+    // URL ảnh đã ký nếu ảnh còn tồn tại; ảnh đã bị gỡ khỏi cấu hình sau các lần lưu thì trả null.
+    private String usableUrl(Object assetId) {
+        if (assetId == null) {
+            return null;
+        }
+        UUID id = UUID.fromString(assetId.toString());
+        var asset = mediaAssetService.find(id);
+        if (asset == null || asset.getStatus() == phucuong.ht.modules.media.model.enums.MediaStatus.DELETED) {
+            return null;
+        }
+        return mediaUrls.display(id, MediaCategory.BADGE_BACKGROUND);
     }
 
     // Đặt cấu hình làm cấu hình chung của phạm vi chứa nó; cấu hình chung cũ trở thành cấu hình thường.
@@ -196,6 +250,7 @@ public class BadgeConfigService {
         LayoutConfigRules.requireNotDefault(config, validationHelper);
         mediaAssetService.release(config.getFrontBackgroundAssetId());
         mediaAssetService.release(config.getBackBackgroundAssetId());
+        versionService.deleteAll(LayoutConfigVersionService.BADGE, id);
         configRepository.remove(config.getId());
     }
 

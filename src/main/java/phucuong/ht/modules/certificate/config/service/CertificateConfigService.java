@@ -93,6 +93,7 @@ public class CertificateConfigService {
     private final MediaFolderService mediaFolderService;
     private final MediaUrls mediaUrls;
     private final phucuong.ht.modules.media.album.BackgroundAlbumService albumService;
+    private final phucuong.ht.common.layoutconfig.LayoutConfigVersionService versionService;
 
     public record PdfExport(byte[] content, String filename) {
     }
@@ -234,12 +235,51 @@ public class CertificateConfigService {
         CertificateConfig config = requireEditable(id, actor);
         String audit = securityUtils.currentAuditActor(authentication);
         OffsetDateTime now = OffsetDateTime.now();
+        // Ghi lại bản hiện tại trước khi đổi để người dùng xem lịch sử và khôi phục.
+        versionService.record(phucuong.ht.common.layoutconfig.LayoutConfigVersionService.CERTIFICATE, id, snapshotOf(config), audit);
 
         if (TextFolding.normalize(request.getName()) != null) {
             config.setName(uniqueName(config.getScopeKey(), request.getName(), config.getName()));
         }
         applyContent(config, request, now, audit, actor);
         return toResponse(configRepository.merge(config), actor, usageByConfig(actor, authentication).getOrDefault(id, List.of()));
+    }
+
+    // Nội dung cấu hình tại một thời điểm (không có ảnh đã ký, chỉ mã ảnh) để lưu lịch sử phiên bản.
+    private java.util.Map<String, Object> snapshotOf(CertificateConfig config) {
+        java.util.Map<String, Object> snapshot = new java.util.LinkedHashMap<>();
+        snapshot.put("name", config.getName());
+        snapshot.put("paperSize", config.getPaperSize());
+        snapshot.put("orientation", config.getOrientation());
+        snapshot.put("backgroundAssetId", config.getBackgroundAssetId() == null ? null : config.getBackgroundAssetId().toString());
+        snapshot.put("fieldLayout", config.getFieldLayout() == null ? List.of() : config.getFieldLayout());
+        return snapshot;
+    }
+
+    // Lịch sử các bản đã lưu của một cấu hình (mới nhất trước); quyền như xem cấu hình đó.
+    @Transactional(readOnly = true)
+    public List<phucuong.ht.common.layoutconfig.LayoutConfigVersionResponse> versions(UUID id, Authentication authentication) {
+        get(id, authentication);
+        return versionService.list(phucuong.ht.common.layoutconfig.LayoutConfigVersionService.CERTIFICATE, id).stream()
+                .map(version -> {
+                    java.util.Map<String, Object> snapshot = new java.util.LinkedHashMap<>(version.snapshot());
+                    snapshot.put("backgroundImage", usableUrl(snapshot.get("backgroundAssetId"), MediaCategory.CERTIFICATE_BACKGROUND));
+                    return new phucuong.ht.common.layoutconfig.LayoutConfigVersionResponse(version.id(), version.versionNo(), version.createdAt(), version.createdBy(), snapshot);
+                })
+                .toList();
+    }
+
+    // URL ảnh đã ký nếu ảnh còn tồn tại; ảnh đã bị gỡ khỏi cấu hình sau các lần lưu thì trả null.
+    private String usableUrl(Object assetId, MediaCategory category) {
+        if (assetId == null) {
+            return null;
+        }
+        UUID id = UUID.fromString(assetId.toString());
+        var asset = mediaAssetService.find(id);
+        if (asset == null || asset.getStatus() == phucuong.ht.modules.media.model.enums.MediaStatus.DELETED) {
+            return null;
+        }
+        return mediaUrls.display(id, category);
     }
 
     // Đặt cấu hình làm cấu hình chung của phạm vi chứa nó; cấu hình chung cũ trở thành cấu hình thường.
@@ -263,6 +303,7 @@ public class CertificateConfigService {
         CertificateConfig config = requireEditable(id, actor);
         LayoutConfigRules.requireNotDefault(config, validationHelper);
         mediaAssetService.release(config.getBackgroundAssetId());
+        versionService.deleteAll(phucuong.ht.common.layoutconfig.LayoutConfigVersionService.CERTIFICATE, id);
         configRepository.remove(config.getId());
     }
 
@@ -660,14 +701,14 @@ public class CertificateConfigService {
         if (layout == null) {
             return List.of();
         }
-        return layout.stream().filter(item -> QR_TYPE.equalsIgnoreCase(item.getType())).toList();
+        return layout.stream().filter(item -> item.isPrinted() && QR_TYPE.equalsIgnoreCase(item.getType())).toList();
     }
 
     private List<CertificateLayoutItem> photoItems(List<CertificateLayoutItem> layout) {
         if (layout == null) {
             return List.of();
         }
-        return layout.stream().filter(item -> PHOTO_TYPE.equalsIgnoreCase(item.getType())).toList();
+        return layout.stream().filter(item -> item.isPrinted() && PHOTO_TYPE.equalsIgnoreCase(item.getType())).toList();
     }
 
     // Cạnh ảnh huynh trưởng theo tỉ lệ chiều cao trang.
@@ -708,6 +749,9 @@ public class CertificateConfigService {
             return items;
         }
         for (CertificateLayoutItem item : layout) {
+            if (!item.isPrinted()) {
+                continue;
+            }
             if (QR_TYPE.equalsIgnoreCase(item.getType()) || PHOTO_TYPE.equalsIgnoreCase(item.getType())) {
                 continue; // Mã QR và ảnh vẽ riêng (xem RenderQr, RenderPhoto).
             }

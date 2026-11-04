@@ -208,6 +208,7 @@ GET /api/certificates/config/assignments|200|401|403|N/A: fixed catalog with no 
 PUT /api/certificates/config/assignments|200|401|403|400|404|N/A: assigning a config to a course type is idempotent
 POST /api/certificates/config|200|401|403|400|N/A: creation has no existing resource lookup|N/A: duplicate names get an automatic numeric suffix
 GET /api/certificates/config/{id}|200|401|403|400|404|N/A: read-only endpoint does not mutate state
+GET /api/certificates/config/{id}/versions|200|401|403|400|404|N/A: read-only endpoint does not mutate state
 PUT /api/certificates/config/{id}|200|401|403|400|404|N/A: duplicate names get an automatic numeric suffix
 PUT /api/certificates/config/{id}/default|200|401|403|400|404|N/A: setting the default config is idempotent
 DELETE /api/certificates/config/{id}|200|401|403|400|404|409
@@ -253,6 +254,7 @@ GET /api/badges/config|200|401|403|400|N/A: collection endpoint does not resolve
 GET /api/badges/config/options|200|401|403|N/A: fixed catalog with no request parameters to validate|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
 GET /api/badges/config/fields|200|401|403|N/A: fixed catalog with no request parameters to validate|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
 GET /api/badges/config/{id}|200|401|403|400|404|N/A: read-only endpoint does not mutate state
+GET /api/badges/config/{id}/versions|200|401|403|400|404|N/A: read-only endpoint does not mutate state
 POST /api/badges/config/preview-pdf|200|401|403|400|N/A: draft content is not a stored resource|N/A: preview does not change state
 POST /api/badges/config|200|401|403|400|N/A: creation has no existing resource lookup|N/A: duplicate names get an automatic numeric suffix
 PUT /api/badges/config/{id}|200|401|403|400|404|N/A: duplicate names get an automatic numeric suffix
