@@ -209,6 +209,30 @@ public class CourseParticipationRepository extends BaseRepo<CourseParticipation,
         return results.stream().findFirst();
     }
 
+    /**
+     * Như {@link #findByLeaderIdAndCourseCode} cho cả một trang (một câu thay vì mỗi dòng một câu). Có thể trả thêm hồ sơ của
+     * cặp huynh trưởng / khóa không có trong trang; nơi gọi tự ghép theo đúng cặp.
+     */
+    public List<CourseParticipation> findAllByLeaderIdsAndCourseCodes(java.util.Collection<UUID> leaderIds, java.util.Collection<String> courseCodes) {
+        if (leaderIds == null || leaderIds.isEmpty() || courseCodes == null || courseCodes.isEmpty()) {
+            return List.of();
+        }
+        return entityManager.createQuery(
+                        """
+                                select cp
+                                from CourseParticipation cp
+                                join fetch cp.course c
+                                join fetch cp.leader l
+                                where l.id in :leaderIds
+                                  and c.courseCode in :courseCodes
+                                """,
+                        CourseParticipation.class
+                )
+                .setParameter("leaderIds", leaderIds)
+                .setParameter("courseCodes", courseCodes)
+                .getResultList();
+    }
+
     public boolean existsByLeaderIdAndCourseCode(UUID leaderId, String courseCode) {
         Long count = entityManager.createQuery("select count(cp) from CourseParticipation cp where cp.leader.id = :leaderId and cp.course.courseCode = :courseCode", Long.class)
                 .setParameter("leaderId", leaderId).setParameter("courseCode", courseCode).getSingleResult();
