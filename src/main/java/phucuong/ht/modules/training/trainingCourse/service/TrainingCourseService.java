@@ -798,10 +798,10 @@ public class TrainingCourseService {
     }
 
     // Khóa/mở chỉnh sửa điểm của khóa. Quyền kiểm tra ở controller (lock theo phạm vi sở hữu khóa).
-    @Caching(evict = {
-            @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_LIST, allEntries = true),
-            @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_DETAIL, allEntries = true)
-    })
+    // Xóa cả cache chứng nhận (màn chứng nhận / chấm điểm đọc lại đúng trạng thái khóa điểm) và thống kê
+    // (cảnh báo "chấm điểm quá hạn" ở tổng quan chỉ tính khóa chưa khóa điểm).
+    @EvictCaches.TrainingCourseData
+    @EvictCaches.Analytics
     @Transactional
     public TrainingCourseResponse setScoreLocked(String courseCode, boolean locked, Authentication authentication) {
         TrainingCourse course = trainingCourseRepository.findByCodeWithType(courseCode)

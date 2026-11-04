@@ -1,5 +1,7 @@
 package phucuong.ht.modules.system.controller;
 
+import phucuong.ht.modules.privacy.model.PrivacyConsentSource;
+import phucuong.ht.modules.privacy.service.PrivacyConsentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -20,6 +22,8 @@ import java.util.List;
 @RequestMapping("/api/system/accounts")
 @RequiredArgsConstructor
 public class AccountController {
+
+    private final PrivacyConsentService privacyConsent;
     private final AccountManagementService service;
 
     @PostMapping
@@ -28,7 +32,9 @@ public class AccountController {
             + " || @securityUtils.hasAuthority(authentication, 'system.account.manage.deanery')"
             + " || @securityUtils.hasAuthority(authentication, 'system.account.manage.parish')")
     public apiResponse<AccountResponse> create(@Valid @RequestBody AccountCreateRequest request, Authentication authentication) {
-        return apiResponse.success("Tạo tài khoản thành công", service.create(request, authentication));
+        AccountResponse created = service.create(request, authentication);
+        privacyConsent.recordAttestation(authentication, null, PrivacyConsentSource.ACCOUNT_FORM);
+        return apiResponse.success("Tạo tài khoản thành công", created);
     }
 
     @GetMapping

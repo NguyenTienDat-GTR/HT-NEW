@@ -81,9 +81,10 @@ public class AccountRoleController {
     )
     public apiResponse<List<RoleResponse>> findAssignableRoles(
             @RequestParam(required = false) String username,
+            @RequestParam(defaultValue = "false") boolean includeAssigned,
             Authentication authentication
     ) {
-        return apiResponse.success("Lấy danh sách vai trò có thể gán thành công", accountRoleService.findAssignableRoles(username, authentication));
+        return apiResponse.success("Lấy danh sách vai trò có thể gán thành công", accountRoleService.findAssignableRoles(username, includeAssigned, authentication));
     }
 
     @GetMapping("/{id}")

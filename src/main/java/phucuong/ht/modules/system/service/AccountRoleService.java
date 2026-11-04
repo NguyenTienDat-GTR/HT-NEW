@@ -134,8 +134,13 @@ public class AccountRoleService {
         return page(searchRequest, manageable);
     }
 
-    @Transactional(readOnly = true)
     public List<RoleResponse> findAssignableRoles(String username, Authentication authentication) {
+        return findAssignableRoles(username, false, authentication);
+    }
+
+    /** includeAssigned=true: trả thêm các vai trò tài khoản đã được gán (assigned=true) để màn hình gán hiển thị đủ. */
+    @Transactional(readOnly = true)
+    public List<RoleResponse> findAssignableRoles(String username, boolean includeAssigned, Authentication authentication) {
         String normalizedUsername = commonValidationHelper.normalizeOptionalText(username);
         Account targetAccount = normalizedUsername == null ? null : requireAccount(normalizedUsername);
         Set<String> assignedRoleCodes = targetAccount == null
@@ -146,9 +151,22 @@ public class AccountRoleService {
                 .collect(java.util.stream.Collectors.toSet());
         return roleRepository.findAll().stream()
                 .filter(role -> Boolean.TRUE.equals(role.getStatus()))
-                .filter(role -> !assignedRoleCodes.contains(role.getRoleCode()))
-                .filter(role -> targetAccount == null ? canAssignRole(authentication, role) : canManage(authentication, targetAccount, role))
-                .map(this::toRoleResponse)
+                .filter(role -> {
+                    if (assignedRoleCodes.contains(role.getRoleCode())) return includeAssigned;
+                    return targetAccount == null ? canAssignRole(authentication, role) : canManage(authentication, targetAccount, role);
+                })
+                .map(role -> {
+                    RoleResponse response = toRoleResponse(role);
+                    return includeAssigned && targetAccount != null
+                            ? RoleResponse.builder()
+                            .roleCode(response.getRoleCode()).roleName(response.getRoleName()).description(response.getDescription())
+                            .isSystem(response.getIsSystem()).displayOrder(response.getDisplayOrder()).status(response.getStatus())
+                            .createdAt(response.getCreatedAt()).createdBy(response.getCreatedBy()).createdByName(response.getCreatedByName())
+                            .updatedAt(response.getUpdatedAt()).updatedBy(response.getUpdatedBy()).updatedByName(response.getUpdatedByName())
+                            .assigned(assignedRoleCodes.contains(role.getRoleCode()))
+                            .build()
+                            : response;
+                })
                 .toList();
     }
 

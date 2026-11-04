@@ -4,6 +4,8 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -21,6 +23,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.Executor;
 import java.util.regex.Pattern;
 
 @Component
@@ -42,13 +45,23 @@ public class ApiAuditLoggingFilter extends OncePerRequestFilter {
     private final securityUtils securityUtils;
     private final AccountRepository accountRepository;
     private final AuditResourceNamer auditResourceNamer;
+    // Lưu nhật ký sau khi đã trả phản hồi: tra phạm vi / tên đối tượng và insert không làm chậm request (mỗi câu SQL vài chục ms khi DB ở xa).
+    private final Executor auditExecutor;
 
+    /** Lưu đồng bộ ngay trong request (dùng cho test đơn vị). */
     public ApiAuditLoggingFilter(SystemLogRepository systemLogRepository, AuditScopeResolver auditScopeResolver, securityUtils securityUtils, AccountRepository accountRepository, AuditResourceNamer auditResourceNamer) {
+        this(systemLogRepository, auditScopeResolver, securityUtils, accountRepository, auditResourceNamer, Runnable::run);
+    }
+
+    @Autowired
+    public ApiAuditLoggingFilter(SystemLogRepository systemLogRepository, AuditScopeResolver auditScopeResolver, securityUtils securityUtils, AccountRepository accountRepository, AuditResourceNamer auditResourceNamer,
+                                 @Qualifier(AsyncConfig.AUDIT_LOG_EXECUTOR) Executor auditExecutor) {
         this.systemLogRepository = systemLogRepository;
         this.auditScopeResolver = auditScopeResolver;
         this.securityUtils = securityUtils;
         this.accountRepository = accountRepository;
         this.auditResourceNamer = auditResourceNamer;
+        this.auditExecutor = auditExecutor;
     }
 
     @Override
@@ -62,15 +75,50 @@ public class ApiAuditLoggingFilter extends OncePerRequestFilter {
         long started = System.nanoTime();
         String resource = resolveResource(request.getRequestURI());
         String resourceId = extractResourceId(request.getRequestURI(), resource);
-        // Tra tên trước khi xử lý yêu cầu: với sửa/xóa, nhật ký giữ tên của đối tượng như lúc bị tác động.
-        String resourceName = safeName(resource, resourceId);
+        boolean read = isRead(request.getMethod());
+        // Request ghi: tra tên TRƯỚC khi xử lý để nhật ký giữ tên của đối tượng như lúc bị tác động (sửa / xóa).
+        // Request đọc không đổi dữ liệu nên tra tên sau, ở luồng nền.
+        String resourceName = read ? null : safeName(resource, resourceId);
 
         filterChain.doFilter(request, response);
 
+        AuditEntry entry;
         try {
-            persistAuditLog(request, response, resource, resourceId, resourceName, (System.nanoTime() - started) / 1_000_000);
+            entry = snapshot(request, response, resource, resourceId, resourceName, read, (System.nanoTime() - started) / 1_000_000);
         } catch (RuntimeException exception) {
-            log.warn("Không thể lưu audit log cho {} {}", request.getMethod(), request.getRequestURI(), exception);
+            log.warn("Không thể ghi nhận audit log cho {} {}", request.getMethod(), request.getRequestURI(), exception);
+            return;
+        }
+        try {
+            auditExecutor.execute(() -> persistQuietly(entry));
+        } catch (RuntimeException rejected) {
+            // Hàng đợi từ chối (vd. đang tắt ứng dụng): lưu ngay để không mất nhật ký.
+            persistQuietly(entry);
+        }
+    }
+
+    private static boolean isRead(String method) {
+        return "GET".equalsIgnoreCase(method) || "HEAD".equalsIgnoreCase(method) || "OPTIONS".equalsIgnoreCase(method);
+    }
+
+    /** Mọi thông tin lấy từ request / phản hồi, chụp lại trước khi request kết thúc (luồng nền không đọc được request nữa). */
+    private record AuditEntry(Authentication authentication, String method, String uri, String query, int status, long durationMs,
+                              String resource, String resourceId, String resourceName, boolean resolveName,
+                              String ipAddress, String userAgent, OffsetDateTime loggedAt) {
+    }
+
+    private AuditEntry snapshot(HttpServletRequest request, HttpServletResponse response, String resource, String resourceId,
+                                String resourceName, boolean resolveName, long durationMs) {
+        return new AuditEntry(SecurityContextHolder.getContext().getAuthentication(), request.getMethod(), request.getRequestURI(),
+                sanitizeQuery(request), response.getStatus(), durationMs, resource, resourceId, resourceName, resolveName,
+                request.getRemoteAddr(), request.getHeader("User-Agent"), OffsetDateTime.now());
+    }
+
+    private void persistQuietly(AuditEntry entry) {
+        try {
+            persistAuditLog(entry);
+        } catch (RuntimeException exception) {
+            log.warn("Không thể lưu audit log cho {} {}", entry.method(), entry.uri(), exception);
         }
     }
 
@@ -82,28 +130,33 @@ public class ApiAuditLoggingFilter extends OncePerRequestFilter {
         }
     }
 
-    private void persistAuditLog(HttpServletRequest request, HttpServletResponse response, String resource, String resourceId, String resourceName, long durationMs) {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+    private void persistAuditLog(AuditEntry entry) {
+        Authentication authentication = entry.authentication();
+        String method = entry.method();
+        String uri = entry.uri();
+        String resource = entry.resource();
+        String resourceId = entry.resourceId();
+        String resourceName = entry.resolveName() ? safeName(resource, resourceId) : entry.resourceName();
         String currentUsername = securityUtils.currentUsername(authentication);
         String persistedUsername = currentUsername != null && accountRepository.existsByUsername(currentUsername) ? currentUsername : null;
-        AuditScopeContext scope = auditScopeResolver.resolve(authentication, request.getRequestURI(), resource, resourceId);
+        AuditScopeContext scope = auditScopeResolver.resolve(authentication, uri, resource, resourceId);
 
         SystemLog log = new SystemLog();
-        log.setAction(request.getMethod());
-        log.setHttpMethod(request.getMethod());
-        log.setOperation(resolveOperation(request.getMethod(), request.getRequestURI(), resource, resourceId));
-        log.setRequestPath(truncate(request.getRequestURI(), REQUEST_PATH_MAX_LENGTH));
-        log.setQueryString(truncate(sanitizeQuery(request), QUERY_STRING_MAX_LENGTH));
-        log.setStatusCode(response.getStatus());
-        log.setDurationMs((int) Math.min(durationMs, Integer.MAX_VALUE));
-        log.setModule(resolveModule(request.getRequestURI()));
+        log.setAction(method);
+        log.setHttpMethod(method);
+        log.setOperation(resolveOperation(method, uri, resource, resourceId));
+        log.setRequestPath(truncate(uri, REQUEST_PATH_MAX_LENGTH));
+        log.setQueryString(truncate(entry.query(), QUERY_STRING_MAX_LENGTH));
+        log.setStatusCode(entry.status());
+        log.setDurationMs((int) Math.min(entry.durationMs(), Integer.MAX_VALUE));
+        log.setModule(resolveModule(uri));
         log.setResource(resource);
         log.setResourceId(resourceId);
         log.setResourceName(resourceName);
-        log.setIpAddress(request.getRemoteAddr());
-        log.setUserAgent(truncate(request.getHeader("User-Agent"), USER_AGENT_MAX_LENGTH));
-        log.setMessage(request.getMethod() + " " + truncate(request.getRequestURI(), REQUEST_PATH_MAX_LENGTH));
-        log.setLoggedAt(OffsetDateTime.now());
+        log.setIpAddress(entry.ipAddress());
+        log.setUserAgent(truncate(entry.userAgent(), USER_AGENT_MAX_LENGTH));
+        log.setMessage(method + " " + truncate(uri, REQUEST_PATH_MAX_LENGTH));
+        log.setLoggedAt(entry.loggedAt());
         log.setStatus(Boolean.TRUE);
         log.setCreatedAt(log.getLoggedAt());
         log.setUpdatedAt(log.getLoggedAt());

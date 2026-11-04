@@ -338,6 +338,8 @@ public class CrossDeaneryService {
     }
 
     // Giáo xứ thu hồi yêu cầu khi giáo hạt nhà chưa xử lý.
+    @EvictCaches.Courses
+    @EvictCaches.Analytics
     @Transactional
     public RequestResponse cancel(String id, Authentication authentication) {
         CrossDeaneryRequest request = requireRequest(id);

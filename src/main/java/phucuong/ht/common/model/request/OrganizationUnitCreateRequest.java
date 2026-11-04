@@ -1,5 +1,6 @@
 package phucuong.ht.common.model.request;
 
+import phucuong.ht.modules.privacy.model.SubjectConsentRequest;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -11,7 +12,7 @@ import java.time.LocalDate;
 
 @Getter
 @Setter
-public class OrganizationUnitCreateRequest {
+public class OrganizationUnitCreateRequest extends SubjectConsentRequest {
 
     @NotBlank(message = "Tên là bắt buộc")
     @Size(max = 100, message = "Tên không được vượt quá 100 ký tự")

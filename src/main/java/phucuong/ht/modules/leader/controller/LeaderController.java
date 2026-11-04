@@ -1,5 +1,7 @@
 package phucuong.ht.modules.leader.controller;
 
+import phucuong.ht.modules.privacy.model.PrivacyConsentSource;
+import phucuong.ht.modules.privacy.service.PrivacyConsentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -24,6 +26,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class LeaderController {
 
+    private final PrivacyConsentService privacyConsent;
+
     private final LeaderService leaderService;
     private final phucuong.ht.common.excel.job.ExcelJobService excelJobService;
     private final phucuong.ht.modules.leaderLevel.service.LeaderLevelService leaderLevelService;
@@ -31,7 +35,9 @@ public class LeaderController {
     @PostMapping
     @PreAuthorize("@leaderAccessEvaluator.canCreate(authentication)")
     public apiResponse<LeaderResponse> create(@Valid @RequestBody LeaderCreateRequest request, Authentication authentication) {
-        return apiResponse.success("Tạo Huynh Trưởng thành công", leaderService.create(request, authentication));
+        LeaderResponse created = leaderService.create(request, authentication);
+        privacyConsent.recordAttestation(authentication, created.getId(), PrivacyConsentSource.LEADER_FORM);
+        return apiResponse.success("Tạo Huynh Trưởng thành công", created);
     }
 
     @GetMapping
@@ -55,10 +61,14 @@ public class LeaderController {
     public org.springframework.http.ResponseEntity<apiResponse<phucuong.ht.common.excel.job.ExcelJobResponse>> importLeaders(
             @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
             @RequestPart(value = "images", required = false) org.springframework.web.multipart.MultipartFile images,
+            @RequestParam(value = "subjectConsentConfirmed", required = false) Boolean subjectConsentConfirmed,
             @RequestHeader(value = phucuong.ht.common.idempotency.IdempotencyService.HEADER, required = false) String idempotencyKey,
             Authentication authentication) {
-        return phucuong.ht.common.excel.job.ExcelJobResponses.accepted(excelJobService.createImport(
-                phucuong.ht.common.excel.job.ExcelJobKind.IMPORT_LEADERS, "", file, images, idempotencyKey, authentication));
+        privacyConsent.requireConfirmed(subjectConsentConfirmed);
+        var accepted = excelJobService.createImport(
+                phucuong.ht.common.excel.job.ExcelJobKind.IMPORT_LEADERS, "", file, images, idempotencyKey, authentication);
+        privacyConsent.recordAttestation(authentication, null, PrivacyConsentSource.LEADER_IMPORT);
+        return phucuong.ht.common.excel.job.ExcelJobResponses.accepted(accepted);
     }
 
     // Xuất Excel chạy nền theo đúng bộ lọc/tìm kiếm/sắp xếp của danh sách; trả 202 + tác vụ, theo dõi tại /api/excel-jobs.
@@ -97,7 +107,9 @@ public class LeaderController {
             @Valid @RequestBody LeaderUpdateRequest request,
             Authentication authentication
     ) {
-        return apiResponse.success("Cập nhật Huynh Trưởng thành công", leaderService.update(id, request, authentication));
+        LeaderResponse updated = leaderService.update(id, request, authentication);
+        privacyConsent.recordAttestation(authentication, id, PrivacyConsentSource.LEADER_FORM);
+        return apiResponse.success("Cập nhật Huynh Trưởng thành công", updated);
     }
 
     @PostMapping("/{id}/transfer")

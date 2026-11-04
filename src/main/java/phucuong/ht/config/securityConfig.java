@@ -54,6 +54,7 @@ public class securityConfig {
                 "/api/auth/refresh",
                 "/api/auth/logout",
                 "/api/auth/forgot-password/**",
+                "/api/privacy/policy",
                 "/actuator/health",
                 "/internal/site-hosts/check",
                 "/ws/notifications",
@@ -68,6 +69,7 @@ public class securityConfig {
                 "/api/auth/refresh",
                 "/api/auth/logout",
                 "/api/auth/forgot-password/**",
+                "/api/privacy/policy",
                 "/actuator/health",
                 "/internal/site-hosts/check",
                 "/ws/notifications"

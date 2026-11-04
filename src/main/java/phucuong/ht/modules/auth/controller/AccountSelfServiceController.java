@@ -1,5 +1,7 @@
 package phucuong.ht.modules.auth.controller;
 
+import phucuong.ht.modules.privacy.model.PrivacyConsentSource;
+import phucuong.ht.modules.privacy.service.PrivacyConsentService;
 import phucuong.ht.modules.auth.model.request.MyProfileUpdateRequest;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -40,6 +42,8 @@ import phucuong.ht.common.repository.BaseSearchRequest;
 @RequiredArgsConstructor
 public class AccountSelfServiceController {
 
+    private final PrivacyConsentService privacyConsent;
+
     private final MyProfileService myProfileService;
     private final MyEmailService myEmailService;
     private final MyPermissionService myPermissionService;
@@ -55,17 +59,23 @@ public class AccountSelfServiceController {
     /** Tự sửa thông tin cá nhân (không gồm giáo xứ / giáo hạt). Email và SĐT chỉ kiểm tra trùng khi đổi. */
     @PutMapping("/me/profile")
     public apiResponse<MyProfileResponse> updateProfile(@Valid @RequestBody MyProfileUpdateRequest request, Authentication authentication) {
-        return apiResponse.success("Cập nhật hồ sơ cá nhân thành công", myProfileService.updateProfile(request, authentication));
+        MyProfileResponse updated = myProfileService.updateProfile(request, authentication);
+        privacyConsent.recordSelf(authentication, PrivacyConsentSource.PROFILE_EDIT);
+        return apiResponse.success("Cập nhật hồ sơ cá nhân thành công", updated);
     }
 
     @PutMapping("/me/avatar")
     public apiResponse<MyProfileResponse> updateMyAvatar(@Valid @RequestBody MyAvatarUpdateRequest request, Authentication authentication) {
-        return apiResponse.success("Cập nhật ảnh đại diện thành công", myProfileService.updateAvatar(request, authentication));
+        MyProfileResponse updated = myProfileService.updateAvatar(request, authentication);
+        privacyConsent.recordSelf(authentication, PrivacyConsentSource.AVATAR);
+        return apiResponse.success("Cập nhật ảnh đại diện thành công", updated);
     }
 
     @PutMapping("/me/email")
     public apiResponse<EmailUpdateResponse> updateEmail(@Valid @RequestBody EmailUpdateRequest request, Authentication authentication) {
-        return apiResponse.success("Cập nhật email thành công", myEmailService.update(request, authentication));
+        EmailUpdateResponse updated = myEmailService.update(request, authentication);
+        privacyConsent.recordSelf(authentication, PrivacyConsentSource.EMAIL_CHANGE);
+        return apiResponse.success("Cập nhật email thành công", updated);
     }
 
     @GetMapping("/me/permissions")
