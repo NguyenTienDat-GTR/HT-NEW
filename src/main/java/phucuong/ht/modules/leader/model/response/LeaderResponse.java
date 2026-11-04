@@ -35,6 +35,8 @@ public class LeaderResponse {
     private String deaneryName;
     private UUID parishId;
     private String parishName;
+    // "Giáo họ X" / "Giáo điểm Y" khi huynh trưởng thuộc giáo họ / giáo điểm; rỗng nếu thuộc giáo xứ.
+    private String subUnitName;
     private String createdByName;
     private String updatedByName;
 }

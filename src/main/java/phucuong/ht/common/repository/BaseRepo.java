@@ -381,10 +381,12 @@ public abstract class BaseRepo<T extends BaseModel, ID> {
     }
 
     /**
-     * Thứ tự mặc định, chỉ dùng khi request không chỉ định sortBy hợp lệ (mặc định: không có).
+     * Thứ tự mặc định, chỉ dùng khi request không chỉ định sortBy hợp lệ (mặc định: createdAt giảm dần).
      */
     protected List<jakarta.persistence.criteria.Order> defaultOrders(CriteriaBuilder cb, Root<T> root) {
-        return List.of();
+        // Mặc định mọi danh sách: bản ghi tạo gần nhất đứng trước (nếu entity có createdAt).
+        Path<?> createdAt = tryResolvePath(root, "createdAt");
+        return createdAt == null ? List.of() : List.of(cb.desc(createdAt));
     }
 
     private Path<?> tryResolvePath(Path<?> root, String fieldPath) {

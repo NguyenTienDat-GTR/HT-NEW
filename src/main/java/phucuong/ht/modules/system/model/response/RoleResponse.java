@@ -20,4 +20,6 @@ public class RoleResponse {
     private String updatedBy;
     private String createdByName;
     private String updatedByName;
+    /** Chỉ có giá trị khi liệt kê vai trò theo tài khoản: true nếu tài khoản đã được gán vai trò này. */
+    private Boolean assigned;
 }

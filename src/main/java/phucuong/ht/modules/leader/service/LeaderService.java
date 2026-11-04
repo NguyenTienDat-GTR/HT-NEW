@@ -473,6 +473,7 @@ public class LeaderService {
                 .deaneryName(leader.getParish() == null || leader.getParish().getDeanery() == null ? null : leader.getParish().getDeanery().getName())
                 .parishId(leader.getParish() == null ? null : leader.getParish().getId())
                 .parishName(leader.getParish() == null ? null : leader.getParish().getName())
+                .subUnitName(leader.getParish() == null ? null : phucuong.ht.modules.parish.model.ParishUnitNames.of(leader.getParish()).subUnitName())
                 .build();
     }
 
