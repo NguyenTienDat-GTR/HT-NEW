@@ -398,11 +398,11 @@ Environment variables:
 
 Current login session policy:
 
-- the backend identifies the login source by `HttpServletRequest.getRemoteAddr()`
-- each account may keep at most 2 active IP-based sessions
-- each IP may keep only 1 active session for the same account
-- a new login from the same IP revokes both the previous access token and refresh token on that IP
-- a login from a third IP revokes the oldest active IP session for that account
+- the backend identifies the login source by the optional `deviceId` in the login body (FE generates it once and keeps it in localStorage); when absent it falls back to `HttpServletRequest.getRemoteAddr()`. Two devices behind the same NAT/proxy share one IP, so keying by IP alone made the 2nd device kick out the 1st; `deviceId` fixes that
+- each account may keep at most 2 active sessions (source key = `device:<deviceId>` or the IP)
+- each source key may keep only 1 active session for the same account
+- a new login from the same source key revokes both the previous access token and refresh token of that source
+- a login from a third source revokes the oldest active session for that account
 - `POST /api/auth/refresh` still reads the refresh token from the HttpOnly cookie
 - successful refresh rotates both access token and refresh token for the existing `sessionId` through an atomic Redis compare-and-set/Lua operation; only one concurrent use of the same refresh token can succeed
 - normal access-token activity updates only the session ordering score, so it cannot overwrite a concurrent refresh rotation with stale session data

@@ -146,6 +146,33 @@ class AuthServiceTest {
     }
 
     @Test
+    void loginShouldKeySessionByDeviceIdWhenProvidedSoSameIpDevicesCoexist() {
+        AuthService authService = createService();
+        LoginRequest request = new LoginRequest();
+        request.setUsername("superadminpc");
+        request.setPassword("secret");
+        request.setDeviceId("device-abc");
+        AuthUserDetails principal = AuthUserDetails.databasePrincipal(
+                "superadminpc", "encoded-password", null, List.of("SUPER_ADMIN"), List.of("auth.session.manage.all"), true);
+        Authentication authentication = new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
+        TokenSessionState sessionState = session("session-3", "superadminpc", "device:device-abc");
+
+        when(authenticationManager.authenticate(any(Authentication.class))).thenReturn(authentication);
+        when(redisTokenSessionService.createSession(eq("superadminpc"), eq("device:device-abc"), anyString(), anyString(), eq("pending"), anyBoolean()))
+                .thenReturn(sessionState);
+        when(jwtUtils.generateAccessToken(eq(principal), eq("session-3"), anyString())).thenReturn("access-token");
+        when(jwtUtils.generateRefreshToken(eq(principal), eq("session-3"), anyString(), any(Instant.class))).thenReturn("refresh-token");
+        when(redisTokenSessionService.rotateSession(eq("session-3"), eq("superadminpc"), anyString(), anyString(), eq("refresh-token")))
+                .thenReturn(sessionState);
+        when(jwtUtils.getAccessTokenExpirationMs()).thenReturn(900000L);
+
+        AuthTokenResponse response = authService.login(request, "127.0.0.1");
+
+        assertEquals("access-token", response.getAccessToken());
+        verify(redisTokenSessionService).createSession(eq("superadminpc"), eq("device:device-abc"), anyString(), anyString(), eq("pending"), anyBoolean());
+    }
+
+    @Test
     void refreshShouldRotateTokensForExistingRedisSession() {
         AuthService authService = createService();
         AuthUserDetails principal = AuthUserDetails.databasePrincipal(
