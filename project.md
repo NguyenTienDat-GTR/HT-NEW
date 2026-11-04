@@ -406,6 +406,7 @@ Current login session policy:
 - `POST /api/auth/refresh` still reads the refresh token from the HttpOnly cookie
 - successful refresh rotates both access token and refresh token for the existing `sessionId` through an atomic Redis compare-and-set/Lua operation; only one concurrent use of the same refresh token can succeed
 - normal access-token activity updates only the session ordering score, so it cannot overwrite a concurrent refresh rotation with stale session data
+- `app.security.cookie.expose-access-token-in-body` (env `AUTH_EXPOSE_ACCESS_TOKEN_IN_BODY`): default `true` in dev, `false` in the prod profile (test/production). When `false`, `/auth/login` and `/auth/refresh` omit `accessToken` from the JSON body; it only travels in the HttpOnly access cookie (refresh token is never in the body). The JWT filter already accepts the cookie, and the WebSocket handshake copies the access cookie so STOMP `CONNECT` works without an `Authorization` header. FE stores a `COOKIE_SESSION` marker instead of a token and sends no Bearer header. HttpOnly cookies are still visible in DevTools > Application (browser limitation) but not readable by JS/XSS
 - protected APIs now validate `sessionId + accessToken jti` against Redis on every request
 - token parsing requires the configured JWT issuer and audience in addition to the correct signing key and token type
 - updating, disabling, or deleting an account revokes all of that account's Redis sessions immediately; previously issued access tokens then fail the Redis `sessionId + jti` check

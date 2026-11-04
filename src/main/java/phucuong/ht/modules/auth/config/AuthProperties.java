@@ -52,5 +52,10 @@ public class AuthProperties {
         private String path = "/";
         private String sameSite = "Lax";
         private boolean secure = false;
+        /**
+         * true (dev): trả accessToken trong body JSON để dễ debug. false (test/production): accessToken chỉ nằm trong
+         * cookie HttpOnly, không xuất hiện trong response body nên không đọc được bằng JS/DevTools Preview.
+         */
+        private boolean exposeAccessTokenInBody = true;
     }
 }
