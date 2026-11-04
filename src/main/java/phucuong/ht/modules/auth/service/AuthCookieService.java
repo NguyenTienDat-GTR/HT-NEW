@@ -28,6 +28,14 @@ public class AuthCookieService {
         ).toString());
     }
 
+    /** Bản trả về trong body: ẩn accessToken khi cấu hình không cho lộ (test/production), token vẫn nằm trong cookie HttpOnly. */
+    public AuthTokenResponse toBodyResponse(AuthTokenResponse tokens) {
+        if (authProperties.getCookie().isExposeAccessTokenInBody()) {
+            return tokens;
+        }
+        return tokens.toBuilder().accessToken(null).build();
+    }
+
     public void clearAccessCookie(HttpServletResponse response) {
         response.addHeader("Set-Cookie", buildCookie(
                 authProperties.getCookie().getAccessTokenName(),
