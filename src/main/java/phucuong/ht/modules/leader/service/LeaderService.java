@@ -211,6 +211,8 @@ public class LeaderService {
             @CacheEvict(cacheNames = CacheNames.LEADER_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.LEADER_DETAIL, allEntries = true)
     })
+    // Khóa / chứng nhận hiển thị tên huynh trưởng (người tạo, người kết thúc, người duyệt...) nên cũng phải xóa cache.
+    @EvictCaches.Courses
     @EvictCaches.Certificates
     @EvictCaches.ExecutiveAssignments
     public LeaderResponse update(UUID id, LeaderUpdateRequest request, Authentication authentication) {
@@ -250,6 +252,8 @@ public class LeaderService {
                 leaderRepository.setImageAsset(id, newAssetId);
                 mediaAssetService.release(oldAssetId);
             }
+            // Tên hiển thị của người thao tác có cache trong bộ nhớ 60 giây: xóa để danh sách nạp lại dùng tên mới.
+            auditActorNameResolver.evictAll();
             return toLeaderResponse(leaderValidationHelper.requireExistingLeaderWithParish(id));
         } catch (DataIntegrityViolationException exception) {
             throw new ApiException(HttpStatus.CONFLICT, errorCode.CONFLICT, "Dữ liệu Huynh Trưởng bị trùng hoặc xung đột với dữ liệu hiện có");
@@ -305,6 +309,8 @@ public class LeaderService {
             @CacheEvict(cacheNames = CacheNames.LEADER_LIST, allEntries = true),
             @CacheEvict(cacheNames = CacheNames.LEADER_DETAIL, allEntries = true)
     })
+    // Khóa / chứng nhận hiển thị tên huynh trưởng (người tạo, người kết thúc, người duyệt...) nên cũng phải xóa cache.
+    @EvictCaches.Courses
     @EvictCaches.Certificates
     @EvictCaches.ExecutiveAssignments
     public LeaderResponse updateOwnProfile(UUID id, LeaderSelfUpdateRequest request, String auditActor) {
@@ -343,6 +349,8 @@ public class LeaderService {
                 leaderRepository.setImageAsset(id, newAssetId);
                 mediaAssetService.release(oldAssetId);
             }
+            // Tên hiển thị của người thao tác có cache trong bộ nhớ 60 giây: xóa để danh sách nạp lại dùng tên mới.
+            auditActorNameResolver.evictAll();
             return toLeaderResponse(leaderValidationHelper.requireExistingLeaderWithParish(id));
         } catch (DataIntegrityViolationException exception) {
             throw new ApiException(HttpStatus.CONFLICT, errorCode.CONFLICT, "Email hoặc số điện thoại đã được dùng bởi hồ sơ khác");

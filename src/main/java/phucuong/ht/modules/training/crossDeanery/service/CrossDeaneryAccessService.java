@@ -9,6 +9,7 @@ import phucuong.ht.common.utils.AuditActorNameResolver;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.common.validation.AccountScopeValidationHelper;
 import phucuong.ht.common.validation.CommonValidationHelper;
+import phucuong.ht.config.EvictCaches;
 import phucuong.ht.modules.deanery.model.entity.Deanery;
 import phucuong.ht.modules.deanery.repository.DeaneryRepository;
 import phucuong.ht.modules.notification.service.TrainingNotificationCommand;
@@ -80,6 +81,8 @@ public class CrossDeaneryAccessService {
                 .toList();
     }
 
+    // Đổi quyết định cho phép / từ chối khóa liên giáo hạt: xóa cache khóa để danh sách / chi tiết không giữ dữ liệu cũ.
+    @EvictCaches.Courses
     @Transactional
     public CourseInvitation decide(String courseCode, AccessDecisionRequest request, Authentication authentication) {
         Deanery home = requireHomeDeanery(authentication);
