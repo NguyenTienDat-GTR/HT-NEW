@@ -8,6 +8,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import phucuong.ht.common.dto.apiResponse;
 import phucuong.ht.common.repository.BaseSearchRequest;
+import phucuong.ht.common.layoutconfig.LayoutConfigVersionResponse;
 import phucuong.ht.modules.badge.config.model.request.BadgeConfigUpsertRequest;
 import phucuong.ht.modules.badge.config.model.request.BadgePreviewPdfRequest;
 import phucuong.ht.modules.badge.config.model.response.BadgeConfigResponse;
@@ -42,6 +43,13 @@ public class BadgeConfigController {
     @PreAuthorize("@badgeConfigAccessEvaluator.canRead(authentication)")
     public apiResponse<List<CertificateFieldCatalogItem>> fields() {
         return apiResponse.success("Lấy danh sách trường thẻ tham dự thành công", service.fieldCatalog());
+    }
+
+    // Lịch sử các bản đã lưu của một cấu hình thẻ (mới nhất trước); quyền như xem cấu hình.
+    @GetMapping("/{id}/versions")
+    @PreAuthorize("@badgeConfigAccessEvaluator.canRead(authentication)")
+    public apiResponse<List<LayoutConfigVersionResponse>> versions(@PathVariable UUID id, Authentication authentication) {
+        return apiResponse.success("Lấy lịch sử phiên bản cấu hình thẻ thành công", service.versions(id, authentication));
     }
 
     @GetMapping("/{id}")

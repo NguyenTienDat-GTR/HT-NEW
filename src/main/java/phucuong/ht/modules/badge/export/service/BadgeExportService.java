@@ -158,6 +158,9 @@ public class BadgeExportService {
         List<CertificatePdfRenderer.RenderQr> qrCodes = new ArrayList<>();
         if (layout != null) {
             for (CertificateLayoutItem item : layout) {
+                if (!item.isPrinted()) {
+                    continue;
+                }
                 String type = item.getType() == null ? "" : item.getType().trim().toUpperCase(Locale.ROOT);
                 if (TYPE_PHOTO.equals(type)) {
                     if (photo != null) {

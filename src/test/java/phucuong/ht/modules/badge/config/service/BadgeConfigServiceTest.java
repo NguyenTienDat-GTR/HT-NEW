@@ -70,7 +70,8 @@ class BadgeConfigServiceTest {
         });
         service = new BadgeConfigService(repository, scopeResolver, validationHelper, securityUtils, mediaAssets, mediaFolders, mediaUrls,
                 mock(phucuong.ht.modules.media.album.BackgroundAlbumService.class),
-                new BadgePdfRenderer(new phucuong.ht.modules.certificate.config.service.CertificatePdfRenderer()));
+                new BadgePdfRenderer(new phucuong.ht.modules.certificate.config.service.CertificatePdfRenderer()),
+                mock(phucuong.ht.common.layoutconfig.LayoutConfigVersionService.class));
 
         when(repository.persist(any())).thenAnswer(invocation -> {
             BadgeConfig config = invocation.getArgument(0);

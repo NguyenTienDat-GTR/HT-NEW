@@ -67,7 +67,8 @@ class CertificateConfigLibraryTest {
                 mock(phucuong.ht.modules.media.service.MediaAssetService.class),
                 mock(phucuong.ht.modules.media.service.MediaFolderService.class),
                 mock(phucuong.ht.modules.media.service.MediaUrls.class),
-                mock(phucuong.ht.modules.media.album.BackgroundAlbumService.class));
+                mock(phucuong.ht.modules.media.album.BackgroundAlbumService.class),
+                mock(phucuong.ht.common.layoutconfig.LayoutConfigVersionService.class));
 
         when(configRepository.persist(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(configRepository.merge(any())).thenAnswer(invocation -> invocation.getArgument(0));
