@@ -4,3 +4,5 @@ Các font sau thuộc SIL Open Font License 1.1 (https://scripts.sil.org/OFL), t
 - Pacifico
 - Patrick Hand
 DejaVu Sans/Serif: xem DejaVu-LICENSE.txt.
+Thêm (SIL Open Font License 1.1, tải từ Google Fonts): Roboto, Montserrat, Lora, Playfair Display, Noto Serif, Dancing Script, Great Vibes.
+Tinos: Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0), tải từ Google Fonts.
