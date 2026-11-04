@@ -185,7 +185,10 @@ public class AccountManagementService {
     @Transactional(readOnly = true)
     public Page<AccountResponse> findAll(BaseSearchRequest request, Authentication authentication) {
         BaseSearchRequest searchRequest = request == null ? new BaseSearchRequest() : request;
-        List<AccountResponse> manageable = accountRepository.findAll().stream()
+        List<Account> accounts = accountRepository.findAll();
+        // Vai trò của mọi tài khoản trong một câu, thay vì vài câu cho mỗi tài khoản khi lọc quyền xem và dựng dữ liệu.
+        phucuong.ht.config.AccountLookupMemoConfig.preloadActiveRoles(accountRoleRepository, accounts.stream().map(Account::getUsername).toList());
+        List<AccountResponse> manageable = accounts.stream()
                 .filter(account -> isVisibleInAccountList(authentication, account))
                 .map(account -> response(account, authentication))
                 .filter(response -> matchesAccountFilters(response, searchRequest))
@@ -196,7 +199,9 @@ public class AccountManagementService {
     @Transactional(readOnly = true)
     public List<AccountResponse> findAccountPermissionTargets(Authentication authentication, String search) {
         String normalizedSearch = validation.normalizeOptionalText(search);
-        return accountRepository.findAll().stream()
+        List<Account> accounts = accountRepository.findAll();
+        phucuong.ht.config.AccountLookupMemoConfig.preloadActiveRoles(accountRoleRepository, accounts.stream().map(Account::getUsername).toList());
+        return accounts.stream()
                 .filter(account -> Boolean.TRUE.equals(account.getStatus()))
                 .filter(account -> isSuperAdmin(authentication) ? isValidAccountPermissionTarget(account) : authorizationHelper.canManageForPermissions(authentication, account))
                 .map(this::response)

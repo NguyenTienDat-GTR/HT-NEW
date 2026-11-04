@@ -48,4 +48,22 @@ public class AsyncConfig {
         executor.initialize();
         return executor;
     }
+
+    public static final String AUDIT_LOG_EXECUTOR = "auditLogExecutor";
+
+    // Executor lưu nhật ký API (system_log) sau khi đã trả phản hồi, để việc tra phạm vi và insert không cộng vào thời gian request.
+    // Hàng đợi đầy thì luồng gọi tự lưu (CallerRuns) và khi tắt ứng dụng thì chờ lưu hết: không bỏ sót dòng nhật ký nào.
+    @Bean(name = AUDIT_LOG_EXECUTOR)
+    public Executor auditLogExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(4);
+        executor.setQueueCapacity(5000);
+        executor.setThreadNamePrefix("audit-log-");
+        executor.setRejectedExecutionHandler(new java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy());
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(30);
+        executor.initialize();
+        return executor;
+    }
 }

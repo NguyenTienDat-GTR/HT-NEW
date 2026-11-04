@@ -219,8 +219,16 @@ public class AccountManagementAuthorizationHelper {
         }
     }
 
+    // Được gọi cho từng dòng khi lọc danh sách (phân quyền vai trò, tài khoản): ghi nhớ trong request đọc để chỉ truy vấn một lần.
     private Integer currentActorRoleOrder(Authentication authentication) {
         String username = currentUsername(authentication);
+        String roles = authentication != null && authentication.getPrincipal() instanceof AuthUserDetails principal
+                ? String.join(",", principal.getRoles()) : "";
+        return phucuong.ht.common.utils.RequestMemo.get("actorRoleOrder:" + username + ":" + roles,
+                () -> loadCurrentActorRoleOrder(authentication, username));
+    }
+
+    private Integer loadCurrentActorRoleOrder(Authentication authentication, String username) {
         Integer databaseOrder = accountRoleRepository.findActiveByUsername(username).stream()
                 .map(accountRole -> accountRole.getRole())
                 .map(Role::getDisplayOrder)

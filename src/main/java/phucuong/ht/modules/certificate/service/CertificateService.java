@@ -97,7 +97,7 @@ public class CertificateService {
         }
         scopedRequest.setScopeAnyOf(groups);
         Page<Certificate> page = certificateRepository.findAll(scopedRequest);
-        return new PageImpl<>(page.getContent().stream().map(this::toResponse).toList(), page.getPageable(), page.getTotalElements());
+        return new PageImpl<>(toResponses(page.getContent()), page.getPageable(), page.getTotalElements());
     }
 
     // Mã mọi chứng nhận đã duyệt của một khóa trong phạm vi tài khoản được xem (dùng khi xuất PDF mà không chọn hồ sơ nào).
@@ -135,7 +135,7 @@ public class CertificateService {
         request.setSortDirection("DESC");
         request.setFilters(new LinkedHashMap<>(Map.of("leader.id", leaderId)));
         // ArrayList (không phải List bất biến của Stream.toList): danh sách rỗng bất biến đọc lại từ cache Redis bị lỗi giải mã.
-        return new java.util.ArrayList<>(certificateRepository.findAll(request).getContent().stream().map(this::toResponse).toList());
+        return new java.util.ArrayList<>(toResponses(certificateRepository.findAll(request).getContent()));
     }
 
     // Các năm cấp có chứng nhận thật trong phạm vi người xem (mới nhất trước), cho bộ lọc năm cấp:
@@ -485,6 +485,30 @@ public class CertificateService {
 
     private CertificateResponse toResponse(Certificate certificate) {
         return responseBuilder(certificate, findParticipation(certificate)).build();
+    }
+
+    // Danh sách: nạp hồ sơ tham dự của cả trang trong một câu thay vì mỗi chứng nhận một câu.
+    private List<CertificateResponse> toResponses(List<Certificate> certificates) {
+        java.util.Set<UUID> leaderIds = new java.util.HashSet<>();
+        java.util.Set<String> courseCodes = new java.util.HashSet<>();
+        for (Certificate certificate : certificates) {
+            if (certificate.getLeader() != null && certificate.getCourse() != null) {
+                leaderIds.add(certificate.getLeader().getId());
+                courseCodes.add(certificate.getCourse().getCourseCode());
+            }
+        }
+        Map<String, CourseParticipation> participations = new HashMap<>();
+        for (CourseParticipation participation : courseParticipationRepository.findAllByLeaderIdsAndCourseCodes(leaderIds, courseCodes)) {
+            participations.putIfAbsent(participationKey(participation.getLeader().getId(), participation.getCourse().getCourseCode()), participation);
+        }
+        return certificates.stream()
+                .map(certificate -> responseBuilder(certificate, certificate.getLeader() == null || certificate.getCourse() == null ? null
+                        : participations.get(participationKey(certificate.getLeader().getId(), certificate.getCourse().getCourseCode()))).build())
+                .toList();
+    }
+
+    private static String participationKey(UUID leaderId, String courseCode) {
+        return leaderId + "|" + courseCode;
     }
 
     // Chi tiết: thêm thông tin huynh trưởng, khóa, kết quả. Chỉ dùng với chứng nhận đã fetch đủ quan hệ (findByCodeWithLeaderAndCourse).
