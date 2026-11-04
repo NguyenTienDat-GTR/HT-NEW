@@ -1,5 +1,6 @@
 package phucuong.ht.modules.auth.model.request;
 
+import phucuong.ht.modules.privacy.model.SelfConsentRequest;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Past;
 import jakarta.validation.constraints.Pattern;
@@ -17,7 +18,7 @@ import java.util.UUID;
  */
 @Getter
 @Setter
-public class MyProfileUpdateRequest {
+public class MyProfileUpdateRequest extends SelfConsentRequest {
 
     @Size(max = 50, message = "Tên thánh tối đa 50 ký tự")
     private String holyName;

@@ -1,5 +1,7 @@
 package phucuong.ht.modules.parish.controller;
 
+import phucuong.ht.modules.privacy.model.PrivacyConsentSource;
+import phucuong.ht.modules.privacy.service.PrivacyConsentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -25,13 +27,17 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ParishController {
 
+    private final PrivacyConsentService privacyConsent;
+
     private final ParishService parishService;
     private final phucuong.ht.common.excel.job.ExcelJobService excelJobService;
 
     @PostMapping
     @PreAuthorize("@parishAccessEvaluator.canCreate(authentication)")
     public apiResponse<ParishResponse> create(@Valid @RequestBody ParishCreateRequest request, Authentication authentication) {
-        return apiResponse.success("Tạo giáo xứ thành công", parishService.create(request, authentication));
+        ParishResponse created = parishService.create(request, authentication);
+        privacyConsent.recordAttestation(authentication, null, PrivacyConsentSource.ORG_FORM);
+        return apiResponse.success("Tạo giáo xứ thành công", created);
     }
 
     @GetMapping
@@ -64,7 +70,9 @@ public class ParishController {
             @Valid @RequestBody ParishUpdateRequest request,
             Authentication authentication
     ) {
-        return apiResponse.success("Cập nhật giáo xứ thành công", parishService.update(id, request, authentication));
+        ParishResponse updated = parishService.update(id, request, authentication);
+        privacyConsent.recordAttestation(authentication, null, PrivacyConsentSource.ORG_FORM);
+        return apiResponse.success("Cập nhật giáo xứ thành công", updated);
     }
     // Đổi giáo xứ cha của giáo họ / giáo điểm: admin giáo hạt / giáo phận trong phạm vi (cùng quyền tạo giáo xứ).
     @PatchMapping("/{id}/parent")

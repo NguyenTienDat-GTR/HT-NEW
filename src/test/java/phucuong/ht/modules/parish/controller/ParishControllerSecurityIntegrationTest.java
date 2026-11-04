@@ -104,10 +104,12 @@ class ParishControllerSecurityIntegrationTest {
         UUID parishId = UUID.randomUUID();
         UUID deaneryId = UUID.randomUUID();
         ParishCreateRequest createRequest = new ParishCreateRequest();
+        createRequest.setSubjectConsentConfirmed(true);
         createRequest.setName("New Parish");
         createRequest.setChapterName("Chapter");
         createRequest.setDeaneryId(deaneryId);
         ParishUpdateRequest updateRequest = new ParishUpdateRequest();
+        updateRequest.setSubjectConsentConfirmed(true);
         updateRequest.setName("Updated Parish");
         when(parishAccessEvaluator.canCreate(any())).thenReturn(true);
         when(parishAccessEvaluator.canUpdate(any(), eq(parishId))).thenReturn(true);
@@ -134,6 +136,7 @@ class ParishControllerSecurityIntegrationTest {
         UUID parishId = UUID.randomUUID();
         UUID deaneryId = UUID.randomUUID();
         ParishUpdateRequest request = new ParishUpdateRequest();
+        request.setSubjectConsentConfirmed(true);
         request.setChapterName("Updated Chapter");
         when(parishAccessEvaluator.canRead(any(), eq(parishId))).thenReturn(true);
         when(parishAccessEvaluator.canUpdate(any(), eq(parishId))).thenReturn(true);

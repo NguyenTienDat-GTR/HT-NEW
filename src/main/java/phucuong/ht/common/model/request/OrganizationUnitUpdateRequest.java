@@ -1,5 +1,6 @@
 package phucuong.ht.common.model.request;
 
+import phucuong.ht.modules.privacy.model.SubjectConsentRequest;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -10,7 +11,7 @@ import java.time.LocalDate;
 
 @Getter
 @Setter
-public class OrganizationUnitUpdateRequest {
+public class OrganizationUnitUpdateRequest extends SubjectConsentRequest {
 
     @Size(max = 100, message = "Tên không được vượt quá 100 ký tự")
     private String name;

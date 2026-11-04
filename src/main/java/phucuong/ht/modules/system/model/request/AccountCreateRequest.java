@@ -1,5 +1,6 @@
 package phucuong.ht.modules.system.model.request;
 
+import phucuong.ht.modules.privacy.model.SubjectConsentRequest;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
@@ -10,7 +11,7 @@ import java.util.UUID;
 
 @Getter
 @Setter
-public class AccountCreateRequest {
+public class AccountCreateRequest extends SubjectConsentRequest {
 
     private String roleCode;
     private List<String> roleCodes;

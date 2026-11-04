@@ -21,6 +21,7 @@ class OrganizationUnitValidationHelperTest {
     @Test
     void normalizeCreateInputShouldTrimTextAndNullBlankOptionalFields() {
         OrganizationUnitCreateRequest request = new OrganizationUnitCreateRequest();
+        request.setSubjectConsentConfirmed(true);
         request.setName("  Giáo phận  ");
         request.setChaplain(" ");
         request.setPhoneNumber("");
@@ -37,6 +38,7 @@ class OrganizationUnitValidationHelperTest {
     @Test
     void normalizeUpdateInputShouldTrimNameAndNullBlankOptionalFields() {
         OrganizationUnitUpdateRequest request = new OrganizationUnitUpdateRequest();
+        request.setSubjectConsentConfirmed(true);
         request.setName("  Tên mới  ");
         request.setChaplain("");
         request.setPhoneNumber(" ");
@@ -53,6 +55,7 @@ class OrganizationUnitValidationHelperTest {
     @Test
     void phoneNumberShouldAcceptVietnameseTenDigitNumberStartingWithZero() {
         OrganizationUnitCreateRequest request = new OrganizationUnitCreateRequest();
+        request.setSubjectConsentConfirmed(true);
         request.setName("Giáo phận");
         request.setPhoneNumber("0912345678");
 
@@ -63,6 +66,7 @@ class OrganizationUnitValidationHelperTest {
     void phoneNumberShouldRejectInvalidVietnameseNumbers() {
         for (String phoneNumber : new String[]{"912345678", "0012345678", "091234567", "09123456789", "09A2345678"}) {
             OrganizationUnitUpdateRequest request = new OrganizationUnitUpdateRequest();
+            request.setSubjectConsentConfirmed(true);
             request.setPhoneNumber(phoneNumber);
 
             assertEquals(1, validator.validate(request).size(), phoneNumber);

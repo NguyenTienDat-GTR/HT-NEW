@@ -1,5 +1,7 @@
 package phucuong.ht.modules.deanery.controller;
 
+import phucuong.ht.modules.privacy.model.PrivacyConsentSource;
+import phucuong.ht.modules.privacy.service.PrivacyConsentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -24,13 +26,17 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class DeaneryController {
 
+    private final PrivacyConsentService privacyConsent;
+
     private final DeaneryService deaneryService;
     private final phucuong.ht.common.excel.job.ExcelJobService excelJobService;
 
     @PostMapping
     @PreAuthorize("@deaneryAccessEvaluator.canCreate(authentication)")
     public apiResponse<DeaneryResponse> create(@Valid @RequestBody DeaneryCreateRequest request, Authentication authentication) {
-        return apiResponse.success("Tạo giáo hạt thành công", deaneryService.create(request, authentication));
+        DeaneryResponse created = deaneryService.create(request, authentication);
+        privacyConsent.recordAttestation(authentication, null, PrivacyConsentSource.ORG_FORM);
+        return apiResponse.success("Tạo giáo hạt thành công", created);
     }
 
     @GetMapping
@@ -63,7 +69,9 @@ public class DeaneryController {
             @Valid @RequestBody DeaneryUpdateRequest request,
             Authentication authentication
     ) {
-        return apiResponse.success("Cập nhật giáo hạt thành công", deaneryService.update(id, request, authentication));
+        DeaneryResponse updated = deaneryService.update(id, request, authentication);
+        privacyConsent.recordAttestation(authentication, null, PrivacyConsentSource.ORG_FORM);
+        return apiResponse.success("Cập nhật giáo hạt thành công", updated);
     }
 @PatchMapping("/{id}/toggle-status")
     @PreAuthorize("@deaneryAccessEvaluator.canToggle(authentication, #id)")

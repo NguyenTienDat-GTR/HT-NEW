@@ -1,5 +1,6 @@
 package phucuong.ht.modules.leader.model.request;
 
+import phucuong.ht.modules.privacy.model.SubjectConsentRequest;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -15,7 +16,7 @@ import java.util.UUID;
 
 @Getter
 @Setter
-public class LeaderCreateRequest {
+public class LeaderCreateRequest extends SubjectConsentRequest {
 
     @NotBlank
     @Size(max = 50)

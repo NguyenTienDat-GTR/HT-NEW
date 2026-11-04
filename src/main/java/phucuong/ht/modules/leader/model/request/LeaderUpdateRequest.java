@@ -1,5 +1,6 @@
 package phucuong.ht.modules.leader.model.request;
 
+import phucuong.ht.modules.privacy.model.SubjectConsentRequest;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -12,7 +13,7 @@ import java.util.UUID;
 
 @Getter
 @Setter
-public class LeaderUpdateRequest {
+public class LeaderUpdateRequest extends SubjectConsentRequest {
 
     @Size(max = 50)
     private String holyName;

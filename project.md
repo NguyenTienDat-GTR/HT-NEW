@@ -1608,3 +1608,12 @@ Ma trận endpoint (`endpoint-contract-matrix.psv`) hiện có 124 route.
 - Import chia đội cũng nhận ảnh: endpoint `/teams/import` nhận phần `images`, `ExcelImportHandlerConfig` truyền ZIP cho `IMPORT_TEAM_PARTICIPANTS`, mẫu chia đội có cột "Tên file ảnh". `PastCourseParticipantImportService.importParticipants(..., withTeam, images)` là phương thức public có đủ `@Transactional`/`@CacheEvict`.
 - Dọn trùng lặp: `ImportTemplates.avatarColumn()` / `avatarGuide(...)` thay 4 bản định nghĩa cột và dòng hướng dẫn ảnh; việc gom ảnh của một dòng nằm ở `collectAvatar(...)` thay vì trong thân vòng ghi.
 
+## 2026-11-04 Chính sách bảo vệ dữ liệu cá nhân và bằng chứng đồng ý (nhánh `feature/privacy-policy-consent`, migration `V126`)
+
+- Bảng `privacy_consent`: ai đồng ý (`SELF`) hoặc ai xác nhận hộ (`ADMIN_ATTESTATION`), phiên bản chính sách, chức năng (`source`), IP, user agent, thời điểm, thời điểm rút (`withdrawn_at`). Căn cứ: Điều 9, 10 Luật 91/2025/QH15; Điều 6 NĐ 356/2025/NĐ-CP.
+- Module `modules/privacy`: `PrivacyConsentService` ghi và tra cứu bằng chứng (JdbcTemplate); phiên bản chính sách lấy từ `app.privacy.policy-version` (biến `APP_PRIVACY_POLICY_VERSION`, mặc định 1.0).
+- Endpoint: `GET /api/privacy/policy` (công khai), `GET` / `POST /api/auth/me/privacy-consent`, `POST /api/auth/me/privacy-consent/withdraw` (đã thêm vào bảng hợp đồng endpoint).
+- Request tự sửa (`MyProfileUpdateRequest`, `EmailUpdateRequest`, `MyAvatarUpdateRequest`) kế thừa `SelfConsentRequest`: bắt buộc `privacyConsent = true`, thiếu thì 400.
+- Request admin nhập hộ (`LeaderCreateRequest`, `LeaderUpdateRequest`, `AccountCreateRequest`, `OrganizationUnitCreateRequest`, `OrganizationUnitUpdateRequest`) kế thừa `SubjectConsentRequest`: bắt buộc `subjectConsentConfirmed = true`. Ba endpoint import (`/leaders/import`, `/training/courses/{code}/participants/import`, `/teams/import`) nhận tham số multipart `subjectConsentConfirmed` và trả 400 nếu thiếu.
+- Controller ghi bằng chứng sau khi lưu thành công; rút đồng ý chỉ đánh dấu `withdrawn_at`, không xóa dữ liệu.
+- Test: `PrivacyConsentIntegrationTest`; cập nhật test tích hợp leader/giáo phận/giáo hạt/giáo xứ, `MyProfileUpdateIntegrationTest`, `OrganizationUnitValidationHelperTest`, `EndpointContractMatrixTest`.

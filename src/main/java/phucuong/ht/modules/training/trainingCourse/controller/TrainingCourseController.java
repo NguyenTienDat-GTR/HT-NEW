@@ -1,5 +1,7 @@
 package phucuong.ht.modules.training.trainingCourse.controller;
 
+import phucuong.ht.modules.privacy.model.PrivacyConsentSource;
+import phucuong.ht.modules.privacy.service.PrivacyConsentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -22,6 +24,8 @@ import phucuong.ht.modules.training.trainingCourse.service.TrainingCourseService
 @RequestMapping("/api/training/courses")
 @RequiredArgsConstructor
 public class TrainingCourseController {
+
+    private final PrivacyConsentService privacyConsent;
 
     private final TrainingCourseService trainingCourseService;
     private final phucuong.ht.common.excel.job.ExcelJobService excelJobService;
@@ -69,12 +73,16 @@ public class TrainingCourseController {
             @PathVariable String courseCode,
             @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
             @RequestPart(value = "images", required = false) org.springframework.web.multipart.MultipartFile images,
+            @RequestParam(value = "subjectConsentConfirmed", required = false) Boolean subjectConsentConfirmed,
             @RequestHeader(value = phucuong.ht.common.idempotency.IdempotencyService.HEADER, required = false) String idempotencyKey,
             Authentication authentication) {
+        privacyConsent.requireConfirmed(subjectConsentConfirmed);
         // Báo lỗi ngay nếu khóa không thuộc đơn vị của mình thay vì đợi tác vụ chạy xong.
         pastCourseParticipantImportService.precheck(courseCode, authentication);
-        return phucuong.ht.common.excel.job.ExcelJobResponses.accepted(excelJobService.createImport(
-                phucuong.ht.common.excel.job.ExcelJobKind.IMPORT_PARTICIPANTS, courseCode, file, images, idempotencyKey, authentication));
+        var accepted = excelJobService.createImport(
+                phucuong.ht.common.excel.job.ExcelJobKind.IMPORT_PARTICIPANTS, courseCode, file, images, idempotencyKey, authentication);
+        privacyConsent.recordAttestation(authentication, null, PrivacyConsentSource.COURSE_IMPORT);
+        return phucuong.ht.common.excel.job.ExcelJobResponses.accepted(accepted);
     }
 
     // Tải file Excel mẫu danh sách chia đội (giống danh sách tham dự khóa thường, thêm cột Tên đội, không có sheet Ngoại lệ).
@@ -93,11 +101,15 @@ public class TrainingCourseController {
             @PathVariable String courseCode,
             @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
             @RequestPart(value = "images", required = false) org.springframework.web.multipart.MultipartFile images,
+            @RequestParam(value = "subjectConsentConfirmed", required = false) Boolean subjectConsentConfirmed,
             @RequestHeader(value = phucuong.ht.common.idempotency.IdempotencyService.HEADER, required = false) String idempotencyKey,
             Authentication authentication) {
+        privacyConsent.requireConfirmed(subjectConsentConfirmed);
         pastCourseParticipantImportService.precheck(courseCode, authentication, true);
-        return phucuong.ht.common.excel.job.ExcelJobResponses.accepted(excelJobService.createImport(
-                phucuong.ht.common.excel.job.ExcelJobKind.IMPORT_TEAM_PARTICIPANTS, courseCode, file, images, idempotencyKey, authentication));
+        var accepted = excelJobService.createImport(
+                phucuong.ht.common.excel.job.ExcelJobKind.IMPORT_TEAM_PARTICIPANTS, courseCode, file, images, idempotencyKey, authentication);
+        privacyConsent.recordAttestation(authentication, null, PrivacyConsentSource.TEAM_IMPORT);
+        return phucuong.ht.common.excel.job.ExcelJobResponses.accepted(accepted);
     }
 
     // Xóa học viên nhập nhầm khỏi khóa quá khứ.
