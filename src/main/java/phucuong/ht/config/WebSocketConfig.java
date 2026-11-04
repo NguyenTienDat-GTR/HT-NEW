@@ -17,7 +17,15 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
+import jakarta.servlet.http.Cookie;
+import org.springframework.http.server.ServerHttpRequest;
+import org.springframework.http.server.ServerHttpResponse;
+import org.springframework.http.server.ServletServerHttpRequest;
+import org.springframework.web.socket.WebSocketHandler;
+import org.springframework.web.socket.server.HandshakeInterceptor;
 import phucuong.ht.common.utils.jwtUtils;
+import phucuong.ht.modules.auth.config.AuthProperties;
+import java.util.Map;
 import phucuong.ht.modules.auth.service.RedisTokenSessionService;
 import phucuong.ht.modules.certificate.service.CertificateRealtimeNotifier;
 import phucuong.ht.modules.system.service.RbacAuthRefreshNotifier;
@@ -39,6 +47,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final jwtUtils jwtUtils;
     private final RedisTokenSessionService redisTokenSessionService;
+    private final AuthProperties authProperties;
 
     @Value("${app.websocket.allowed-origins:http://localhost:3000}")
     private String allowedOrigins;
@@ -53,7 +62,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws/notifications")
-                .setAllowedOriginPatterns(resolveAllowedOrigins());
+                .setAllowedOriginPatterns(resolveAllowedOrigins())
+                .addInterceptors(new AccessCookieHandshakeInterceptor(authProperties.getCookie().getAccessTokenName()));
     }
 
     @Override
@@ -79,6 +89,38 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
             return false;
         }
         return !origin.matches("^https?://\\*\\.[A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)+(:\\d+)?$");
+    }
+
+    /** Lưu access token từ cookie HttpOnly của handshake để STOMP CONNECT dùng khi FE không giữ token trong JS. */
+    static final class AccessCookieHandshakeInterceptor implements HandshakeInterceptor {
+        static final String ATTRIBUTE = "accessTokenCookie";
+        private final String cookieName;
+
+        AccessCookieHandshakeInterceptor(String cookieName) {
+            this.cookieName = cookieName;
+        }
+
+        @Override
+        public boolean beforeHandshake(ServerHttpRequest request, ServerHttpResponse response,
+                                       WebSocketHandler wsHandler, Map<String, Object> attributes) {
+            if (request instanceof ServletServerHttpRequest servletRequest) {
+                Cookie[] cookies = servletRequest.getServletRequest().getCookies();
+                if (cookies != null) {
+                    for (Cookie cookie : cookies) {
+                        if (cookieName.equals(cookie.getName()) && StringUtils.hasText(cookie.getValue())) {
+                            attributes.put(ATTRIBUTE, cookie.getValue());
+                            break;
+                        }
+                    }
+                }
+            }
+            return true;
+        }
+
+        @Override
+        public void afterHandshake(ServerHttpRequest request, ServerHttpResponse response,
+                                   WebSocketHandler wsHandler, Exception exception) {
+        }
     }
 
     static final class NotificationInboundChannelInterceptor implements ChannelInterceptor {
@@ -121,14 +163,21 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
         private void authenticateConnect(StompHeaderAccessor accessor) {
             String authorization = accessor.getFirstNativeHeader("Authorization");
-            if (!StringUtils.hasText(authorization) || !authorization.startsWith("Bearer ")) {
-                throw new AccessDeniedException("Yêu cầu Bearer access token cho WebSocket");
+            String token = null;
+            if (StringUtils.hasText(authorization) && authorization.startsWith("Bearer ")) {
+                token = authorization.substring(7);
+            } else if (accessor.getSessionAttributes() != null
+                    && accessor.getSessionAttributes().get(AccessCookieHandshakeInterceptor.ATTRIBUTE) instanceof String cookieToken) {
+                token = cookieToken;
+            }
+            if (!StringUtils.hasText(token)) {
+                throw new AccessDeniedException("Yêu cầu access token cho WebSocket");
             }
             if (jwtUtils == null || redisTokenSessionService == null) {
                 throw new AccessDeniedException("WebSocket chưa sẵn sàng xác thực token");
             }
 
-            jwtUtils.TokenClaims claims = jwtUtils.parseAccessTokenClaims(authorization.substring(7));
+            jwtUtils.TokenClaims claims = jwtUtils.parseAccessTokenClaims(token);
             if (claims.principal().isMustChangePassword()) {
                 throw new AccessDeniedException("Phải đổi mật khẩu trước khi mở WebSocket");
             }

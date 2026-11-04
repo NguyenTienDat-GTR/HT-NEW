@@ -111,7 +111,7 @@ public class AuthService {
         AuthUserDetails principal = (AuthUserDetails) authentication.getPrincipal();
         rejectExpiredTemporaryPassword(principal.getUsername());
         siteLoginGuard.assertCanLogin(principal.getUsername(), siteHost);
-        return issueNewSessionTokens(principal, normalizeIpAddress(ipAddress), request.isRememberMeEnabled());
+        return issueNewSessionTokens(principal, resolveSessionSource(request.getDeviceId(), ipAddress), request.isRememberMeEnabled());
     }
 
     /** Mật khẩu tạm do admin đặt lại chỉ dùng được trong thời gian ngắn; quá hạn thì không cho đăng nhập. */
@@ -288,6 +288,17 @@ public class AuthService {
                 .rememberMe(rememberMe)
                 .user(toUserResponse(principal))
                 .build();
+    }
+
+    /**
+     * Khóa nguồn đăng nhập dùng để giới hạn phiên: ưu tiên mã thiết bị (hai thiết bị cùng IP/NAT/proxy vẫn là hai phiên),
+     * thiếu mã thiết bị thì quay về IP như trước.
+     */
+    private String resolveSessionSource(String deviceId, String ipAddress) {
+        if (StringUtils.hasText(deviceId)) {
+            return "device:" + deviceId.trim();
+        }
+        return normalizeIpAddress(ipAddress);
     }
 
     private String normalizeIpAddress(String ipAddress) {
