@@ -40,9 +40,6 @@ public class TrainingCourseType extends BaseModel {
     @Column(name = "required_min_age")
     private Integer requiredMinAge;
 
-    @Column(name = "required_years_active")
-    private Integer requiredYearsActive;
-
     // Phải đi khóa này trong vòng bao nhiêu năm kể từ lần đạt khóa tiên quyết gần nhất (năm tổ chức khóa - năm đạt <= giá trị này).
     @Column(name = "max_years_after_prerequisite")
     private Integer maxYearsAfterPrerequisite;
