@@ -13,7 +13,9 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.util.CellRangeAddressList;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import phucuong.ht.modules.deanery.service.DeaneryImportService;
 import phucuong.ht.modules.leader.service.LeaderImportService;
+import phucuong.ht.modules.parish.service.ParishImportService;
 import phucuong.ht.modules.training.trainingCourse.service.PastCourseParticipantImportService;
 
 import java.io.ByteArrayOutputStream;
@@ -29,10 +31,14 @@ import java.util.List;
 public final class ImportTemplates {
 
     public static final String LEADERS_SHEET = "Huynh trưởng";
+    public static final String DEANERIES_SHEET = "Giáo hạt";
+    public static final String PARISHES_SHEET = "Giáo xứ";
     public static final String PARTICIPANTS_SHEET = "Danh sách tham dự";
     public static final String EXCEPTION_SHEET = "Ngoại lệ";
     private static final String GUIDE_SHEET = "Hướng dẫn";
     private static final String LOOKUP_SHEET = "Danh mục";
+    private static final String LOOKUP_DEANERY_HEADER = "Giáo hạt (" + ParishImportService.COL_DEANERY + ")";
+    private static final String LOOKUP_LEVEL_HEADER = "Cấp độ (" + LeaderImportService.COL_LEVEL + ")";
     private static final int VALIDATED_ROWS = 5000;
 
     private ImportTemplates() {
@@ -41,7 +47,7 @@ public final class ImportTemplates {
     private record Column(String header, boolean required, int width, Kind kind) {
     }
 
-    private enum Kind { TEXT, DATE, NUMBER, GENDER, RESULT, LEVEL, GENERAL }
+    private enum Kind { TEXT, DATE, NUMBER, GENDER, RESULT, LEVEL, DEANERY, UNIT_TYPE, GENERAL }
 
     /** Mẫu import hồ sơ huynh trưởng. levelNames: tên cấp độ trong danh mục của giáo phận người tải (để chọn nhanh). */
     public static byte[] leaders(List<String> levelNames) {
@@ -71,6 +77,62 @@ public final class ImportTemplates {
                 "9. Mỗi lần import tối đa 5.000 dòng.",
                 avatarGuide(10, false));
         return build(LEADERS_SHEET, "Hướng dẫn import hồ sơ huynh trưởng", columns, samples, guide, levelNames);
+    }
+
+    /** Mẫu import danh sách giáo hạt: chỉ bắt buộc Tên giáo hạt. */
+    public static byte[] deaneries() {
+        List<Column> columns = List.of(
+                new Column(DeaneryImportService.COL_NAME, true, 28, Kind.GENERAL),
+                new Column(DeaneryImportService.COL_PATRON_SAINT_DAY, false, 16, Kind.DATE),
+                new Column(DeaneryImportService.COL_ESTABLISHMENT_DATE, false, 16, Kind.DATE),
+                new Column(DeaneryImportService.COL_CHAPLAIN, false, 26, Kind.GENERAL),
+                new Column(DeaneryImportService.COL_PHONE, false, 16, Kind.TEXT),
+                new Column(DeaneryImportService.COL_EMAIL, false, 30, Kind.GENERAL),
+                new Column(DeaneryImportService.COL_ASSOCIATION, false, 26, Kind.GENERAL));
+        List<List<Object>> samples = List.of(
+                List.of("Thánh Tâm", LocalDate.of(2000, 6, 16), LocalDate.of(1990, 1, 1), "Linh mục Phêrô Nguyễn Văn An", "0901234567", "giaohat.thanhtam@example.com", "Thánh Tâm"),
+                List.of("Phú Cường"));
+        List<String> guide = List.of(
+                "1. Điền dữ liệu ở sheet \"" + DEANERIES_SHEET + "\" (sheet đầu tiên), từ dòng 2. Xóa các dòng ví dụ trước khi import. Tên cột có thể có hoặc không có dấu *, thứ tự cột không quan trọng.",
+                "2. CHỈ cột Tên giáo hạt là bắt buộc (tiêu đề màu đỏ). Các cột còn lại có thể để trống.",
+                "3. Giáo hạt được tạo trong giáo phận hiện tại của tài khoản. Tên giáo hạt tối đa 100 ký tự, không được trùng với giáo hạt đã có trong giáo phận hoặc trùng giữa các dòng trong file.",
+                "4. Ngày bổn mạng, Ngày thành lập theo dạng dd/MM/yyyy (Ngày thành lập không được sau ngày hiện tại).",
+                "5. Số điện thoại gồm 10 chữ số và bắt đầu bằng 0 (cột đã để định dạng Text để không mất số 0 đầu). Email phải đúng định dạng.",
+                "6. Chỉ cần một dòng lỗi thì toàn bộ file không được lưu; hệ thống báo rõ sheet, dòng, cột bị lỗi ở khay tác vụ để bạn sửa rồi import lại. Mỗi lần import tối đa 5.000 dòng.");
+        return build(DEANERIES_SHEET, "Hướng dẫn import danh sách giáo hạt", columns, samples, guide, List.of(), null, null, null, LOOKUP_DEANERY_HEADER);
+    }
+
+    /**
+     * Mẫu import danh sách giáo xứ. deaneryNames: các giáo hạt có trong hệ thống mà người tải được phép tạo giáo xứ (danh sách chọn).
+     * Bắt buộc: Tên giáo xứ, Tên giáo hạt; Loại để trống là giáo xứ, giáo họ / giáo điểm phải chọn Loại và nhập Giáo xứ cha.
+     */
+    public static byte[] parishes(List<String> deaneryNames) {
+        String firstDeanery = deaneryNames.isEmpty() ? "Tên giáo hạt" : deaneryNames.get(0);
+        List<Column> columns = List.of(
+                new Column(ParishImportService.COL_NAME, true, 28, Kind.GENERAL),
+                new Column(ParishImportService.COL_TYPE, false, 14, Kind.UNIT_TYPE),
+                new Column(ParishImportService.COL_DEANERY, true, 26, Kind.DEANERY),
+                new Column(ParishImportService.COL_PARENT, false, 26, Kind.GENERAL),
+                new Column(ParishImportService.COL_PATRON_SAINT_DAY, false, 16, Kind.DATE),
+                new Column(ParishImportService.COL_ESTABLISHMENT_DATE, false, 16, Kind.DATE),
+                new Column(ParishImportService.COL_CHAPLAIN, false, 26, Kind.GENERAL),
+                new Column(ParishImportService.COL_PHONE, false, 16, Kind.TEXT),
+                new Column(ParishImportService.COL_EMAIL, false, 30, Kind.GENERAL),
+                new Column(ParishImportService.COL_CHAPTER, false, 24, Kind.GENERAL));
+        List<List<Object>> samples = List.of(
+                List.of("Chính Tòa", "", firstDeanery, "", LocalDate.of(2000, 6, 16), LocalDate.of(1990, 1, 1), "Linh mục Phêrô Nguyễn Văn An", "0901234567", "giaoxu.chinhtoa@example.com", "Chính Tòa"),
+                List.of("Bình An", "Giáo họ", firstDeanery, "Chính Tòa"),
+                List.of("Hòa Bình", "Giáo điểm", firstDeanery, "Chính Tòa"));
+        List<String> guide = List.of(
+                "1. Điền dữ liệu ở sheet \"" + PARISHES_SHEET + "\" (sheet đầu tiên), từ dòng 2. Xóa các dòng ví dụ trước khi import. Tên cột có thể có hoặc không có dấu *, thứ tự cột không quan trọng.",
+                "2. Bắt buộc (tiêu đề màu đỏ): Tên giáo xứ, Tên giáo hạt. Các cột còn lại có thể để trống, trừ khi Loại là Giáo họ / Giáo điểm (xem mục 4).",
+                "3. Tên giáo hạt: chọn từ danh sách (sheet \"" + LOOKUP_SHEET + "\" là các giáo hạt đã có trong hệ thống mà bạn được phép tạo giáo xứ) hoặc nhập đúng tên. Giáo hạt chưa có trong hệ thống sẽ báo lỗi (hệ thống không tự tạo giáo hạt).",
+                "4. Loại: để TRỐNG nếu là giáo xứ. Nếu là giáo họ hoặc giáo điểm thì BẮT BUỘC chọn \"Giáo họ\" / \"Giáo điểm\" (chọn từ danh sách) và nhập thêm cột Giáo xứ cha.",
+                "5. Giáo xứ cha: tên một giáo xứ (không phải giáo họ / giáo điểm) CÙNG giáo hạt, đã có trong hệ thống hoặc là giáo xứ mới ở một dòng khác trong cùng file. Giáo xứ thì không được nhập cột này.",
+                "6. Tên giáo xứ tối đa 100 ký tự, không được trùng với giáo xứ / giáo họ / giáo điểm đã có trong cùng giáo hạt hoặc trùng giữa các dòng trong file (cùng giáo hạt).",
+                "7. Ngày bổn mạng, Ngày thành lập theo dạng dd/MM/yyyy (Ngày thành lập không được sau ngày hiện tại). Số điện thoại gồm 10 chữ số và bắt đầu bằng 0. Email phải đúng định dạng.",
+                "8. Chỉ nhập được giáo xứ cho giáo hạt trong phạm vi tài khoản của bạn. Chỉ cần một dòng lỗi thì toàn bộ file không được lưu; hệ thống báo rõ sheet, dòng, cột bị lỗi ở khay tác vụ để bạn sửa rồi import lại. Mỗi lần import tối đa 5.000 dòng.");
+        return build(PARISHES_SHEET, "Hướng dẫn import danh sách giáo xứ", columns, samples, guide, deaneryNames, null, null, null, LOOKUP_DEANERY_HEADER);
     }
 
     /** Mẫu import danh sách tham dự khóa quá khứ (mọi cột bắt buộc trừ Cấp độ và Nhận xét). */
@@ -196,13 +258,22 @@ public final class ImportTemplates {
 
     private static byte[] build(String dataSheetName, String guideTitle, List<Column> columns, List<List<Object>> samples,
                                 List<String> guide, List<String> levelNames) {
-        return build(dataSheetName, guideTitle, columns, samples, guide, levelNames, null, null, null);
+        return build(dataSheetName, guideTitle, columns, samples, guide, levelNames, null, null, null, LOOKUP_LEVEL_HEADER);
     }
 
     /** exceptionSheetName != null: thêm sheet thứ hai (hồ sơ ngoại lệ) ngay sau sheet dữ liệu, cùng cách tô tiêu đề và danh sách chọn. */
     private static byte[] build(String dataSheetName, String guideTitle, List<Column> columns, List<List<Object>> samples,
                                 List<String> guide, List<String> levelNames,
                                 String exceptionSheetName, List<Column> exceptionColumns, List<List<Object>> exceptionSamples) {
+        return build(dataSheetName, guideTitle, columns, samples, guide, levelNames, exceptionSheetName, exceptionColumns, exceptionSamples, LOOKUP_LEVEL_HEADER);
+    }
+
+    /** lookupValues: giá trị ở sheet "Danh mục" (cấp độ hoặc giáo hạt, tùy mẫu) dùng cho danh sách chọn; lookupHeader: tiêu đề cột đó. */
+    private static byte[] build(String dataSheetName, String guideTitle, List<Column> columns, List<List<Object>> samples,
+                                List<String> guide, List<String> lookupValues,
+                                String exceptionSheetName, List<Column> exceptionColumns, List<List<Object>> exceptionSamples,
+                                String lookupHeader) {
+        List<String> levelNames = lookupValues;
         try (XSSFWorkbook workbook = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             fillDataSheet(workbook, workbook.createSheet(dataSheetName), columns, samples, levelNames);
             if (exceptionSheetName != null) {
@@ -212,7 +283,7 @@ public final class ImportTemplates {
             // Danh mục cấp độ của giáo phận người tải: chọn nhanh bằng danh sách thả xuống.
             Sheet lookup = workbook.createSheet(LOOKUP_SHEET);
             lookup.setColumnWidth(0, 32 * 256);
-            lookup.createRow(0).createCell(0).setCellValue("Cấp độ (" + LeaderImportService.COL_LEVEL + ")");
+            lookup.createRow(0).createCell(0).setCellValue(lookupHeader);
             for (int i = 0; i < levelNames.size(); i++) {
                 lookup.createRow(i + 1).createCell(0).setCellValue(levelNames.get(i));
             }
@@ -300,7 +371,8 @@ public final class ImportTemplates {
             DataValidationConstraint constraint = switch (columns.get(c).kind()) {
                 case GENDER -> validations.createExplicitListConstraint(new String[]{"Nam", "Nữ"});
                 case RESULT -> validations.createExplicitListConstraint(new String[]{"Đạt", "Không đạt"});
-                case LEVEL -> levelNames.isEmpty() ? null
+                case UNIT_TYPE -> validations.createExplicitListConstraint(new String[]{"Giáo họ", "Giáo điểm"});
+                case LEVEL, DEANERY -> levelNames.isEmpty() ? null
                         : validations.createFormulaListConstraint("'" + LOOKUP_SHEET + "'!$A$2:$A$" + (levelNames.size() + 1));
                 default -> null;
             };

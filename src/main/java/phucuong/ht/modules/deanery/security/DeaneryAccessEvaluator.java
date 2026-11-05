@@ -46,7 +46,10 @@ public class DeaneryAccessEvaluator {
     public boolean canRead(Authentication authentication, UUID deaneryId) {
         return hasAuthority(authentication, READ_ALL)
                 || hasDioceseScopedAccess(authentication, deaneryId, READ_DIOCESE)
-                || hasDeaneryScopedAccess(authentication, deaneryId, READ_DEANERY);
+                || hasDeaneryScopedAccess(authentication, deaneryId, READ_DEANERY)
+                // Tài khoản cấp giáo xứ xem được chi tiết (chỉ đọc) giáo hạt chứa giáo xứ của mình.
+                || hasDeaneryScopedAccess(authentication, deaneryId, "organization.parish.read.deanery")
+                || hasDeaneryScopedAccess(authentication, deaneryId, "organization.parish.read.parish");
     }
 
     public boolean canUpdate(Authentication authentication, UUID deaneryId) {

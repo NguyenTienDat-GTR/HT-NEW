@@ -120,6 +120,22 @@ class DioceseAccessEvaluatorTest {
         assertFalse(dioceseAccessEvaluator.canToggle(dioceseAdmin, dioceseId));
     }
 
+    @Test
+    void canReadShouldAllowParishAndDeaneryAccountsToViewTheirOwnDiocese() {
+        UUID dioceseId = UUID.randomUUID();
+        when(accountRepository.findActiveDioceseIdByUsername("admin-parish")).thenReturn(Optional.of(dioceseId));
+        when(accountRepository.findActiveDioceseIdByUsername("admin-deanery")).thenReturn(Optional.of(dioceseId));
+
+        assertTrue(dioceseAccessEvaluator.canRead(
+                authentication("admin-parish", List.of("ADMIN_PARISH"), List.of("organization.parish.read.parish")), dioceseId));
+        assertTrue(dioceseAccessEvaluator.canRead(
+                authentication("admin-deanery", List.of("ADMIN_DEANERY"), List.of("organization.deanery.read.deanery")), dioceseId));
+        // Diocese khác với giáo phận chứa đơn vị của tài khoản thì vẫn bị từ chối.
+        assertFalse(dioceseAccessEvaluator.canRead(
+                authentication("admin-parish", List.of("ADMIN_PARISH"), List.of("organization.parish.read.parish")), UUID.randomUUID()));
+    }
+
+
     private Authentication authentication(String username, List<String> roles, List<String> permissions) {
         return authentication(username, null, roles, permissions);
     }

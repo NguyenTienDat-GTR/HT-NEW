@@ -12,6 +12,8 @@ public enum ExcelJobKind {
     EXPORT_TEAMS("Xuất Excel chia đội", "chia-doi", false),
     EXPORT_CERTIFICATES("Xuất Excel chứng nhận", "chung-nhan", false),
     IMPORT_LEADERS("Import hồ sơ huynh trưởng", "", true),
+    IMPORT_DEANERIES("Import danh sách giáo hạt", "", true),
+    IMPORT_PARISHES("Import danh sách giáo xứ", "", true),
     IMPORT_PARTICIPANTS("Import danh sách tham dự khóa huấn luyện", "", true),
     IMPORT_TEAM_PARTICIPANTS("Import danh sách chia đội khóa huấn luyện", "", true);
 
