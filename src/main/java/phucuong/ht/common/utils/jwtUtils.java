@@ -27,6 +27,8 @@ public class jwtUtils {
     private static final String CLAIM_LEADER_ID = "leaderId";
     private static final String CLAIM_ROLES = "roles";
     private static final String CLAIM_PERMISSIONS = "permissions";
+    // Danh sách quyền nén (deflate + base64url): token nằm trong cookie nên phải nhỏ hơn giới hạn ~4KB của trình duyệt.
+    private static final String CLAIM_PERMISSIONS_PACKED = "permissionsZ";
     private static final String CLAIM_JTI = "jti";
     private static final String CLAIM_SESSION_ID = "sessionId";
     private static final String CLAIM_MUST_CHANGE_PASSWORD = "mustChangePassword";
@@ -119,7 +121,7 @@ public class jwtUtils {
                 .claim(CLAIM_SESSION_ID, sessionId)
                 .claim(CLAIM_LEADER_ID, principal.getLeaderId())
                 .claim(CLAIM_ROLES, principal.getRoles())
-                .claim(CLAIM_PERMISSIONS, principal.getPermissions())
+                .claim(CLAIM_PERMISSIONS_PACKED, packPermissions(principal.getPermissions()))
                 .claim(CLAIM_MUST_CHANGE_PASSWORD, principal.isMustChangePassword())
                 .signWith(resolveSecretKey(tokenType))
                 .compact();
@@ -149,7 +151,7 @@ public class jwtUtils {
                         claims.getSubject(),
                         claims.get(CLAIM_LEADER_ID, String.class),
                         readClaimList(claims.get(CLAIM_ROLES)),
-                        readClaimList(claims.get(CLAIM_PERMISSIONS)),
+                        readPermissions(claims),
                         Boolean.TRUE.equals(claims.get(CLAIM_MUST_CHANGE_PASSWORD, Boolean.class))
                 ),
                 claims.get(CLAIM_SESSION_ID, String.class),
@@ -158,6 +160,53 @@ public class jwtUtils {
                 claims.getExpiration() == null ? null : claims.getExpiration().toInstant(),
                 tokenType
         );
+    }
+
+    private static String packPermissions(List<String> permissions) {
+        byte[] raw = String.join(",", permissions).getBytes(StandardCharsets.UTF_8);
+        java.util.zip.Deflater deflater = new java.util.zip.Deflater(java.util.zip.Deflater.BEST_COMPRESSION, true);
+        try {
+            deflater.setInput(raw);
+            deflater.finish();
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            byte[] buffer = new byte[512];
+            while (!deflater.finished()) {
+                out.write(buffer, 0, deflater.deflate(buffer));
+            }
+            return java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(out.toByteArray());
+        } finally {
+            deflater.end();
+        }
+    }
+
+    private List<String> readPermissions(Claims claims) {
+        String packed = claims.get(CLAIM_PERMISSIONS_PACKED, String.class);
+        if (packed == null) {
+            // Token cấp trước khi nén quyền.
+            return readClaimList(claims.get(CLAIM_PERMISSIONS));
+        }
+        if (packed.isEmpty()) {
+            return List.of();
+        }
+        java.util.zip.Inflater inflater = new java.util.zip.Inflater(true);
+        try {
+            inflater.setInput(java.util.Base64.getUrlDecoder().decode(packed));
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            byte[] buffer = new byte[512];
+            while (!inflater.finished()) {
+                int read = inflater.inflate(buffer);
+                if (read == 0 && (inflater.needsInput() || inflater.needsDictionary())) {
+                    break;
+                }
+                out.write(buffer, 0, read);
+            }
+            String joined = out.toString(StandardCharsets.UTF_8);
+            return joined.isEmpty() ? List.of() : List.of(joined.split(","));
+        } catch (java.util.zip.DataFormatException | IllegalArgumentException exception) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, errorCode.INVALID_TOKEN, "Token không hợp lệ hoặc đã hết hạn");
+        } finally {
+            inflater.end();
+        }
     }
 
     @SuppressWarnings("unchecked")

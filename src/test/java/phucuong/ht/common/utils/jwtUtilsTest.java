@@ -110,4 +110,23 @@ class jwtUtilsTest {
         properties.getJwt().setRefreshTokenExpirationMs(604_800_000L);
         return properties;
     }
+
+    @Test
+    void accessTokenWithManyPermissionsShouldFitInsideABrowserCookieAndRoundTrip() {
+        List<String> permissions = List.of("organization.leader.toggle.parish","training.participation.submit.parish","organization.position.create.parish","organization.position.read.parish","organization.position.update.parish","organization.executive_board_assignment.read.parish","system.audit_log.read.parish","organization.executive_board_assignment.create.parish","system.account.reset_password.parish","analytics.dashboard.read.parish","system.account_permission.manage.parish","system.account.manage.parish","system.account_role.assign.parish","organization.leader.create.parish","organization.leader.read.parish","organization.parish.update.parish","organization.parish.read.parish","organization.leader.update.parish","organization.executive_board_assignment.toggle.parish","system.role.toggle.parish","system.role.update.parish","system.role.read.parish","system.role.create.parish","organization.leader_certificate.read.parish","system.role_permission.revoke.parish","system.role_permission.assign.parish","system.role_permission.read.parish","training.participation.read.parish");
+        AuthUserDetails principal = AuthUserDetails.tokenPrincipal(
+                "datgiaoxubencat510", java.util.UUID.randomUUID().toString(), List.of("ADMIN_PARISH"), permissions);
+
+        String token = jwtUtils.generateAccessToken(principal, java.util.UUID.randomUUID().toString(), java.util.UUID.randomUUID().toString());
+
+        assertTrue(token.length() < 1800, "Token dài " + token.length());
+        assertEquals(permissions, jwtUtils.parseAccessTokenClaims(token).principal().getPermissions());
+    }
+
+    @Test
+    void accessTokenWithoutPermissionsShouldRoundTripAsEmptyList() {
+        AuthUserDetails principal = AuthUserDetails.tokenPrincipal("locked", null, List.of(), List.of());
+        String token = jwtUtils.generateAccessToken(principal, "s", "t");
+        assertEquals(List.of(), jwtUtils.parseAccessTokenClaims(token).principal().getPermissions());
+    }
 }

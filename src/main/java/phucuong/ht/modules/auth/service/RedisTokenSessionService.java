@@ -29,6 +29,7 @@ public class RedisTokenSessionService {
     private static final String USER_SESSIONS_KEY_PREFIX = "auth:user:";
     private static final int MAX_ACTIVE_SESSIONS = 2;
     private static final int MAX_TRACKED_ACCESS_TOKEN_IDS = 4;
+    private static final long REFRESH_GRACE_MS = 30_000L;
     private static final DefaultRedisScript<Long> COMPARE_AND_ROTATE_REFRESH_SCRIPT = new DefaultRedisScript<>(
             """
                     if redis.call('GET', KEYS[1]) ~= ARGV[1] then
@@ -193,48 +194,98 @@ public class RedisTokenSessionService {
             String refreshTokenJti,
             String refreshToken
     ) {
-        StoredSession storedSession = getStoredSession(sessionId);
-        if (storedSession == null || isExpired(storedSession.state())) {
-            revokeSession(sessionId);
-            throw invalidSession("Phien dang nhap khong con hieu luc");
-        }
-
-        TokenSessionState sessionState = storedSession.state();
-        if (!Objects.equals(sessionState.getUsername(), username)
-                || !Objects.equals(sessionState.getRefreshTokenJti(), expectedRefreshTokenJti)
-                || !Objects.equals(sessionState.getRefreshTokenHash(), hashRefreshToken(expectedRefreshToken))) {
-            throw invalidSession("Phien dang nhap khong con hieu luc");
-        }
-
-        rememberAccessToken(sessionState);
-        Instant now = Instant.now();
-        sessionState.setAccessTokenJti(accessTokenJti);
-        sessionState.setRefreshTokenJti(refreshTokenJti);
-        sessionState.setRefreshTokenHash(hashRefreshToken(refreshToken));
-        sessionState.setExpiresAt(slideExpiry(sessionState, now));
-        sessionState.setLastUsedAt(now);
-
-        try {
-            Duration ttl = resolveTtl(sessionState.getExpiresAt());
-            Long result = stringRedisTemplate.execute(
-                    COMPARE_AND_ROTATE_REFRESH_SCRIPT,
-                    List.of(sessionKey(sessionId), userSessionsKey(username)),
-                    storedSession.raw(),
-                    objectMapper.writeValueAsString(sessionState),
-                    Long.toString(ttl.toMillis()),
-                    sessionId,
-                    Double.toString(score(now))
-            );
-            if (!Long.valueOf(1L).equals(result)) {
-                throw invalidSession("Refresh token đã được sử dụng hoặc không còn hiệu lực");
+        String expectedHash = hashRefreshToken(expectedRefreshToken);
+        // Hai lần thử: nếu một request refresh khác vừa xoay token trước (CAS thất bại) thì đọc lại phiên rồi xét tiếp,
+        // refresh token cũ vẫn dùng được trong thời gian ân hạn ngắn.
+        for (int attempt = 0; attempt < 2; attempt++) {
+            StoredSession storedSession = getStoredSession(sessionId);
+            if (storedSession == null || isExpired(storedSession.state())) {
+                revokeSession(sessionId);
+                throw invalidSession("Phien dang nhap khong con hieu luc");
             }
-        } catch (JsonProcessingException exception) {
-            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode.INTERNAL_ERROR, "Không thể lưu dữ liệu phiên đăng nhập");
-        } catch (ApiException exception) {
-            throw exception;
-        } catch (RuntimeException exception) {
-            log.warn("Atomic refresh-token rotation failed for session {}", sessionId, exception);
-            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode.INTERNAL_ERROR, "Hệ thống phiên đăng nhập tạm thời không khả dụng");
+
+            TokenSessionState sessionState = storedSession.state();
+            boolean isCurrent = Objects.equals(sessionState.getUsername(), username)
+                    && Objects.equals(sessionState.getRefreshTokenJti(), expectedRefreshTokenJti)
+                    && Objects.equals(sessionState.getRefreshTokenHash(), expectedHash);
+            if (!isCurrent && !(Objects.equals(sessionState.getUsername(), username) && wasRotatedRecently(sessionState, expectedHash))) {
+                throw invalidSession("Phien dang nhap khong con hieu luc");
+            }
+
+            Instant now = Instant.now();
+            rememberAccessToken(sessionState);
+            rememberRefreshToken(sessionState, now);
+            sessionState.setAccessTokenJti(accessTokenJti);
+            sessionState.setRefreshTokenJti(refreshTokenJti);
+            sessionState.setRefreshTokenHash(hashRefreshToken(refreshToken));
+            sessionState.setExpiresAt(slideExpiry(sessionState, now));
+            sessionState.setLastUsedAt(now);
+
+            try {
+                Duration ttl = resolveTtl(sessionState.getExpiresAt());
+                Long result = stringRedisTemplate.execute(
+                        COMPARE_AND_ROTATE_REFRESH_SCRIPT,
+                        List.of(sessionKey(sessionId), userSessionsKey(username)),
+                        storedSession.raw(),
+                        objectMapper.writeValueAsString(sessionState),
+                        Long.toString(ttl.toMillis()),
+                        sessionId,
+                        Double.toString(score(now))
+                );
+                if (Long.valueOf(1L).equals(result)) {
+                    return;
+                }
+            } catch (JsonProcessingException exception) {
+                throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode.INTERNAL_ERROR, "Không thể lưu dữ liệu phiên đăng nhập");
+            } catch (ApiException exception) {
+                throw exception;
+            } catch (RuntimeException exception) {
+                log.warn("Atomic refresh-token rotation failed for session {}", sessionId, exception);
+                throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, errorCode.INTERNAL_ERROR, "Hệ thống phiên đăng nhập tạm thời không khả dụng");
+            }
+        }
+        throw invalidSession("Refresh token đã được sử dụng hoặc không còn hiệu lực");
+    }
+
+    /**
+     * Refresh token vừa bị thay trong vòng {@link #REFRESH_GRACE_MS} vẫn được chấp nhận một lần nữa: trình duyệt có thể đã hủy phản hồi
+     * (đổi trang ngay sau khi đăng nhập, hai tab refresh cùng lúc) nên chưa nhận được cookie mới. Token cũ ngoài khoảng này bị từ chối.
+     */
+    private boolean wasRotatedRecently(TokenSessionState sessionState, String hash) {
+        long cutoff = Instant.now().toEpochMilli() - REFRESH_GRACE_MS;
+        for (String entry : sessionState.getPreviousRefreshTokens() == null ? List.<String>of() : sessionState.getPreviousRefreshTokens()) {
+            int separator = entry.indexOf('@');
+            if (separator <= 0) {
+                continue;
+            }
+            try {
+                if (entry.substring(0, separator).equals(hash) && Long.parseLong(entry.substring(separator + 1)) >= cutoff) {
+                    return true;
+                }
+            } catch (NumberFormatException ignored) {
+                // Bản ghi hỏng: bỏ qua.
+            }
+        }
+        return false;
+    }
+
+    private void rememberRefreshToken(TokenSessionState sessionState, Instant now) {
+        List<String> entries = sessionState.getPreviousRefreshTokens();
+        if (entries == null) {
+            entries = new ArrayList<>();
+            sessionState.setPreviousRefreshTokens(entries);
+        }
+        long cutoff = now.toEpochMilli() - REFRESH_GRACE_MS;
+        entries.removeIf(entry -> {
+            int separator = entry.indexOf('@');
+            try {
+                return separator <= 0 || Long.parseLong(entry.substring(separator + 1)) < cutoff;
+            } catch (NumberFormatException exception) {
+                return true;
+            }
+        });
+        if (StringUtils.hasText(sessionState.getRefreshTokenHash())) {
+            entries.add(sessionState.getRefreshTokenHash() + "@" + now.toEpochMilli());
         }
     }
 

@@ -162,6 +162,17 @@ class DeaneryAccessEvaluatorTest {
         verifyNoInteractions(accountRepository, deaneryRepository);
     }
 
+    @Test
+    void canReadShouldAllowParishAccountToViewTheirOwnDeaneryOnly() {
+        UUID deaneryId = UUID.randomUUID();
+        when(accountRepository.findActiveDeaneryIdByUsername("admin-parish")).thenReturn(Optional.of(deaneryId));
+        Authentication authentication = authentication("admin-parish", List.of("ADMIN_PARISH"), List.of("organization.parish.read.parish"));
+
+        assertTrue(deaneryAccessEvaluator.canRead(authentication, deaneryId));
+        assertFalse(deaneryAccessEvaluator.canRead(authentication, UUID.randomUUID()));
+    }
+
+
     private Authentication authentication(String username, List<String> roles, List<String> permissions) {
         return authentication(username, null, roles, permissions);
     }

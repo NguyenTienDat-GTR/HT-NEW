@@ -266,4 +266,33 @@ class RedisTokenSessionServiceTest {
                 session.getSessionId(), "superadminpc", "refresh-1", "refresh-token-1",
                 "access-3", "refresh-3", "refresh-token-3"));
     }
+
+    @Test
+    void staleRefreshTokenShouldStillWorkWithinGraceWindowButNotAfterIt() {
+        TokenSessionState session = redisTokenSessionService.createSession(
+                "superadminpc", "127.0.0.1", "access-1", "refresh-1", "refresh-token-1");
+        redisTokenSessionService.rotateSession(session.getSessionId(), "superadminpc", "access-1", "refresh-1", "refresh-token-1");
+        when(stringRedisTemplate.execute(any(DefaultRedisScript.class), anyList(), any(Object[].class)))
+                .thenAnswer(invocation -> {
+                    Object[] args = invocation.getArguments();
+                    @SuppressWarnings("unchecked")
+                    List<String> keys = (List<String>) args[1];
+                    if (!args[2].equals(valueStore.get(keys.get(0)))) {
+                        return 0L;
+                    }
+                    valueStore.put(keys.get(0), (String) args[3]);
+                    return 1L;
+                });
+
+        redisTokenSessionService.rotateRefreshSession(session.getSessionId(), "superadminpc", "refresh-1", "refresh-token-1",
+                "access-2", "refresh-2", "refresh-token-2");
+        // Phản hồi của lần xoay đầu bị trình duyệt hủy nên cookie vẫn là token cũ: dùng lại vẫn được trong thời gian ân hạn.
+        redisTokenSessionService.rotateRefreshSession(session.getSessionId(), "superadminpc", "refresh-1", "refresh-token-1",
+                "access-3", "refresh-3", "refresh-token-3");
+        // Token đã bị thay quá thời gian ân hạn thì bị từ chối.
+        String key = "auth:session:" + session.getSessionId();
+        valueStore.put(key, valueStore.get(key).replaceAll("@[0-9]+", "@1000"));
+        assertThrows(RuntimeException.class, () -> redisTokenSessionService.rotateRefreshSession(session.getSessionId(), "superadminpc",
+                "refresh-1", "refresh-token-1", "access-4", "refresh-4", "refresh-token-4"));
+    }
 }
