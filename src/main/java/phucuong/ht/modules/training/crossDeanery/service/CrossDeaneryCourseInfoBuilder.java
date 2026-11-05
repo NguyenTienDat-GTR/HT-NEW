@@ -30,8 +30,8 @@ public class CrossDeaneryCourseInfoBuilder {
             if (type.getRequiredMinAge() != null) {
                 requirements.add("Từ " + type.getRequiredMinAge() + " tuổi");
             }
-            if (type.getRequiredYearsActive() != null) {
-                requirements.add("Đã sinh hoạt tối thiểu " + type.getRequiredYearsActive() + " năm");
+            if (course.getYearsActive() != null && course.getYearsActive() > 0) {
+                requirements.add("Cách lần đạt cấp độ yêu cầu / khóa tiên quyết tối thiểu " + course.getYearsActive() + " năm");
             }
             if (type.getPrerequisiteType() != null) {
                 String within = type.getMaxYearsAfterPrerequisite() == null ? "" : " (trong vòng " + type.getMaxYearsAfterPrerequisite() + " năm)";
