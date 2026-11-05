@@ -15,7 +15,6 @@ public class TrainingCourseTypeResponse {
     private UnitType managementUnitType;
     private String requiredCurrentLevel;
     private Integer requiredMinAge;
-    private Integer requiredYearsActive;
     private Integer maxYearsAfterPrerequisite;
     private String prerequisiteTypeCode;
     private String prerequisiteTypeName;

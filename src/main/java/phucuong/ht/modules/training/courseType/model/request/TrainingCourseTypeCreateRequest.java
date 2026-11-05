@@ -22,8 +22,6 @@ public class TrainingCourseTypeCreateRequest {
 
     private Integer requiredMinAge;
 
-    private Integer requiredYearsActive;
-
     @jakarta.validation.constraints.Min(1)
     private Integer maxYearsAfterPrerequisite;
 

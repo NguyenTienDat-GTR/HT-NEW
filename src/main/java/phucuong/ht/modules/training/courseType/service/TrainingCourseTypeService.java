@@ -56,7 +56,6 @@ public class TrainingCourseTypeService {
         courseType.setManagementUnitType(request.getManagementUnitType());
         courseType.setRequiredCurrentLevel(leaderLevelService.requireExistingOrNull(request.getRequiredCurrentLevel(), "Cấp yêu cầu", actorDioceseId(authentication)));
         courseType.setRequiredMinAge(request.getRequiredMinAge());
-        courseType.setRequiredYearsActive(request.getRequiredYearsActive());
         courseType.setMaxYearsAfterPrerequisite(request.getMaxYearsAfterPrerequisite());
         courseType.setResultingLevel(leaderLevelService.requireExistingOrNull(request.getResultingLevel(), "Cấp độ đạt được", actorDioceseId(authentication)));
         courseType.setCertificateShortCode(normalizeText(request.getCertificateShortCode()));
@@ -140,9 +139,6 @@ public class TrainingCourseTypeService {
         }
         if (request.getRequiredMinAge() != null) {
             courseType.setRequiredMinAge(request.getRequiredMinAge());
-        }
-        if (request.getRequiredYearsActive() != null) {
-            courseType.setRequiredYearsActive(request.getRequiredYearsActive());
         }
         if (Boolean.TRUE.equals(request.getClearMaxYearsAfterPrerequisite())) {
             courseType.setMaxYearsAfterPrerequisite(null);
@@ -251,7 +247,6 @@ public class TrainingCourseTypeService {
                 .managementUnitType(courseType.getManagementUnitType())
                 .requiredCurrentLevel(courseType.getRequiredCurrentLevel())
                 .requiredMinAge(courseType.getRequiredMinAge())
-                .requiredYearsActive(courseType.getRequiredYearsActive())
                 .maxYearsAfterPrerequisite(courseType.getMaxYearsAfterPrerequisite())
                 .prerequisiteTypeCode(courseType.getPrerequisiteType() == null ? null : courseType.getPrerequisiteType().getTypeCode())
                 .prerequisiteTypeName(courseType.getPrerequisiteType() == null ? null : courseType.getPrerequisiteType().getTypeName())
