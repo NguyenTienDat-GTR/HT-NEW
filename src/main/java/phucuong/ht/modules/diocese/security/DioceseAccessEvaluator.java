@@ -33,9 +33,13 @@ public class DioceseAccessEvaluator {
                 || hasAuthority(authentication, READ_DIOCESE);
     }
 
+    // Ngoài quyền xem giáo phận, tài khoản có quyền xem giáo hạt / giáo xứ của mình cũng xem được chi tiết (chỉ đọc) giáo phận chứa đơn vị đó.
     public boolean canRead(Authentication authentication, UUID dioceseId) {
         return hasAuthority(authentication, READ_ALL)
-                || hasScopedAccess(authentication, dioceseId, READ_DIOCESE);
+                || hasScopedAccess(authentication, dioceseId, READ_DIOCESE)
+                || hasScopedAccess(authentication, dioceseId, "organization.deanery.read.deanery")
+                || hasScopedAccess(authentication, dioceseId, "organization.parish.read.deanery")
+                || hasScopedAccess(authentication, dioceseId, "organization.parish.read.parish");
     }
 
     public boolean canUpdate(Authentication authentication, UUID dioceseId) {

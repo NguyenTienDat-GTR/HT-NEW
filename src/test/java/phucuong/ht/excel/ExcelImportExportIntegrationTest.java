@@ -1297,6 +1297,60 @@ class ExcelImportExportIntegrationTest {
                 phucuong.ht.config.CacheNames.ANALYTICS_COURSES, phucuong.ht.config.CacheNames.ANALYTICS_LEADERS);
     }
 
+    @Autowired private phucuong.ht.modules.deanery.service.DeaneryImportService deaneryImportService;
+    @Autowired private phucuong.ht.modules.parish.service.ParishImportService parishImportService;
+
+    private static Authentication orgAdmin() {
+        return admin(USERNAME, "organization.deanery.create.diocese", "organization.parish.create.diocese");
+    }
+
+    @Test
+    @Order(32)
+    void importsDeaneriesAndParishesWithTypeAndParentAndRejectsBadFilesWithoutSavingAnything() {
+        // Giáo hạt: chỉ cần tên; trùng giáo hạt đã có hoặc trùng trong file thì báo lỗi và không lưu gì.
+        int deaneriesBefore = jdbc.queryForObject("select count(*) from deanery", Integer.class);
+        MockMultipartFile badDeaneries = excel(List.of("Tên giáo hạt *", "Email"), List.of(
+                new Row("Hạt Nhập Một", ""), new Row("Thủ Dầu Một", ""), new Row("Hạt Nhập Một", "sai-email")));
+        ImportValidationException deaneryError = assertThrows(ImportValidationException.class,
+                () -> deaneryImportService.importDeaneries(path(badDeaneries), orgAdmin(), JobProgress.NONE));
+        assertTrue(deaneryError.getErrors().size() >= 3, deaneryError.getErrors().toString());
+        assertEquals(deaneriesBefore, jdbc.queryForObject("select count(*) from deanery", Integer.class));
+
+        MockMultipartFile deaneries = excel(List.of("Tên giáo hạt *"), List.of(new Row("Hạt Nhập Một"), new Row("Hạt Nhập Hai")));
+        assertEquals(2, deaneryImportService.importDeaneries(path(deaneries), orgAdmin(), JobProgress.NONE).created());
+        assertEquals(deaneriesBefore + 2, jdbc.queryForObject("select count(*) from deanery", Integer.class));
+        assertEquals(dioceseId, jdbc.queryForObject("select diocese_id from deanery where name='Hạt Nhập Một'", UUID.class));
+        assertTrue(parishImportService.selectableDeaneryNames(orgAdmin()).contains("Hạt Nhập Một"));
+
+        // Giáo xứ: giáo họ nằm TRƯỚC giáo xứ cha cùng file vẫn tạo được; Loại trống là giáo xứ.
+        List<String> headers = List.of("Tên giáo xứ *", "Loại", "Tên giáo hạt *", "Giáo xứ cha");
+        int parishesBefore = jdbc.queryForObject("select count(*) from parish", Integer.class);
+        MockMultipartFile parishes = excel(headers, List.of(
+                new Row("Họ Nhập Con", "Giáo họ", "Hạt Nhập Một", "Xứ Nhập Cha"),
+                new Row("Xứ Nhập Cha", "", "Hạt Nhập Một", ""),
+                new Row("Điểm Nhập Con", "Giáo điểm", "Hạt Nhập Hai", "Xứ Nhập Cha Hai"),
+                new Row("Xứ Nhập Cha Hai", "", "Hạt Nhập Hai", "")));
+        assertEquals(4, parishImportService.importParishes(path(parishes), orgAdmin(), JobProgress.NONE).created());
+        assertEquals(parishesBefore + 4, jdbc.queryForObject("select count(*) from parish", Integer.class));
+        assertEquals("PARISH", jdbc.queryForObject("select unit_type from parish where name='Xứ Nhập Cha'", String.class));
+        assertEquals("GIAO_HO", jdbc.queryForObject("select unit_type from parish where name='Họ Nhập Con'", String.class));
+        assertEquals(jdbc.queryForObject("select id from parish where name='Xứ Nhập Cha'", UUID.class),
+                jdbc.queryForObject("select parent_parish_id from parish where name='Họ Nhập Con'", UUID.class));
+
+        // Sai: giáo họ thiếu giáo xứ cha, loại không hợp lệ, giáo hạt chưa có, giáo xứ có cha, tên trùng giáo xứ đã có.
+        MockMultipartFile badParishes = excel(headers, List.of(
+                new Row("Họ Thiếu Cha", "Giáo họ", "Hạt Nhập Một", ""),
+                new Row("Xứ Loại Sai", "Nhà thờ", "Hạt Nhập Một", ""),
+                new Row("Xứ Hạt Lạ", "", "Hạt Không Có", ""),
+                new Row("Xứ Có Cha", "", "Hạt Nhập Một", "Xứ Nhập Cha"),
+                new Row("Xứ Nhập Cha", "", "Hạt Nhập Một", "")));
+        ImportValidationException parishError = assertThrows(ImportValidationException.class,
+                () -> parishImportService.importParishes(path(badParishes), orgAdmin(), JobProgress.NONE));
+        assertEquals(java.util.Set.of("Giáo xứ cha", "Loại", "Tên giáo hạt", "Tên giáo xứ"),
+                parishError.getErrors().stream().map(error -> error.column()).collect(java.util.stream.Collectors.toSet()), parishError.getErrors().toString());
+        assertEquals(parishesBefore + 4, jdbc.queryForObject("select count(*) from parish", Integer.class));
+    }
+
     private void awaitIdle() {
         long end = System.currentTimeMillis() + 20_000;
         while (System.currentTimeMillis() < end) {

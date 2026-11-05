@@ -248,11 +248,15 @@ GET /api/excel-jobs/{id}|200|401|N/A: jobs of other users are reported as not fo
 GET /api/excel-jobs/{id}/file|200|401|N/A: jobs of other users are reported as not found|400|404|N/A: read-only endpoint does not mutate state
 POST /api/excel-jobs/{id}/cancel|200|401|N/A: jobs of other users are reported as not found|400|404|409
 POST /api/leaders/import|202|401|403|400|N/A: import resolves parishes by name inside the file, no path resource|409
+POST /api/deaneries/import|202|401|403|400|N/A: import resolves units by name inside the file, no path resource|409
+POST /api/parishes/import|202|401|403|400|N/A: import resolves units by name inside the file, no path resource|409
 POST /api/training/courses/past|200|401|403|400|404|409
 PUT /api/training/courses/past/{courseCode}|200|401|403|400|404|409
 POST /api/training/courses/{courseCode}/participants/import|202|401|403|400|404|409
 DELETE /api/training/courses/{courseCode}/participants/{participationId}|200|401|403|N/A: both identifiers are opaque strings checked as not found|404|409
 GET /api/leaders/import-template|200|401|403|N/A: template download has no request parameters|N/A: template download does not resolve a resource|N/A: read-only endpoint does not mutate state
+GET /api/deaneries/import-template|200|401|403|N/A: template download has no request parameters|N/A: template download does not resolve a resource|N/A: read-only endpoint does not mutate state
+GET /api/parishes/import-template|200|401|403|N/A: template download has no request parameters|N/A: template download does not resolve a resource|N/A: read-only endpoint does not mutate state
 GET /api/training/courses/past/import-template|200|401|403|N/A: template download has no request parameters|N/A: template download does not resolve a resource|N/A: read-only endpoint does not mutate state
 GET /api/badges/config|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
 GET /api/badges/config/options|200|401|403|N/A: fixed catalog with no request parameters to validate|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state

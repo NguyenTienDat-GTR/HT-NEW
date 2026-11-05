@@ -31,6 +31,7 @@ public class ParishController {
 
     private final ParishService parishService;
     private final phucuong.ht.common.excel.job.ExcelJobService excelJobService;
+    private final phucuong.ht.modules.parish.service.ParishImportService parishImportService;
 
     @PostMapping
     @PreAuthorize("@parishAccessEvaluator.canCreate(authentication)")
@@ -44,6 +45,30 @@ public class ParishController {
     @PreAuthorize("@parishAccessEvaluator.canList(authentication)")
     public apiResponse<Page<ParishResponse>> findAll(BaseSearchRequest request, Authentication authentication) {
         return apiResponse.success("Lấy danh sách giáo xứ thành công", parishService.findAll(request, authentication));
+    }
+
+    // Tải file Excel mẫu để tự tạo file import (cùng quyền với tạo giáo xứ); danh sách chọn giáo hạt lấy từ các giáo hạt trong phạm vi tài khoản.
+    @GetMapping("/import-template")
+    @PreAuthorize("@parishAccessEvaluator.canCreate(authentication)")
+    public org.springframework.http.ResponseEntity<byte[]> importTemplate(Authentication authentication) {
+        return phucuong.ht.common.excel.ExcelResponses.xlsx(
+                phucuong.ht.common.excel.ImportTemplates.parishes(parishImportService.selectableDeaneryNames(authentication)), "mau-import-giao-xu");
+    }
+
+    // Import giáo xứ từ Excel chạy nền (cùng quyền và phạm vi với tạo giáo xứ). Có dòng lỗi thì không lưu gì.
+    // Bắt buộc có Idempotency-Key: gửi lại cùng key trả lại đúng tác vụ cũ, không import hai lần.
+    @PostMapping(value = "/import", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("@parishAccessEvaluator.canCreate(authentication)")
+    public org.springframework.http.ResponseEntity<apiResponse<phucuong.ht.common.excel.job.ExcelJobResponse>> importParishes(
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
+            @RequestParam(value = "subjectConsentConfirmed", required = false) Boolean subjectConsentConfirmed,
+            @RequestHeader(value = phucuong.ht.common.idempotency.IdempotencyService.HEADER, required = false) String idempotencyKey,
+            Authentication authentication) {
+        privacyConsent.requireConfirmed(subjectConsentConfirmed);
+        var accepted = excelJobService.createImport(
+                phucuong.ht.common.excel.job.ExcelJobKind.IMPORT_PARISHES, "", file, null, idempotencyKey, authentication);
+        privacyConsent.recordAttestation(authentication, null, PrivacyConsentSource.ORG_FORM);
+        return phucuong.ht.common.excel.job.ExcelJobResponses.accepted(accepted);
     }
 
     // Xuất Excel chạy nền theo đúng bộ lọc/tìm kiếm/sắp xếp của danh sách; trả 202 + tác vụ, theo dõi tại /api/excel-jobs.

@@ -45,6 +45,30 @@ public class DeaneryController {
         return apiResponse.success("Lấy danh sách giáo hạt thành công", deaneryService.findAll(request, authentication));
     }
 
+    // Tải file Excel mẫu để tự tạo file import (cùng quyền với tạo giáo hạt).
+    @GetMapping("/import-template")
+    @PreAuthorize("@deaneryAccessEvaluator.canCreate(authentication)")
+    public org.springframework.http.ResponseEntity<byte[]> importTemplate() {
+        return phucuong.ht.common.excel.ExcelResponses.xlsx(
+                phucuong.ht.common.excel.ImportTemplates.deaneries(), "mau-import-giao-hat");
+    }
+
+    // Import giáo hạt từ Excel chạy nền (cùng quyền và phạm vi với tạo giáo hạt). Có dòng lỗi thì không lưu gì.
+    // Bắt buộc có Idempotency-Key: gửi lại cùng key trả lại đúng tác vụ cũ, không import hai lần.
+    @PostMapping(value = "/import", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("@deaneryAccessEvaluator.canCreate(authentication)")
+    public org.springframework.http.ResponseEntity<apiResponse<phucuong.ht.common.excel.job.ExcelJobResponse>> importDeaneries(
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
+            @RequestParam(value = "subjectConsentConfirmed", required = false) Boolean subjectConsentConfirmed,
+            @RequestHeader(value = phucuong.ht.common.idempotency.IdempotencyService.HEADER, required = false) String idempotencyKey,
+            Authentication authentication) {
+        privacyConsent.requireConfirmed(subjectConsentConfirmed);
+        var accepted = excelJobService.createImport(
+                phucuong.ht.common.excel.job.ExcelJobKind.IMPORT_DEANERIES, "", file, null, idempotencyKey, authentication);
+        privacyConsent.recordAttestation(authentication, null, PrivacyConsentSource.ORG_FORM);
+        return phucuong.ht.common.excel.job.ExcelJobResponses.accepted(accepted);
+    }
+
     // Xuất Excel chạy nền theo đúng bộ lọc/tìm kiếm/sắp xếp của danh sách; trả 202 + tác vụ, theo dõi tại /api/excel-jobs.
     @org.springframework.web.bind.annotation.PostMapping("/export")
     @PreAuthorize("@deaneryAccessEvaluator.canList(authentication)")

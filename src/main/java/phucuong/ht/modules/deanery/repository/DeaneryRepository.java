@@ -122,6 +122,23 @@ public class DeaneryRepository extends BaseRepo<Deanery, UUID> {
                 .getResultList();
     }
 
+    /** Toàn bộ giáo hạt kèm giáo phận (dùng để đối chiếu tên giáo hạt khi import giáo xứ). */
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<Deanery> findAllWithDiocese() {
+        return entityManager.createQuery(
+                        "select de from Deanery de join fetch de.diocese d", Deanery.class)
+                .getResultList();
+    }
+
+    /** Tên các giáo hạt đã có của một giáo phận (dùng để báo trùng khi import giáo hạt). */
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<String> findNamesByDioceseId(UUID dioceseId) {
+        return entityManager.createQuery(
+                        "select de.name from Deanery de where de.diocese.id = :dioceseId", String.class)
+                .setParameter("dioceseId", dioceseId)
+                .getResultList();
+    }
+
     public Optional<UUID> findDioceseIdByDeaneryId(UUID deaneryId) {
         List<UUID> results = entityManager.createQuery(
                         """

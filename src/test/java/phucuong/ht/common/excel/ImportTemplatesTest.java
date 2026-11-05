@@ -153,4 +153,31 @@ class ImportTemplatesTest {
             assertEquals(2, reader.firstSheet().rows().size());
         }
     }
+
+    @Test
+    void deaneryTemplateOnlyRequiresTheNameColumn() {
+        try (ExcelWorkbookReader reader = ExcelWorkbookReader.open(upload(ImportTemplates.deaneries()))) {
+            ExcelSheetData sheet = reader.firstSheet();
+            assertEquals(ImportTemplates.DEANERIES_SHEET, sheet.name());
+            assertTrue(sheet.requireColumns(new ImportErrors(), phucuong.ht.modules.deanery.service.DeaneryImportService.COL_NAME));
+            assertEquals("0901234567", sheet.rows().get(0).phone(phucuong.ht.modules.deanery.service.DeaneryImportService.COL_PHONE));
+            assertEquals(null, sheet.rows().get(1).text(phucuong.ht.modules.deanery.service.DeaneryImportService.COL_EMAIL));
+        }
+    }
+
+    @Test
+    void parishTemplateHasTypeAndDeaneryDropdowns() throws Exception {
+        byte[] content = ImportTemplates.parishes(List.of("Giáo hạt A", "Giáo hạt B"));
+        try (ExcelWorkbookReader reader = ExcelWorkbookReader.open(upload(content))) {
+            ExcelSheetData sheet = reader.firstSheet();
+            assertEquals(ImportTemplates.PARISHES_SHEET, sheet.name());
+            assertTrue(sheet.requireColumns(new ImportErrors(), phucuong.ht.modules.parish.service.ParishImportService.COL_NAME, phucuong.ht.modules.parish.service.ParishImportService.COL_DEANERY));
+            assertTrue(sheet.hasColumn(phucuong.ht.modules.parish.service.ParishImportService.COL_TYPE));
+            assertTrue(sheet.hasColumn(phucuong.ht.modules.parish.service.ParishImportService.COL_PARENT));
+            assertEquals("Giáo hạt A", sheet.rows().get(0).text(phucuong.ht.modules.parish.service.ParishImportService.COL_DEANERY));
+        }
+        String xml = sheetXml(content);
+        assertTrue(xml.contains("'Danh mục'!$A$2:$A$3"), xml);
+        assertTrue(xml.contains("Giáo họ,Giáo điểm"), xml);
+    }
 }
