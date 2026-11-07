@@ -81,6 +81,12 @@
 	}
 }
 
+# www.<tên-miền-chính> chuyển hướng về tên miền chính. Caddy tự xin chứng chỉ cho www nên không còn lỗi 525.
+# Lưu ý: SITE_HOSTS phải là MỘT tên miền (không phải danh sách) để placeholder này hợp lệ.
+www.{$SITE_HOSTS} {
+	redir https://{$SITE_HOSTS}{uri} permanent
+}
+
 # Tên miền chính (cố định). Xin chứng chỉ ngay khi Caddy khởi động.
 # Yêu cầu: tên miền đã trỏ về IP server, cổng 80 và 443 đã mở.
 {$SITE_HOSTS} {
