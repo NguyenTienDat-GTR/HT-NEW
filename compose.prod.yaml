@@ -169,6 +169,10 @@ services:
     command: tunnel --no-autoupdate run
     environment:
       TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    # Để route ssh://host.docker.internal:22 trong dashboard Cloudflare trỏ tới sshd của chính máy chủ
+    # (cloudflared chạy trong container nên không thấy localhost của máy chủ). host-gateway = IP gateway của network Docker.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks: [ht-network]
 
 volumes:
