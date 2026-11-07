@@ -25,6 +25,7 @@ import phucuong.ht.modules.training.courseParticipation.service.CourseParticipan
 import phucuong.ht.modules.training.enums.ParticipationStatus;
 import phucuong.ht.modules.training.enums.WorkflowApprovalStatus;
 import phucuong.ht.modules.training.trainingCourse.model.entity.TrainingCourse;
+import phucuong.ht.modules.training.trainingCourse.service.TrainingCourseStatusSupport;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -73,8 +74,8 @@ class CourseAttendanceServiceTest {
         parish = TrainingTestFixtures.parish("Giáo xứ B", deanery);
         course = TrainingTestFixtures.course("KH-1", "Khóa 1", deanery);
         course.setAttendanceEnabled(true);
-        course.setStartDate(LocalDate.now().minusDays(1));
-        course.setEndDate(LocalDate.now().plusDays(3));
+        course.setStartDate(TrainingCourseStatusSupport.today().minusDays(1));
+        course.setEndDate(TrainingCourseStatusSupport.today().plusDays(3));
         when(participantSupport.requireRegularCourse(eq("KH-1"), any())).thenReturn(course);
 
         ann = participation("p-ann", "An", "an@x.vn", course);
@@ -210,10 +211,10 @@ class CourseAttendanceServiceTest {
         course.setAttendanceEnabled(false);
         assertTrue(failure(() -> service.lookup(token)).getMessage().contains("chưa bật điểm danh"));
         course.setAttendanceEnabled(true);
-        course.setStartDate(LocalDate.now().minusDays(5));
-        course.setEndDate(LocalDate.now().minusDays(1));
+        course.setStartDate(TrainingCourseStatusSupport.today().minusDays(5));
+        course.setEndDate(TrainingCourseStatusSupport.today().minusDays(1));
         assertTrue(failure(() -> service.lookup(token)).getMessage().contains("đã kết thúc"));
-        course.setEndDate(LocalDate.now().plusDays(1));
+        course.setEndDate(TrainingCourseStatusSupport.today().plusDays(1));
         course.setStatus(Boolean.FALSE);
         assertTrue(failure(() -> service.lookup(token)).getMessage().contains("vô hiệu hóa"));
     }
@@ -268,13 +269,13 @@ class CourseAttendanceServiceTest {
         assertEquals(409, failure(() -> service.scan("KH-1", tokens.tokenFor("KH-1", "p-ann"), scanner)).getStatus().value());
 
         course.setStatus(Boolean.TRUE);
-        course.setEndDate(LocalDate.now().minusDays(1));
-        course.setStartDate(LocalDate.now().minusDays(5));
+        course.setEndDate(TrainingCourseStatusSupport.today().minusDays(1));
+        course.setStartDate(TrainingCourseStatusSupport.today().minusDays(5));
         ApiException ended = failure(() -> service.scan("KH-1", tokens.tokenFor("KH-1", "p-ann"), scanner));
         assertEquals(409, ended.getStatus().value());
         assertTrue(ended.getMessage().contains("đã kết thúc"));
 
-        course.setEndDate(LocalDate.now().plusDays(3));
+        course.setEndDate(TrainingCourseStatusSupport.today().plusDays(3));
         course.setFinishedAt(OffsetDateTime.now());
         assertEquals(409, failure(() -> service.scan("KH-1", tokens.tokenFor("KH-1", "p-ann"), scanner)).getStatus().value());
         assertNull(ann.getCheckedInAt());
@@ -282,13 +283,13 @@ class CourseAttendanceServiceTest {
 
     @Test
     void scanIsRefusedBeforeTheCourseStartsWithTheStartDate() {
-        course.setStartDate(LocalDate.now().plusDays(2));
-        course.setEndDate(LocalDate.now().plusDays(4));
+        course.setStartDate(TrainingCourseStatusSupport.today().plusDays(2));
+        course.setEndDate(TrainingCourseStatusSupport.today().plusDays(4));
         String token = tokens.tokenFor("KH-1", "p-ann");
         ApiException early = failure(() -> service.lookup(token));
         assertEquals(409, early.getStatus().value());
         assertTrue(early.getMessage().contains("chưa diễn ra"));
-        assertTrue(early.getMessage().contains(LocalDate.now().plusDays(2).format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"))));
+        assertTrue(early.getMessage().contains(TrainingCourseStatusSupport.today().plusDays(2).format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"))));
         assertEquals(409, failure(() -> service.scan(token, scanner)).getStatus().value());
         assertEquals(409, failure(() -> service.setCheckedIn("KH-1", "p-ann", true, scanner)).getStatus().value());
         assertNull(ann.getCheckedInAt());
@@ -308,8 +309,8 @@ class CourseAttendanceServiceTest {
 
     @Test
     void scanWorksOnTheLastDayOfTheCourse() {
-        course.setStartDate(LocalDate.now().minusDays(3));
-        course.setEndDate(LocalDate.now());
+        course.setStartDate(TrainingCourseStatusSupport.today().minusDays(3));
+        course.setEndDate(TrainingCourseStatusSupport.today());
         assertEquals(ScanStatus.CHECKED_IN, service.scan("KH-1", tokens.tokenFor("KH-1", "p-ann"), scanner).status());
     }
 
