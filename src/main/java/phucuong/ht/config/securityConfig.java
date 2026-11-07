@@ -51,6 +51,7 @@ public class securityConfig {
         String[] publicMatchers = swaggerPublicEnabled
                 ? new String[]{
                 "/api/auth/login",
+                "/api/auth/captcha-config",
                 "/api/auth/refresh",
                 "/api/auth/logout",
                 "/api/auth/forgot-password/**",
@@ -66,6 +67,7 @@ public class securityConfig {
         }
                 : new String[]{
                 "/api/auth/login",
+                "/api/auth/captcha-config",
                 "/api/auth/refresh",
                 "/api/auth/logout",
                 "/api/auth/forgot-password/**",
