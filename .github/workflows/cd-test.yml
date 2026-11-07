@@ -54,11 +54,27 @@ jobs:
         env:
           TEST_ENV_FILE: ${{ secrets.TEST_ENV_FILE }}
 
+      - name: Mở cầu nối SSH qua Cloudflare Tunnel (cổng 22 của server đã đóng với internet)
+        env:
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          curl -fsSL -o cloudflared.deb https://github.com/cloudflare/cloudflared/releases/download/2025.11.1/cloudflared-linux-amd64.deb
+          sudo dpkg -i cloudflared.deb
+          nohup cloudflared access tcp --hostname ssh.clead.io.vn --url 127.0.0.1:2222 --service-token-id "$CF_ACCESS_CLIENT_ID" --service-token-secret "$CF_ACCESS_CLIENT_SECRET" > "$RUNNER_TEMP/cloudflared-bridge.log" 2>&1 &
+          for i in $(seq 1 30); do
+            if (echo > /dev/tcp/127.0.0.1/2222) 2>/dev/null; then echo "Cầu nối SSH sẵn sàng"; exit 0; fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/cloudflared-bridge.log"
+          echo "Không mở được cầu nối SSH qua Cloudflare (kiểm tra secret CF_ACCESS_CLIENT_ID/SECRET và policy Service Auth)"
+          exit 1
+
       - name: Copy file lên server
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.SSH_HOST }}
-          port: ${{ secrets.SSH_PORT || 22 }}
+          host: 127.0.0.1
+          port: 2222
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "out/*"
@@ -71,8 +87,8 @@ jobs:
           GHCR_USER: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          host: ${{ secrets.SSH_HOST }}
-          port: ${{ secrets.SSH_PORT || 22 }}
+          host: 127.0.0.1
+          port: 2222
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           envs: GHCR_USER,GHCR_TOKEN,DEPLOY_DIR
