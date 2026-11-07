@@ -16,6 +16,7 @@ GET /api/analytics/records/export|200|401|403|400|N/A: aggregate endpoint has no
 
 # Authentication and session
 POST /api/auth/login|200|401|N/A: public login endpoint has no permission gate|400|N/A: invalid credentials must not expose account existence|N/A: login does not create a persistent conflict
+GET /api/auth/captcha-config|200|N/A: public endpoint readable before authentication|N/A: public endpoint has no permission gate|N/A: endpoint accepts no client request data|N/A: endpoint returns a fixed Turnstile configuration|N/A: read-only endpoint does not mutate state
 POST /api/auth/refresh|200|401|N/A: public refresh endpoint has no permission gate|N/A: refresh token is read from a cookie rather than a request body|N/A: invalid refresh tokens are reported as unauthorized|N/A: refresh does not create a persistent conflict
 POST /api/auth/logout|200|N/A: idempotent logout succeeds even when no valid session remains|N/A: public logout endpoint has no permission gate|N/A: refresh token is read from a cookie rather than a request body|N/A: missing or invalid refresh cookie is treated as already logged out|N/A: logout is idempotent and does not create a persistent conflict
 GET /api/auth/me|200|401|N/A: authenticated caller needs no additional permission|N/A: endpoint accepts no client request data|N/A: current authenticated account is resolved from the session|N/A: read-only endpoint does not mutate state
