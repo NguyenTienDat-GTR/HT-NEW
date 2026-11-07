@@ -10,7 +10,7 @@ public class CertificateApproveRequest {
     private String approvalReason;
 
     // Người ký ghi vào chứng nhận khi duyệt. signerTitle bắt buộc khi signerType = OTHER;
-    // CHAPLAIN mặc định chức danh "Linh mục tuyên úy".
+    // CHAPLAIN mặc định chức danh "Linh mục tuyên úy". COURSE_CHAPLAIN: bỏ qua signerName, hệ thống tự lấy cha tuyên úy của đơn vị tổ chức khóa.
     private CertificateSignerType signerType;
     private String signerName;
     private String signerTitle;

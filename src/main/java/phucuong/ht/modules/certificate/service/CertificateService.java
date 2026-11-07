@@ -358,23 +358,47 @@ public class CertificateService {
     // Ghi người ký vào chứng nhận; bắt buộc có người ký khi duyệt.
     private void applySigner(Certificate certificate, CertificateApproveRequest request) {
         phucuong.ht.modules.certificate.model.enums.CertificateSignerType signerType = request == null ? null : request.getSignerType();
-        String signerName = request == null ? null : commonValidationHelper.normalizeOptionalText(request.getSignerName());
-        if (signerType == null || signerName == null) {
+        if (signerType == null) {
             throw commonValidationHelper.validationError("Phải chọn người ký khi duyệt chứng nhận");
         }
+        String signerName;
         String signerTitle;
-        if (signerType == phucuong.ht.modules.certificate.model.enums.CertificateSignerType.OTHER) {
-            signerTitle = request == null ? null : commonValidationHelper.normalizeOptionalText(request.getSignerTitle());
-            if (signerTitle == null) {
-                throw commonValidationHelper.validationError("Phải nhập chức danh người ký khi chọn 'Khác'");
+        if (signerType == phucuong.ht.modules.certificate.model.enums.CertificateSignerType.COURSE_CHAPLAIN) {
+            // Tự lấy cha tuyên úy của đơn vị tổ chức khóa; lưu như người ký "Linh mục tuyên úy" thông thường.
+            signerName = courseChaplain(certificate.getCourse());
+            if (signerName == null) {
+                throw commonValidationHelper.validationError("Đơn vị tổ chức khóa chưa có thông tin Linh mục tuyên úy, hãy nhập tên người ký hoặc cập nhật thông tin đơn vị");
             }
-        } else {
+            signerType = phucuong.ht.modules.certificate.model.enums.CertificateSignerType.CHAPLAIN;
             signerTitle = "Linh mục tuyên úy";
+        } else {
+            signerName = commonValidationHelper.normalizeOptionalText(request.getSignerName());
+            if (signerName == null) {
+                throw commonValidationHelper.validationError("Phải chọn người ký khi duyệt chứng nhận");
+            }
+            if (signerType == phucuong.ht.modules.certificate.model.enums.CertificateSignerType.OTHER) {
+                signerTitle = commonValidationHelper.normalizeOptionalText(request.getSignerTitle());
+                if (signerTitle == null) {
+                    throw commonValidationHelper.validationError("Phải nhập chức danh người ký khi chọn 'Khác'");
+                }
+            } else {
+                signerTitle = "Linh mục tuyên úy";
+            }
         }
         certificate.setSignerType(signerType);
         certificate.setSignerName(signerName);
         certificate.setSignerTitle(signerTitle);
         certificate.setSignedBy((signerTitle + " " + signerName).trim());
+    }
+
+    // Cha tuyên úy của đơn vị tổ chức khóa: khóa do giáo hạt tổ chức thì lấy của giáo hạt, ngược lại lấy của giáo phận.
+    private String courseChaplain(phucuong.ht.modules.training.trainingCourse.model.entity.TrainingCourse course) {
+        if (course == null) {
+            return null;
+        }
+        String chaplain = course.getDeanery() != null ? course.getDeanery().getChaplain()
+                : course.getDiocese() != null ? course.getDiocese().getChaplain() : null;
+        return commonValidationHelper.normalizeOptionalText(chaplain);
     }
 
     private Certificate approveInternal(String certificateCode, CertificateApproveRequest request, Authentication authentication) {
