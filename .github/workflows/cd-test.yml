@@ -59,6 +59,9 @@ jobs:
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
+          # Secret dán từ PowerShell dễ dính ký tự xuống dòng/khoảng trắng: làm sạch trước khi dùng.
+          CF_ACCESS_CLIENT_ID="$(printf %s "$CF_ACCESS_CLIENT_ID" | tr -d '[:space:]')"
+          CF_ACCESS_CLIENT_SECRET="$(printf %s "$CF_ACCESS_CLIENT_SECRET" | tr -d '[:space:]')"
           curl -fsSL -o cloudflared.deb https://github.com/cloudflare/cloudflared/releases/download/2025.11.1/cloudflared-linux-amd64.deb
           sudo dpkg -i cloudflared.deb
           nohup cloudflared access tcp --hostname ssh.clead.io.vn --url 0.0.0.0:2222 --service-token-id "$CF_ACCESS_CLIENT_ID" --service-token-secret "$CF_ACCESS_CLIENT_SECRET" > "$RUNNER_TEMP/cloudflared-bridge.log" 2>&1 &
@@ -70,6 +73,8 @@ jobs:
             if ssh-keyscan -T 15 -p 2222 127.0.0.1 2>/dev/null | grep -q "ssh-"; then echo "Cầu nối SSH sẵn sàng (đã bắt tay SSH tới server)"; exit 0; fi
             sleep 3
           done
+          echo "Chẩn đoán: độ dài Client ID=${#CF_ACCESS_CLIENT_ID} (mong đợi 39), Client Secret=${#CF_ACCESS_CLIENT_SECRET} (mong đợi 64)"
+          curl -s -o /dev/null -w "Chẩn đoán: HTTPS tới ssh.clead.io.vn kèm token -> HTTP %{http_code}\n" -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" https://ssh.clead.io.vn || true
           cat "$RUNNER_TEMP/cloudflared-bridge.log"
           echo "Không mở được cầu nối SSH qua Cloudflare (kiểm tra secret CF_ACCESS_CLIENT_ID/SECRET và policy Service Auth)"
           exit 1
