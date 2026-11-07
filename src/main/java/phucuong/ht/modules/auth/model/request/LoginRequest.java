@@ -24,6 +24,10 @@ public class LoginRequest {
     @Pattern(regexp = "^[A-Za-z0-9_-]*$", message = "Mã thiết bị không hợp lệ")
     private String deviceId;
 
+    /** Token Cloudflare Turnstile do widget trên form đăng nhập sinh ra; chỉ bắt buộc khi BE bật Turnstile. */
+    @Size(max = 2048, message = "Mã xác minh không hợp lệ")
+    private String turnstileToken;
+
     public boolean isRememberMeEnabled() {
         return Boolean.TRUE.equals(rememberMe);
     }

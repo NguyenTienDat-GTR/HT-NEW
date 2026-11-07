@@ -18,6 +18,9 @@ import phucuong.ht.modules.auth.model.response.AuthTokenResponse;
 import phucuong.ht.modules.auth.model.response.AuthenticatedUserResponse;
 import phucuong.ht.modules.auth.service.AuthCookieService;
 import phucuong.ht.modules.auth.service.AuthService;
+import phucuong.ht.modules.auth.service.TurnstileService;
+
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -26,6 +29,16 @@ public class AuthController {
 
     private final AuthService authService;
     private final AuthCookieService authCookieService;
+    private final TurnstileService turnstileService;
+
+    /** Cho FE biết có hiện ô xác minh Turnstile không (site key là công khai). */
+    @GetMapping("/captcha-config")
+    public apiResponse<Map<String, Object>> captchaConfig() {
+        return apiResponse.success("Cấu hình xác minh", Map.of(
+                "enabled", turnstileService.isEnabled(),
+                "siteKey", turnstileService.getSiteKey()
+        ));
+    }
 
     @PostMapping("/login")
     public apiResponse<AuthTokenResponse> login(
@@ -33,6 +46,7 @@ public class AuthController {
             HttpServletRequest httpServletRequest,
             HttpServletResponse httpServletResponse
     ) {
+        turnstileService.assertHuman(request.getTurnstileToken(), httpServletRequest.getRemoteAddr());
         AuthTokenResponse tokens = authService.login(request, httpServletRequest.getRemoteAddr(), httpServletRequest.getHeader("X-Site-Host"));
         authCookieService.writeRefreshCookie(httpServletResponse, tokens);
         authCookieService.writeAccessCookie(httpServletResponse, tokens);

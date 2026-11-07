@@ -158,6 +158,19 @@ services:
       - app
     networks: [ht-network]
 
+  # Cloudflare Tunnel: kênh quản trị đi ra ngoài (server chủ động nối tới Cloudflare), nên có thể ĐÓNG cổng 22 của
+  # server. Cấu hình route (ssh.<miền>, db.<miền>...) và chính sách Cloudflare Access làm trên dashboard Zero Trust.
+  # Không chạy mặc định; bật bằng: docker compose --profile tunnel up -d cloudflared (cần CLOUDFLARE_TUNNEL_TOKEN trong .env).
+  cloudflared:
+    image: cloudflare/cloudflared:2025.11.1
+    container_name: ht-cloudflared
+    restart: unless-stopped
+    profiles: [tunnel]
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    networks: [ht-network]
+
 volumes:
   pgdata:
   redisdata:
