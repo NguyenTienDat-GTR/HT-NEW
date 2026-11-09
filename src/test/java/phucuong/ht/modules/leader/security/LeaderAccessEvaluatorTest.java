@@ -187,6 +187,26 @@ class LeaderAccessEvaluatorTest {
     }
 
     @Test
+    void canToggleShouldAllowDioceseAndDeaneryAdminsWithScopedAuthority() {
+        UUID leaderId = UUID.randomUUID();
+        UUID dioceseId = UUID.randomUUID();
+        UUID deaneryId = UUID.randomUUID();
+        Authentication diocese = authentication("admin-diocese", null, List.of("ADMIN_DIOCESE"), List.of(LeaderAccessEvaluator.TOGGLE_DIOCESE));
+        when(accountRepository.findActiveDioceseIdByUsername("admin-diocese")).thenReturn(Optional.of(dioceseId));
+        when(leaderRepository.findDioceseIdByLeaderId(leaderId)).thenReturn(Optional.of(dioceseId));
+        assertTrue(leaderAccessEvaluator.canToggle(diocese, leaderId));
+
+        Authentication deanery = authentication("admin-deanery", null, List.of("ADMIN_DEANERY"), List.of(LeaderAccessEvaluator.TOGGLE_DEANERY));
+        when(accountRepository.findActiveDeaneryIdByUsername("admin-deanery")).thenReturn(Optional.of(deaneryId));
+        when(leaderRepository.findDeaneryIdByLeaderId(leaderId)).thenReturn(Optional.of(deaneryId));
+        assertTrue(leaderAccessEvaluator.canToggle(deanery, leaderId));
+
+        // Không có quyền toggle (chỉ có quyền sửa) thì bị từ chối.
+        Authentication updateOnly = authentication("admin-deanery", null, List.of("ADMIN_DEANERY"), List.of(LeaderAccessEvaluator.UPDATE_DEANERY));
+        assertFalse(leaderAccessEvaluator.canToggle(updateOnly, leaderId));
+    }
+
+    @Test
     void canTransferRequiresTransferAuthorityInScopeAndDeniesParishAdmin() {
         UUID leaderId = UUID.randomUUID();
         UUID deaneryId = UUID.randomUUID();

@@ -26,6 +26,8 @@ public class LeaderAccessEvaluator {
     public static final String UPDATE_PARISH = "organization.leader.update.parish";
     public static final String TRANSFER_DIOCESE = "organization.leader.transfer.diocese";
     public static final String TRANSFER_DEANERY = "organization.leader.transfer.deanery";
+    public static final String TOGGLE_DIOCESE = "organization.leader.toggle.diocese";
+    public static final String TOGGLE_DEANERY = "organization.leader.toggle.deanery";
     public static final String TOGGLE_PARISH = "organization.leader.toggle.parish";
 
     private final AccountRepository accountRepository;
@@ -63,7 +65,9 @@ public class LeaderAccessEvaluator {
     }
 
     public boolean canToggle(Authentication authentication, UUID id) {
-        return hasRole(authentication, "ADMIN_PARISH") && hasParishScopedAccess(authentication, id, TOGGLE_PARISH);
+        return (hasRole(authentication, "ADMIN_DIOCESE") && hasDioceseScopedAccess(authentication, id, TOGGLE_DIOCESE))
+                || (hasRole(authentication, "ADMIN_DEANERY") && hasDeaneryScopedAccess(authentication, id, TOGGLE_DEANERY))
+                || (hasRole(authentication, "ADMIN_PARISH") && hasParishScopedAccess(authentication, id, TOGGLE_PARISH));
     }
 
     private boolean hasDioceseScopedAccess(Authentication authentication, UUID id, String scopedAuthority) {
