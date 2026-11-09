@@ -9,6 +9,7 @@ import org.springframework.web.context.request.RequestContextHolder;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.modules.auth.repository.AccountRepository;
 import phucuong.ht.modules.training.trainingCourse.model.entity.TrainingCourse;
+import phucuong.ht.modules.training.trainingCourse.security.TrainingCourseAccessEvaluator;
 
 import java.util.UUID;
 
@@ -57,8 +58,8 @@ public class CourseScoreVisibility {
                 String name = securityUtils.currentUsername(authentication);
                 cachedViewer = new Viewer(
                         securityUtils.hasAuthority(authentication, SUPER_ADMIN_AUTHORITY),
-                        name == null ? null : accountRepository.findDirectActiveDioceseIdByUsername(name).orElse(null),
-                        name == null ? null : accountRepository.findDirectActiveDeaneryIdByUsername(name).orElse(null));
+                        dioceseScopeOf(authentication, name),
+                        deaneryScopeOf(authentication, name));
                 THREAD_VIEWER.set(cachedViewer);
             }
             return cachedViewer;
@@ -70,10 +71,26 @@ public class CourseScoreVisibility {
         String username = securityUtils.currentUsername(authentication);
         Viewer viewer = new Viewer(
                 securityUtils.hasAuthority(authentication, SUPER_ADMIN_AUTHORITY),
-                username == null ? null : accountRepository.findDirectActiveDioceseIdByUsername(username).orElse(null),
-                username == null ? null : accountRepository.findDirectActiveDeaneryIdByUsername(username).orElse(null));
+                dioceseScopeOf(authentication, username),
+                deaneryScopeOf(authentication, username));
         attributes.setAttribute(VIEWER_ATTRIBUTE, viewer, RequestAttributes.SCOPE_REQUEST);
         return viewer;
+    }
+
+    // Cấp sở hữu theo ROLE đang có (không chỉ đơn vị gán trực tiếp cho tài khoản): tài khoản có role phạm vi giáo phận / giáo hạt mà đơn vị suy ra
+    // từ huynh trưởng gắn với tài khoản vẫn là cấp tổ chức khóa. Tài khoản chỉ có role giáo xứ / huynh trưởng thì không có phạm vi nào.
+    private UUID dioceseScopeOf(Authentication authentication, String username) {
+        if (username == null || !securityUtils.hasAuthority(authentication, TrainingCourseAccessEvaluator.READ_DIOCESE)) {
+            return null;
+        }
+        return accountRepository.findActiveDioceseIdByUsername(username).orElse(null);
+    }
+
+    private UUID deaneryScopeOf(Authentication authentication, String username) {
+        if (username == null || !securityUtils.hasAuthority(authentication, TrainingCourseAccessEvaluator.READ_DEANERY)) {
+            return null;
+        }
+        return accountRepository.findActiveDeaneryIdByUsername(username).orElse(null);
     }
 
     /** Worker nền gọi khi kết thúc mỗi job để người xem của job này không rò sang job khác trên cùng luồng. */
