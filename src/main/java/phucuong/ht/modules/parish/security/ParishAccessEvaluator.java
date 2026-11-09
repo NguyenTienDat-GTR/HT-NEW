@@ -71,6 +71,7 @@ public class ParishAccessEvaluator {
             return false;
         }
         return hasAuthority(authentication, UPDATE_ALL)
+                || hasDioceseScopedAccess(authentication, parishId, UPDATE_DIOCESE)
                 || hasParishScopedAccess(authentication, parishId, UPDATE_PARISH);
     }
 
