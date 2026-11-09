@@ -70,5 +70,8 @@ public class TrainingCourseUpdateRequest {
     @jakarta.validation.constraints.Pattern(regexp = "ALL|PASSED_ONLY", message = "Chế độ sao chép phải là ALL hoặc PASSED_ONLY")
     private String copyMode;
 
+    // Chỉ sao chép các huynh trưởng này từ khóa nguồn (chọn riêng ở hộp thoại); null / rỗng = sao chép theo copyMode.
+    private List<java.util.UUID> copyLeaderIds;
+
     private String additionalNotes;
 }

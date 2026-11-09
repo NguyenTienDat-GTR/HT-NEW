@@ -40,6 +40,18 @@ public class CourseCopyController {
         return apiResponse.success("Lấy danh sách khóa nguồn thành công", courseCopyService.anySources(courseCode, courseTypeCode, authentication));
     }
 
+    // Hồ sơ trong các khóa nguồn đã chọn để chọn từng huynh trưởng cần sao chép (hộp thoại trong form tạo / sửa khóa).
+    @GetMapping("/copy-sources/candidates")
+    @PreAuthorize("(#courseCode != null and @trainingCourseAccessEvaluator.canUpdate(authentication, #courseCode))"
+            + " or (#courseCode == null and @trainingCourseAccessEvaluator.canCreate(authentication, #courseTypeCode))")
+    public apiResponse<List<Candidate>> anyCandidates(@RequestParam(required = false) String courseCode,
+                                                      @RequestParam(required = false) String courseTypeCode,
+                                                      @RequestParam List<String> sourceCourseCodes,
+                                                      Authentication authentication) {
+        return apiResponse.success("Lấy danh sách hồ sơ của khóa nguồn thành công",
+                courseCopyService.anyCandidates(courseCode, courseTypeCode, sourceCourseCodes, authentication));
+    }
+
     @GetMapping("/{courseCode}/prerequisite-copy/sources")
     @PreAuthorize("@courseParticipationAccessEvaluator.canManageCourseParticipants(authentication, #courseCode)")
     public apiResponse<SourcesResponse> sources(@PathVariable String courseCode) {

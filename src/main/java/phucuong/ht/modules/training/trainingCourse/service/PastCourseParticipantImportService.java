@@ -355,6 +355,7 @@ public class PastCourseParticipantImportService extends AbstractExcelImporter<Pa
         }
         courseActivityGuard.requireActive(course);
         courseActivityGuard.requireNotEnded(course);
+        courseActivityGuard.requireNotStarted(course, "nhập Excel thêm vào danh sách tham dự");
         if (!courseParticipationService.canApproveCourse(course, authentication)) {
             throw commonValidationHelper.forbidden("Không có quyền nhập danh sách tham dự cho khóa huấn luyện này");
         }

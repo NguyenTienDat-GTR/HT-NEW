@@ -871,6 +871,17 @@ class AttendeeBadgeAttendanceInvitationIntegrationTest {
 
     @Test
     @Order(22)
+    void importIntoACourseThatHasAlreadyStartedIsRejected() throws Exception {
+        // COURSE bắt đầu từ hôm qua: không nhập Excel thêm vào danh sách tham dự nữa.
+        phucuong.ht.common.exception.ApiException thrown = org.junit.jupiter.api.Assertions.assertThrows(phucuong.ht.common.exception.ApiException.class,
+                () -> participantImportService.precheck(COURSE, deaneryAdmin(), true));
+        assertTrue(thrown.getMessage().contains("đã diễn ra"), thrown.getMessage());
+        org.junit.jupiter.api.Assertions.assertThrows(phucuong.ht.common.exception.ApiException.class,
+                () -> participantImportService.precheck(COURSE, deaneryAdmin()));
+    }
+
+    @Test
+    @Order(22)
     void importedTeamParticipantsAreInvitedWhenAutoSendIsOn() throws Exception {
         jdbc.update("insert into training_course (course_code, course_name, host_year, start_date, end_date, course_type_code, diocese_id, deanery_id, passing_score, "
                         + "attendance_enabled, auto_send_invitation, created_at) values ('KH-IT-3', 'Khóa nhập đội', 2026, ?, ?, 'DU_TRUONG_IT', ?, ?, 5, true, true, now())",

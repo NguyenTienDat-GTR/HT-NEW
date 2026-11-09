@@ -92,6 +92,31 @@ class TrainingCourseUpdateScopeTest {
     }
 
     @Test
+    void registrationWindowCannotBeAfterTheCourseStartDate() {
+        UUID deaneryId = UUID.randomUUID();
+        TrainingCourse course = deaneryCourse("DT-R1", deaneryId);
+        course.setStartDate(TrainingCourseStatusSupport.today().plusDays(10));
+        course.setEndDate(TrainingCourseStatusSupport.today().plusDays(12));
+        var authentication = authentication("admin-deanery", "training.course.update.deanery");
+        when(trainingCourseRepository.findByCodeWithType("DT-R1")).thenReturn(Optional.of(course));
+        when(accountScopeValidationHelper.requireActiveDeaneryId(eq(authentication), anyString())).thenReturn(deaneryId);
+        when(deaneryRepository.getRequired(deaneryId)).thenReturn(course.getDeanery());
+
+        java.time.OffsetDateTime afterStart = TrainingCourseStatusSupport.today().plusDays(11).atTime(9, 0)
+                .atZone(TrainingCourseStatusSupport.ZONE).toOffsetDateTime();
+        TrainingCourseUpdateRequest tooLate = new TrainingCourseUpdateRequest();
+        tooLate.setRegistrationStartAt(java.time.OffsetDateTime.now().minusDays(1));
+        tooLate.setRegistrationEndAt(afterStart);
+        assertThrows(RuntimeException.class, () -> service().update("DT-R1", tooLate, authentication));
+
+        // Đóng đăng ký đúng ngày bắt đầu thì hợp lệ.
+        TrainingCourseUpdateRequest onStartDate = new TrainingCourseUpdateRequest();
+        onStartDate.setRegistrationStartAt(java.time.OffsetDateTime.now().minusDays(1));
+        onStartDate.setRegistrationEndAt(TrainingCourseStatusSupport.today().plusDays(10).atTime(8, 0).atZone(TrainingCourseStatusSupport.ZONE).toOffsetDateTime());
+        assertEquals(onStartDate.getRegistrationEndAt(), service().update("DT-R1", onStartDate, authentication).getRegistrationEndAt());
+    }
+
+    @Test
     void lockedFieldsCannotChangeOnceCourseHasParticipations() {
         UUID deaneryId = UUID.randomUUID();
         TrainingCourse course = deaneryCourse("DT-L1", deaneryId);
@@ -185,10 +210,19 @@ class TrainingCourseUpdateScopeTest {
         TrainingCourse starting = deaneryCourse("DT-7", UUID.randomUUID());
         starting.setRegistrationStartAt(now.minusMinutes(5));
         starting.setRegistrationEndAt(now.plusDays(1));
-        starting.setStartDate(TrainingCourseStatusSupport.today().minusDays(1));
-        starting.setEndDate(TrainingCourseStatusSupport.today().plusDays(1));
+        starting.setStartDate(TrainingCourseStatusSupport.today().plusDays(2));
+        starting.setEndDate(TrainingCourseStatusSupport.today().plusDays(4));
         starting.setRegistrationStatus(CourseRegistrationStatus.NOT_STARTED);
         starting.setOrganizingStatus(CourseOrganizingStatus.UPCOMING);
+
+        // Khóa tới ngày bắt đầu: đăng ký đóng dù cờ mở đăng ký còn bật và thời gian đăng ký chưa hết.
+        TrainingCourse started = deaneryCourse("DT-10", UUID.randomUUID());
+        started.setRegistrationStartAt(now.minusDays(3));
+        started.setRegistrationEndAt(now.plusDays(1));
+        started.setStartDate(TrainingCourseStatusSupport.today().minusDays(1));
+        started.setEndDate(TrainingCourseStatusSupport.today().plusDays(1));
+        started.setRegistrationStatus(CourseRegistrationStatus.OPEN);
+        started.setOrganizingStatus(CourseOrganizingStatus.UPCOMING);
 
         TrainingCourse expiring = deaneryCourse("DT-8", UUID.randomUUID());
         expiring.setRegistrationStartAt(now.minusDays(3));
@@ -206,15 +240,17 @@ class TrainingCourseUpdateScopeTest {
         manuallyClosed.setRegistrationStatus(CourseRegistrationStatus.CLOSED);
         manuallyClosed.setOrganizingStatus(CourseOrganizingStatus.UPCOMING);
 
-        when(trainingCourseRepository.findCoursesWithOpenStatuses()).thenReturn(List.of(starting, expiring, manuallyClosed));
+        when(trainingCourseRepository.findCoursesWithOpenStatuses()).thenReturn(List.of(starting, started, expiring, manuallyClosed));
 
-        assertEquals(2, service().refreshCourseStatuses());
+        assertEquals(3, service().refreshCourseStatuses());
         assertEquals(CourseRegistrationStatus.OPEN, starting.getRegistrationStatus());
-        assertEquals(CourseOrganizingStatus.ONGOING, starting.getOrganizingStatus());
+        assertEquals(CourseOrganizingStatus.UPCOMING, starting.getOrganizingStatus());
+        assertEquals(CourseRegistrationStatus.ENDED, started.getRegistrationStatus());
+        assertEquals(CourseOrganizingStatus.ONGOING, started.getOrganizingStatus());
         assertEquals(CourseRegistrationStatus.ENDED, expiring.getRegistrationStatus());
         assertEquals(CourseOrganizingStatus.ENDED, expiring.getOrganizingStatus());
         assertEquals(CourseRegistrationStatus.CLOSED, manuallyClosed.getRegistrationStatus());
-        verify(domainEventPublisher, times(2)).publishAfterCommit(any());
+        verify(domainEventPublisher, times(3)).publishAfterCommit(any());
     }
 
     @Test

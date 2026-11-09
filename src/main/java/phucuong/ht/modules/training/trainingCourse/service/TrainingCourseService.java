@@ -141,7 +141,7 @@ public class TrainingCourseService {
         course.setUpdatedAt(now);
         course.setCreatedBy(auditActor);
         course.setUpdatedBy(auditActor);
-        validateRegistrationWindow(course.getRegistrationStartAt(), course.getRegistrationEndAt());
+        validateRegistrationWindow(course.getRegistrationStartAt(), course.getRegistrationEndAt(), course.getStartDate());
         applyOwnerScope(course, courseType, authentication);
         course.setPassingScore(request.getPassingScore());
         courseScoreComponentService.validateInputs(request.getScoreComponents());
@@ -155,7 +155,7 @@ public class TrainingCourseService {
         if (Boolean.TRUE.equals(course.getOpenToOtherDeaneries()) && crossDeaneryAccessService != null) {
             crossDeaneryAccessService.notifyCourseOpened(course, auditActor);
         }
-        CopyResult copied = copyParticipants(course, request.getCopySourceCourseCodes(), request.getCopyMode(), authentication);
+        CopyResult copied = copyParticipants(course, request.getCopySourceCourseCodes(), request.getCopyMode(), request.getCopyLeaderIds(), authentication);
         return withCopyResult(toResponse(trainingCourseRepository.findByCodeWithType(course.getCourseCode()).orElse(course)), copied);
     }
 
@@ -392,7 +392,7 @@ public class TrainingCourseService {
         }
         existing.setUpdatedAt(OffsetDateTime.now());
         existing.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật khóa huấn luyện"));
-        validateRegistrationWindow(existing.getRegistrationStartAt(), existing.getRegistrationEndAt());
+        validateRegistrationWindow(existing.getRegistrationStartAt(), existing.getRegistrationEndAt(), existing.getStartDate());
         applyOwnerScope(existing, targetType, authentication);
         if (request.getScoreComponents() != null) {
             courseScoreComponentService.sync(existing, request.getScoreComponents(), existing.getUpdatedBy());
@@ -412,16 +412,17 @@ public class TrainingCourseService {
         if (!wasOpen && Boolean.TRUE.equals(existing.getOpenToOtherDeaneries()) && crossDeaneryAccessService != null) {
             crossDeaneryAccessService.notifyCourseOpened(existing, existing.getUpdatedBy());
         }
-        CopyResult copied = copyParticipants(existing, request.getCopySourceCourseCodes(), request.getCopyMode(), authentication);
+        CopyResult copied = copyParticipants(existing, request.getCopySourceCourseCodes(), request.getCopyMode(), request.getCopyLeaderIds(), authentication);
         return withCopyResult(toResponse(existing, courseParticipationRepository.existsByCourseCode(courseCode)), copied);
     }
 
     // Sao chép danh sách tham dự từ khóa nguồn khi lưu khóa (null nếu không yêu cầu).
-    private CopyResult copyParticipants(TrainingCourse course, List<String> sourceCourseCodes, String copyMode, Authentication authentication) {
+    private CopyResult copyParticipants(TrainingCourse course, List<String> sourceCourseCodes, String copyMode, List<java.util.UUID> copyLeaderIds,
+                                        Authentication authentication) {
         if (sourceCourseCodes == null || sourceCourseCodes.isEmpty() || courseCopyService == null) {
             return null;
         }
-        return courseCopyService.copyFromSources(course, sourceCourseCodes, "PASSED_ONLY".equals(copyMode), authentication);
+        return courseCopyService.copyFromSources(course, sourceCourseCodes, "PASSED_ONLY".equals(copyMode), copyLeaderIds, authentication);
     }
 
     private TrainingCourseResponse withCopyResult(TrainingCourseResponse response, CopyResult copied) {
@@ -614,8 +615,8 @@ public class TrainingCourseService {
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy khóa huấn luyện " + courseCode));
         courseActivityGuard.requireActive(course);
         OffsetDateTime now = OffsetDateTime.now();
-        if (TrainingCourseStatusSupport.isCourseEnded(course, now)) {
-            throw commonValidationHelper.conflict("Khóa huấn luyện đã kết thúc nên đăng ký phải đóng và không thể mở lại");
+        if (TrainingCourseStatusSupport.isCourseStarted(course, now)) {
+            throw commonValidationHelper.conflict("Khóa huấn luyện đã diễn ra nên đăng ký phải đóng và không thể mở lại");
         }
         if (Boolean.FALSE.equals(course.getRegistrationEnabled())) {
             throw commonValidationHelper.conflict("Khóa huấn luyện không mở đăng ký, hãy bật \"Mở đăng ký\" trong chỉnh sửa khóa trước");
@@ -797,12 +798,18 @@ public class TrainingCourseService {
     }
 
 
-    private void validateRegistrationWindow(OffsetDateTime registrationStartAt, OffsetDateTime registrationEndAt) {
-        if (registrationStartAt == null || registrationEndAt == null) {
+    // Thời gian đăng ký (khi khóa mở đăng ký): đóng sau mở và không được sau ngày bắt đầu diễn ra của khóa (khóa tới ngày bắt đầu thì đăng ký tự đóng).
+    private void validateRegistrationWindow(OffsetDateTime registrationStartAt, OffsetDateTime registrationEndAt, java.time.LocalDate courseStartDate) {
+        if (registrationStartAt != null && registrationEndAt != null && registrationEndAt.isBefore(registrationStartAt)) {
+            throw commonValidationHelper.validationError("registrationEndAt không được nhỏ hơn registrationStartAt");
+        }
+        if (courseStartDate == null) {
             return;
         }
-        if (registrationEndAt.isBefore(registrationStartAt)) {
-            throw commonValidationHelper.validationError("registrationEndAt không được nhỏ hơn registrationStartAt");
+        for (OffsetDateTime moment : new OffsetDateTime[]{registrationStartAt, registrationEndAt}) {
+            if (moment != null && moment.atZoneSameInstant(TrainingCourseStatusSupport.ZONE).toLocalDate().isAfter(courseStartDate)) {
+                throw commonValidationHelper.validationError("Thời gian đăng ký không được sau ngày bắt đầu của khóa (" + courseStartDate + ")");
+            }
         }
     }
 
