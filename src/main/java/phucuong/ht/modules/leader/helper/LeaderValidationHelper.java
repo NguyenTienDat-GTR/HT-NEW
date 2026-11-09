@@ -57,7 +57,7 @@ public class LeaderValidationHelper {
 
         request.setHolyName(commonValidationHelper.normalizeRequiredText(request.getHolyName()));
         request.setFullName(commonValidationHelper.normalizeRequiredText(request.getFullName()));
-        request.setEmail(commonValidationHelper.normalizeRequiredText(request.getEmail()));
+        request.setEmail(commonValidationHelper.normalizeOptionalText(request.getEmail()));
         request.setPhoneNumber(commonValidationHelper.normalizeOptionalText(request.getPhoneNumber()));
     }
 
@@ -72,7 +72,7 @@ public class LeaderValidationHelper {
     }
 
     public void validateCreateEmailUniqueness(String email) {
-        if (leaderRepository.existsByEmail(email)) {
+        if (email != null && leaderRepository.existsByEmail(email)) {
             throw commonValidationHelper.conflict("Email Huynh Trưởng đã tồn tại");
         }
     }

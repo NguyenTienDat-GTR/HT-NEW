@@ -35,7 +35,7 @@ public class LeaderCreateRequest extends SubjectConsentRequest {
     @NotNull
     private LocalDate birthDate;
 
-    @NotBlank
+    // Email không bắt buộc.
     @Email
     @Size(max = 100)
     private String email;

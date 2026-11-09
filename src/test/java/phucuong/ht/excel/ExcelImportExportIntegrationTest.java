@@ -357,7 +357,7 @@ class ExcelImportExportIntegrationTest {
                 participant("khong.co@example.com", "0977000001", "Đạt", "", "", "", "", "", "", ""),
                 fullRow("an@example.com", "0901234569", "Đạt", "7", ""),
                 fullRow("binh@example.com", "Có lẽ", "7"),
-                participant("", "0977000002", "Đạt", "Phêrô", "Thiếu Email", "01/01/1990", "Nam", "", "Thủ Dầu Một", "Búng"),
+                participant("thieu.sdt@example.com", "", "Đạt", "Phêrô", "Thiếu SĐT", "01/01/1990", "Nam", "", "Thủ Dầu Một", "Búng"),
                 fullRow("an@example.com", "Đạt", "9")));
         ImportValidationException exception = assertThrows(ImportValidationException.class,
                 () -> participantImportService.importParticipants(courseCode, path(bad), phuCuongAdmin(), JobProgress.NONE));
@@ -365,7 +365,7 @@ class ExcelImportExportIntegrationTest {
         assertTrue(messages.stream().anyMatch(m -> m.startsWith("3:Tên thánh:") && m.contains("Bắt buộc")), messages.toString());
         assertTrue(messages.stream().anyMatch(m -> m.startsWith("4:Email / Số điện thoại:") && m.contains("hai huynh trưởng khác nhau")), messages.toString());
         assertTrue(messages.stream().anyMatch(m -> m.startsWith("5:Kết quả:")), messages.toString());
-        assertTrue(messages.stream().anyMatch(m -> m.startsWith("6:Email:") && m.contains("Bắt buộc")), messages.toString());
+        assertTrue(messages.stream().anyMatch(m -> m.startsWith("6:Số điện thoại:") && m.contains("Bắt buộc")), messages.toString());
         assertTrue(messages.stream().anyMatch(m -> m.startsWith("7:Email / Số điện thoại:") && m.contains("nhiều lần")), messages.toString());
         assertEquals(0, jdbc.queryForObject("select count(*) from course_participation", Integer.class));
 
