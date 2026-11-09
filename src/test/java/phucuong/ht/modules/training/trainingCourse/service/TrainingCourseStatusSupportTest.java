@@ -24,8 +24,21 @@ class TrainingCourseStatusSupportTest {
     }
 
     @Test
-    void ongoingCourseKeepsRegistrationOpen() {
-        assertEquals(CourseRegistrationStatus.OPEN, TrainingCourseStatusSupport.registrationStatus(openCourse(), now));
+    void upcomingCourseKeepsRegistrationOpenWhileTheWindowIsOpen() {
+        TrainingCourse course = openCourse();
+        course.setStartDate(LocalDate.now().plusDays(2));
+        course.setEndDate(LocalDate.now().plusDays(5));
+        assertEquals(CourseRegistrationStatus.OPEN, TrainingCourseStatusSupport.registrationStatus(course, now));
+    }
+
+    @Test
+    void courseThatHasStartedClosesRegistrationEvenWithTheFlagOnAndTheWindowOpen() {
+        TrainingCourse course = openCourse();
+        course.setRegistrationEnabled(Boolean.TRUE);
+        assertTrue(TrainingCourseStatusSupport.isCourseStarted(course, now));
+        assertEquals(CourseRegistrationStatus.ENDED, TrainingCourseStatusSupport.registrationStatus(course, now));
+        course.setStartDate(LocalDate.now());
+        assertEquals(CourseRegistrationStatus.ENDED, TrainingCourseStatusSupport.registrationStatus(course, now));
     }
 
     @Test

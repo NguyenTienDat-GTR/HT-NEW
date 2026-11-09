@@ -124,7 +124,7 @@ class CourseParticipationServiceTest {
 
         UUID parishId = UUID.randomUUID();
         UUID leaderId = UUID.randomUUID();
-        TrainingCourse course = course("SMKN_DT", UnitType.DEANERY);
+        TrainingCourse course = upcomingCourse("SMKN_DT", UnitType.DEANERY);
         Leader leader = leader(leaderId, parishId, "HT_XU");
         course.getCourseType().setRequiredCurrentLevel("DU_TRUONG");
 
@@ -147,7 +147,7 @@ class CourseParticipationServiceTest {
 
         UUID parishId = UUID.randomUUID();
         UUID leaderId = UUID.randomUUID();
-        TrainingCourse course = course("SMKN_DT", UnitType.DEANERY);
+        TrainingCourse course = upcomingCourse("SMKN_DT", UnitType.DEANERY);
         Parish parish = parish(parishId, course);
         when(trainingCourseRepository.findByCodeWithType("SMKNDT-2026")).thenReturn(Optional.of(course));
         when(parishRepository.findByIdWithDeaneryAndDiocese(parishId)).thenReturn(Optional.of(parish));
@@ -165,7 +165,7 @@ class CourseParticipationServiceTest {
     void registerShouldRejectWhenRegistrationWindowNotOpen() {
         courseParticipationService = buildService();
 
-        TrainingCourse course = course("SMKN_DT", UnitType.DEANERY);
+        TrainingCourse course = upcomingCourse("SMKN_DT", UnitType.DEANERY);
         course.setRegistrationStartAt(OffsetDateTime.now().plusDays(1));
         course.setRegistrationEndAt(OffsetDateTime.now().plusDays(2));
 
@@ -184,7 +184,7 @@ class CourseParticipationServiceTest {
 
         UUID parishId = UUID.randomUUID();
         UUID leaderId = UUID.randomUUID();
-        TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);
+        TrainingCourse course = upcomingCourse("SMTL_I", UnitType.DIOCESE);
         course.getCourseType().setRequiredMinAge(18);
         Leader leader = leader(leaderId, parishId, "HT_XU");
         leader.setBirthDate(null);
@@ -208,7 +208,7 @@ class CourseParticipationServiceTest {
 
         UUID parishId = UUID.randomUUID();
         UUID leaderId = UUID.randomUUID();
-        TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);
+        TrainingCourse course = upcomingCourse("SMTL_I", UnitType.DIOCESE);
         Leader leader = leader(leaderId, parishId, "HT_XU");
         leader.setStatus(Boolean.FALSE);
 
@@ -230,7 +230,7 @@ class CourseParticipationServiceTest {
         courseParticipationService = buildService();
 
         UUID parishId = UUID.randomUUID();
-        TrainingCourse course = course("SMKN_DT", UnitType.DEANERY);
+        TrainingCourse course = upcomingCourse("SMKN_DT", UnitType.DEANERY);
         Parish foreignParish = parish(parishId, course);
         Deanery foreignDeanery = new Deanery();
         foreignDeanery.setId(UUID.randomUUID());
@@ -254,7 +254,7 @@ class CourseParticipationServiceTest {
         courseParticipationService = buildService();
 
         UUID parishId = UUID.randomUUID();
-        TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);
+        TrainingCourse course = upcomingCourse("SMTL_I", UnitType.DIOCESE);
         Parish foreignParish = parish(parishId, course);
         Diocese foreignDiocese = new Diocese();
         foreignDiocese.setId(UUID.randomUUID());
@@ -281,7 +281,7 @@ class CourseParticipationServiceTest {
 
         UUID parishId = UUID.randomUUID();
         UUID leaderId = UUID.randomUUID();
-        TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);
+        TrainingCourse course = upcomingCourse("SMTL_I", UnitType.DIOCESE);
         course.setAutoApproveEligible(Boolean.TRUE);
         Leader leader = leader(leaderId, parishId, "HT_XU");
         Parish parish = parish(parishId, course);
@@ -309,7 +309,7 @@ class CourseParticipationServiceTest {
         courseParticipationService = buildService();
 
         UUID deaneryId = UUID.randomUUID();
-        TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);
+        TrainingCourse course = upcomingCourse("SMTL_I", UnitType.DIOCESE);
         Diocese foreignDiocese = new Diocese();
         foreignDiocese.setId(UUID.randomUUID());
         Deanery foreignDeanery = new Deanery();
@@ -332,7 +332,7 @@ class CourseParticipationServiceTest {
 
         UUID parishId = UUID.randomUUID();
         UUID leaderId = UUID.randomUUID();
-        TrainingCourse course = course("SMTL_I", UnitType.DIOCESE);
+        TrainingCourse course = upcomingCourse("SMTL_I", UnitType.DIOCESE);
         Leader leader = leader(leaderId, parishId, "HT_XU");
         Parish parish = parish(parishId, course);
         leader.setParish(parish);
@@ -846,6 +846,14 @@ class CourseParticipationServiceTest {
     private UsernamePasswordAuthenticationToken authentication(String username, String permission) {
         AuthUserDetails principal = AuthUserDetails.tokenPrincipal(username, "leader-1", List.of("ADMIN_PARISH"), List.of(permission));
         return new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
+    }
+
+    // Khóa chưa diễn ra (còn nhận đăng ký): khóa đã tới ngày bắt đầu thì đăng ký bị đóng.
+    private TrainingCourse upcomingCourse(String typeCode, UnitType managementUnitType) {
+        TrainingCourse course = course(typeCode, managementUnitType);
+        course.setStartDate(java.time.LocalDate.now().plusDays(2));
+        course.setEndDate(java.time.LocalDate.now().plusDays(5));
+        return course;
     }
 
     private TrainingCourse course(String typeCode, UnitType managementUnitType) {

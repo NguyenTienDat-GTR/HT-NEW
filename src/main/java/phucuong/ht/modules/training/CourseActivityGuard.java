@@ -31,6 +31,17 @@ public class CourseActivityGuard {
                 == phucuong.ht.modules.training.enums.CourseOrganizingStatus.ENDED;
     }
 
+    // Khóa đã diễn ra (đã tới ngày bắt đầu, hoặc đã kết thúc): đóng đăng ký, không sao chép / nhập Excel thêm vào danh sách tham dự nữa.
+    public boolean isStarted(TrainingCourse course) {
+        return TrainingCourseStatusSupport.isCourseStarted(course, java.time.OffsetDateTime.now());
+    }
+
+    public void requireNotStarted(TrainingCourse course, String action) {
+        if (isStarted(course)) {
+            throw validationHelper.conflict("Khóa huấn luyện đã diễn ra nên không thể " + action);
+        }
+    }
+
     public void requireNotEnded(TrainingCourse course) {
         if (isEnded(course)) {
             throw validationHelper.conflict("Khóa huấn luyện đã kết thúc nên không thể thao tác");

@@ -291,6 +291,25 @@ class CourseCopyServiceTest {
         assertThrows(ApiException.class, () -> service.anyCandidates("TARGET2", null, List.of("A"), mock(Authentication.class)));
     }
 
+    @Test
+    void copyIsRejectedOnceTheTargetCourseHasStarted() {
+        // Dùng bộ chặn thật: khóa đã tới ngày bắt đầu thì không sao chép thêm vào danh sách tham dự.
+        CommonValidationHelper validation = mock(CommonValidationHelper.class);
+        when(validation.conflict(anyString())).thenAnswer(inv -> new ApiException(HttpStatus.CONFLICT, errorCode.CONFLICT, inv.getArgument(0)));
+        when(validation.requireAuditActor(any(), anyString())).thenReturn("admin");
+        CourseCopyService strict = new CourseCopyService(courseRepository, participationRepository, participationService, new TrainingWorkflowSupport(),
+                new CourseActivityGuard(validation), validation);
+        ReflectionTestUtils.setField(strict, "securityUtils", mock(securityUtils.class));
+        TrainingCourse started = copyTarget(false);
+        started.setStartDate(java.time.LocalDate.now());
+        started.setEndDate(java.time.LocalDate.now().plusDays(3));
+
+        ApiException thrown = assertThrows(ApiException.class, () -> strict.copyFromSources(started, List.of("A"), false, mock(Authentication.class)));
+
+        assertTrue(thrown.getMessage().contains("đã diễn ra"));
+        org.mockito.Mockito.verifyNoInteractions(participationRepository);
+    }
+
     private TrainingCourse course(String code, TrainingCourseType type, OffsetDateTime finishedAt) {
         TrainingCourse course = new TrainingCourse();
         course.setCourseCode(code);

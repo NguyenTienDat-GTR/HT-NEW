@@ -488,7 +488,7 @@ public class CourseCopyService {
     }
 
     private boolean isWritable(TrainingCourse course) {
-        return !course.isPast() && !Boolean.FALSE.equals(course.getStatus()) && !courseActivityGuard.isEnded(course);
+        return !course.isPast() && !Boolean.FALSE.equals(course.getStatus()) && !courseActivityGuard.isEnded(course) && !courseActivityGuard.isStarted(course);
     }
 
     private void requireWritable(TrainingCourse course) {
@@ -497,6 +497,7 @@ public class CourseCopyService {
         }
         courseActivityGuard.requireActive(course);
         courseActivityGuard.requireNotEnded(course);
+        courseActivityGuard.requireNotStarted(course, "sao chép vào danh sách tham dự");
     }
 
     private TrainingCourse requireCourse(String courseCode) {

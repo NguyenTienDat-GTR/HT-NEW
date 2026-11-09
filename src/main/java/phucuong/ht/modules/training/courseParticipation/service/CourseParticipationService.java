@@ -776,8 +776,8 @@ public class CourseParticipationService {
         if (now.isAfter(course.getRegistrationEndAt())) {
             throw commonValidationHelper.validationError("Đã hết thời gian nhận đăng ký");
         }
-        if (TrainingCourseStatusSupport.isCourseEnded(course, now)) {
-            throw commonValidationHelper.validationError("Khóa huấn luyện đã kết thúc nên đã đóng đăng ký");
+        if (TrainingCourseStatusSupport.isCourseStarted(course, now)) {
+            throw commonValidationHelper.validationError("Khóa huấn luyện đã diễn ra nên đã đóng đăng ký");
         }
         if (TrainingCourseStatusSupport.registrationStatus(course, now) == CourseRegistrationStatus.CLOSED) {
             throw commonValidationHelper.validationError("Khóa huấn luyện đang đóng đăng ký");
