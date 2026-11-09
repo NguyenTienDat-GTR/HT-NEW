@@ -7,7 +7,9 @@ import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import java.time.LocalDate;
+import java.time.MonthDay;
 
 @Getter
 @Setter
@@ -16,7 +18,8 @@ public class OrganizationUnitUpdateRequest extends SubjectConsentRequest {
     @Size(max = 100, message = "Tên không được vượt quá 100 ký tự")
     private String name;
 
-    private LocalDate patronSaintDay;
+    @JsonFormat(pattern = "MM-dd")
+    private MonthDay patronSaintDay;
 
     private LocalDate establishmentDate;
 

@@ -3,7 +3,9 @@ package phucuong.ht.modules.deanery.model.response;
 import lombok.Builder;
 import lombok.Getter;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import java.time.LocalDate;
+import java.time.MonthDay;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
@@ -22,7 +24,8 @@ public class DeaneryResponse {
     // Trạng thái hiệu lực: false nếu chính giáo hạt hoặc giáo phận cha đang bị tắt.
     private final Boolean effectiveStatus;
     private final String name;
-    private final LocalDate patronSaintDay;
+    @JsonFormat(pattern = "MM-dd")
+    private final MonthDay patronSaintDay;
     private final LocalDate establishmentDate;
     private final String chaplain;
     private final String phoneNumber;
