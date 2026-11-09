@@ -64,6 +64,10 @@ public class TrainingCourse extends BaseModel {
     @Column(name = "passing_score", nullable = false)
     private BigDecimal passingScore;
 
+    // Khóa có mở đăng ký hay không. Tắt: không có thời gian đăng ký và không ai đăng ký được (trạng thái đăng ký luôn là CLOSED).
+    @Column(name = "registration_enabled", nullable = false)
+    private Boolean registrationEnabled = Boolean.TRUE;
+
     // Trạng thái đăng ký: scheduler tự mở khi đến giờ, tự đóng khi hết hạn; CLOSED là đóng thủ công.
     @Enumerated(EnumType.STRING)
     @Column(name = "registration_status", nullable = false)

@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import phucuong.ht.config.DomainEventMessage;
 import phucuong.ht.config.DomainEventPublisher;
+import phucuong.ht.modules.training.courseCopy.model.CourseCopyModels.CopyResult;
 import phucuong.ht.modules.training.enums.CourseRegistrationStatus;
 import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.modules.auth.repository.AccountRepository;
@@ -102,6 +103,9 @@ public class TrainingCourseService {
     private phucuong.ht.modules.training.TrainingDecisionNotifier trainingDecisionNotifier;
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private phucuong.ht.modules.training.crossDeanery.service.CrossDeaneryAccessService crossDeaneryAccessService;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    @org.springframework.context.annotation.Lazy
+    private phucuong.ht.modules.training.courseCopy.service.CourseCopyService courseCopyService;
 
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.TRAINING_COURSE_LIST, allEntries = true),
@@ -123,8 +127,10 @@ public class TrainingCourseService {
         course.setLocation(request.getLocation());
         course.setStartDate(request.getStartDate());
         course.setEndDate(request.getEndDate());
-        course.setRegistrationStartAt(request.getRegistrationStartAt());
-        course.setRegistrationEndAt(request.getRegistrationEndAt());
+        course.setRegistrationEnabled(!Boolean.FALSE.equals(request.getRegistrationEnabled()));
+        // Không mở đăng ký thì không có thời gian đăng ký.
+        course.setRegistrationStartAt(course.getRegistrationEnabled() ? request.getRegistrationStartAt() : null);
+        course.setRegistrationEndAt(course.getRegistrationEnabled() ? request.getRegistrationEndAt() : null);
         course.setAdditionalNotes(request.getAdditionalNotes());
         course.setAutoApproveEligible(Boolean.TRUE.equals(request.getAutoApproveEligible()));
         course.setScoreVisible(Boolean.TRUE.equals(request.getScoreVisible()));
@@ -149,7 +155,8 @@ public class TrainingCourseService {
         if (Boolean.TRUE.equals(course.getOpenToOtherDeaneries()) && crossDeaneryAccessService != null) {
             crossDeaneryAccessService.notifyCourseOpened(course, auditActor);
         }
-        return toResponse(trainingCourseRepository.findByCodeWithType(course.getCourseCode()).orElse(course));
+        CopyResult copied = copyParticipants(course, request.getCopySourceCourseCodes(), request.getCopyMode(), authentication);
+        return withCopyResult(toResponse(trainingCourseRepository.findByCodeWithType(course.getCourseCode()).orElse(course)), copied);
     }
 
     @Cacheable(cacheNames = CacheNames.TRAINING_COURSE_LIST, key = "@cacheScopeKeyHelper.listKey(#authentication, #request)")
@@ -342,11 +349,25 @@ public class TrainingCourseService {
         if (request.getEndDate() != null) {
             existing.setEndDate(request.getEndDate());
         }
-        if (request.getRegistrationStartAt() != null) {
-            existing.setRegistrationStartAt(request.getRegistrationStartAt());
+        CourseRegistrationStatus registrationBefore = existing.getRegistrationStatus();
+        if (request.getRegistrationEnabled() != null) {
+            boolean wasEnabled = !Boolean.FALSE.equals(existing.getRegistrationEnabled());
+            existing.setRegistrationEnabled(request.getRegistrationEnabled());
+            if (!wasEnabled && request.getRegistrationEnabled()) {
+                // Mở lại đăng ký: trạng thái CLOSED do tắt đăng ký không được giữ, tính lại theo thời gian đăng ký.
+                existing.setRegistrationStatus(CourseRegistrationStatus.NOT_STARTED);
+            }
         }
-        if (request.getRegistrationEndAt() != null) {
-            existing.setRegistrationEndAt(request.getRegistrationEndAt());
+        if (Boolean.FALSE.equals(existing.getRegistrationEnabled())) {
+            existing.setRegistrationStartAt(null);
+            existing.setRegistrationEndAt(null);
+        } else {
+            if (request.getRegistrationStartAt() != null) {
+                existing.setRegistrationStartAt(request.getRegistrationStartAt());
+            }
+            if (request.getRegistrationEndAt() != null) {
+                existing.setRegistrationEndAt(request.getRegistrationEndAt());
+            }
         }
         if (request.getPassingScore() != null) {
             if (existing.getPassingScore() == null || existing.getPassingScore().compareTo(request.getPassingScore()) != 0) {
@@ -378,6 +399,10 @@ public class TrainingCourseService {
         }
         requirePassingScoreWithinLimit(existing, CourseScoreComponentService.maxFinalOfCourse(courseScoreComponentRepository.findByCourseCode(courseCode)));
         TrainingCourseStatusSupport.refresh(existing, OffsetDateTime.now());
+        if (registrationBefore == CourseRegistrationStatus.OPEN && existing.getRegistrationStatus() != CourseRegistrationStatus.OPEN
+                && Boolean.FALSE.equals(existing.getRegistrationEnabled())) {
+            publishRegistrationEvent(existing, false, "REGISTRATION_DISABLED", existing.getUpdatedBy());
+        }
         if (request.getRecipientUsernames() != null) {
             applyRecipients(existing, request.getRecipientUsernames());
         }
@@ -387,7 +412,23 @@ public class TrainingCourseService {
         if (!wasOpen && Boolean.TRUE.equals(existing.getOpenToOtherDeaneries()) && crossDeaneryAccessService != null) {
             crossDeaneryAccessService.notifyCourseOpened(existing, existing.getUpdatedBy());
         }
-        return toResponse(existing, courseParticipationRepository.existsByCourseCode(courseCode));
+        CopyResult copied = copyParticipants(existing, request.getCopySourceCourseCodes(), request.getCopyMode(), authentication);
+        return withCopyResult(toResponse(existing, courseParticipationRepository.existsByCourseCode(courseCode)), copied);
+    }
+
+    // Sao chép danh sách tham dự từ khóa nguồn khi lưu khóa (null nếu không yêu cầu).
+    private CopyResult copyParticipants(TrainingCourse course, List<String> sourceCourseCodes, String copyMode, Authentication authentication) {
+        if (sourceCourseCodes == null || sourceCourseCodes.isEmpty() || courseCopyService == null) {
+            return null;
+        }
+        return courseCopyService.copyFromSources(course, sourceCourseCodes, "PASSED_ONLY".equals(copyMode), authentication);
+    }
+
+    private TrainingCourseResponse withCopyResult(TrainingCourseResponse response, CopyResult copied) {
+        if (copied == null) {
+            return response;
+        }
+        return response.toBuilder().copiedParticipantCount(copied.copied()).copySkippedCount(copied.skipped().size()).build();
     }
 
     // Tác động của việc đổi trạng thái khóa, để cảnh báo trước khi xác nhận: vô hiệu hóa thì thu hồi các chứng nhận đã duyệt,
@@ -575,6 +616,9 @@ public class TrainingCourseService {
         OffsetDateTime now = OffsetDateTime.now();
         if (TrainingCourseStatusSupport.isCourseEnded(course, now)) {
             throw commonValidationHelper.conflict("Khóa huấn luyện đã kết thúc nên đăng ký phải đóng và không thể mở lại");
+        }
+        if (Boolean.FALSE.equals(course.getRegistrationEnabled())) {
+            throw commonValidationHelper.conflict("Khóa huấn luyện không mở đăng ký, hãy bật \"Mở đăng ký\" trong chỉnh sửa khóa trước");
         }
         CourseRegistrationStatus current = TrainingCourseStatusSupport.registrationStatus(course, now);
         if (current == CourseRegistrationStatus.ENDED) {
@@ -868,6 +912,7 @@ public class TrainingCourseService {
                 .location(course.getLocation())
                 .startDate(course.getStartDate())
                 .endDate(course.getEndDate())
+                .registrationEnabled(!Boolean.FALSE.equals(course.getRegistrationEnabled()))
                 .registrationStartAt(course.getRegistrationStartAt())
                 .registrationEndAt(course.getRegistrationEndAt())
                 .dioceseId(course.getDiocese() == null ? null : course.getDiocese().getId())

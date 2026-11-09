@@ -44,6 +44,9 @@ public class TrainingCourseResponse {
     private Boolean scoreLocked;
     private Boolean autoApproveEligible;
     private Boolean scoreVisible;
+    // Chỉ có ở phản hồi tạo / sửa khóa khi có sao chép danh sách tham dự: số hồ sơ đã sao chép và số hồ sơ bị bỏ qua.
+    private Integer copiedParticipantCount;
+    private Integer copySkippedCount;
     private Boolean attendanceEnabled;
     private Boolean autoSendInvitation;
     // Khóa có cấp độ đạt được thì mới có chứng nhận và tab duyệt chứng nhận.
@@ -57,6 +60,7 @@ public class TrainingCourseResponse {
     private String location;
     private LocalDate startDate;
     private LocalDate endDate;
+    private Boolean registrationEnabled;
     private OffsetDateTime registrationStartAt;
     private OffsetDateTime registrationEndAt;
     private UUID dioceseId;
