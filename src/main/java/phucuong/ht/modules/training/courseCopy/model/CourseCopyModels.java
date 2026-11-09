@@ -46,13 +46,6 @@ public final class CourseCopyModels {
                             LocalDate startDate, LocalDate endDate, String ownerName, long participantCount, long passedCount) {
     }
 
-    // Sao chép ngay vào khóa đã có (nút ở tab Danh sách tham dự): copyMode ALL | PASSED_ONLY (null = ALL); leaderIds khác rỗng = chỉ các huynh trưởng này.
-    public record CopyToCourseRequest(@NotEmpty(message = "Chưa chọn khóa nguồn nào")
-                                      @Size(max = 50, message = "Mỗi lần chọn tối đa 50 khóa") List<String> sourceCourseCodes,
-                                      @jakarta.validation.constraints.Pattern(regexp = "ALL|PASSED_ONLY", message = "Chế độ sao chép phải là ALL hoặc PASSED_ONLY") String copyMode,
-                                      @Size(max = 5000, message = "Mỗi lần sao chép tối đa 5000 hồ sơ") List<UUID> leaderIds) {
-    }
-
     public record Skipped(UUID leaderId, String fullName, String reason) {
     }
 

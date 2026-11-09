@@ -190,29 +190,6 @@ public class TrainingCourseRepository extends BaseRepo<TrainingCourse, String> {
                 .getResultList();
     }
 
-    // Khóa có thể làm nguồn sao chép danh sách tham dự trong một giáo phận: khóa thường đã kết thúc hoặc khóa quá khứ
-    // (của giáo phận hoặc của giáo hạt thuộc giáo phận), còn bật.
-    @org.springframework.transaction.annotation.Transactional(readOnly = true)
-    public List<TrainingCourse> findCopySources(java.util.UUID dioceseId) {
-        return entityManager.createQuery(
-                        """
-                                select tc
-                                from TrainingCourse tc
-                                left join fetch tc.courseType
-                                left join fetch tc.diocese dc
-                                left join fetch tc.deanery dn
-                                left join fetch dn.diocese dd
-                                where tc.status = true
-                                  and (tc.pastCourse = true or tc.finishedAt is not null)
-                                  and (dc.id = :dioceseId or dd.id = :dioceseId)
-                                order by tc.hostYear desc, tc.courseName
-                                """,
-                        TrainingCourse.class
-                )
-                .setParameter("dioceseId", dioceseId)
-                .getResultList();
-    }
-
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public boolean existsByCourseTypeCode(String courseTypeCode) {
         Long count = entityManager.createQuery(

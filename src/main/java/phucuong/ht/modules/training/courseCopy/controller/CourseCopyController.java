@@ -12,7 +12,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import phucuong.ht.common.dto.apiResponse;
-import phucuong.ht.modules.training.courseCopy.model.CourseCopyModels;
 import phucuong.ht.modules.training.courseCopy.model.CourseCopyModels.AnySource;
 import phucuong.ht.modules.training.courseCopy.model.CourseCopyModels.Candidate;
 import phucuong.ht.modules.training.courseCopy.model.CourseCopyModels.CopyRequest;
@@ -66,15 +65,6 @@ public class CourseCopyController {
                                                    @RequestParam(defaultValue = "false") boolean includeFailed) {
         return apiResponse.success("Lấy danh sách hồ sơ có thể sao chép thành công",
                 courseCopyService.candidates(courseCode, sourceCourseCodes, includeFailed));
-    }
-
-    // Sao chép danh sách tham dự từ khóa nguồn bất kỳ (đã kết thúc / khóa quá khứ cùng phạm vi) vào khóa đã có.
-    @PostMapping("/{courseCode}/participants-copy")
-    @PreAuthorize("@courseParticipationAccessEvaluator.canManageCourseParticipants(authentication, #courseCode)")
-    public apiResponse<CopyResult> copyToCourse(@PathVariable String courseCode, @Valid @RequestBody CourseCopyModels.CopyToCourseRequest request,
-                                                Authentication authentication) {
-        CopyResult result = courseCopyService.copyToCourse(courseCode, request, authentication);
-        return apiResponse.success("Đã sao chép " + result.copied() + " hồ sơ vào danh sách tham dự", result);
     }
 
     @PostMapping("/{courseCode}/prerequisite-copy")

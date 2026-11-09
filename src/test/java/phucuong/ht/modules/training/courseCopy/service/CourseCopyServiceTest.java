@@ -194,7 +194,7 @@ class CourseCopyServiceTest {
     }
 
     private void stubSourceWith(TrainingCourse source, CourseParticipation... participations) {
-        when(courseRepository.findCopySources(any())).thenReturn(List.of(source));
+        when(courseRepository.findFinishedByCourseTypeCode("SMTL_I")).thenReturn(List.of(source));
         when(participationRepository.findApprovedByCourseCodes(anyCollection())).thenReturn(List.of(participations));
         when(participationRepository.findLeaderIdsByCourseCode("TARGET2")).thenReturn(Set.of());
         when(participationRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -266,6 +266,29 @@ class CourseCopyServiceTest {
         assertEquals(2, candidates.size());
         assertNull(candidates.stream().filter(item -> item.leaderId().equals(free.getId())).findFirst().orElseThrow().blockedReason());
         assertEquals(CourseCopyService.BLOCK_EXISTING, candidates.stream().filter(item -> item.leaderId().equals(already.getId())).findFirst().orElseThrow().blockedReason());
+    }
+
+    @Test
+    void formSourcesAreOnlyFinishedCoursesOfThePrerequisiteTypeInTheSameDiocese() {
+        TrainingCourse own = course("A", prerequisiteType, OffsetDateTime.now());
+        TrainingCourse foreign = course("B", prerequisiteType, OffsetDateTime.now());
+        foreign.setDiocese(diocese());
+        when(courseRepository.findFinishedByCourseTypeCode("SMTL_I")).thenReturn(List.of(own, foreign));
+        when(courseRepository.findByCodeWithType("TARGET2")).thenReturn(Optional.of(copyTarget(false)));
+
+        List<phucuong.ht.modules.training.courseCopy.model.CourseCopyModels.AnySource> sources = service.anySources("TARGET2", null, mock(Authentication.class));
+
+        assertEquals(List.of("A"), sources.stream().map(item -> item.courseCode()).toList());
+    }
+
+    @Test
+    void courseTypeWithoutPrerequisiteHasNoSourcesAndRejectsAnySelectedCourse() {
+        TrainingCourse rootTarget = course("TARGET2", type("ROOT", null), null);
+        when(courseRepository.findByCodeWithType("TARGET2")).thenReturn(Optional.of(rootTarget));
+        when(courseRepository.findFinishedByCourseTypeCode(anyString())).thenReturn(List.of(course("A", prerequisiteType, OffsetDateTime.now())));
+
+        assertTrue(service.anySources("TARGET2", null, mock(Authentication.class)).isEmpty());
+        assertThrows(ApiException.class, () -> service.anyCandidates("TARGET2", null, List.of("A"), mock(Authentication.class)));
     }
 
     private TrainingCourse course(String code, TrainingCourseType type, OffsetDateTime finishedAt) {
