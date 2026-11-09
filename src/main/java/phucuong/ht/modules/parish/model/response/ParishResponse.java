@@ -4,7 +4,9 @@ import lombok.Builder;
 import lombok.Getter;
 import phucuong.ht.modules.parish.model.enums.ParishUnitType;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import java.time.LocalDate;
+import java.time.MonthDay;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
@@ -23,7 +25,8 @@ public class ParishResponse {
     // Trạng thái hiệu lực: false nếu chính giáo xứ hoặc giáo hạt/giáo phận cha đang bị tắt.
     private Boolean effectiveStatus;
     private String name;
-    private LocalDate patronSaintDay;
+    @JsonFormat(pattern = "MM-dd")
+    private MonthDay patronSaintDay;
     private LocalDate establishmentDate;
     private String chaplain;
     private String phoneNumber;

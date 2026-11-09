@@ -29,6 +29,7 @@ import phucuong.ht.modules.diocese.model.entity.Diocese;
 
 import java.nio.file.Path;
 import java.time.LocalDate;
+import java.time.MonthDay;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -63,7 +64,7 @@ public class DeaneryImportService extends AbstractExcelImporter<DeaneryImportSer
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private UnitOperationalStatusService unitOperationalStatusService;
 
-    record Row(ExcelRowData source, String name, LocalDate patronSaintDay, LocalDate establishmentDate, String chaplain,
+    record Row(ExcelRowData source, String name, MonthDay patronSaintDay, LocalDate establishmentDate, String chaplain,
                String phone, String email, String association) {
     }
 
@@ -124,7 +125,7 @@ public class DeaneryImportService extends AbstractExcelImporter<DeaneryImportSer
                     }
                 }
             }
-            LocalDate patronSaintDay = row.date(errors, COL_PATRON_SAINT_DAY, false);
+            MonthDay patronSaintDay = row.monthDay(errors, COL_PATRON_SAINT_DAY, false);
             LocalDate establishmentDate = row.date(errors, COL_ESTABLISHMENT_DATE, false);
             if (establishmentDate != null && establishmentDate.isAfter(LocalDate.now())) {
                 row.error(errors, COL_ESTABLISHMENT_DATE, "Ngày thành lập không được sau ngày hiện tại");

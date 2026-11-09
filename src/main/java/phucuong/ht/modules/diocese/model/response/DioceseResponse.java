@@ -3,7 +3,9 @@ package phucuong.ht.modules.diocese.model.response;
 import lombok.Builder;
 import lombok.Getter;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import java.time.LocalDate;
+import java.time.MonthDay;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
@@ -20,7 +22,8 @@ public class DioceseResponse {
     private final String updatedByName;
     private final Boolean status;
     private final String name;
-    private final LocalDate patronSaintDay;
+    @JsonFormat(pattern = "MM-dd")
+    private final MonthDay patronSaintDay;
     private final LocalDate establishmentDate;
     private final String chaplain;
     private final String phoneNumber;

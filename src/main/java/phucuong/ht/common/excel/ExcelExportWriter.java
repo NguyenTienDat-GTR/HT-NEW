@@ -15,6 +15,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.time.LocalDate;
+import java.time.MonthDay;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
@@ -103,7 +104,9 @@ public final class ExcelExportWriter {
         if (value == null) {
             return;
         }
-        if (value instanceof LocalDate date) {
+        if (value instanceof MonthDay monthDay) {
+            cell.setCellValue(String.format("%02d/%02d", monthDay.getDayOfMonth(), monthDay.getMonthValue()));
+        } else if (value instanceof LocalDate date) {
             cell.setCellValue(date);
             cell.setCellStyle(dateStyle);
         } else if (value instanceof OffsetDateTime time) {

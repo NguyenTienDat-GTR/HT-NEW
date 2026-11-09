@@ -30,6 +30,7 @@ import phucuong.ht.modules.parish.repository.ParishRepository;
 
 import java.nio.file.Path;
 import java.time.LocalDate;
+import java.time.MonthDay;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -74,7 +75,7 @@ public class ParishImportService extends AbstractExcelImporter<ParishImportServi
 
     /** parentKey: khóa "mã giáo hạt|tên giáo xứ cha đã chuẩn hóa" khi giáo xứ cha là giáo xứ mới trong cùng file; ngược lại dùng existingParent. */
     record Row(ExcelRowData source, String name, ParishUnitType unitType, Deanery deanery, Parish existingParent, String parentKey,
-               LocalDate patronSaintDay, LocalDate establishmentDate, String chaplain, String phone, String email, String chapter) {
+               MonthDay patronSaintDay, LocalDate establishmentDate, String chaplain, String phone, String email, String chapter) {
     }
 
     /** Trạng thái của một lần import (service dùng chung nhiều luồng nên không giữ trong field). */
@@ -209,7 +210,7 @@ public class ParishImportService extends AbstractExcelImporter<ParishImportServi
                 }
             }
 
-            LocalDate patronSaintDay = row.date(errors, COL_PATRON_SAINT_DAY, false);
+            MonthDay patronSaintDay = row.monthDay(errors, COL_PATRON_SAINT_DAY, false);
             LocalDate establishmentDate = row.date(errors, COL_ESTABLISHMENT_DATE, false);
             if (establishmentDate != null && establishmentDate.isAfter(LocalDate.now())) {
                 row.error(errors, COL_ESTABLISHMENT_DATE, "Ngày thành lập không được sau ngày hiện tại");

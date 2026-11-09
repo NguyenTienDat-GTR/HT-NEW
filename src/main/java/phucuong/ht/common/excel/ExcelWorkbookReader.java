@@ -16,6 +16,7 @@ import java.io.InputStream;
 import java.math.BigDecimal;
 import java.text.Normalizer;
 import java.time.LocalDate;
+import java.time.MonthDay;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -172,6 +173,20 @@ public final class ExcelWorkbookReader implements AutoCloseable {
                 .replace('đ', 'd').replace('Đ', 'D')
                 .replace("*", " ");
         return stripped.toLowerCase(Locale.ROOT).replaceAll("\\s+", " ").trim();
+    }
+
+    /** Ngày + tháng không năm: "d/M", "d-M"; vẫn nhận đầy đủ ngày/tháng/năm rồi bỏ năm. */
+    static MonthDay parseMonthDay(String text) {
+        String trimmed = text.trim();
+        for (String pattern : new String[]{"d/M", "d-M"}) {
+            try {
+                return MonthDay.parse(trimmed, DateTimeFormatter.ofPattern(pattern));
+            } catch (DateTimeParseException ignored) {
+                // thử định dạng kế tiếp
+            }
+        }
+        LocalDate full = parseDate(trimmed);
+        return full == null ? null : MonthDay.from(full);
     }
 
     static LocalDate parseDate(String text) {
