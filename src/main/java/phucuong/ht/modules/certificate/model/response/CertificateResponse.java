@@ -40,6 +40,8 @@ public class CertificateResponse {
     private WorkflowApprovalStatus approvalStatus;
     private Boolean systemSuggested;
     private Boolean approvedByException;
+    // Chứng nhận ngoại lệ do người chấm điểm tạo cho hồ sơ không đạt (highlight ở tab duyệt, bắt buộc nhập lý do khi duyệt).
+    private Boolean exceptionRequested;
     private String exceptionApprovalReason;
     private String rejectionReason;
     private OffsetDateTime approvedAt;

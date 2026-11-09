@@ -41,6 +41,11 @@ public final class CourseCopyModels {
                               @Size(max = 5000, message = "Mỗi lần sao chép tối đa 5000 hồ sơ") List<UUID> leaderIds) {
     }
 
+    // Khóa nguồn chọn được khi tạo / sửa khóa: khóa đã kết thúc hoặc khóa quá khứ trong phạm vi. courseTypeName = null với khóa quá khứ.
+    public record AnySource(String courseCode, String courseName, Integer hostYear, String courseTypeName, boolean pastCourse,
+                            LocalDate startDate, LocalDate endDate, String ownerName, long participantCount, long passedCount) {
+    }
+
     public record Skipped(UUID leaderId, String fullName, String reason) {
     }
 

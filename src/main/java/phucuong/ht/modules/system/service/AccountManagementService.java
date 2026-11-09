@@ -154,6 +154,9 @@ public class AccountManagementService {
             credentialLeader = requireLeader(request.getLeaderId(), "leaderId là bắt buộc với tài khoản không phải ADMIN_DIOCESE");
             requireUnitOperational(UnitType.PARISH, credentialLeader.getParish().getId());
             account.setLeader(credentialLeader);
+            // Tài khoản không phải ADMIN_DIOCESE luôn lưu giáo xứ / giáo hạt / giáo phận của huynh trưởng gắn với tài khoản
+            // (ADMIN_DIOCESE đã có giáo phận được chọn ở nhánh trên).
+            applyLeaderUnits(account, credentialLeader);
             recipientEmail = requireCredentialEmail(credentialLeader.getEmail());
             recipientName = fullName(credentialLeader);
             usernameBase = generateLeaderUsernameBase(credentialLeader);
@@ -388,6 +391,14 @@ public class AccountManagementService {
             password.append(alphabet[SECURE_RANDOM.nextInt(alphabet.length)]);
         }
         return password.toString();
+    }
+
+    private void applyLeaderUnits(Account account, Leader leader) {
+        var parish = leader.getParish();
+        var deanery = parish == null ? null : parish.getDeanery();
+        account.setParish(parish);
+        account.setDeanery(deanery);
+        account.setDiocese(deanery == null ? null : deanery.getDiocese());
     }
 
     private String requireCredentialEmail(String email) {

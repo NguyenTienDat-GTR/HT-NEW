@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import phucuong.ht.common.dto.apiResponse;
+import phucuong.ht.modules.training.courseCopy.model.CourseCopyModels.AnySource;
 import phucuong.ht.modules.training.courseCopy.model.CourseCopyModels.Candidate;
 import phucuong.ht.modules.training.courseCopy.model.CourseCopyModels.CopyRequest;
 import phucuong.ht.modules.training.courseCopy.model.CourseCopyModels.CopyResult;
@@ -22,19 +23,30 @@ import java.util.List;
 
 // Sao chép danh sách tham dự của khóa tiên quyết đã kết thúc: người duyệt đăng ký đúng đơn vị sở hữu khóa.
 @RestController
-@RequestMapping("/api/training/courses/{courseCode}/prerequisite-copy")
+@RequestMapping("/api/training/courses")
 @RequiredArgsConstructor
 public class CourseCopyController {
 
     private final CourseCopyService courseCopyService;
 
-    @GetMapping("/sources")
+    // Khóa nguồn để sao chép danh sách tham dự ngay trong form tạo / sửa khóa. Sửa khóa: truyền courseCode (cần quyền sửa khóa đó);
+    // tạo khóa: truyền courseTypeCode (cần quyền tạo loại khóa đó).
+    @GetMapping("/copy-sources")
+    @PreAuthorize("(#courseCode != null and @trainingCourseAccessEvaluator.canUpdate(authentication, #courseCode))"
+            + " or (#courseCode == null and @trainingCourseAccessEvaluator.canCreate(authentication, #courseTypeCode))")
+    public apiResponse<List<AnySource>> anySources(@RequestParam(required = false) String courseCode,
+                                                   @RequestParam(required = false) String courseTypeCode,
+                                                   Authentication authentication) {
+        return apiResponse.success("Lấy danh sách khóa nguồn thành công", courseCopyService.anySources(courseCode, courseTypeCode, authentication));
+    }
+
+    @GetMapping("/{courseCode}/prerequisite-copy/sources")
     @PreAuthorize("@courseParticipationAccessEvaluator.canManageCourseParticipants(authentication, #courseCode)")
     public apiResponse<SourcesResponse> sources(@PathVariable String courseCode) {
         return apiResponse.success("Lấy danh sách khóa tiên quyết thành công", courseCopyService.sources(courseCode));
     }
 
-    @GetMapping("/candidates")
+    @GetMapping("/{courseCode}/prerequisite-copy/candidates")
     @PreAuthorize("@courseParticipationAccessEvaluator.canManageCourseParticipants(authentication, #courseCode)")
     public apiResponse<List<Candidate>> candidates(@PathVariable String courseCode,
                                                    @RequestParam List<String> sourceCourseCodes,
@@ -43,7 +55,7 @@ public class CourseCopyController {
                 courseCopyService.candidates(courseCode, sourceCourseCodes, includeFailed));
     }
 
-    @PostMapping
+    @PostMapping("/{courseCode}/prerequisite-copy")
     @PreAuthorize("@courseParticipationAccessEvaluator.canManageCourseParticipants(authentication, #courseCode)")
     public apiResponse<CopyResult> copy(@PathVariable String courseCode, @Valid @RequestBody CopyRequest request, Authentication authentication) {
         CopyResult result = courseCopyService.copy(courseCode, request, authentication);

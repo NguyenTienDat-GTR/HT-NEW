@@ -42,5 +42,8 @@ public class PastTrainingCourseRequest {
     @Size(max = 50, message = "Cấp độ đạt được tối đa 50 ký tự")
     private String resultingLevel;
 
+    // Hiển thị điểm cho cấp thấp hơn cấp sở hữu khóa (như khóa thường); null = tắt khi tạo, giữ nguyên khi sửa.
+    private Boolean scoreVisible;
+
     private String additionalNotes;
 }

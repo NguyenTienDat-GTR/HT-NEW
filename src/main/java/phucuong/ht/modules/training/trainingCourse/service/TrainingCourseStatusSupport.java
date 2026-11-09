@@ -26,6 +26,10 @@ public final class TrainingCourseStatusSupport {
         if (isCourseEnded(course, now)) {
             return CourseRegistrationStatus.ENDED;
         }
+        // Khóa không mở đăng ký: luôn đóng, không ai đăng ký được.
+        if (Boolean.FALSE.equals(course.getRegistrationEnabled())) {
+            return CourseRegistrationStatus.CLOSED;
+        }
         OffsetDateTime start = course.getRegistrationStartAt();
         OffsetDateTime end = course.getRegistrationEndAt();
         if (end != null && now.isAfter(end)) {

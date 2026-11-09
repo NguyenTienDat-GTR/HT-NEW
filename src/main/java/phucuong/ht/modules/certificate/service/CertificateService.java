@@ -438,8 +438,9 @@ public class CertificateService {
                 && participation.getTotalScore() != null
                 && participation.getTotalScore().compareTo(participation.getCourse().getPassingScore()) >= 0;
         String approvalReason = request == null ? null : commonValidationHelper.normalizeOptionalText(request.getApprovalReason());
-        if (!passingScore && approvalReason == null) {
-            throw commonValidationHelper.validationError("approvalReason là bắt buộc khi duyệt chứng chỉ cho leader chưa đạt điểm qua");
+        boolean exceptionCertificate = Boolean.TRUE.equals(certificate.getExceptionRequested());
+        if ((!passingScore || exceptionCertificate) && approvalReason == null) {
+            throw commonValidationHelper.validationError("approvalReason là bắt buộc khi duyệt chứng chỉ ngoại lệ hoặc cho leader chưa đạt điểm qua");
         }
 
         // Người ký ghi trực tiếp vào chứng nhận khi duyệt.
@@ -453,7 +454,7 @@ public class CertificateService {
         certificate.setApprovalStatus(WorkflowApprovalStatus.APPROVED);
         certificate.setApprovedAt(approvedAt);
         certificate.setApprovedBy(actor);
-        certificate.setApprovedByException(!passingScore);
+        certificate.setApprovedByException(!passingScore || exceptionCertificate);
         certificate.setExceptionApprovalReason(approvalReason);
         if (approvalDate != null) {
             certificate.setIssueDate(approvalDate);
@@ -463,6 +464,11 @@ public class CertificateService {
         certificate.setUpdatedAt(now);
         certificate.setUpdatedBy(actor);
 
+        // Chứng nhận của hồ sơ không đạt điểm được duyệt (ngoại lệ): kết quả khóa của hồ sơ chuyển sang đạt.
+        if (!passingScore || exceptionCertificate) {
+            participation.setResult(phucuong.ht.modules.training.enums.CourseResult.COMPLETED);
+            participation.setParticipationStatus(phucuong.ht.modules.training.enums.ParticipationStatus.COMPLETED);
+        }
         participation.setCertificateApprovalStatus(WorkflowApprovalStatus.APPROVED);
         participation.setCertificateApprovedAt(approvedAt);
         participation.setApprovedBy(actor);
@@ -474,7 +480,7 @@ public class CertificateService {
 
         publishEvent("training.certificate.approved", "certificate", certificateCode, actor, Map.of(
                 "courseCode", certificate.getCourse().getCourseCode(),
-                "approvedByException", !passingScore
+                "approvedByException", !passingScore || exceptionCertificate
         ));
         certificateRealtimeNotifier.notifyChanged("APPROVED", certificate.getCourse().getCourseCode(), certificateCode);
         return certificate;
@@ -590,10 +596,11 @@ public class CertificateService {
                 .coursePast(certificate.getCourse() != null && certificate.getCourse().isPast())
                 .scoreHidden(!showScores)
                 .totalScore(participation == null || !showScores ? null : participation.getTotalScore())
-                .passingScore(participation == null || participation.getCourse() == null ? null : participation.getCourse().getPassingScore())
-                .scoreNote(participation == null || !showScores ? null : participation.getScoreNote())
+                .passingScore(participation == null || participation.getCourse() == null || !showScores ? null : participation.getCourse().getPassingScore())
+                .scoreNote(participation == null ? null : participation.getScoreNote())
                 .passed(participation == null || participation.getTotalScore() == null ? null : passed)
-                .approvalReasonRequired(participation != null && participation.getTotalScore() != null && !passed)
+                .approvalReasonRequired(Boolean.TRUE.equals(certificate.getExceptionRequested()) || participation != null && participation.getTotalScore() != null && !passed)
+                .exceptionRequested(Boolean.TRUE.equals(certificate.getExceptionRequested()))
                 .result(certificate.getResult())
                 .signedBy(certificate.getSignedBy())
                 .signerType(certificate.getSignerType())

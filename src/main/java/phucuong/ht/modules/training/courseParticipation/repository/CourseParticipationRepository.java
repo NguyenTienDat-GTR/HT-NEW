@@ -245,6 +245,32 @@ public class CourseParticipationRepository extends BaseRepo<CourseParticipation,
         return count != null && count > 0;
     }
 
+    // Số hồ sơ trong danh sách tham dự (đã duyệt, chưa hủy) và số hồ sơ đạt của từng khóa: [tổng, đạt].
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public java.util.Map<String, long[]> countAttendeesAndPassedByCourseCodes(java.util.Collection<String> courseCodes) {
+        java.util.Map<String, long[]> result = new java.util.HashMap<>();
+        if (courseCodes == null || courseCodes.isEmpty()) {
+            return result;
+        }
+        List<Object[]> rows = entityManager.createQuery(
+                        """
+                                select cp.course.courseCode, count(cp),
+                                       sum(case when cp.finalResult = phucuong.ht.modules.training.enums.CourseFinalResult.PASSED then 1 else 0 end)
+                                from CourseParticipation cp
+                                where cp.course.courseCode in :codes
+                                  and cp.approvalStatus = phucuong.ht.modules.training.enums.WorkflowApprovalStatus.APPROVED
+                                  and cp.participationStatus <> phucuong.ht.modules.training.enums.ParticipationStatus.CANCELLED
+                                group by cp.course.courseCode
+                                """,
+                        Object[].class)
+                .setParameter("codes", courseCodes)
+                .getResultList();
+        for (Object[] row : rows) {
+            result.put((String) row[0], new long[]{((Number) row[1]).longValue(), row[2] == null ? 0 : ((Number) row[2]).longValue()});
+        }
+        return result;
+    }
+
     // Số tham dự viên đã được duyệt của từng khóa (một truy vấn cho cả trang danh sách).
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public java.util.Map<String, Long> countApprovedByCourseCodes(java.util.Collection<String> courseCodes) {

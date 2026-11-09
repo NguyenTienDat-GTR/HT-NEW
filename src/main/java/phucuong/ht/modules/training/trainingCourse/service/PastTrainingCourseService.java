@@ -75,10 +75,11 @@ public class PastTrainingCourseService {
             course.setDeanery(null);
         }
         course.setCourseType(null);
+        course.setRegistrationEnabled(Boolean.FALSE);
         apply(course, request, dioceseId);
         course.setYearsActive(0);
         course.setStatus(Boolean.TRUE);
-        course.setScoreVisible(Boolean.TRUE);
+        course.setScoreVisible(Boolean.TRUE.equals(request.getScoreVisible()));
         course.setAutoApproveEligible(Boolean.FALSE);
         course.setAttendanceEnabled(Boolean.FALSE);
         course.setAutoSendInvitation(Boolean.FALSE);
@@ -122,6 +123,9 @@ public class PastTrainingCourseService {
             throw commonValidationHelper.conflict("Khóa đã có danh sách tham dự nên không đổi được năm tổ chức, cấp độ đạt được và điểm đạt");
         }
         apply(course, request, dioceseId);
+        if (request.getScoreVisible() != null) {
+            course.setScoreVisible(request.getScoreVisible());
+        }
         OffsetDateTime now = OffsetDateTime.now();
         course.setFinishedAt(finishedAt(course, now));
         course.setUpdatedAt(now);
