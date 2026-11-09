@@ -61,6 +61,10 @@ public class Certificate extends BaseModel {
     @Column(name = "system_suggested")
     private Boolean systemSuggested;
 
+    // Chứng nhận ngoại lệ do người chấm điểm tạo cho hồ sơ không đạt: người duyệt phải nhập lý do khi duyệt.
+    @Column(name = "exception_requested", nullable = false)
+    private Boolean exceptionRequested = Boolean.FALSE;
+
     @Column(name = "approved_by_exception")
     private Boolean approvedByException;
 

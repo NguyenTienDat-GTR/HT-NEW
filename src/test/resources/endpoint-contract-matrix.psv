@@ -178,6 +178,7 @@ GET /api/training/courses/{courseCode}/score-components|200|401|403|N/A: collect
 POST /api/training/registrations/{id}/deanery-approval|200|401|403|400|404|409
 POST /api/training/registrations/{id}/diocese-approval|200|401|403|400|404|409
 PATCH /api/training/participations/{id}/score|200|401|403|400|404|409
+POST /api/training/participations/{id}/exception-certificate|200|401|403|N/A: no request body|404|409
 PATCH /api/training/participations/{id}/score-note|200|401|403|400|404|409
 
 # Training course types
@@ -285,6 +286,7 @@ DELETE /api/training/courses/{courseCode}/teams|200|401|403|N/A: course code is 
 POST /api/training/participants/teams/export|202|401|403|400|N/A: export of a collection does not resolve an individual resource|409
 GET /api/training/courses/teams/import-template|200|401|403|N/A: template download has no request parameters|N/A: template download does not resolve a resource|N/A: read-only endpoint does not mutate state
 POST /api/training/courses/{courseCode}/teams/import|202|401|403|400|404|409
+GET /api/training/courses/copy-sources|200|401|403|N/A: query parameters are optional|404|N/A: read-only endpoint does not mutate state
 GET /api/training/courses/{courseCode}/prerequisite-copy/sources|200|401|403|N/A: course code is an opaque string|404|N/A: read-only endpoint does not mutate state
 GET /api/training/courses/{courseCode}/prerequisite-copy/candidates|200|401|403|400|404|N/A: read-only endpoint does not mutate state
 POST /api/training/courses/{courseCode}/prerequisite-copy|200|401|403|400|404|409

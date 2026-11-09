@@ -193,6 +193,13 @@ public class CourseParticipationController {
         return apiResponse.success("Cập nhật nhận xét thành công", courseParticipationService.updateScoreNote(id, request, authentication));
     }
 
+    // Tạo chứng nhận ngoại lệ (chờ duyệt) cho hồ sơ không đạt: người chấm điểm đúng cấp quản lý của khóa.
+    @PostMapping("/participations/{id}/exception-certificate")
+    @PreAuthorize("@courseParticipationAccessEvaluator.canScore(authentication, #id)")
+    public apiResponse<CourseParticipationResponse> createExceptionCertificate(@PathVariable String id, Authentication authentication) {
+        return apiResponse.success("Đã tạo chứng nhận ngoại lệ chờ duyệt", courseParticipationService.createExceptionCertificate(id, authentication));
+    }
+
     @PatchMapping("/participations/{id}/score")
     @PreAuthorize("@courseParticipationAccessEvaluator.canScore(authentication, #id)")
     public apiResponse<CourseParticipationResponse> score(
