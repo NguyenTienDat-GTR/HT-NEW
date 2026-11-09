@@ -56,7 +56,7 @@ public final class ImportTemplates {
                 new Column(LeaderImportService.COL_FULL_NAME, true, 28, Kind.GENERAL),
                 new Column(LeaderImportService.COL_BIRTH_DATE, true, 14, Kind.DATE),
                 new Column(LeaderImportService.COL_GENDER, true, 12, Kind.GENDER),
-                new Column(LeaderImportService.COL_EMAIL, true, 32, Kind.GENERAL),
+                new Column(LeaderImportService.COL_EMAIL, false, 32, Kind.GENERAL),
                 new Column(LeaderImportService.COL_PHONE, true, 16, Kind.TEXT),
                 new Column(LeaderImportService.COL_LEVEL, false, 26, Kind.LEVEL),
                 new Column(LeaderImportService.COL_DEANERY, true, 22, Kind.GENERAL),
@@ -67,10 +67,10 @@ public final class ImportTemplates {
                 List.of("Maria", "Trần Thị Bình", LocalDate.of(1998, 11, 21), "Nữ", "tran.thi.binh@example.com", "0912345678", "", "Tên giáo hạt", "Tên giáo xứ", ""));
         List<String> guide = List.of(
                 "1. Điền dữ liệu ở sheet \"" + LEADERS_SHEET + "\" (sheet đầu tiên), từ dòng 2. Xóa các dòng ví dụ trước khi import. Tên cột có thể có hoặc không có dấu *, thứ tự cột không quan trọng.",
-                "2. Tất cả các cột đều bắt buộc (tiêu đề màu đỏ), TRỪ cột Cấp độ và Tên file ảnh: Tên thánh, Họ và tên, Ngày sinh, Giới tính, Email, Số điện thoại, Giáo hạt, Giáo xứ.",
+                "2. Tất cả các cột đều bắt buộc (tiêu đề màu đỏ), TRỪ cột Email, Cấp độ và Tên file ảnh: Tên thánh, Họ và tên, Ngày sinh, Giới tính, Số điện thoại, Giáo hạt, Giáo xứ.",
                 "3. Ngày sinh theo dạng dd/MM/yyyy (ví dụ 07/03/1995), không được sau ngày hiện tại.",
                 "4. Giới tính chỉ nhận: Nam hoặc Nữ (chọn từ danh sách).",
-                "5. Email và Số điện thoại không được trùng với huynh trưởng đã có trong hệ thống hoặc trùng giữa các dòng trong file. Số điện thoại gồm 10 chữ số và bắt đầu bằng 0 (cột đã để định dạng Text để không mất số 0 đầu).",
+                "5. Email (không bắt buộc, nếu nhập phải đúng định dạng) và Số điện thoại không được trùng với huynh trưởng đã có trong hệ thống hoặc trùng giữa các dòng trong file. Số điện thoại gồm 10 chữ số và bắt đầu bằng 0 (cột đã để định dạng Text để không mất số 0 đầu).",
                 "6. Cấp độ: chọn từ danh sách (sheet \"" + LOOKUP_SHEET + "\") hoặc nhập tên / mã cấp độ trong danh mục của giáo phận. Để trống nghĩa là \"Chưa có cấp\".",
                 "7. Giáo hạt và Giáo xứ (cột Giáo xứ cũng nhận tên giáo họ / giáo điểm) phải ĐÃ CÓ trong hệ thống (nhập đúng tên) và giáo xứ phải thuộc đúng giáo hạt đã nhập; nếu chưa có, dòng đó báo lỗi (hệ thống không tự tạo giáo hạt / giáo xứ).",
                 "8. Chỉ nhập được huynh trưởng cho giáo xứ trong phạm vi tài khoản của bạn. Chỉ cần một dòng lỗi thì toàn bộ file không được lưu; hệ thống báo rõ sheet, dòng, cột bị lỗi ở khay tác vụ để bạn sửa rồi import lại.",
@@ -138,7 +138,7 @@ public final class ImportTemplates {
     /** Mẫu import danh sách tham dự khóa quá khứ (mọi cột bắt buộc trừ Cấp độ và Nhận xét). */
     public static byte[] participants(List<String> levelNames) {
         List<Column> columns = List.of(
-                new Column(PastCourseParticipantImportService.COL_EMAIL, true, 32, Kind.GENERAL),
+                new Column(PastCourseParticipantImportService.COL_EMAIL, false, 32, Kind.GENERAL),
                 new Column(PastCourseParticipantImportService.COL_PHONE, true, 16, Kind.TEXT),
                 new Column(PastCourseParticipantImportService.COL_SCORE, true, 12, Kind.NUMBER),
                 new Column(PastCourseParticipantImportService.COL_RESULT, true, 14, Kind.RESULT),
@@ -158,8 +158,8 @@ public final class ImportTemplates {
         List<String> guide = List.of(
                 "1. Chỉ dùng cho khóa huấn luyện quá khứ (tạo bằng nút \"Tạo khóa quá khứ\"). Mở chi tiết khóa, vào tab \"Danh sách tham dự\" và bấm \"Import Excel\".",
                 "2. Điền dữ liệu ở sheet \"" + PARTICIPANTS_SHEET + "\" (sheet đầu tiên), từ dòng 2. Xóa các dòng ví dụ trước khi import.",
-                "3. MỌI DÒNG đều phải nhập đủ tất cả các cột (tiêu đề màu đỏ), chỉ được để trống cột Nhận xét, Cấp độ, Ghi chú và Tên file ảnh: Email, Số điện thoại, Tổng điểm, Kết quả, Tên thánh, Họ và tên, Ngày sinh, Giới tính, Giáo hạt, Giáo xứ.",
-                "4. Huynh trưởng được tìm theo Email và Số điện thoại (hai thông tin này là duy nhất, nếu khớp hai huynh trưởng khác nhau thì báo lỗi). Không dùng mã định danh (UUID).",
+                "3. MỌI DÒNG đều phải nhập đủ tất cả các cột (tiêu đề màu đỏ), chỉ được để trống cột Email, Nhận xét, Cấp độ, Ghi chú và Tên file ảnh: Số điện thoại, Tổng điểm, Kết quả, Tên thánh, Họ và tên, Ngày sinh, Giới tính, Giáo hạt, Giáo xứ.",
+                "4. Huynh trưởng được tìm theo Số điện thoại (bắt buộc) và Email (nếu có nhập); hai thông tin này là duy nhất, nếu khớp hai huynh trưởng khác nhau thì báo lỗi. Không dùng mã định danh (UUID).",
                 "5. Huynh trưởng ĐÃ CÓ HỒ SƠ: hệ thống chỉ thêm huynh trưởng đó vào khóa, KHÔNG tạo mới và KHÔNG sửa hồ sơ (thông tin trong dòng chỉ để kiểm tra đủ dữ liệu). Huynh trưởng CHƯA CÓ HỒ SƠ: hệ thống tạo hồ sơ từ chính dòng này rồi thêm vào khóa.",
                 "6. Ngày sinh theo dạng dd/MM/yyyy; Giới tính chọn Nam hoặc Nữ; Số điện thoại gồm 10 chữ số và bắt đầu bằng 0; Cấp độ chọn từ sheet \"" + LOOKUP_SHEET + "\" (để trống là Chưa có cấp).",
                 "7. Giáo hạt và Giáo xứ (cột Giáo xứ cũng nhận tên giáo họ / giáo điểm) phải ĐÃ CÓ trong hệ thống, giáo xứ phải thuộc đúng giáo hạt đã nhập và thuộc giáo phận (khóa giáo phận) hoặc giáo hạt (khóa giáo hạt) của khóa; giáo xứ phải đang hoạt động. Huynh trưởng đã có hồ sơ cũng phải thuộc giáo phận / giáo hạt của khóa.",
@@ -175,7 +175,7 @@ public final class ImportTemplates {
     /** Mẫu import danh sách tham dự khóa huấn luyện thường (không có điểm / kết quả; điểm được chấm ở tab Chấm điểm). */
     public static byte[] regularParticipants(List<String> levelNames) {
         List<Column> columns = List.of(
-                new Column(PastCourseParticipantImportService.COL_EMAIL, true, 32, Kind.GENERAL),
+                new Column(PastCourseParticipantImportService.COL_EMAIL, false, 32, Kind.GENERAL),
                 new Column(PastCourseParticipantImportService.COL_PHONE, true, 16, Kind.TEXT),
                 new Column(LeaderImportService.COL_HOLY_NAME, true, 14, Kind.GENERAL),
                 new Column(LeaderImportService.COL_FULL_NAME, true, 26, Kind.GENERAL),
@@ -196,8 +196,8 @@ public final class ImportTemplates {
         List<String> guide = List.of(
                 "1. Dùng cho khóa huấn luyện thường (không phải khóa quá khứ). Mở chi tiết khóa, vào tab \"Danh sách tham dự\" và bấm \"Nhập excel danh sách tham dự\".",
                 "2. Có hai sheet dữ liệu, điền từ dòng 2 và xóa các dòng ví dụ trước khi import: sheet \"" + PARTICIPANTS_SHEET + "\" (sheet đầu tiên) cho huynh trưởng ĐỦ điều kiện của khóa; sheet \"" + EXCEPTION_SHEET + "\" cho huynh trưởng KHÔNG đủ điều kiện của khóa (điều kiện hiển thị ở phần \"Điều kiện của khóa\" trong chi tiết khóa). Có thể bỏ trống một trong hai sheet.",
-                "3. MỌI DÒNG đều phải nhập đủ các cột (tiêu đề màu đỏ), chỉ được để trống cột Cấp độ: Email, Số điện thoại, Tên thánh, Họ và tên, Ngày sinh, Giới tính, Giáo hạt, Giáo xứ. Sheet \"" + EXCEPTION_SHEET + "\" có thêm cột bắt buộc \"Lí do ngoại lệ\".",
-                "4. Huynh trưởng được tìm theo Email và Số điện thoại (hai thông tin này là duy nhất, nếu khớp hai huynh trưởng khác nhau thì báo lỗi). Không dùng mã định danh (UUID).",
+                "3. MỌI DÒNG đều phải nhập đủ các cột (tiêu đề màu đỏ), chỉ được để trống cột Email và Cấp độ: Số điện thoại, Tên thánh, Họ và tên, Ngày sinh, Giới tính, Giáo hạt, Giáo xứ. Sheet \"" + EXCEPTION_SHEET + "\" có thêm cột bắt buộc \"Lí do ngoại lệ\".",
+                "4. Huynh trưởng được tìm theo Số điện thoại (bắt buộc) và Email (nếu có nhập); hai thông tin này là duy nhất, nếu khớp hai huynh trưởng khác nhau thì báo lỗi. Không dùng mã định danh (UUID).",
                 "5. Huynh trưởng ĐÃ CÓ HỒ SƠ: hệ thống chỉ thêm huynh trưởng đó vào khóa, KHÔNG tạo mới và KHÔNG sửa hồ sơ. Huynh trưởng CHƯA CÓ HỒ SƠ (ở cả hai sheet): hệ thống tạo hồ sơ từ chính dòng này rồi thêm vào khóa.",
                 "6. Ngày sinh theo dạng dd/MM/yyyy; Giới tính chọn Nam hoặc Nữ; Số điện thoại gồm 10 chữ số và bắt đầu bằng 0; Cấp độ chọn từ sheet \"" + LOOKUP_SHEET + "\" (để trống là Chưa có cấp).",
                 "7. Giáo hạt và Giáo xứ (cột Giáo xứ cũng nhận tên giáo họ / giáo điểm) phải ĐÃ CÓ trong hệ thống, giáo xứ phải thuộc đúng giáo hạt đã nhập và thuộc giáo phận (khóa giáo phận) hoặc giáo hạt (khóa giáo hạt) của khóa; giáo xứ phải đang hoạt động.",
@@ -214,7 +214,7 @@ public final class ImportTemplates {
     /** Mẫu import danh sách chia đội: như danh sách tham dự khóa thường, thêm cột Tên đội, không có sheet Ngoại lệ. */
     public static byte[] teamParticipants(List<String> levelNames) {
         List<Column> columns = List.of(
-                new Column(PastCourseParticipantImportService.COL_EMAIL, true, 32, Kind.GENERAL),
+                new Column(PastCourseParticipantImportService.COL_EMAIL, false, 32, Kind.GENERAL),
                 new Column(PastCourseParticipantImportService.COL_PHONE, true, 16, Kind.TEXT),
                 new Column(LeaderImportService.COL_HOLY_NAME, true, 14, Kind.GENERAL),
                 new Column(LeaderImportService.COL_FULL_NAME, true, 26, Kind.GENERAL),
@@ -232,8 +232,8 @@ public final class ImportTemplates {
         List<String> guide = List.of(
                 "1. Dùng cho khóa huấn luyện thường (không phải khóa quá khứ). Mở chi tiết khóa, vào tab \"Chia đội\" và bấm \"Nhập excel chia đội\".",
                 "2. Chỉ có một sheet dữ liệu \"" + PARTICIPANTS_SHEET + "\" (sheet đầu tiên), không có sheet Ngoại lệ; điền từ dòng 2 và xóa các dòng ví dụ trước khi import.",
-                "3. MỌI DÒNG đều phải nhập đủ các cột (tiêu đề màu đỏ), chỉ được để trống cột Cấp độ: Email, Số điện thoại, Tên thánh, Họ và tên, Ngày sinh, Giới tính, Giáo hạt, Giáo xứ, Tên đội (tối đa 150 ký tự).",
-                "4. Huynh trưởng được tìm theo Email và Số điện thoại (hai thông tin này là duy nhất, nếu khớp hai huynh trưởng khác nhau thì báo lỗi). Huynh trưởng ĐÃ CÓ HỒ SƠ chỉ được thêm vào khóa (hồ sơ không bị sửa); CHƯA CÓ HỒ SƠ thì được tạo mới từ chính dòng này.",
+                "3. MỌI DÒNG đều phải nhập đủ các cột (tiêu đề màu đỏ), chỉ được để trống cột Email và Cấp độ: Số điện thoại, Tên thánh, Họ và tên, Ngày sinh, Giới tính, Giáo hạt, Giáo xứ, Tên đội (tối đa 150 ký tự).",
+                "4. Huynh trưởng được tìm theo Số điện thoại (bắt buộc) và Email (nếu có nhập); hai thông tin này là duy nhất, nếu khớp hai huynh trưởng khác nhau thì báo lỗi. Huynh trưởng ĐÃ CÓ HỒ SƠ chỉ được thêm vào khóa (hồ sơ không bị sửa); CHƯA CÓ HỒ SƠ thì được tạo mới từ chính dòng này.",
                 "5. Hồ sơ được import mặc định là ĐÃ DUYỆT đăng ký: vào thẳng danh sách tham dự của khóa và gắn vào đội theo cột Tên đội. Hệ thống không kiểm tra điều kiện tham dự của khóa ở bước này.",
                 "6. Ngày sinh theo dạng dd/MM/yyyy; Giới tính chọn Nam hoặc Nữ; Số điện thoại gồm 10 chữ số và bắt đầu bằng 0; Cấp độ chọn từ sheet \"" + LOOKUP_SHEET + "\" (để trống là Chưa có cấp).",
                 "7. Giáo hạt và Giáo xứ (cột Giáo xứ cũng nhận tên giáo họ / giáo điểm) phải ĐÃ CÓ trong hệ thống, giáo xứ phải thuộc đúng giáo hạt đã nhập và thuộc giáo phận (khóa giáo phận) hoặc giáo hạt (khóa giáo hạt) của khóa; giáo xứ phải đang hoạt động.",

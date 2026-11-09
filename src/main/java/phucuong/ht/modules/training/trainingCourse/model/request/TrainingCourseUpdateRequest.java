@@ -29,6 +29,9 @@ public class TrainingCourseUpdateRequest {
 
     private LocalDate endDate;
 
+    // Khóa có mở đăng ký hay không; tắt thì bỏ qua thời gian đăng ký. null = giữ nguyên.
+    private Boolean registrationEnabled;
+
     private OffsetDateTime registrationStartAt;
 
     private OffsetDateTime registrationEndAt;
@@ -59,6 +62,16 @@ public class TrainingCourseUpdateRequest {
 
     // Tự gửi email thông tin tham dự khi hồ sơ được duyệt; null = giữ nguyên.
     private Boolean autoSendInvitation;
+
+    // Sao chép danh sách tham dự từ các khóa nguồn (khóa đã kết thúc / khóa quá khứ cùng phạm vi) ngay khi lưu khóa. null hoặc rỗng = không sao chép.
+    private List<String> copySourceCourseCodes;
+
+    // ALL = mọi hồ sơ trong danh sách tham dự của khóa nguồn; PASSED_ONLY = chỉ hồ sơ có kết quả đạt. null = ALL.
+    @jakarta.validation.constraints.Pattern(regexp = "ALL|PASSED_ONLY", message = "Chế độ sao chép phải là ALL hoặc PASSED_ONLY")
+    private String copyMode;
+
+    // Chỉ sao chép các huynh trưởng này từ khóa nguồn (chọn riêng ở hộp thoại); null / rỗng = sao chép theo copyMode.
+    private List<java.util.UUID> copyLeaderIds;
 
     private String additionalNotes;
 }

@@ -22,9 +22,13 @@ public final class TrainingCourseStatusSupport {
         if (course.isPast()) {
             return CourseRegistrationStatus.ENDED;
         }
-        // Khóa đã kết thúc (kết thúc thủ công hoặc quá ngày kết thúc) thì bắt buộc đã đóng đăng ký, không mở lại được.
-        if (isCourseEnded(course, now)) {
+        // Khóa đã diễn ra (đã tới ngày bắt đầu) hoặc đã kết thúc thì bắt buộc đã đóng đăng ký, kể cả khi bật cờ mở đăng ký, không mở lại được.
+        if (isCourseStarted(course, now)) {
             return CourseRegistrationStatus.ENDED;
+        }
+        // Khóa không mở đăng ký: luôn đóng, không ai đăng ký được.
+        if (Boolean.FALSE.equals(course.getRegistrationEnabled())) {
+            return CourseRegistrationStatus.CLOSED;
         }
         OffsetDateTime start = course.getRegistrationStartAt();
         OffsetDateTime end = course.getRegistrationEndAt();
@@ -38,6 +42,11 @@ public final class TrainingCourseStatusSupport {
             return CourseRegistrationStatus.NOT_STARTED;
         }
         return CourseRegistrationStatus.OPEN;
+    }
+
+    // Đã tới ngày bắt đầu (đang diễn ra) hoặc đã kết thúc.
+    public static boolean isCourseStarted(TrainingCourse course, OffsetDateTime now) {
+        return course != null && organizingStatus(course, now.atZoneSameInstant(ZONE).toLocalDate()) != CourseOrganizingStatus.UPCOMING;
     }
 
     public static boolean isCourseEnded(TrainingCourse course, OffsetDateTime now) {

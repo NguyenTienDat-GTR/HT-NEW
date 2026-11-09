@@ -120,7 +120,7 @@ public class LeaderImportService extends AbstractExcelImporter<LeaderImportServi
     @Override
     protected List<Row> readRows(ExcelWorkbookReader reader, ImportRun run, ImportErrors errors) {
         ExcelSheetData sheet = reader.firstSheet();
-        sheet.requireColumns(errors, COL_HOLY_NAME, COL_FULL_NAME, COL_BIRTH_DATE, COL_GENDER, COL_EMAIL, COL_PHONE, COL_DEANERY, COL_PARISH);
+        sheet.requireColumns(errors, COL_HOLY_NAME, COL_FULL_NAME, COL_BIRTH_DATE, COL_GENDER, COL_PHONE, COL_DEANERY, COL_PARISH);
         errors.throwIfAny();
         if (sheet.rows().isEmpty()) {
             throw commonValidationHelper.validationError("File Excel không có dòng dữ liệu nào");
@@ -196,7 +196,8 @@ public class LeaderImportService extends AbstractExcelImporter<LeaderImportServi
                 row.error(errors, COL_AVATAR_FILE, "Tên file ảnh tối đa 255 ký tự");
             }
 
-            String email = row.requiredText(errors, COL_EMAIL);
+            // Email không bắt buộc: để trống thì bỏ qua, có nhập thì phải đúng định dạng và không trùng.
+            String email = row.text(COL_EMAIL);
             if (email != null) {
                 if (email.length() > 100 || !EMAIL.matcher(email).matches()) {
                     row.error(errors, COL_EMAIL, "Email không hợp lệ");
@@ -267,7 +268,7 @@ public class LeaderImportService extends AbstractExcelImporter<LeaderImportServi
     }
 
     /**
-     * Đọc và kiểm tra thông tin huynh trưởng MỚI của một dòng (bắt buộc: Tên thánh, Họ và tên, Ngày sinh, Giới tính, Email, Giáo xứ;
+     * Đọc và kiểm tra thông tin huynh trưởng MỚI của một dòng (bắt buộc: Tên thánh, Họ và tên, Ngày sinh, Giới tính, Số điện thoại, Giáo xứ;
      * tuỳ chọn: Số điện thoại, Cấp độ, Giáo hạt). Không kiểm tra trùng với huynh trưởng khác - người gọi đã xác định huynh trưởng này chưa có.
      * {@code problemOf} trả chuỗi rỗng nếu giáo xứ hợp lệ, ngược lại là lý do giáo xứ không dùng được. Trả null và ghi lỗi nếu dòng sai.
      */
@@ -287,7 +288,7 @@ public class LeaderImportService extends AbstractExcelImporter<LeaderImportServi
             row.error(errors, COL_BIRTH_DATE, "Ngày sinh không được sau ngày hiện tại");
         }
         LeaderGender gender = parseGender(row, errors);
-        String email = row.requiredText(errors, COL_EMAIL);
+        String email = row.text(COL_EMAIL);
         if (email != null && (email.length() > 100 || !EMAIL.matcher(email).matches())) {
             row.error(errors, COL_EMAIL, "Email không hợp lệ");
         }

@@ -7,6 +7,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.test.util.ReflectionTestUtils;
 import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.common.exception.errorCode;
+import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.common.exception.ApiException;
 import phucuong.ht.modules.deanery.model.entity.Deanery;
@@ -84,6 +85,9 @@ class CourseCopyServiceTest {
                 mock(CourseActivityGuard.class), validation);
         ReflectionTestUtils.setField(service, "trainingDecisionNotifier", notifier);
         ReflectionTestUtils.setField(service, "invitationAutoTrigger", invitationTrigger);
+        securityUtils security = mock(securityUtils.class);
+        when(security.hasAuthority(any(), anyString())).thenReturn(true);
+        ReflectionTestUtils.setField(service, "securityUtils", security);
 
         target = course("TARGET", type("SMKN_I", prerequisiteType), null);
         target.setStartDate(java.time.LocalDate.now().plusDays(5));
@@ -175,9 +179,135 @@ class CourseCopyServiceTest {
         assertEquals(ParticipationStatus.ATTENDED, created.getParticipationStatus());
         assertEquals(fresh, created.getLeader());
         assertNull(created.getTeamName());
+        // Như duyệt đăng ký: bộ tự gửi email được gọi cho hồ sơ vừa sao chép (chỉ gửi khi khóa bật tự gửi).
         verify(invitationTrigger).afterApproved(List.of(created));
         verify(notifier).notifyRegistrations(eq(Decision.REGISTRATION_APPROVED), eq(List.of(created)), isNull(), eq("admin"),
                 eq(Map.of("new-0", "parish-user")));
+    }
+
+    private TrainingCourse copyTarget(boolean autoSendInvitation) {
+        TrainingCourse course = course("TARGET2", type("SMKN_I", prerequisiteType), null);
+        course.setAutoSendInvitation(autoSendInvitation);
+        course.setStartDate(java.time.LocalDate.now().plusDays(5));
+        course.setEndDate(java.time.LocalDate.now().plusDays(10));
+        return course;
+    }
+
+    private void stubSourceWith(TrainingCourse source, CourseParticipation... participations) {
+        when(courseRepository.findFinishedByCourseTypeCode("SMTL_I")).thenReturn(List.of(source));
+        when(participationRepository.findApprovedByCourseCodes(anyCollection())).thenReturn(List.of(participations));
+        when(participationRepository.findLeaderIdsByCourseCode("TARGET2")).thenReturn(Set.of());
+        when(participationRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+    }
+
+    @Test
+    void copyFromSourcesCopiesOnlyThePickedLeadersAndTriggersAutoSendForTheCopiedOnes() {
+        TrainingCourse source = course("A", prerequisiteType, OffsetDateTime.now());
+        Leader one = leader("Hai", parish);
+        Leader two = leader("Ba", parish);
+        Leader three = leader("Tu", parish);
+        stubSourceWith(source, participation(one, source, CourseFinalResult.PASSED), participation(two, source, CourseFinalResult.FAILED), participation(three, source, CourseFinalResult.PASSED));
+        // Khóa đích bật tự gửi email: các hồ sơ vừa sao chép được giao cho bộ tự gửi (khóa không bật thì bộ này tự bỏ qua).
+        TrainingCourse withAutoSend = copyTarget(true);
+
+        CopyResult result = service.copyFromSources(withAutoSend, List.of("A"), true, List.of(one.getId(), two.getId()), mock(Authentication.class));
+
+        // Chọn riêng thì bỏ qua cách "chỉ hồ sơ đạt": người không đạt được chọn vẫn sao chép, người không được chọn thì không.
+        assertEquals(2, result.copied());
+        org.mockito.ArgumentCaptor<CourseParticipation> saved = org.mockito.ArgumentCaptor.forClass(CourseParticipation.class);
+        verify(participationRepository, org.mockito.Mockito.times(2)).save(saved.capture());
+        assertEquals(Set.of(one.getId(), two.getId()), saved.getAllValues().stream().map(item -> item.getLeader().getId()).collect(java.util.stream.Collectors.toSet()));
+        org.mockito.ArgumentCaptor<java.util.Collection<CourseParticipation>> sent = org.mockito.ArgumentCaptor.forClass(java.util.Collection.class);
+        verify(invitationTrigger).afterApproved(sent.capture());
+        assertEquals(2, sent.getValue().size());
+        assertTrue(sent.getValue().stream().allMatch(item -> item.getCourse() == withAutoSend));
+    }
+
+    @Test
+    void copyFromSourcesInPassedOnlyModeSkipsFailedLeadersWhenNobodyIsPicked() {
+        TrainingCourse source = course("A", prerequisiteType, OffsetDateTime.now());
+        Leader passed = leader("Hai", parish);
+        Leader failed = leader("Ba", parish);
+        stubSourceWith(source, participation(passed, source, CourseFinalResult.PASSED), participation(failed, source, CourseFinalResult.FAILED));
+
+        CopyResult result = service.copyFromSources(copyTarget(false), List.of("A"), true, mock(Authentication.class));
+
+        assertEquals(1, result.copied());
+        org.mockito.ArgumentCaptor<CourseParticipation> saved = org.mockito.ArgumentCaptor.forClass(CourseParticipation.class);
+        verify(participationRepository).save(saved.capture());
+        assertEquals(passed.getId(), saved.getValue().getLeader().getId());
+    }
+
+    @Test
+    void copyFromSourcesReportsPickedLeadersThatAreNotInTheSourceCourses() {
+        TrainingCourse source = course("A", prerequisiteType, OffsetDateTime.now());
+        Leader inSource = leader("Hai", parish);
+        stubSourceWith(source, participation(inSource, source, CourseFinalResult.PASSED));
+        UUID stranger = UUID.randomUUID();
+
+        CopyResult result = service.copyFromSources(copyTarget(false), List.of("A"), false, List.of(inSource.getId(), stranger), mock(Authentication.class));
+
+        assertEquals(1, result.copied());
+        assertEquals(1, result.skipped().size());
+        assertEquals(stranger, result.skipped().get(0).leaderId());
+    }
+
+    @Test
+    void anyCandidatesListsEveryLeaderOfTheSelectedSourcesWithBlockedReasons() {
+        TrainingCourse source = course("A", prerequisiteType, OffsetDateTime.now());
+        Leader free = leader("Hai", parish);
+        Leader already = leader("Ba", parish);
+        stubSourceWith(source, participation(free, source, CourseFinalResult.PASSED), participation(already, source, CourseFinalResult.FAILED));
+        when(courseRepository.findByCodeWithType("TARGET2")).thenReturn(Optional.of(copyTarget(false)));
+        when(participationRepository.findLeaderIdsByCourseCode("TARGET2")).thenReturn(Set.of(already.getId()));
+
+        List<Candidate> candidates = service.anyCandidates("TARGET2", null, List.of("A"), mock(Authentication.class));
+
+        assertEquals(2, candidates.size());
+        assertNull(candidates.stream().filter(item -> item.leaderId().equals(free.getId())).findFirst().orElseThrow().blockedReason());
+        assertEquals(CourseCopyService.BLOCK_EXISTING, candidates.stream().filter(item -> item.leaderId().equals(already.getId())).findFirst().orElseThrow().blockedReason());
+    }
+
+    @Test
+    void formSourcesAreOnlyFinishedCoursesOfThePrerequisiteTypeInTheSameDiocese() {
+        TrainingCourse own = course("A", prerequisiteType, OffsetDateTime.now());
+        TrainingCourse foreign = course("B", prerequisiteType, OffsetDateTime.now());
+        foreign.setDiocese(diocese());
+        when(courseRepository.findFinishedByCourseTypeCode("SMTL_I")).thenReturn(List.of(own, foreign));
+        when(courseRepository.findByCodeWithType("TARGET2")).thenReturn(Optional.of(copyTarget(false)));
+
+        List<phucuong.ht.modules.training.courseCopy.model.CourseCopyModels.AnySource> sources = service.anySources("TARGET2", null, mock(Authentication.class));
+
+        assertEquals(List.of("A"), sources.stream().map(item -> item.courseCode()).toList());
+    }
+
+    @Test
+    void courseTypeWithoutPrerequisiteHasNoSourcesAndRejectsAnySelectedCourse() {
+        TrainingCourse rootTarget = course("TARGET2", type("ROOT", null), null);
+        when(courseRepository.findByCodeWithType("TARGET2")).thenReturn(Optional.of(rootTarget));
+        when(courseRepository.findFinishedByCourseTypeCode(anyString())).thenReturn(List.of(course("A", prerequisiteType, OffsetDateTime.now())));
+
+        assertTrue(service.anySources("TARGET2", null, mock(Authentication.class)).isEmpty());
+        assertThrows(ApiException.class, () -> service.anyCandidates("TARGET2", null, List.of("A"), mock(Authentication.class)));
+    }
+
+    @Test
+    void copyIsRejectedOnceTheTargetCourseHasStarted() {
+        // Dùng bộ chặn thật: khóa đã tới ngày bắt đầu thì không sao chép thêm vào danh sách tham dự.
+        CommonValidationHelper validation = mock(CommonValidationHelper.class);
+        when(validation.conflict(anyString())).thenAnswer(inv -> new ApiException(HttpStatus.CONFLICT, errorCode.CONFLICT, inv.getArgument(0)));
+        when(validation.requireAuditActor(any(), anyString())).thenReturn("admin");
+        CourseCopyService strict = new CourseCopyService(courseRepository, participationRepository, participationService, new TrainingWorkflowSupport(),
+                new CourseActivityGuard(validation), validation);
+        ReflectionTestUtils.setField(strict, "securityUtils", mock(securityUtils.class));
+        TrainingCourse started = copyTarget(false);
+        started.setStartDate(java.time.LocalDate.now());
+        started.setEndDate(java.time.LocalDate.now().plusDays(3));
+
+        ApiException thrown = assertThrows(ApiException.class, () -> strict.copyFromSources(started, List.of("A"), false, mock(Authentication.class)));
+
+        assertTrue(thrown.getMessage().contains("đã diễn ra"));
+        org.mockito.Mockito.verifyNoInteractions(participationRepository);
     }
 
     private TrainingCourse course(String code, TrainingCourseType type, OffsetDateTime finishedAt) {

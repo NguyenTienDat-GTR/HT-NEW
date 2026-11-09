@@ -53,8 +53,7 @@ public class CertificateLifecycleService {
         return certificate.getCourse() == null ? null : trainingWorkflowSupport.certificateLevelFor(certificate.getCourse()).orElse(null);
     }
 
-    // Thu hồi chứng nhận đã duyệt. Hồ sơ của khóa trở thành không đạt dù điểm cao hơn điểm đạt và huynh trưởng được hạ về
-    // cấp trước đó đã đạt. enforceOrder = true (thu hồi thủ công): phải thu hồi từ chứng nhận cấp cao nhất trước.
+    // Thu hồi chứng nhận đã duyệt. Kết quả chung của hồ sơ không đổi; huynh trưởng được hạ về cấp trước đó đã đạt. enforceOrder = true (thu hồi thủ công): phải thu hồi từ chứng nhận cấp cao nhất trước.
     public void revoke(Certificate certificate, String reason, CertificateRevocationSource source, boolean enforceOrder,
                        String actor, OffsetDateTime now) {
         requireLinked(certificate);
@@ -81,8 +80,6 @@ public class CertificateLifecycleService {
 
         findParticipation(certificate).ifPresent(participation -> {
             participation.setCertificateApprovalStatus(WorkflowApprovalStatus.REVOKED);
-            // Không đạt bất kể điểm: chốt ngay kết quả chung của hồ sơ, kể cả khi khóa chưa kết thúc.
-            participation.setFinalResult(CourseFinalResult.FAILED);
             participation.setUpdatedAt(now);
             participation.setUpdatedBy(actor);
         });
@@ -129,7 +126,8 @@ public class CertificateLifecycleService {
             participation.setUpdatedBy(actor);
             if (participation.getCourse() != null && participation.getCourse().getFinishedAt() != null) {
                 // Khóa đã kết thúc: đánh giá lại kết quả chung và thăng cấp lại nếu hồ sơ đạt.
-                courseFinishService.reevaluateIfFinished(participation, actor);
+                // Kết quả chung không đổi khi thu hồi nên phải ép thăng cấp lại.
+                courseFinishService.reevaluateIfFinished(participation, actor, true);
             } else {
                 // Khóa chưa kết thúc: kết quả chung chỉ được chốt khi kết thúc khóa.
                 participation.setFinalResult(null);

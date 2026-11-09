@@ -248,6 +248,10 @@ public class LeaderService {
 
         try {
             leaderRepository.update(id, request, auditActor);
+            // Email không bắt buộc: clearFields chứa "email" thì xóa email (BaseRepo.update bỏ qua giá trị null).
+            if (request.getClearFields() != null && request.getClearFields().contains("email") && request.getEmail() == null) {
+                leaderRepository.clearEmail(id);
+            }
             if (newAssetId != null) {
                 leaderRepository.setImageAsset(id, newAssetId);
                 mediaAssetService.release(oldAssetId);

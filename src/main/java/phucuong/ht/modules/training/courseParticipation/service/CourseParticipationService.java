@@ -552,17 +552,83 @@ public class CourseParticipationService {
         } else {
             participation.setResult(CourseResult.UNCOMPLETED);
             participation.setParticipationStatus(ParticipationStatus.ATTENDED);
-            participation.setCertificateApprovalStatus(WorkflowApprovalStatus.NOT_REQUIRED);
-            participation.setCertificateRequestedAt(null);
-            // Sửa điểm xuống dưới điểm đạt: xóa chứng nhận đang chờ duyệt của hồ sơ.
-            currentCertificate
-                    .filter(item -> item.getApprovalStatus() == WorkflowApprovalStatus.PENDING
-                            || item.getApprovalStatus() == WorkflowApprovalStatus.SUBMITTED
-                            || item.getApprovalStatus() == WorkflowApprovalStatus.REJECTED)
-                    .ifPresent(certificateRepository::delete);
+            // Chứng nhận ngoại lệ đang chờ duyệt (do người chấm điểm tạo cho hồ sơ không đạt) được giữ nguyên khi sửa điểm.
+            boolean keepException = currentCertificate
+                    .filter(item -> Boolean.TRUE.equals(item.getExceptionRequested()))
+                    .filter(item -> item.getApprovalStatus() == WorkflowApprovalStatus.PENDING || item.getApprovalStatus() == WorkflowApprovalStatus.SUBMITTED)
+                    .isPresent();
+            if (!keepException) {
+                participation.setCertificateApprovalStatus(WorkflowApprovalStatus.NOT_REQUIRED);
+                participation.setCertificateRequestedAt(null);
+                // Sửa điểm xuống dưới điểm đạt: xóa chứng nhận đang chờ duyệt của hồ sơ.
+                currentCertificate
+                        .filter(item -> item.getApprovalStatus() == WorkflowApprovalStatus.PENDING
+                                || item.getApprovalStatus() == WorkflowApprovalStatus.SUBMITTED
+                                || item.getApprovalStatus() == WorkflowApprovalStatus.REJECTED)
+                        .ifPresent(certificateRepository::delete);
+            }
         }
         publishEvent("training.score.updated", "courseParticipation", participationId, actor, Map.of("score", totalScore));
         certificateRealtimeNotifier.notifyChanged("SCORE_UPDATED", participation.getCourse().getCourseCode(), null);
+        return toResponse(participation);
+    }
+
+    /**
+     * Tạo chứng nhận ngoại lệ (chờ duyệt) cho hồ sơ đã chấm điểm nhưng không đạt: người chấm điểm đề xuất, người duyệt
+     * quyết định ở tab duyệt chứng nhận (bắt buộc nhập lý do khi duyệt). Chỉ khóa thường có cấp độ đạt được và chưa kết thúc.
+     */
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_LIST, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.CERTIFICATE_DETAIL, allEntries = true)
+    })
+    @EvictCaches.Analytics
+    @Transactional
+    public CourseParticipationResponse createExceptionCertificate(String participationId, Authentication authentication) {
+        CourseParticipation participation = courseParticipationRepository.findByIdWithLeaderAndCourse(participationId)
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy đăng ký khóa huấn luyện " + participationId));
+        TrainingCourse course = participation.getCourse();
+        courseActivityGuard.requireActive(course);
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tạo chứng nhận ngoại lệ");
+        if (course.isPast()) {
+            throw commonValidationHelper.conflict("Khóa quá khứ không tạo chứng nhận ngoại lệ");
+        }
+        if (course.getFinishedAt() != null) {
+            throw commonValidationHelper.conflict("Khóa huấn luyện đã kết thúc nên không thể tạo chứng nhận ngoại lệ");
+        }
+        if (!trainingWorkflowSupport.requiresCertificate(course)) {
+            throw commonValidationHelper.conflict("Khóa huấn luyện không có cấp độ đạt được nên không có chứng nhận");
+        }
+        requireApprovedForScoring(participation);
+        if (participation.getTotalScore() == null || participation.getResult() == CourseResult.COMPLETED) {
+            throw commonValidationHelper.conflict("Chỉ tạo chứng nhận ngoại lệ cho hồ sơ đã chấm điểm và có kết quả không đạt");
+        }
+        OffsetDateTime now = OffsetDateTime.now();
+        Optional<Certificate> existing = certificateRepository.findByLeaderIdAndCourseCode(participation.getLeader().getId(), course.getCourseCode());
+        if (existing.isPresent() && existing.get().getApprovalStatus() != WorkflowApprovalStatus.REJECTED) {
+            throw commonValidationHelper.conflict("Hồ sơ đã có chứng nhận");
+        }
+        if (existing.isPresent()) {
+            // Chứng nhận từng bị từ chối: đưa lại về chờ duyệt dưới dạng ngoại lệ.
+            Certificate certificate = existing.get();
+            certificate.setApprovalStatus(WorkflowApprovalStatus.PENDING);
+            certificate.setRejectionReason(null);
+            certificate.setUpdatedAt(now);
+            certificate.setUpdatedBy(actor);
+            certificate.setSystemSuggested(Boolean.FALSE);
+            certificate.setExceptionRequested(Boolean.TRUE);
+        } else {
+            ensureSuggestedCertificateExists(participation, actor);
+            certificateRepository.findByLeaderIdAndCourseCode(participation.getLeader().getId(), course.getCourseCode()).ifPresent(certificate -> {
+                certificate.setSystemSuggested(Boolean.FALSE);
+                certificate.setExceptionRequested(Boolean.TRUE);
+            });
+        }
+        participation.setCertificateApprovalStatus(WorkflowApprovalStatus.PENDING);
+        participation.setCertificateRequestedAt(now);
+        participation.setUpdatedAt(now);
+        participation.setUpdatedBy(actor);
+        publishEvent("training.certificate.exception_requested", "courseParticipation", participationId, actor, Map.of("courseCode", course.getCourseCode()));
+        certificateRealtimeNotifier.notifyChanged("EXCEPTION_REQUESTED", course.getCourseCode(), null);
         return toResponse(participation);
     }
 
@@ -698,6 +764,9 @@ public class CourseParticipationService {
 
     public void requireRegistrationWindowOpen(TrainingCourse course) {
         OffsetDateTime now = OffsetDateTime.now();
+        if (Boolean.FALSE.equals(course.getRegistrationEnabled())) {
+            throw commonValidationHelper.validationError("Khóa huấn luyện không mở đăng ký");
+        }
         if (course.getRegistrationStartAt() == null || course.getRegistrationEndAt() == null) {
             throw commonValidationHelper.validationError("Khóa huấn luyện chưa cấu hình thời gian nhận đăng ký");
         }
@@ -707,8 +776,8 @@ public class CourseParticipationService {
         if (now.isAfter(course.getRegistrationEndAt())) {
             throw commonValidationHelper.validationError("Đã hết thời gian nhận đăng ký");
         }
-        if (TrainingCourseStatusSupport.isCourseEnded(course, now)) {
-            throw commonValidationHelper.validationError("Khóa huấn luyện đã kết thúc nên đã đóng đăng ký");
+        if (TrainingCourseStatusSupport.isCourseStarted(course, now)) {
+            throw commonValidationHelper.validationError("Khóa huấn luyện đã diễn ra nên đã đóng đăng ký");
         }
         if (TrainingCourseStatusSupport.registrationStatus(course, now) == CourseRegistrationStatus.CLOSED) {
             throw commonValidationHelper.validationError("Khóa huấn luyện đang đóng đăng ký");
@@ -930,13 +999,13 @@ public class CourseParticipationService {
                 .participationStatus(participation.getParticipationStatus())
                 .scoreHidden(!showScores)
                 .totalScore(showScores ? participation.getTotalScore() : null)
-                .passingScore(participation.getCourse() == null ? null : participation.getCourse().getPassingScore())
+                .passingScore(participation.getCourse() == null || !showScores ? null : participation.getCourse().getPassingScore())
                 .passed(participation.getCourse() != null
                         && participation.getTotalScore() != null
                         && participation.getTotalScore().compareTo(participation.getCourse().getPassingScore()) >= 0)
                 .result(participation.getResult())
                 .review(participation.getReview())
-                .scoreNote(showScores ? participation.getScoreNote() : null)
+                .scoreNote(participation.getScoreNote())
                 .eligible(participation.getEligible())
                 .exceptionReason(participation.getExceptionReason())
                 .registrationNote(participation.getRegistrationNote())

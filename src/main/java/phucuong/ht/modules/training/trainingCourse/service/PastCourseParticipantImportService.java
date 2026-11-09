@@ -166,7 +166,7 @@ public class PastCourseParticipantImportService extends AbstractExcelImporter<Pa
         boolean withTeam = run.withTeam;
         ExcelSheetData sheet = reader.firstSheet();
         // Mọi cột đều bắt buộc có trong file, trừ Cấp độ và Nhận xét; khóa thường không có Tổng điểm / Kết quả.
-        sheet.requireColumns(errors, COL_EMAIL, COL_PHONE,
+        sheet.requireColumns(errors, COL_PHONE,
                 LeaderImportService.COL_HOLY_NAME, LeaderImportService.COL_FULL_NAME, LeaderImportService.COL_BIRTH_DATE,
                 LeaderImportService.COL_GENDER, LeaderImportService.COL_DEANERY, LeaderImportService.COL_PARISH);
         if (past) {
@@ -179,7 +179,7 @@ public class PastCourseParticipantImportService extends AbstractExcelImporter<Pa
         // Khóa thường có thêm sheet "Ngoại lệ" (huynh trưởng không đủ điều kiện, chờ duyệt đăng ký); sheet này có thể không có hoặc để trống.
         ExcelSheetData exceptionSheet = past || withTeam ? null : reader.sheet(ImportTemplates.EXCEPTION_SHEET);
         if (exceptionSheet != null) {
-            exceptionSheet.requireColumns(errors, COL_EMAIL, COL_PHONE, COL_EXCEPTION_REASON,
+            exceptionSheet.requireColumns(errors, COL_PHONE, COL_EXCEPTION_REASON,
                     LeaderImportService.COL_HOLY_NAME, LeaderImportService.COL_FULL_NAME, LeaderImportService.COL_BIRTH_DATE,
                     LeaderImportService.COL_GENDER, LeaderImportService.COL_DEANERY, LeaderImportService.COL_PARISH);
             errors.throwIfAny();
@@ -355,6 +355,7 @@ public class PastCourseParticipantImportService extends AbstractExcelImporter<Pa
         }
         courseActivityGuard.requireActive(course);
         courseActivityGuard.requireNotEnded(course);
+        courseActivityGuard.requireNotStarted(course, "nhập Excel thêm vào danh sách tham dự");
         if (!courseParticipationService.canApproveCourse(course, authentication)) {
             throw commonValidationHelper.forbidden("Không có quyền nhập danh sách tham dự cho khóa huấn luyện này");
         }
@@ -418,8 +419,9 @@ public class PastCourseParticipantImportService extends AbstractExcelImporter<Pa
             String phone = row.phone(COL_PHONE);
             Leader leader = null;
             LeaderImportService.NewLeader newLeader = null;
-            if (email == null || phone == null) {
-                row.error(errors, email == null ? COL_EMAIL : COL_PHONE, "Bắt buộc nhập");
+            if (phone == null) {
+                // Email không bắt buộc; số điện thoại là thông tin tối thiểu để tìm / tạo huynh trưởng.
+                row.error(errors, COL_PHONE, "Bắt buộc nhập");
             } else {
                 Leader foundByEmail = email == null ? null : byEmail.get(email.toLowerCase(Locale.ROOT));
                 Leader foundByPhone = phone == null ? null : byPhone.get(phone);
@@ -508,7 +510,7 @@ public class PastCourseParticipantImportService extends AbstractExcelImporter<Pa
             return null;
         }
         // Cùng một huynh trưởng mới xuất hiện ở hai dòng của file (cùng email hoặc cùng số điện thoại).
-        if (!plannedEmails.add(data.email().toLowerCase(Locale.ROOT)) || (data.phone() != null && !plannedPhones.add(data.phone()))) {
+        if ((data.email() != null && !plannedEmails.add(data.email().toLowerCase(Locale.ROOT))) || (data.phone() != null && !plannedPhones.add(data.phone()))) {
             row.error(errors, COL_EMAIL + " / " + COL_PHONE, "Huynh trưởng xuất hiện nhiều lần trong file");
             return null;
         }

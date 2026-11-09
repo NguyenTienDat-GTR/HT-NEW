@@ -162,7 +162,7 @@ class CertificateRevokeTest {
     // ---------------------------------------------------------------- thu hồi
 
     @Test
-    void revokeFailsTheParticipationEvenWhenScoreIsAbovePassingScore() {
+    void revokeKeepsTheFinalResultOfTheParticipation() {
         CertificateResponse response = service.revoke("CERT-1", reason("Sai thông tin"), admin);
 
         assertEquals(WorkflowApprovalStatus.REVOKED, response.getApprovalStatus());
@@ -171,8 +171,8 @@ class CertificateRevokeTest {
         assertNotNull(certificate.getRevokedAt());
         assertEquals("leader-1", certificate.getRevokedBy());
         assertEquals(WorkflowApprovalStatus.REVOKED, participation.getCertificateApprovalStatus());
-        assertEquals(CourseFinalResult.FAILED, participation.getFinalResult());
-        // Điểm vẫn cao hơn điểm đạt; chỉ kết quả chung của hồ sơ bị chuyển thành không đạt.
+        // Thu hồi không đổi kết quả chung của hồ sơ (chỉ hạ cấp và đổi trạng thái chứng nhận).
+        assertEquals(CourseFinalResult.PASSED, participation.getFinalResult());
         assertEquals(CourseResult.COMPLETED, participation.getResult());
         verify(eventPublisher).publishAfterCommit(any());
         // Hạ cấp về cấp trước đó huynh trưởng đã đạt nhờ lịch sử cấp bậc của khóa.
@@ -290,7 +290,7 @@ class CertificateRevokeTest {
         assertNotNull(certificate.getReissuedAt());
         assertNull(certificate.getRevocationSource());
         // Khóa đã kết thúc: đánh giá lại để hồ sơ đạt và thăng cấp lại.
-        verify(courseFinishService).reevaluateIfFinished(eq(participation), eq("leader-1"));
+        verify(courseFinishService).reevaluateIfFinished(eq(participation), eq("leader-1"), eq(true));
     }
 
     @Test

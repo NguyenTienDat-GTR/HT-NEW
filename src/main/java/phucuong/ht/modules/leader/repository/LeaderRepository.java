@@ -34,6 +34,14 @@ public class LeaderRepository extends BaseRepo<Leader, UUID> {
                 .executeUpdate();
     }
 
+    /** Xóa email (email không bắt buộc). */
+    @Transactional
+    public void clearEmail(UUID id) {
+        entityManager.createQuery("update Leader l set l.email = null where l.id = :id")
+                .setParameter("id", id)
+                .executeUpdate();
+    }
+
     /** Đặt (hoặc gỡ, khi assetId = null) ảnh đại diện và xóa dữ liệu base64 cũ nếu còn. */
     @Transactional
     public void setImageAsset(UUID id, UUID assetId) {
