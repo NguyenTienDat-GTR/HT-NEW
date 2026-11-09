@@ -84,6 +84,7 @@ class CourseCopyServiceTest {
         service = new CourseCopyService(courseRepository, participationRepository, participationService, new TrainingWorkflowSupport(),
                 mock(CourseActivityGuard.class), validation);
         ReflectionTestUtils.setField(service, "trainingDecisionNotifier", notifier);
+        ReflectionTestUtils.setField(service, "invitationAutoTrigger", invitationTrigger);
         securityUtils security = mock(securityUtils.class);
         when(security.hasAuthority(any(), anyString())).thenReturn(true);
         ReflectionTestUtils.setField(service, "securityUtils", security);
@@ -178,17 +179,10 @@ class CourseCopyServiceTest {
         assertEquals(ParticipationStatus.ATTENDED, created.getParticipationStatus());
         assertEquals(fresh, created.getLeader());
         assertNull(created.getTeamName());
-        assertNoInvitationDependency();
+        // Như duyệt đăng ký: bộ tự gửi email được gọi cho hồ sơ vừa sao chép (chỉ gửi khi khóa bật tự gửi).
+        verify(invitationTrigger).afterApproved(List.of(created));
         verify(notifier).notifyRegistrations(eq(Decision.REGISTRATION_APPROVED), eq(List.of(created)), isNull(), eq("admin"),
                 eq(Map.of("new-0", "parish-user")));
-    }
-
-    // Sao chép không tự gửi email thông tin tham dự (dù khóa bật tự gửi): service không được phụ thuộc vào bộ kích hoạt gửi email.
-    // Luồng duyệt / import / chia đội vẫn tự gửi như cũ (xem CourseInvitationAutoTriggerTest).
-    private void assertNoInvitationDependency() {
-        for (java.lang.reflect.Field field : CourseCopyService.class.getDeclaredFields()) {
-            assertFalse(CourseInvitationAutoTrigger.class.isAssignableFrom(field.getType()), "CourseCopyService không được gọi bộ tự gửi email: " + field.getName());
-        }
     }
 
     private TrainingCourse copyTarget(boolean autoSendInvitation) {
@@ -207,13 +201,13 @@ class CourseCopyServiceTest {
     }
 
     @Test
-    void copyFromSourcesCopiesOnlyThePickedLeadersAndNeverSendsInvitationEmails() {
+    void copyFromSourcesCopiesOnlyThePickedLeadersAndTriggersAutoSendForTheCopiedOnes() {
         TrainingCourse source = course("A", prerequisiteType, OffsetDateTime.now());
         Leader one = leader("Hai", parish);
         Leader two = leader("Ba", parish);
         Leader three = leader("Tu", parish);
         stubSourceWith(source, participation(one, source, CourseFinalResult.PASSED), participation(two, source, CourseFinalResult.FAILED), participation(three, source, CourseFinalResult.PASSED));
-        // Khóa đích bật tự gửi email: sao chép xong vẫn không tự gửi.
+        // Khóa đích bật tự gửi email: các hồ sơ vừa sao chép được giao cho bộ tự gửi (khóa không bật thì bộ này tự bỏ qua).
         TrainingCourse withAutoSend = copyTarget(true);
 
         CopyResult result = service.copyFromSources(withAutoSend, List.of("A"), true, List.of(one.getId(), two.getId()), mock(Authentication.class));
@@ -223,7 +217,10 @@ class CourseCopyServiceTest {
         org.mockito.ArgumentCaptor<CourseParticipation> saved = org.mockito.ArgumentCaptor.forClass(CourseParticipation.class);
         verify(participationRepository, org.mockito.Mockito.times(2)).save(saved.capture());
         assertEquals(Set.of(one.getId(), two.getId()), saved.getAllValues().stream().map(item -> item.getLeader().getId()).collect(java.util.stream.Collectors.toSet()));
-        assertNoInvitationDependency();
+        org.mockito.ArgumentCaptor<java.util.Collection<CourseParticipation>> sent = org.mockito.ArgumentCaptor.forClass(java.util.Collection.class);
+        verify(invitationTrigger).afterApproved(sent.capture());
+        assertEquals(2, sent.getValue().size());
+        assertTrue(sent.getValue().stream().allMatch(item -> item.getCourse() == withAutoSend));
     }
 
     @Test

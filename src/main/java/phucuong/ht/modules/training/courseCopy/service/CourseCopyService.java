@@ -15,6 +15,7 @@ import phucuong.ht.modules.parish.model.entity.Parish;
 import phucuong.ht.modules.training.CourseActivityGuard;
 import phucuong.ht.modules.training.TrainingDecisionNotifier;
 import phucuong.ht.modules.training.TrainingWorkflowSupport;
+import phucuong.ht.modules.training.courseInvitation.service.CourseInvitationAutoTrigger;
 import phucuong.ht.modules.training.courseCopy.model.CourseCopyModels.AnySource;
 import phucuong.ht.modules.training.courseCopy.model.CourseCopyModels.Candidate;
 import phucuong.ht.modules.training.courseParticipation.security.CourseParticipationAccessEvaluator;
@@ -53,7 +54,7 @@ import java.util.UUID;
 /**
  * Sao chép danh sách tham dự của các khóa tiên quyết đã kết thúc (đã chốt kết quả chung) sang khóa huấn luyện.
  * Hồ sơ được sao chép vào thẳng danh sách tham dự (đã duyệt, không kiểm tra điều kiện của khóa), thông báo như khi duyệt đăng ký
- * (không tự gửi email thông tin tham dự dù khóa bật tự gửi). Huynh trưởng đã có hồ sơ trong khóa (mọi trạng thái) được bỏ qua.
+ * và tự gửi email thông tin tham dự nếu khóa bật. Huynh trưởng đã có hồ sơ trong khóa (mọi trạng thái) được bỏ qua.
  */
 @Service
 @RequiredArgsConstructor
@@ -82,6 +83,8 @@ public class CourseCopyService {
     private UnitOperationalStatusService unitOperationalStatusService;
     @Autowired(required = false)
     private TrainingDecisionNotifier trainingDecisionNotifier;
+    @Autowired(required = false)
+    private CourseInvitationAutoTrigger invitationAutoTrigger;
     @Autowired(required = false)
     private phucuong.ht.common.concurrency.EntityLockService entityLockService;
 
@@ -162,8 +165,11 @@ public class CourseCopyService {
             submitterById.put(participation.getId(), source.getCreatedBy());
         }
         if (!created.isEmpty()) {
-            // Không tự gửi email thông tin tham dự khi sao chép (dù khóa bật tự gửi): người quản lý chủ động gửi sau ở tab Thẻ & điểm danh.
-            // Chỉ thông báo trong hệ thống cho người gửi đăng ký gốc / admin giáo xứ / huynh trưởng.
+            // Như duyệt đăng ký: khóa bật "tự gửi email thông tin tham dự" thì hồ sơ vừa sao chép được tự gửi (sau khi commit),
+            // đồng thời thông báo cho người gửi đăng ký gốc / admin giáo xứ / huynh trưởng.
+            if (invitationAutoTrigger != null) {
+                invitationAutoTrigger.afterApproved(created);
+            }
             if (trainingDecisionNotifier != null) {
                 trainingDecisionNotifier.notifyRegistrations(Decision.REGISTRATION_APPROVED, created, null, actor, submitterById);
             }
