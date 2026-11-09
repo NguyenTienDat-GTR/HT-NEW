@@ -57,6 +57,7 @@ public class DeaneryAccessEvaluator {
             return false;
         }
         return hasAuthority(authentication, UPDATE_ALL)
+                || hasDioceseScopedAccess(authentication, deaneryId, UPDATE_DIOCESE)
                 || hasDeaneryScopedAccess(authentication, deaneryId, UPDATE_DEANERY);
     }
 
