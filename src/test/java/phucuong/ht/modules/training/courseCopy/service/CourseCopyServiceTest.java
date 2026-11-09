@@ -7,6 +7,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.test.util.ReflectionTestUtils;
 import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.common.exception.errorCode;
+import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.common.exception.ApiException;
 import phucuong.ht.modules.deanery.model.entity.Deanery;
@@ -52,7 +53,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class CourseCopyServiceTest {
@@ -84,6 +84,9 @@ class CourseCopyServiceTest {
         service = new CourseCopyService(courseRepository, participationRepository, participationService, new TrainingWorkflowSupport(),
                 mock(CourseActivityGuard.class), validation);
         ReflectionTestUtils.setField(service, "trainingDecisionNotifier", notifier);
+        securityUtils security = mock(securityUtils.class);
+        when(security.hasAuthority(any(), anyString())).thenReturn(true);
+        ReflectionTestUtils.setField(service, "securityUtils", security);
 
         target = course("TARGET", type("SMKN_I", prerequisiteType), null);
         target.setStartDate(java.time.LocalDate.now().plusDays(5));
@@ -175,10 +178,97 @@ class CourseCopyServiceTest {
         assertEquals(ParticipationStatus.ATTENDED, created.getParticipationStatus());
         assertEquals(fresh, created.getLeader());
         assertNull(created.getTeamName());
-        // Sao chép không tự gửi email thông tin tham dự.
-        verifyNoInteractions(invitationTrigger);
+        assertNoInvitationDependency();
         verify(notifier).notifyRegistrations(eq(Decision.REGISTRATION_APPROVED), eq(List.of(created)), isNull(), eq("admin"),
                 eq(Map.of("new-0", "parish-user")));
+    }
+
+    // Sao chép không tự gửi email thông tin tham dự (dù khóa bật tự gửi): service không được phụ thuộc vào bộ kích hoạt gửi email.
+    // Luồng duyệt / import / chia đội vẫn tự gửi như cũ (xem CourseInvitationAutoTriggerTest).
+    private void assertNoInvitationDependency() {
+        for (java.lang.reflect.Field field : CourseCopyService.class.getDeclaredFields()) {
+            assertFalse(CourseInvitationAutoTrigger.class.isAssignableFrom(field.getType()), "CourseCopyService không được gọi bộ tự gửi email: " + field.getName());
+        }
+    }
+
+    private TrainingCourse copyTarget(boolean autoSendInvitation) {
+        TrainingCourse course = course("TARGET2", type("SMKN_I", prerequisiteType), null);
+        course.setAutoSendInvitation(autoSendInvitation);
+        course.setStartDate(java.time.LocalDate.now().plusDays(5));
+        course.setEndDate(java.time.LocalDate.now().plusDays(10));
+        return course;
+    }
+
+    private void stubSourceWith(TrainingCourse source, CourseParticipation... participations) {
+        when(courseRepository.findCopySources(any())).thenReturn(List.of(source));
+        when(participationRepository.findApprovedByCourseCodes(anyCollection())).thenReturn(List.of(participations));
+        when(participationRepository.findLeaderIdsByCourseCode("TARGET2")).thenReturn(Set.of());
+        when(participationRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+    }
+
+    @Test
+    void copyFromSourcesCopiesOnlyThePickedLeadersAndNeverSendsInvitationEmails() {
+        TrainingCourse source = course("A", prerequisiteType, OffsetDateTime.now());
+        Leader one = leader("Hai", parish);
+        Leader two = leader("Ba", parish);
+        Leader three = leader("Tu", parish);
+        stubSourceWith(source, participation(one, source, CourseFinalResult.PASSED), participation(two, source, CourseFinalResult.FAILED), participation(three, source, CourseFinalResult.PASSED));
+        // Khóa đích bật tự gửi email: sao chép xong vẫn không tự gửi.
+        TrainingCourse withAutoSend = copyTarget(true);
+
+        CopyResult result = service.copyFromSources(withAutoSend, List.of("A"), true, List.of(one.getId(), two.getId()), mock(Authentication.class));
+
+        // Chọn riêng thì bỏ qua cách "chỉ hồ sơ đạt": người không đạt được chọn vẫn sao chép, người không được chọn thì không.
+        assertEquals(2, result.copied());
+        org.mockito.ArgumentCaptor<CourseParticipation> saved = org.mockito.ArgumentCaptor.forClass(CourseParticipation.class);
+        verify(participationRepository, org.mockito.Mockito.times(2)).save(saved.capture());
+        assertEquals(Set.of(one.getId(), two.getId()), saved.getAllValues().stream().map(item -> item.getLeader().getId()).collect(java.util.stream.Collectors.toSet()));
+        assertNoInvitationDependency();
+    }
+
+    @Test
+    void copyFromSourcesInPassedOnlyModeSkipsFailedLeadersWhenNobodyIsPicked() {
+        TrainingCourse source = course("A", prerequisiteType, OffsetDateTime.now());
+        Leader passed = leader("Hai", parish);
+        Leader failed = leader("Ba", parish);
+        stubSourceWith(source, participation(passed, source, CourseFinalResult.PASSED), participation(failed, source, CourseFinalResult.FAILED));
+
+        CopyResult result = service.copyFromSources(copyTarget(false), List.of("A"), true, mock(Authentication.class));
+
+        assertEquals(1, result.copied());
+        org.mockito.ArgumentCaptor<CourseParticipation> saved = org.mockito.ArgumentCaptor.forClass(CourseParticipation.class);
+        verify(participationRepository).save(saved.capture());
+        assertEquals(passed.getId(), saved.getValue().getLeader().getId());
+    }
+
+    @Test
+    void copyFromSourcesReportsPickedLeadersThatAreNotInTheSourceCourses() {
+        TrainingCourse source = course("A", prerequisiteType, OffsetDateTime.now());
+        Leader inSource = leader("Hai", parish);
+        stubSourceWith(source, participation(inSource, source, CourseFinalResult.PASSED));
+        UUID stranger = UUID.randomUUID();
+
+        CopyResult result = service.copyFromSources(copyTarget(false), List.of("A"), false, List.of(inSource.getId(), stranger), mock(Authentication.class));
+
+        assertEquals(1, result.copied());
+        assertEquals(1, result.skipped().size());
+        assertEquals(stranger, result.skipped().get(0).leaderId());
+    }
+
+    @Test
+    void anyCandidatesListsEveryLeaderOfTheSelectedSourcesWithBlockedReasons() {
+        TrainingCourse source = course("A", prerequisiteType, OffsetDateTime.now());
+        Leader free = leader("Hai", parish);
+        Leader already = leader("Ba", parish);
+        stubSourceWith(source, participation(free, source, CourseFinalResult.PASSED), participation(already, source, CourseFinalResult.FAILED));
+        when(courseRepository.findByCodeWithType("TARGET2")).thenReturn(Optional.of(copyTarget(false)));
+        when(participationRepository.findLeaderIdsByCourseCode("TARGET2")).thenReturn(Set.of(already.getId()));
+
+        List<Candidate> candidates = service.anyCandidates("TARGET2", null, List.of("A"), mock(Authentication.class));
+
+        assertEquals(2, candidates.size());
+        assertNull(candidates.stream().filter(item -> item.leaderId().equals(free.getId())).findFirst().orElseThrow().blockedReason());
+        assertEquals(CourseCopyService.BLOCK_EXISTING, candidates.stream().filter(item -> item.leaderId().equals(already.getId())).findFirst().orElseThrow().blockedReason());
     }
 
     private TrainingCourse course(String code, TrainingCourseType type, OffsetDateTime finishedAt) {
