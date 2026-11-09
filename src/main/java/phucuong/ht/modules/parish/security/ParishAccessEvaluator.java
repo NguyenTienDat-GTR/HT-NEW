@@ -72,6 +72,7 @@ public class ParishAccessEvaluator {
         }
         return hasAuthority(authentication, UPDATE_ALL)
                 || hasDioceseScopedAccess(authentication, parishId, UPDATE_DIOCESE)
+                || hasDeaneryScopedAccess(authentication, parishId, UPDATE_DEANERY)
                 || hasParishScopedAccess(authentication, parishId, UPDATE_PARISH);
     }
 

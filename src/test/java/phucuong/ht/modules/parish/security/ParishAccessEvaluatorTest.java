@@ -160,6 +160,37 @@ class ParishAccessEvaluatorTest {
     }
 
     @Test
+    void canUpdateShouldAllowDeaneryScopedPermissionForParishInSameDeanery() {
+        UUID parishId = UUID.randomUUID();
+        UUID deaneryId = UUID.randomUUID();
+        Authentication authentication = authentication(
+                "admin-dea",
+                "LEADER1",
+                List.of("ADMIN_DEANERY"),
+                List.of(ParishAccessEvaluator.UPDATE_DEANERY)
+        );
+        when(accountRepository.findActiveDeaneryIdByUsername("admin-dea")).thenReturn(Optional.of(deaneryId));
+        when(parishRepository.findDeaneryIdByParishId(parishId)).thenReturn(Optional.of(deaneryId));
+
+        assertTrue(parishAccessEvaluator.canUpdate(authentication, parishId));
+    }
+
+    @Test
+    void canUpdateShouldDenyDeaneryScopedPermissionForParishInOtherDeanery() {
+        UUID parishId = UUID.randomUUID();
+        Authentication authentication = authentication(
+                "admin-dea",
+                "LEADER1",
+                List.of("ADMIN_DEANERY"),
+                List.of(ParishAccessEvaluator.UPDATE_DEANERY)
+        );
+        when(accountRepository.findActiveDeaneryIdByUsername("admin-dea")).thenReturn(Optional.of(UUID.randomUUID()));
+        when(parishRepository.findDeaneryIdByParishId(parishId)).thenReturn(Optional.of(UUID.randomUUID()));
+
+        assertFalse(parishAccessEvaluator.canUpdate(authentication, parishId));
+    }
+
+    @Test
     void canListShouldAllowParishScopedAuthority() {
         Authentication authentication = authentication(
                 "admin-parish",
