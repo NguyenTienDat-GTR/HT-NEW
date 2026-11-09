@@ -8,6 +8,9 @@ WORKDIR /app
 COPY build.gradle settings.gradle gradlew ./
 COPY gradle ./gradle
 
+# Tai san thu vien (layer nay duoc cache khi build.gradle khong doi) de lan build sau khong tai lai.
+RUN sh ./gradlew dependencies --no-daemon -q > /dev/null 2>&1 || true
+
 # Sao chep ma nguon vao container.
 COPY src ./src
 
