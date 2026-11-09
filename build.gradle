@@ -116,6 +116,8 @@ configurations.configureEach {
 
 tasks.withType(Test).configureEach {
     useJUnitPlatform()
+    // Test JVM mặc định chỉ 512MB; ~1100 test cache nhiều context Spring nên dễ OutOfMemoryError (CI runner có ~7GB).
+    maxHeapSize = '2g'
     // Mỗi context Spring được cache giữ một pool riêng; giới hạn pool để nhiều context không làm Postgres hết kết nối.
     systemProperty 'spring.datasource.hikari.maximum-pool-size', '2'
     systemProperty 'spring.datasource.hikari.minimum-idle', '0'
