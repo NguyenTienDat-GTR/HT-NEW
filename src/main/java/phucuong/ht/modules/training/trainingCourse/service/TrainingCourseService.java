@@ -155,7 +155,7 @@ public class TrainingCourseService {
         if (Boolean.TRUE.equals(course.getOpenToOtherDeaneries()) && crossDeaneryAccessService != null) {
             crossDeaneryAccessService.notifyCourseOpened(course, auditActor);
         }
-        CopyResult copied = copyParticipants(course, request.getCopySourceCourseCodes(), request.getCopyMode(), authentication);
+        CopyResult copied = copyParticipants(course, request.getCopySourceCourseCodes(), request.getCopyMode(), request.getCopyLeaderIds(), authentication);
         return withCopyResult(toResponse(trainingCourseRepository.findByCodeWithType(course.getCourseCode()).orElse(course)), copied);
     }
 
@@ -412,16 +412,17 @@ public class TrainingCourseService {
         if (!wasOpen && Boolean.TRUE.equals(existing.getOpenToOtherDeaneries()) && crossDeaneryAccessService != null) {
             crossDeaneryAccessService.notifyCourseOpened(existing, existing.getUpdatedBy());
         }
-        CopyResult copied = copyParticipants(existing, request.getCopySourceCourseCodes(), request.getCopyMode(), authentication);
+        CopyResult copied = copyParticipants(existing, request.getCopySourceCourseCodes(), request.getCopyMode(), request.getCopyLeaderIds(), authentication);
         return withCopyResult(toResponse(existing, courseParticipationRepository.existsByCourseCode(courseCode)), copied);
     }
 
     // Sao chép danh sách tham dự từ khóa nguồn khi lưu khóa (null nếu không yêu cầu).
-    private CopyResult copyParticipants(TrainingCourse course, List<String> sourceCourseCodes, String copyMode, Authentication authentication) {
+    private CopyResult copyParticipants(TrainingCourse course, List<String> sourceCourseCodes, String copyMode, List<java.util.UUID> copyLeaderIds,
+                                        Authentication authentication) {
         if (sourceCourseCodes == null || sourceCourseCodes.isEmpty() || courseCopyService == null) {
             return null;
         }
-        return courseCopyService.copyFromSources(course, sourceCourseCodes, "PASSED_ONLY".equals(copyMode), authentication);
+        return courseCopyService.copyFromSources(course, sourceCourseCodes, "PASSED_ONLY".equals(copyMode), copyLeaderIds, authentication);
     }
 
     private TrainingCourseResponse withCopyResult(TrainingCourseResponse response, CopyResult copied) {

@@ -52,6 +52,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class CourseCopyServiceTest {
@@ -83,7 +84,6 @@ class CourseCopyServiceTest {
         service = new CourseCopyService(courseRepository, participationRepository, participationService, new TrainingWorkflowSupport(),
                 mock(CourseActivityGuard.class), validation);
         ReflectionTestUtils.setField(service, "trainingDecisionNotifier", notifier);
-        ReflectionTestUtils.setField(service, "invitationAutoTrigger", invitationTrigger);
 
         target = course("TARGET", type("SMKN_I", prerequisiteType), null);
         target.setStartDate(java.time.LocalDate.now().plusDays(5));
@@ -175,7 +175,8 @@ class CourseCopyServiceTest {
         assertEquals(ParticipationStatus.ATTENDED, created.getParticipationStatus());
         assertEquals(fresh, created.getLeader());
         assertNull(created.getTeamName());
-        verify(invitationTrigger).afterApproved(List.of(created));
+        // Sao chép không tự gửi email thông tin tham dự.
+        verifyNoInteractions(invitationTrigger);
         verify(notifier).notifyRegistrations(eq(Decision.REGISTRATION_APPROVED), eq(List.of(created)), isNull(), eq("admin"),
                 eq(Map.of("new-0", "parish-user")));
     }

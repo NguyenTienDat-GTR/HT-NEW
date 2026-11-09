@@ -287,9 +287,11 @@ POST /api/training/participants/teams/export|202|401|403|400|N/A: export of a co
 GET /api/training/courses/teams/import-template|200|401|403|N/A: template download has no request parameters|N/A: template download does not resolve a resource|N/A: read-only endpoint does not mutate state
 POST /api/training/courses/{courseCode}/teams/import|202|401|403|400|404|409
 GET /api/training/courses/copy-sources|200|401|403|N/A: query parameters are optional|404|N/A: read-only endpoint does not mutate state
+GET /api/training/courses/copy-sources/candidates|200|401|403|400|404|N/A: read-only endpoint does not mutate state
 GET /api/training/courses/{courseCode}/prerequisite-copy/sources|200|401|403|N/A: course code is an opaque string|404|N/A: read-only endpoint does not mutate state
 GET /api/training/courses/{courseCode}/prerequisite-copy/candidates|200|401|403|400|404|N/A: read-only endpoint does not mutate state
 POST /api/training/courses/{courseCode}/prerequisite-copy|200|401|403|400|404|409
+POST /api/training/courses/{courseCode}/participants-copy|200|401|403|400|404|409
 GET /api/training/cross-deanery/courses|200|401|403|N/A: list endpoint has no request parameters|N/A: list endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
 GET /api/training/cross-deanery/courses/{courseCode}/candidates|200|401|403|N/A: course code is an opaque string|404|N/A: read-only endpoint does not mutate state
 POST /api/training/cross-deanery/courses/{courseCode}/requests|200|401|403|400|404|409

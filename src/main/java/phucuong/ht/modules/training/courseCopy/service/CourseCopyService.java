@@ -21,10 +21,10 @@ import phucuong.ht.modules.training.courseParticipation.security.CourseParticipa
 import phucuong.ht.modules.training.trainingCourse.security.TrainingCourseAccessEvaluator;
 import phucuong.ht.modules.training.courseCopy.model.CourseCopyModels.CopyRequest;
 import phucuong.ht.modules.training.courseCopy.model.CourseCopyModels.CopyResult;
+import phucuong.ht.modules.training.courseCopy.model.CourseCopyModels.CopyToCourseRequest;
 import phucuong.ht.modules.training.courseCopy.model.CourseCopyModels.Skipped;
 import phucuong.ht.modules.training.courseCopy.model.CourseCopyModels.SourceCourse;
 import phucuong.ht.modules.training.courseCopy.model.CourseCopyModels.SourcesResponse;
-import phucuong.ht.modules.training.courseInvitation.service.CourseInvitationAutoTrigger;
 import phucuong.ht.modules.training.courseParticipation.model.entity.CourseParticipation;
 import phucuong.ht.modules.training.courseParticipation.repository.CourseParticipationRepository;
 import phucuong.ht.modules.training.courseParticipation.service.CourseParticipationService;
@@ -53,7 +53,7 @@ import java.util.UUID;
 /**
  * Sao chép danh sách tham dự của các khóa tiên quyết đã kết thúc (đã chốt kết quả chung) sang khóa huấn luyện.
  * Hồ sơ được sao chép vào thẳng danh sách tham dự (đã duyệt, không kiểm tra điều kiện của khóa), thông báo như khi duyệt đăng ký
- * và tự gửi email thông tin tham dự nếu khóa bật. Huynh trưởng đã có hồ sơ trong khóa (mọi trạng thái) được bỏ qua.
+ * (không tự gửi email thông tin tham dự dù khóa bật tự gửi). Huynh trưởng đã có hồ sơ trong khóa (mọi trạng thái) được bỏ qua.
  */
 @Service
 @RequiredArgsConstructor
@@ -82,8 +82,6 @@ public class CourseCopyService {
     private UnitOperationalStatusService unitOperationalStatusService;
     @Autowired(required = false)
     private TrainingDecisionNotifier trainingDecisionNotifier;
-    @Autowired(required = false)
-    private CourseInvitationAutoTrigger invitationAutoTrigger;
     @Autowired(required = false)
     private phucuong.ht.common.concurrency.EntityLockService entityLockService;
 
@@ -164,10 +162,8 @@ public class CourseCopyService {
             submitterById.put(participation.getId(), source.getCreatedBy());
         }
         if (!created.isEmpty()) {
-            // Như duyệt đăng ký: tự gửi email thông tin tham dự (nếu khóa bật) và thông báo cho người gửi đăng ký gốc / admin giáo xứ / huynh trưởng.
-            if (invitationAutoTrigger != null) {
-                invitationAutoTrigger.afterApproved(created);
-            }
+            // Không tự gửi email thông tin tham dự khi sao chép (dù khóa bật tự gửi): người quản lý chủ động gửi sau ở tab Thẻ & điểm danh.
+            // Chỉ thông báo trong hệ thống cho người gửi đăng ký gốc / admin giáo xứ / huynh trưởng.
             if (trainingDecisionNotifier != null) {
                 trainingDecisionNotifier.notifyRegistrations(Decision.REGISTRATION_APPROVED, created, null, actor, submitterById);
             }
@@ -181,28 +177,8 @@ public class CourseCopyService {
      */
     @Transactional(readOnly = true)
     public List<AnySource> anySources(String courseCode, String courseTypeCode, Authentication authentication) {
-        UUID dioceseId;
-        UUID deaneryId = null;
-        boolean deaneryManaged;
-        String excluded = null;
-        if (courseCode != null && !courseCode.isBlank()) {
-            TrainingCourse course = requireCourse(courseCode);
-            dioceseId = trainingWorkflowSupport.dioceseIdOf(course);
-            deaneryManaged = trainingWorkflowSupport.isDeaneryManaged(course);
-            deaneryId = course.getDeanery() == null ? null : course.getDeanery().getId();
-            excluded = course.getCourseCode();
-        } else {
-            TrainingCourseType type = trainingCourseTypeRepository.findByCodeWithPrerequisite(courseTypeCode == null ? "" : courseTypeCode.trim())
-                    .orElseThrow(() -> commonValidationHelper.validationError("Chưa chọn loại khóa huấn luyện"));
-            deaneryManaged = trainingWorkflowSupport.isDeaneryManaged(type);
-            if (deaneryManaged) {
-                deaneryId = accountScopeValidationHelper.requireActiveDeaneryId(authentication, TrainingCourseAccessEvaluator.CREATE_DEANERY);
-                dioceseId = deaneryRepository.getRequired(deaneryId).getDiocese().getId();
-            } else {
-                dioceseId = accountScopeValidationHelper.requireActiveDioceseId(authentication, TrainingCourseAccessEvaluator.CREATE_DIOCESE);
-            }
-        }
-        List<TrainingCourse> sources = copySourcesIn(dioceseId, deaneryManaged, deaneryId, excluded);
+        TargetScope scope = resolveScope(courseCode, courseTypeCode, authentication);
+        List<TrainingCourse> sources = copySourcesIn(scope.dioceseId(), scope.deaneryManaged(), scope.deaneryId(), scope.courseCode());
         Map<String, long[]> counts = courseParticipationRepository.countAttendeesAndPassedByCourseCodes(
                 sources.stream().map(TrainingCourse::getCourseCode).toList());
         return sources.stream().map(source -> {
@@ -213,12 +189,91 @@ public class CourseCopyService {
         }).toList();
     }
 
+    // Phạm vi của khóa đích: khóa đã có (sửa khóa) hoặc phạm vi của tài khoản theo loại khóa (tạo khóa).
+    private record TargetScope(UUID dioceseId, UUID deaneryId, boolean deaneryManaged, String courseCode) {
+    }
+
+    private TargetScope resolveScope(String courseCode, String courseTypeCode, Authentication authentication) {
+        if (courseCode != null && !courseCode.isBlank()) {
+            TrainingCourse course = requireCourse(courseCode);
+            return new TargetScope(trainingWorkflowSupport.dioceseIdOf(course), course.getDeanery() == null ? null : course.getDeanery().getId(),
+                    trainingWorkflowSupport.isDeaneryManaged(course), course.getCourseCode());
+        }
+        TrainingCourseType type = trainingCourseTypeRepository.findByCodeWithPrerequisite(courseTypeCode == null ? "" : courseTypeCode.trim())
+                .orElseThrow(() -> commonValidationHelper.validationError("Chưa chọn loại khóa huấn luyện"));
+        if (trainingWorkflowSupport.isDeaneryManaged(type)) {
+            UUID deaneryId = accountScopeValidationHelper.requireActiveDeaneryId(authentication, TrainingCourseAccessEvaluator.CREATE_DEANERY);
+            return new TargetScope(deaneryRepository.getRequired(deaneryId).getDiocese().getId(), deaneryId, true, null);
+        }
+        UUID dioceseId = accountScopeValidationHelper.requireActiveDioceseId(authentication, TrainingCourseAccessEvaluator.CREATE_DIOCESE);
+        return new TargetScope(dioceseId, null, false, null);
+    }
+
+    /**
+     * Hồ sơ trong danh sách tham dự của các khóa nguồn đã chọn, để người dùng chọn từng huynh trưởng cần sao chép (khóa đích đã có hoặc chưa tạo).
+     * Trùng ở nhiều khóa nguồn thì lấy hồ sơ đạt (khóa kết thúc gần nhất); blockedReason khác null = không sao chép được.
+     */
+    @Transactional(readOnly = true)
+    public List<Candidate> anyCandidates(String courseCode, String courseTypeCode, List<String> sourceCourseCodes, Authentication authentication) {
+        TargetScope scope = resolveScope(courseCode, courseTypeCode, authentication);
+        Set<String> requested = new LinkedHashSet<>(sourceCourseCodes == null ? List.of() : sourceCourseCodes);
+        if (requested.isEmpty()) {
+            return List.of();
+        }
+        Set<String> allowed = copySourcesIn(scope.dioceseId(), scope.deaneryManaged(), scope.deaneryId(), scope.courseCode())
+                .stream().map(TrainingCourse::getCourseCode).collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        if (!allowed.containsAll(requested)) {
+            throw commonValidationHelper.validationError("Khóa nguồn đã chọn không hợp lệ hoặc không thuộc phạm vi của khóa");
+        }
+        Map<UUID, CourseParticipation> best = new LinkedHashMap<>();
+        for (CourseParticipation participation : courseParticipationRepository.findApprovedByCourseCodes(requested)) {
+            if (withinScope(scope, participation.getLeader().getParish())) {
+                best.merge(participation.getLeader().getId(), participation, CourseCopyService::preferred);
+            }
+        }
+        Set<UUID> existing = scope.courseCode() == null ? Set.of() : courseParticipationRepository.findLeaderIdsByCourseCode(scope.courseCode());
+        Map<UUID, Boolean> parishOperational = new HashMap<>();
+        return best.values().stream()
+                .sorted(Comparator.comparing((CourseParticipation item) -> deaneryName(item.getLeader()), Comparator.nullsLast(String::compareTo))
+                        .thenComparing(item -> item.getLeader().getParish().getName(), Comparator.nullsLast(String::compareTo))
+                        .thenComparing(item -> Objects.toString(item.getLeader().getFirstName(), ""))
+                        .thenComparing(item -> Objects.toString(item.getLeader().getLastName(), "")))
+                .map(item -> toCandidate(item, null, blockedReason(item.getLeader(), existing, parishOperational)))
+                .toList();
+    }
+
+    private static boolean withinScope(TargetScope scope, Parish parish) {
+        if (parish == null || parish.getDeanery() == null) {
+            return false;
+        }
+        if (scope.deaneryManaged()) {
+            return scope.deaneryId() != null && scope.deaneryId().equals(parish.getDeanery().getId());
+        }
+        return scope.dioceseId() != null && parish.getDeanery().getDiocese() != null && scope.dioceseId().equals(parish.getDeanery().getDiocese().getId());
+    }
+
     /**
      * Sao chép danh sách tham dự từ các khóa nguồn vào khóa vừa tạo / vừa sửa (cùng giao dịch với việc lưu khóa).
      * passedOnly = chỉ hồ sơ có kết quả đạt; ngược lại sao chép mọi hồ sơ. Hồ sơ không sao chép được (đã có trong khóa, ngưng hoạt động...) bị bỏ qua.
      */
     @Transactional
     public CopyResult copyFromSources(TrainingCourse course, List<String> sourceCourseCodes, boolean passedOnly, Authentication authentication) {
+        return copyFromSources(course, sourceCourseCodes, passedOnly, null, authentication);
+    }
+
+    // Sao chép ngay vào khóa đã có (nút Sao chép ở tab Danh sách tham dự): quyền kiểm tra ở controller, quyền duyệt đăng ký kiểm tra lại trong copyFromSources.
+    @EvictCaches.Courses
+    @EvictCaches.Analytics
+    @Transactional
+    public CopyResult copyToCourse(String courseCode, CopyToCourseRequest request, Authentication authentication) {
+        TrainingCourse course = requireCourse(courseCode);
+        return copyFromSources(course, request.sourceCourseCodes(), "PASSED_ONLY".equals(request.copyMode()), request.leaderIds(), authentication);
+    }
+
+    /** onlyLeaderIds khác rỗng: chỉ sao chép các huynh trưởng được chọn riêng (bỏ qua passedOnly); huynh trưởng không thuộc khóa nguồn bị báo bỏ qua. */
+    @Transactional
+    public CopyResult copyFromSources(TrainingCourse course, List<String> sourceCourseCodes, boolean passedOnly, List<UUID> onlyLeaderIds,
+                                      Authentication authentication) {
         if (sourceCourseCodes == null || sourceCourseCodes.isEmpty()) {
             return new CopyResult(0, List.of());
         }
@@ -235,11 +290,23 @@ public class CourseCopyService {
         Set<String> allowed = copySourcesIn(trainingWorkflowSupport.dioceseIdOf(course), deaneryManaged,
                 course.getDeanery() == null ? null : course.getDeanery().getId(), course.getCourseCode())
                 .stream().map(TrainingCourse::getCourseCode).collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
-        Map<UUID, Candidate> candidates = collectCandidates(course, sourceCourseCodes, !passedOnly, allowed,
+        boolean picked = onlyLeaderIds != null && !onlyLeaderIds.isEmpty();
+        Map<UUID, Candidate> candidates = collectCandidates(course, sourceCourseCodes, picked || !passedOnly, allowed,
                 "Chưa chọn khóa nguồn nào", "Khóa nguồn đã chọn không hợp lệ hoặc không thuộc phạm vi của khóa");
+        List<Skipped> skipped = new ArrayList<>();
+        if (picked) {
+            Set<UUID> wanted = new LinkedHashSet<>(onlyLeaderIds);
+            for (UUID leaderId : wanted) {
+                if (!candidates.containsKey(leaderId)) {
+                    skipped.add(new Skipped(leaderId, null, "Không thuộc danh sách tham dự của khóa nguồn đã chọn"));
+                }
+            }
+            candidates = candidates.entrySet().stream().filter(entry -> wanted.contains(entry.getKey()))
+                    .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (a, b) -> a, LinkedHashMap::new));
+        }
         List<UUID> leaderIds = candidates.values().stream().filter(candidate -> candidate.blockedReason() == null).map(Candidate::leaderId).toList();
         // Hồ sơ không sao chép được cũng được báo lại (bỏ qua) để người dùng biết.
-        List<Skipped> skipped = new ArrayList<>(candidates.values().stream().filter(candidate -> candidate.blockedReason() != null)
+        skipped.addAll(candidates.values().stream().filter(candidate -> candidate.blockedReason() != null)
                 .map(candidate -> new Skipped(candidate.leaderId(), candidate.fullName(), candidate.blockedReason())).toList());
         if (leaderIds.isEmpty()) {
             return new CopyResult(0, skipped);
@@ -365,7 +432,7 @@ public class CourseCopyService {
     private Candidate toCandidate(CourseParticipation source, TrainingCourse course, String blocked) {
         Leader leader = source.getLeader();
         Parish parish = leader.getParish();
-        boolean eligible = blocked == null && courseParticipationService.isEligible(leader.getLeaderLevel(), leader.getBirthDate(), leader.getId(), course);
+        boolean eligible = course != null && blocked == null && courseParticipationService.isEligible(leader.getLeaderLevel(), leader.getBirthDate(), leader.getId(), course);
         return new Candidate(
                 leader.getId(),
                 leader.getHolyName(),
