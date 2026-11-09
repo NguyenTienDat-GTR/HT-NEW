@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.time.LocalDate;
+import java.time.MonthDay;
 import java.util.UUID;
 
 @Getter
@@ -20,8 +21,10 @@ public class OrganizationUnit extends BaseModel {
     @Column(name = "name", nullable = false, length = 100)
     private String name;
 
-    @Column(name = "patron_saint_day")
-    private LocalDate patronSaintDay;
+    /** Ngày bổn mạng chỉ gồm ngày và tháng (không có năm), lưu dạng "MM-dd". */
+    @Convert(converter = MonthDayConverter.class)
+    @Column(name = "patron_saint_day", length = 5)
+    private MonthDay patronSaintDay;
 
     @Column(name = "establishment_date")
     private LocalDate establishmentDate;

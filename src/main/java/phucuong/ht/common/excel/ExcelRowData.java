@@ -2,6 +2,7 @@ package phucuong.ht.common.excel;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.MonthDay;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
 
@@ -77,6 +78,25 @@ public final class ExcelRowData {
         LocalDate parsed = value instanceof String s ? ExcelWorkbookReader.parseDate(s) : null;
         if (parsed == null) {
             error(errors, column, "Ngày không hợp lệ, cần theo dạng dd/MM/yyyy");
+        }
+        return parsed;
+    }
+
+    /** Đọc ô ngày + tháng (không năm): chấp nhận "dd/MM", "d-M" hoặc ô ngày của Excel (bỏ phần năm). */
+    public MonthDay monthDay(ImportErrors errors, String column, boolean required) {
+        Object value = values.get(ExcelWorkbookReader.normalize(column));
+        if (value == null || (value instanceof String s && s.isBlank())) {
+            if (required) {
+                error(errors, column, "Bắt buộc nhập");
+            }
+            return null;
+        }
+        if (value instanceof LocalDate date) {
+            return MonthDay.from(date);
+        }
+        MonthDay parsed = value instanceof String s ? ExcelWorkbookReader.parseMonthDay(s) : null;
+        if (parsed == null) {
+            error(errors, column, "Ngày không hợp lệ, cần theo dạng dd/MM (không có năm)");
         }
         return parsed;
     }

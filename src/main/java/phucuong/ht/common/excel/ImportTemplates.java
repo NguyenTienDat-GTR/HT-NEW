@@ -83,20 +83,20 @@ public final class ImportTemplates {
     public static byte[] deaneries() {
         List<Column> columns = List.of(
                 new Column(DeaneryImportService.COL_NAME, true, 28, Kind.GENERAL),
-                new Column(DeaneryImportService.COL_PATRON_SAINT_DAY, false, 16, Kind.DATE),
+                new Column(DeaneryImportService.COL_PATRON_SAINT_DAY, false, 16, Kind.TEXT),
                 new Column(DeaneryImportService.COL_ESTABLISHMENT_DATE, false, 16, Kind.DATE),
                 new Column(DeaneryImportService.COL_CHAPLAIN, false, 26, Kind.GENERAL),
                 new Column(DeaneryImportService.COL_PHONE, false, 16, Kind.TEXT),
                 new Column(DeaneryImportService.COL_EMAIL, false, 30, Kind.GENERAL),
                 new Column(DeaneryImportService.COL_ASSOCIATION, false, 26, Kind.GENERAL));
         List<List<Object>> samples = List.of(
-                List.of("Thánh Tâm", LocalDate.of(2000, 6, 16), LocalDate.of(1990, 1, 1), "Linh mục Phêrô Nguyễn Văn An", "0901234567", "giaohat.thanhtam@example.com", "Thánh Tâm"),
+                List.of("Thánh Tâm", "16/06", LocalDate.of(1990, 1, 1), "Linh mục Phêrô Nguyễn Văn An", "0901234567", "giaohat.thanhtam@example.com", "Thánh Tâm"),
                 List.of("Phú Cường"));
         List<String> guide = List.of(
                 "1. Điền dữ liệu ở sheet \"" + DEANERIES_SHEET + "\" (sheet đầu tiên), từ dòng 2. Xóa các dòng ví dụ trước khi import. Tên cột có thể có hoặc không có dấu *, thứ tự cột không quan trọng.",
                 "2. CHỈ cột Tên giáo hạt là bắt buộc (tiêu đề màu đỏ). Các cột còn lại có thể để trống.",
                 "3. Giáo hạt được tạo trong giáo phận hiện tại của tài khoản. Tên giáo hạt tối đa 100 ký tự, không được trùng với giáo hạt đã có trong giáo phận hoặc trùng giữa các dòng trong file.",
-                "4. Ngày bổn mạng, Ngày thành lập theo dạng dd/MM/yyyy (Ngày thành lập không được sau ngày hiện tại).",
+                "4. Ngày bổn mạng theo dạng dd/MM, không có năm (ví dụ 16/06). Ngày thành lập theo dạng dd/MM/yyyy (Ngày thành lập không được sau ngày hiện tại).",
                 "5. Số điện thoại gồm 10 chữ số và bắt đầu bằng 0 (cột đã để định dạng Text để không mất số 0 đầu). Email phải đúng định dạng.",
                 "6. Chỉ cần một dòng lỗi thì toàn bộ file không được lưu; hệ thống báo rõ sheet, dòng, cột bị lỗi ở khay tác vụ để bạn sửa rồi import lại. Mỗi lần import tối đa 5.000 dòng.");
         return build(DEANERIES_SHEET, "Hướng dẫn import danh sách giáo hạt", columns, samples, guide, List.of(), null, null, null, LOOKUP_DEANERY_HEADER);
@@ -113,14 +113,14 @@ public final class ImportTemplates {
                 new Column(ParishImportService.COL_TYPE, false, 14, Kind.UNIT_TYPE),
                 new Column(ParishImportService.COL_DEANERY, true, 26, Kind.DEANERY),
                 new Column(ParishImportService.COL_PARENT, false, 26, Kind.GENERAL),
-                new Column(ParishImportService.COL_PATRON_SAINT_DAY, false, 16, Kind.DATE),
+                new Column(ParishImportService.COL_PATRON_SAINT_DAY, false, 16, Kind.TEXT),
                 new Column(ParishImportService.COL_ESTABLISHMENT_DATE, false, 16, Kind.DATE),
                 new Column(ParishImportService.COL_CHAPLAIN, false, 26, Kind.GENERAL),
                 new Column(ParishImportService.COL_PHONE, false, 16, Kind.TEXT),
                 new Column(ParishImportService.COL_EMAIL, false, 30, Kind.GENERAL),
                 new Column(ParishImportService.COL_CHAPTER, false, 24, Kind.GENERAL));
         List<List<Object>> samples = List.of(
-                List.of("Chính Tòa", "", firstDeanery, "", LocalDate.of(2000, 6, 16), LocalDate.of(1990, 1, 1), "Linh mục Phêrô Nguyễn Văn An", "0901234567", "giaoxu.chinhtoa@example.com", "Chính Tòa"),
+                List.of("Chính Tòa", "", firstDeanery, "", "16/06", LocalDate.of(1990, 1, 1), "Linh mục Phêrô Nguyễn Văn An", "0901234567", "giaoxu.chinhtoa@example.com", "Chính Tòa"),
                 List.of("Bình An", "Giáo họ", firstDeanery, "Chính Tòa"),
                 List.of("Hòa Bình", "Giáo điểm", firstDeanery, "Chính Tòa"));
         List<String> guide = List.of(
@@ -130,7 +130,7 @@ public final class ImportTemplates {
                 "4. Loại: để TRỐNG nếu là giáo xứ. Nếu là giáo họ hoặc giáo điểm thì BẮT BUỘC chọn \"Giáo họ\" / \"Giáo điểm\" (chọn từ danh sách) và nhập thêm cột Giáo xứ cha.",
                 "5. Giáo xứ cha: tên một giáo xứ (không phải giáo họ / giáo điểm) CÙNG giáo hạt, đã có trong hệ thống hoặc là giáo xứ mới ở một dòng khác trong cùng file. Giáo xứ thì không được nhập cột này.",
                 "6. Tên giáo xứ tối đa 100 ký tự, không được trùng với giáo xứ / giáo họ / giáo điểm đã có trong cùng giáo hạt hoặc trùng giữa các dòng trong file (cùng giáo hạt).",
-                "7. Ngày bổn mạng, Ngày thành lập theo dạng dd/MM/yyyy (Ngày thành lập không được sau ngày hiện tại). Số điện thoại gồm 10 chữ số và bắt đầu bằng 0. Email phải đúng định dạng.",
+                "7. Ngày bổn mạng theo dạng dd/MM, không có năm (ví dụ 16/06). Ngày thành lập theo dạng dd/MM/yyyy (Ngày thành lập không được sau ngày hiện tại). Số điện thoại gồm 10 chữ số và bắt đầu bằng 0. Email phải đúng định dạng.",
                 "8. Chỉ nhập được giáo xứ cho giáo hạt trong phạm vi tài khoản của bạn. Chỉ cần một dòng lỗi thì toàn bộ file không được lưu; hệ thống báo rõ sheet, dòng, cột bị lỗi ở khay tác vụ để bạn sửa rồi import lại. Mỗi lần import tối đa 5.000 dòng.");
         return build(PARISHES_SHEET, "Hướng dẫn import danh sách giáo xứ", columns, samples, guide, deaneryNames, null, null, null, LOOKUP_DEANERY_HEADER);
     }
