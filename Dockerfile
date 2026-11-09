@@ -9,7 +9,8 @@ COPY build.gradle settings.gradle gradlew ./
 COPY gradle ./gradle
 
 # Tai san thu vien (layer nay duoc cache khi build.gradle khong doi) de lan build sau khong tai lai.
-RUN sh ./gradlew dependencies --no-daemon -q > /dev/null 2>&1 || true
+# Thu lai toi da 4 lan vi services.gradle.org doi luc tra 504; that bai that su thi dung build (khong cache lop loi).
+RUN n=0; until sh ./gradlew dependencies --no-daemon -q > /dev/null; do       n=$((n+1)); [ "$n" -ge 4 ] && exit 1; echo "Thu lai lan $n..."; sleep 10;     done
 
 # Sao chep ma nguon vao container.
 COPY src ./src
