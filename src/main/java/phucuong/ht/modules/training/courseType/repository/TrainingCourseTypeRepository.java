@@ -39,7 +39,7 @@ public class TrainingCourseTypeRepository extends BaseRepo<TrainingCourseType, S
         return results.stream().findFirst();
     }
 
-    // Loại khóa có yêu cầu chứng nhận: có cấp độ đạt được (resultingLevel khác null/NONE), đang hoạt động.
+    // Loại khóa có cấp chứng nhận (hasCertificate = true), đang hoạt động.
     // dioceseId != null chỉ lấy danh mục của giáo phận đó; null (super admin) lấy của mọi giáo phận.
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public List<TrainingCourseType> findCertifiedTypes(java.util.UUID dioceseId) {
@@ -47,15 +47,13 @@ public class TrainingCourseTypeRepository extends BaseRepo<TrainingCourseType, S
                         """
                                 select ct
                                 from TrainingCourseType ct
-                                where ct.resultingLevel is not null
-                                  and ct.resultingLevel <> :none
+                                where ct.hasCertificate = true
                                   and ct.status = true
                                   and (:dioceseId is null or ct.dioceseId = :dioceseId)
                                 order by ct.typeName
                                 """,
                         TrainingCourseType.class
                 )
-                .setParameter("none", "NONE")
                 .setParameter("dioceseId", dioceseId)
                 .getResultList();
     }

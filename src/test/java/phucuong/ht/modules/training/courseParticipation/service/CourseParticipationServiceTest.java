@@ -863,6 +863,7 @@ class CourseParticipationServiceTest {
         type.setManagementUnitType(managementUnitType);
         // Khóa có cấp độ đạt được nên chấm đạt sẽ sinh chứng nhận.
         type.setResultingLevel("HT_I");
+        type.setHasCertificate(true);
         type.setStatus(Boolean.TRUE);
         TrainingCourse course = new TrainingCourse();
         course.setCourseCode("COURSE");

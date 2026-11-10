@@ -596,7 +596,7 @@ public class CourseParticipationService {
             throw commonValidationHelper.conflict("Khóa huấn luyện đã kết thúc nên không thể tạo chứng nhận ngoại lệ");
         }
         if (!trainingWorkflowSupport.requiresCertificate(course)) {
-            throw commonValidationHelper.conflict("Khóa huấn luyện không có cấp độ đạt được nên không có chứng nhận");
+            throw commonValidationHelper.conflict("Khóa huấn luyện không cấp chứng nhận nên không có chứng nhận");
         }
         requireApprovedForScoring(participation);
         if (participation.getTotalScore() == null || participation.getResult() == CourseResult.COMPLETED) {

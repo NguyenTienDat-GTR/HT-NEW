@@ -29,5 +29,7 @@ public class TrainingCourseTypeCreateRequest {
 
     private String resultingLevel;
 
+    private Boolean hasCertificate;
+
     private String certificateShortCode;
 }
