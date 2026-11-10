@@ -105,6 +105,7 @@ class CertificateRevokeTest {
         TrainingCourseType type = new TrainingCourseType();
         type.setTypeCode("T-" + code);
         type.setResultingLevel(resultingLevel);
+        type.setHasCertificate(true);
         TrainingCourse created = new TrainingCourse();
         created.setCourseCode(code);
         created.setCourseName("Khóa " + code);

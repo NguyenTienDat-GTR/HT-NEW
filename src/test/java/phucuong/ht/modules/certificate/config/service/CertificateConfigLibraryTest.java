@@ -210,6 +210,7 @@ class CertificateConfigLibraryTest {
         TrainingCourseType type = new TrainingCourseType();
         type.setTypeCode("T1");
         type.setResultingLevel("HT_I");
+        type.setHasCertificate(true);
         when(courseTypeRepository.findByCodeWithPrerequisite("T1")).thenReturn(Optional.of(type));
         UUID deaneryId = UUID.randomUUID();
         Authentication deanery = deaneryAdmin(deaneryId, UUID.randomUUID());
@@ -228,6 +229,7 @@ class CertificateConfigLibraryTest {
         TrainingCourseType type = new TrainingCourseType();
         type.setTypeCode("T1");
         type.setResultingLevel("HT_I");
+        type.setHasCertificate(true);
         when(courseTypeRepository.findByCodeWithPrerequisite("T1")).thenReturn(Optional.of(type));
         CertificateConfig target = config("Mẫu A", SYSTEM, false);
         when(configRepository.findById(target.getId())).thenReturn(Optional.of(target));

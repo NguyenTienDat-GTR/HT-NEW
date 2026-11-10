@@ -19,6 +19,7 @@ public class TrainingCourseTypeResponse {
     private String prerequisiteTypeCode;
     private String prerequisiteTypeName;
     private String resultingLevel;
+    private Boolean hasCertificate;
     private String certificateShortCode;
     private Boolean status;
     private String createdBy;

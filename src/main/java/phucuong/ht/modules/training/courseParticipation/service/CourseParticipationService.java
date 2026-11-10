@@ -159,7 +159,7 @@ public class CourseParticipationService {
         TrainingCourse course = requireCourse(courseCode);
         courseActivityGuard.requireActive(course);
         requireActiveRegistrationData(course);
-        requireRegistrationWindowOpen(course);
+        requireRegistrationAllowed(course, authentication);
 
         // Đơn vị gửi: giáo xứ (khóa giáo phận/giáo hạt trong phạm vi), giáo phận (chỉ khóa giáo phận) hoặc giáo hạt (chỉ khóa giáo hạt).
         boolean deaneryManaged = trainingWorkflowSupport.isDeaneryManaged(course);
@@ -596,7 +596,7 @@ public class CourseParticipationService {
             throw commonValidationHelper.conflict("Khóa huấn luyện đã kết thúc nên không thể tạo chứng nhận ngoại lệ");
         }
         if (!trainingWorkflowSupport.requiresCertificate(course)) {
-            throw commonValidationHelper.conflict("Khóa huấn luyện không có cấp độ đạt được nên không có chứng nhận");
+            throw commonValidationHelper.conflict("Khóa huấn luyện không cấp chứng nhận nên không có chứng nhận");
         }
         requireApprovedForScoring(participation);
         if (participation.getTotalScore() == null || participation.getResult() == CourseResult.COMPLETED) {
@@ -760,6 +760,18 @@ public class CourseParticipationService {
     private TrainingCourse requireCourse(String courseCode) {
         return trainingCourseRepository.findByCodeWithType(courseCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy khóa huấn luyện " + courseCode));
+    }
+
+    // Khóa không mở đăng ký (registrationEnabled = false): người duyệt đăng ký đúng cấp quản lý khóa vẫn đăng ký được cho tới khi khóa diễn ra;
+    // các trường hợp còn lại theo cửa sổ đăng ký thông thường.
+    public void requireRegistrationAllowed(TrainingCourse course, Authentication authentication) {
+        if (Boolean.FALSE.equals(course.getRegistrationEnabled()) && canApproveCourse(course, authentication)) {
+            if (course.isPast() || TrainingCourseStatusSupport.isCourseStarted(course, OffsetDateTime.now())) {
+                throw commonValidationHelper.validationError("Khóa huấn luyện đã diễn ra nên đã đóng đăng ký");
+            }
+            return;
+        }
+        requireRegistrationWindowOpen(course);
     }
 
     public void requireRegistrationWindowOpen(TrainingCourse course) {
