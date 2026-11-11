@@ -20,7 +20,7 @@ public class MediaProperties {
     private String activeProvider;
 
     /**
-     * Tiền tố gốc của mọi khóa lưu trữ, ví dụ ht/prod (tách môi trường trên cùng một tài khoản cloud).
+     * Tiền tố gốc của mọi khóa lưu trữ, ví dụ c-lead/prod (tách môi trường trên cùng một tài khoản cloud).
      */
     private String rootPrefix = "c-lead/dev";
 

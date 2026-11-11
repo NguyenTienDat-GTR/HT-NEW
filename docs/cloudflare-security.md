@@ -26,6 +26,9 @@ Kiểm tra IP thật: đăng nhập sai vài lần rồi xem log BE/audit; IP ph
 4. Zero Trust > Access > Applications: tạo ứng dụng cho `ssh.` và `db.`, policy chỉ cho email của bạn/đội (One-time PIN hoặc Google).
 5. Máy cá nhân: `cloudflared access tcp --hostname db.<tên-miền> --url 127.0.0.1:15432`, rồi pgAdmin nối `127.0.0.1:15432`.
 6. Khi chạy ổn mới đóng cổng 22 trong Security Group. Giữ một cách vào dự phòng (EC2 Instance Connect/Session Manager).
+7. Workflow CD (GitHub Actions) vào server qua `ssh.<tên-miền>` bằng service token: Zero Trust > Access > Service Auth tạo token,
+   thêm token vào policy loại Service Auth của ứng dụng `ssh.`, rồi đặt secret `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` ở cả repo BE và FE.
+   `CLOUDFLARE_TUNNEL_TOKEN` phải luôn có trong secret `PROD_ENV_FILE`: mỗi lần CD ghi đè `.env`, thiếu dòng này thì tunnel rớt và mất đường SSH.
 
 ## 4. Rate limiting + Turnstile
 - BE đã rate limit đăng nhập theo IP bằng Redis. Thêm một lớp ở biên: Security > WAF > Rate limiting rules:
@@ -37,7 +40,8 @@ Kiểm tra IP thật: đăng nhập sai vài lần rồi xem log BE/audit; IP ph
 
 ## 5. WAF + Bot
 - Security > WAF > Managed rules: bật **Cloudflare Managed Ruleset** (Free).
-- Security > Bots: bật **Bot Fight Mode**. Nếu thấy chặn nhầm webhook/app, thêm Custom Rule cho phép.
+- Security > Bots: để **Bot Fight Mode TẮT**. Bật lên thì Cloudflare thử thách cả IP của runner GitHub Actions (Azure, ASN 8075),
+  cầu nối SSH của workflow CD lỗi 403 `websocket: bad handshake` và không deploy được; gói Free không có rule nào bỏ qua được Bot Fight Mode.
 - Custom rules (tối đa 5) gợi ý: chặn `/actuator`, `/swagger-ui`, `/v3/api-docs` từ bên ngoài; thử thách (Managed Challenge) ngoài Việt Nam cho `/backend/api/auth/*`.
 - Security > Settings: Browser Integrity Check bật.
 

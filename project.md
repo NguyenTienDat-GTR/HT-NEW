@@ -1,5 +1,7 @@
 ﻿# BE
 
+> Cách dùng file này: đây là tài liệu tra cứu dài (khoảng 200 KB), không đọc từ đầu đến cuối trước mỗi việc. Tìm theo từ khóa (tên module, endpoint, tên quyền, số migration) rồi chỉ đọc đúng mục liên quan. Mã nguồn và migration là nguồn sự thật; mục nào lệch với mã thì mã đúng và phải sửa lại mục đó. Quy tắc bắt buộc cho mọi phiên nằm ở mục "Session Rules".
+
 ## Dashboard phân tích theo scope
 
 - API (quyền `analytics.dashboard.read.all|diocese|deanery|parish`; backend tự resolve scope từ account, không nhận ID scope từ client):
@@ -100,13 +102,16 @@ This project manages organization data, leaders, training, certificates, and sys
 
 The backend currently relies on:
 
-- Spring Boot 3
+- Spring Boot 3.5 on Java 21 (Gradle wrapper)
 - Spring Data JPA
-- PostgreSQL
+- PostgreSQL 16
 - Flyway
 - Spring Security
 - Redis / Spring Session
+- RabbitMQ (Spring AMQP) for async messaging (notifications, registration auto-approval)
+- WebSocket (STOMP) for realtime notifications
 - JWT for stateless authentication
+- Cloudinary for media storage (see `docs/media-storage.md`)
 
 ## Core Model
 
