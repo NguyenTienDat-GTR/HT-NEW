@@ -1662,3 +1662,8 @@ Ma trận endpoint (`endpoint-contract-matrix.psv`) hiện có 124 route.
 - Khóa đã kết thúc không sửa được: `TrainingCourseService.update` chặn khi `TrainingCourseStatusSupport.isCourseEnded` (kết thúc thủ công hoặc quá ngày kết thúc), báo 409 "Khóa huấn luyện đã kết thúc nên không thể sửa". Khóa quá khứ vẫn sửa ở chức năng riêng.
 - Khóa cấp giáo phận chỉ dùng loại khóa cấp giáo phận: tài khoản gắn trực tiếp giáo phận (không gắn giáo hạt) tạo khóa, và khóa cấp giáo phận đổi loại khi sửa, đều bị từ chối nếu loại khóa có `managementUnitType = DEANERY` (kể cả loại do giáo phận tạo dùng chung). Kiểm tra ở `TrainingCourseService.requireDioceseLevelType`.
 - Test: `TrainingCourseUpdateScopeTest` (khóa đã kết thúc, đổi sang loại giáo hạt, tạo khóa với loại giáo hạt).
+
+## fix/deanery-see-open-diocese-courses
+- Admin giáo hạt (chỉ có `training.participation.submit.deanery`, không kèm quyền giáo xứ) trước đây gửi đăng ký được cho khóa giáo phận nhưng không thấy khóa đó ở danh sách khóa và bị từ chối khi mở chi tiết, vì chỉ `submit.parish` mới được xem khóa đang mở đăng ký. Nay `submit.deanery` cũng được: `TrainingCourseAccessEvaluator.canSeeOpenCourses` (dùng cho `canList`) và `canReadOpenCourseAsSubmitter` (dùng cho `canRead`, cần giáo xứ hoặc giáo hạt của tài khoản còn hoạt động), `TrainingCourseService.findAll` thêm nhóm khóa đang mở theo giáo phận / giáo hạt của tài khoản.
+- Vẫn chỉ xem: khóa `OPEN`, `status = true`, đúng giáo phận (khóa thường) hoặc đúng giáo hạt (khóa giáo hạt); không có quyền sửa, kết thúc, khóa điểm.
+- Test: `TrainingCourseAccessEvaluatorTest` (admin giáo hạt thuần thấy khóa mở của giáo phận mình; không thấy khóa đóng, vô hiệu, giáo phận khác, hoặc khi giáo hạt ngưng hoạt động).

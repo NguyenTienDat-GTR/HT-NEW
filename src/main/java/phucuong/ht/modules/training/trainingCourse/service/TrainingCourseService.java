@@ -170,7 +170,8 @@ public class TrainingCourseService {
         // và các khóa đang mở đăng ký trong giáo phận/giáo hạt của mình (quyền gửi đăng ký của giáo xứ).
         List<Map<String, Object>> groups = new ArrayList<>(accountScopeResolver.scopes(authentication, "training.course.read")
                 .groups(Map.of(AccountScopeResolver.Level.DIOCESE, DIOCESE_FILTER_FIELD, AccountScopeResolver.Level.DEANERY, DEANERY_FILTER_FIELD)));
-        boolean canSeeOpen = AuthorityChecks.hasAuthority(authentication, TrainingCourseAccessEvaluator.SUBMIT_PARISH);
+        boolean canSeeOpen = AuthorityChecks.hasAuthority(authentication, TrainingCourseAccessEvaluator.SUBMIT_PARISH)
+                || AuthorityChecks.hasAuthority(authentication, TrainingCourseAccessEvaluator.SUBMIT_DEANERY);
         if (canSeeOpen) {
             groups.addAll(openCourseGroups(authentication));
         }
