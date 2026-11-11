@@ -3,6 +3,7 @@ package phucuong.ht.common.excel.job;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import phucuong.ht.common.excel.ImportError;
 import phucuong.ht.common.excel.AvatarWarning;
+import phucuong.ht.common.excel.ImportDuplicate;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -29,6 +30,8 @@ public record ExcelJobResponse(
         String errorMessage,
         // Danh sách dòng lỗi khi import bị từ chối.
         List<ImportError> errors,
+        // Dòng nghi trùng với hồ sơ đã có, chờ người dùng xác nhận (các dòng còn lại đã import).
+        List<ImportDuplicate> duplicates,
         Integer created,
         String resultMessage,
         boolean downloadable,
@@ -41,7 +44,7 @@ public record ExcelJobResponse(
 ) {
     public ExcelJobResponse withReplayed(boolean value) {
         return new ExcelJobResponse(id, kind, label, importJob, target, status, processed, total, avatarStatus, avatarProcessed,
-                avatarTotal, avatarSucceeded, avatarWarnings, warning, errorMessage, errors, created,
+                avatarTotal, avatarSucceeded, avatarWarnings, warning, errorMessage, errors, duplicates, created,
                 resultMessage, downloadable, fileName, createdAt, finishedAt, expiresAt, value);
     }
 }

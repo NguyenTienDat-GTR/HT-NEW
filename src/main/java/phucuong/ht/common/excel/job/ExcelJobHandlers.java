@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 import phucuong.ht.common.excel.AvatarZip;
+import phucuong.ht.common.excel.ImportOptions;
 import phucuong.ht.common.excel.ImportSummary;
 import phucuong.ht.common.repository.BaseSearchRequest;
 
@@ -29,7 +30,7 @@ public class ExcelJobHandlers {
     }
 
     public ImportSummary runImport(ExcelJobKind kind, String target, Path file, Authentication authentication, JobProgress progress,
-                                   AvatarZip images) {
-        return registry.importHandler(kind).run(target, file, authentication, progress, images);
+                                   AvatarZip images, ImportOptions options) {
+        return registry.importHandler(kind).run(target, file, authentication, progress, images, options);
     }
 }

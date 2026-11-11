@@ -151,6 +151,24 @@ public class LeaderRepository extends BaseRepo<Leader, UUID> {
                 .getResultList();
     }
 
+    /** Huynh trưởng theo ngày sinh (kèm giáo xứ/giáo hạt/giáo phận): thu hẹp tập ứng viên khi tìm hồ sơ nghi trùng khi import. */
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<Leader> findAllByBirthDates(java.util.Collection<java.time.LocalDate> birthDates) {
+        if (birthDates == null || birthDates.isEmpty()) {
+            return List.of();
+        }
+        return entityManager.createQuery(
+                        """
+                                select l from Leader l
+                                join fetch l.parish p
+                                join fetch p.deanery d
+                                join fetch d.diocese
+                                where l.birthDate in :birthDates
+                                """, Leader.class)
+                .setParameter("birthDates", birthDates)
+                .getResultList();
+    }
+
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public Optional<Leader> findByIdWithParish(UUID id) {
         List<Leader> results = entityManager.createQuery(
