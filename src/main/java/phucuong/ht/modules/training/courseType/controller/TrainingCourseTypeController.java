@@ -11,6 +11,8 @@ import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.modules.training.courseType.model.request.TrainingCourseTypeCreateRequest;
 import phucuong.ht.modules.training.courseType.model.request.TrainingCourseTypeUpdateRequest;
+import phucuong.ht.common.enums.UnitType;
+import phucuong.ht.modules.training.courseType.model.response.PrerequisiteOptionResponse;
 import phucuong.ht.modules.training.courseType.model.response.TrainingCourseTypeResponse;
 import phucuong.ht.modules.training.courseType.service.TrainingCourseTypeService;
 
@@ -31,6 +33,18 @@ public class TrainingCourseTypeController {
     @PreAuthorize("@trainingCourseTypeAccessEvaluator.canList(authentication)")
     public apiResponse<Page<TrainingCourseTypeResponse>> findAll(BaseSearchRequest request, Authentication authentication) {
         return apiResponse.success("Lấy danh sách loại khóa huấn luyện thành công", trainingCourseTypeService.findAll(request, authentication));
+    }
+
+    // Lựa chọn khóa tiên quyết: loại khóa cấp giáo phận chọn được cả loại khóa cấp giáo hạt.
+    @GetMapping("/prerequisite-options")
+    @PreAuthorize("@trainingCourseTypeAccessEvaluator.canPickPrerequisite(authentication, #managementUnitType)")
+    public apiResponse<java.util.List<PrerequisiteOptionResponse>> prerequisiteOptions(
+            @RequestParam(required = false) UnitType managementUnitType,
+            @RequestParam(required = false) String forTypeCode,
+            Authentication authentication
+    ) {
+        return apiResponse.success("Lấy danh sách khóa tiên quyết thành công",
+                trainingCourseTypeService.prerequisiteOptions(managementUnitType, forTypeCode, authentication));
     }
 
     @GetMapping("/{typeCode}")
