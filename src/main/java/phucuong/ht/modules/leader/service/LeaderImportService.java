@@ -421,13 +421,21 @@ public class LeaderImportService extends AbstractExcelImporter<LeaderImportServi
         if (text == null) {
             return LeaderLevelService.NONE;
         }
+        String code = levelCodeOf(text, order);
+        if (code == null) {
+            row.error(errors, COL_LEVEL, "Cấp độ \"" + text + "\" không có trong danh mục cấp độ của giáo phận");
+        }
+        return code;
+    }
+
+    // Mã cấp độ trong danh mục ứng với tên hoặc mã người dùng nhập (bỏ dấu, không phân biệt hoa thường); null nếu không có.
+    public static String levelCodeOf(String text, LeaderLevelService.LevelOrder order) {
         String wanted = ExcelWorkbookReader.normalize(text);
         for (Map.Entry<String, String> entry : order.names().entrySet()) {
             if (ExcelWorkbookReader.normalize(entry.getKey()).equals(wanted) || ExcelWorkbookReader.normalize(entry.getValue()).equals(wanted)) {
                 return entry.getKey();
             }
         }
-        row.error(errors, COL_LEVEL, "Cấp độ \"" + text + "\" không có trong danh mục cấp độ của giáo phận");
         return null;
     }
 

@@ -27,6 +27,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -51,7 +52,7 @@ class CourseFinishServiceTest {
         certificateRepository = mock(CertificateRepository.class);
         rankPromotionService = mock(RankPromotionService.class);
         LeaderLevelService leaderLevelService = mock(LeaderLevelService.class);
-        when(leaderLevelService.order(any())).thenReturn(new LevelOrder(Map.of("NONE", 0, "HT_I", 1), Map.of()));
+        when(leaderLevelService.order(any())).thenReturn(new LevelOrder(Map.of("NONE", 0, "HT_I", 1, "HT_II", 2), Map.of()));
         service = new CourseFinishService(participationRepository, certificateRepository, leaderLevelService, rankPromotionService, new TrainingWorkflowSupport());
 
         TrainingCourseType type = new TrainingCourseType();
@@ -138,6 +139,81 @@ class CourseFinishServiceTest {
 
         assertEquals(0, passed);
         verify(rankPromotionService, never()).promote(any(), anyString(), anyString(), anyString(), any());
+    }
+
+    @Test
+    void chosenLevelOfTheParticipationIsUsedInsteadOfTheCourseLevel() {
+        course.getCourseType().setResultingLevel("HT_II");
+        participation.setTargetLevel("HT_I");
+        certificate(WorkflowApprovalStatus.APPROVED);
+
+        service.finish(course, "admin", OffsetDateTime.now());
+
+        verify(rankPromotionService).promote(eq(leader), eq("HT_I"), eq("K1"), eq("admin"), any());
+    }
+
+    @Test
+    void chosenLevelIsIgnoredWhenTheCourseHasNoResultingLevel() {
+        course.getCourseType().setResultingLevel(null);
+        participation.setTargetLevel("HT_I");
+        certificate(WorkflowApprovalStatus.APPROVED);
+
+        int passed = service.finish(course, "admin", OffsetDateTime.now());
+
+        assertEquals(1, passed);
+        verify(rankPromotionService, never()).promote(any(), anyString(), anyString(), anyString(), any());
+    }
+
+    @Test
+    void chosenLevelIsIgnoredWhenTheResultingLevelIsNone() {
+        course.getCourseType().setResultingLevel("NONE");
+        participation.setTargetLevel("HT_I");
+        certificate(WorkflowApprovalStatus.APPROVED);
+
+        service.finish(course, "admin", OffsetDateTime.now());
+
+        verify(rankPromotionService, never()).promote(any(), anyString(), anyString(), anyString(), any());
+    }
+
+    @Test
+    void pastCourseRecordsTheChosenLevelWhenTheCourseHasAResultingLevel() {
+        course.setPastCourse(Boolean.TRUE);
+        course.setCourseType(null);
+        course.setResultingLevel("HT_II");
+        participation.setTargetLevel("HT_I");
+        certificate(WorkflowApprovalStatus.APPROVED);
+
+        service.finish(course, "admin", OffsetDateTime.now());
+
+        verify(rankPromotionService).recordPastCourse(eq(leader), eq("HT_I"), eq(true), eq("K1"), any(), eq("admin"), any());
+    }
+
+    @Test
+    void pastCourseFallsBackToTheCourseLevelWhenNoLevelWasChosen() {
+        course.setPastCourse(Boolean.TRUE);
+        course.setCourseType(null);
+        course.setResultingLevel("HT_II");
+        certificate(WorkflowApprovalStatus.APPROVED);
+
+        service.finish(course, "admin", OffsetDateTime.now());
+
+        verify(rankPromotionService).recordPastCourse(eq(leader), eq("HT_II"), eq(true), eq("K1"), any(), eq("admin"), any());
+    }
+
+    @Test
+    void pastCourseWithoutResultingLevelNeverPromotesEvenIfALevelWasChosen() {
+        course.setPastCourse(Boolean.TRUE);
+        course.setCourseType(null);
+        course.setResultingLevel(null);
+        participation.setTargetLevel("HT_I");
+        participation.setResult(CourseResult.COMPLETED);
+        when(certificateRepository.findByLeaderIdAndCourseCode(leader.getId(), "K1")).thenReturn(Optional.empty());
+
+        int passed = service.finish(course, "admin", OffsetDateTime.now());
+
+        assertEquals(1, passed);
+        verify(rankPromotionService, never()).promote(any(), anyString(), anyString(), anyString(), any());
+        verify(rankPromotionService, never()).recordPastCourse(any(), any(), anyBoolean(), any(), any(), any(), any());
     }
 
     @Test

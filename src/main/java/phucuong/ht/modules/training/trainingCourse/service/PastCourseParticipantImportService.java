@@ -60,7 +60,9 @@ import java.util.UUID;
 /**
  * Import danh sách tham dự (kèm điểm và kết quả) vào khóa huấn luyện quá khứ. Huynh trưởng được tìm theo email hoặc
  * số điện thoại (đều duy nhất), không dùng mã UUID. Có bất kỳ dòng lỗi nào thì không lưu gì.
- * Học viên Đạt của khóa có cấp độ đạt được được chuyển sang chờ duyệt chứng nhận.
+ * Học viên Đạt của khóa có cấp độ đạt được được chuyển sang chờ duyệt chứng nhận. Cột "Cấp độ đạt được" (chỉ khóa quá khứ, tùy chọn)
+ * chọn cấp độ học viên được thăng khi chứng nhận được duyệt; bỏ trống thì theo cấp độ đạt được của khóa, khóa không có cấp độ đạt được
+ * thì cột này bị bỏ qua (không thăng cấp).
  * Khóa thường cũng import được: chỉ gồm huynh trưởng (không có điểm / kết quả), hồ sơ vào thẳng danh sách tham dự (đã duyệt),
  * người import phải là người duyệt đăng ký của đơn vị sở hữu khóa.
  */
@@ -74,6 +76,8 @@ public class PastCourseParticipantImportService extends AbstractExcelImporter<Pa
     public static final String COL_RESULT = "Kết quả";
     public static final String COL_REVIEW = "Nhận xét";
     public static final String COL_EXCEPTION_REASON = "Lí do ngoại lệ";
+    // Cấp độ học viên đạt được ở khóa quá khứ (tùy chọn): bỏ trống thì theo cấp độ đạt được của khóa.
+    public static final String COL_ACHIEVED_LEVEL = "Cấp độ đạt được";
     public static final String COL_TEAM = "Tên đội";
     // Ghi chú đăng ký của hồ sơ (tùy chọn, có thể bỏ trống hoặc không có cột).
     public static final String COL_NOTE = "Ghi chú";
@@ -105,7 +109,7 @@ public class PastCourseParticipantImportService extends AbstractExcelImporter<Pa
 
     // leader: huynh trưởng đã có hồ sơ; newLeader: thông tin để tạo mới (đúng một trong hai khác null).
     record Parsed(ExcelRowData row, Leader leader, LeaderImportService.NewLeader newLeader, CourseResult result, BigDecimal score, String review,
-                          boolean exception, String exceptionReason, String teamName, String note, String avatarFileName) {
+                          boolean exception, String exceptionReason, String teamName, String note, String avatarFileName, String achievedLevel) {
     }
 
     @EvictCaches.TrainingCourseData
@@ -167,6 +171,8 @@ public class PastCourseParticipantImportService extends AbstractExcelImporter<Pa
         private boolean certificateRequired;
         private int newLeaders;
         private int exceptions;
+        // Số dòng có điền "Cấp độ đạt được" nhưng khóa không có cấp độ đạt được nên bị bỏ qua (không thăng cấp).
+        private int ignoredAchievedLevels;
 
         ImportRun(TrainingCourse course, boolean past, boolean withTeam, String actor, AvatarZip images, ImportOptions options) {
             this.options = options;
@@ -247,6 +253,10 @@ public class PastCourseParticipantImportService extends AbstractExcelImporter<Pa
             participation.setResult(item.result());
             passed = item.result() == CourseResult.COMPLETED;
             participation.setParticipationStatus(passed ? ParticipationStatus.COMPLETED : ParticipationStatus.ATTENDED);
+            if (passed) {
+                // Cấp độ đạt được chọn trong file (null: theo cấp độ đạt được của khóa); chỉ có hiệu lực khi chứng nhận được duyệt.
+                participation.setTargetLevel(item.achievedLevel());
+            }
             if (!passed) {
                 participation.setFinalResult(CourseFinalResult.FAILED);
                 participation.setCertificateApprovalStatus(WorkflowApprovalStatus.NOT_REQUIRED);
@@ -322,6 +332,9 @@ public class PastCourseParticipantImportService extends AbstractExcelImporter<Pa
                 : "Đã import " + created + " học viên vào khóa \"" + course.getCourseName() + "\""
                 + (exceptions > 0 ? ", trong đó " + exceptions + " hồ sơ ngoại lệ chờ duyệt đăng ký" : "")
                 + (newLeaders > 0 ? ", trong đó tạo mới " + newLeaders + " hồ sơ huynh trưởng" : "");
+        if (run.ignoredAchievedLevels > 0) {
+            message += ". Khóa không có cấp độ đạt được nên cột \"" + COL_ACHIEVED_LEVEL + "\" của " + run.ignoredAchievedLevels + " dòng bị bỏ qua, học viên không được thăng cấp";
+        }
         if (!run.duplicates.isEmpty()) {
             message += ". Có " + run.duplicates.size() + " hồ sơ nghi trùng với hồ sơ đã có đang chờ bạn xác nhận";
         }
@@ -400,7 +413,9 @@ public class PastCourseParticipantImportService extends AbstractExcelImporter<Pa
         if (exceptionSheet != null) {
             allRows.addAll(run.options.filter(exceptionSheet.rows()));
         }
-        LeaderLevelService.LevelOrder courseLevels = past || withTeam ? null : leaderLevelService.order(trainingWorkflowSupport.dioceseIdOf(course));
+        LeaderLevelService.LevelOrder courseLevels = withTeam ? null : leaderLevelService.order(trainingWorkflowSupport.dioceseIdOf(course));
+        // Cấp độ đạt được của khóa: không có (hoặc "chưa có cấp") thì khóa không thăng cấp, cột "Cấp độ đạt được" bị bỏ qua.
+        String courseLevel = trainingWorkflowSupport.certificateLevelFor(course).filter(level -> !LeaderLevelService.NONE.equals(level)).orElse(null);
         // Tra cứu huynh trưởng một lần cho cả file.
         Set<String> emails = new HashSet<>();
         Set<String> phones = new HashSet<>();
@@ -547,16 +562,49 @@ public class PastCourseParticipantImportService extends AbstractExcelImporter<Pa
                     }
                 }
             }
+            String achievedLevel = past ? parseAchievedLevel(row, errors, run, courseLevels, courseLevel) : null;
             if (errorCount(errors) != before || (past && courseResult == null)) {
                 continue;
             }
             if (leader != null || newLeader != null) {
-                result.add(new Parsed(row, leader, newLeader, courseResult, score, review, exceptionRow, exceptionReason, teamName, note, avatarFileName));
+                result.add(new Parsed(row, leader, newLeader, courseResult, score, review, exceptionRow, exceptionReason, teamName, note, avatarFileName,
+                        achievedLevel));
             } else if (pendingDuplicate != null) {
                 run.duplicates.add(pendingDuplicate);
             }
         }
         return result;
+    }
+
+    /**
+     * Cột "Cấp độ đạt được" của khóa quá khứ (tùy chọn): trả về mã cấp đã chọn, hoặc null nếu bỏ trống (theo cấp độ đạt được của khóa) / khóa không thăng cấp.
+     * Khóa không có cấp độ đạt được: giá trị bị bỏ qua (không lỗi, không thăng cấp). Ngược lại cấp phải có trong danh mục và không cao hơn cấp của khóa;
+     * không bắt buộc cao hơn cấp hiện tại vì khóa quá khứ chỉ ghi lịch sử (cấp hiện tại chỉ tăng nếu cấp mới cao hơn).
+     */
+    private String parseAchievedLevel(ExcelRowData row, ImportErrors errors, ImportRun run, LeaderLevelService.LevelOrder levels, String courseLevel) {
+        String text = row.text(COL_ACHIEVED_LEVEL);
+        if (text == null) {
+            return null;
+        }
+        if (courseLevel == null) {
+            run.ignoredAchievedLevels++;
+            return null;
+        }
+        String code = LeaderImportService.levelCodeOf(text, levels);
+        if (code == null) {
+            row.error(errors, COL_ACHIEVED_LEVEL, "Cấp độ \"" + text + "\" không có trong danh mục cấp độ của giáo phận");
+            return null;
+        }
+        if (LeaderLevelService.NONE.equals(code)) {
+            row.error(errors, COL_ACHIEVED_LEVEL, "Cấp độ đạt được phải là một cấp cụ thể, không chọn \"" + levels.nameOf(code) + "\"");
+            return null;
+        }
+        String problem = LeaderLevelService.achievableProblem(levels, code, null, courseLevel, false);
+        if (problem != null) {
+            row.error(errors, COL_ACHIEVED_LEVEL, problem);
+            return null;
+        }
+        return code;
     }
 
     // Người đã có hồ sơ (cùng danh tính): email của dòng nếu đã thuộc về huynh trưởng khác thì báo lỗi; ngược lại dùng hồ sơ đã có.
