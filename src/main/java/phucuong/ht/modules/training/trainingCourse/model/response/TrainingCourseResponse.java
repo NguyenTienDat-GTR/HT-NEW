@@ -34,6 +34,10 @@ public class TrainingCourseResponse {
     private String requiredCurrentLevelName;
     private Integer requiredMinAge;
     private String prerequisiteTypeName;
+    // Cấp quản lý của loại khóa tiên quyết (giáo phận / giáo hạt).
+    private UnitType prerequisiteManagementUnitType;
+    // Khác null: khóa tiên quyết do giáo hạt tự tạo (không dùng chung).
+    private UUID prerequisiteOwnerDeaneryId;
     private Integer maxYearsAfterPrerequisite;
     // Chỉ có ở chi tiết/cập nhật khóa: đã có hồ sơ tham gia thì khóa các trường loại khóa, năm tổ chức, số năm hoạt động, điểm đạt.
     private Boolean hasParticipations;

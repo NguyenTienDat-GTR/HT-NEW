@@ -184,6 +184,7 @@ PATCH /api/training/participations/{id}/score-note|200|401|403|400|404|409
 # Training course types
 POST /api/training/course-types|200|401|403|400|N/A: create does not reference an existing course type|409
 GET /api/training/course-types|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
+GET /api/training/course-types/prerequisite-options|200|401|403|400|404|N/A: read-only endpoint does not mutate state
 GET /api/training/course-types/{typeCode}|200|401|403|N/A: type code is an opaque string|404|N/A: read-only endpoint does not mutate state
 PUT /api/training/course-types/{typeCode}|200|401|403|400|404|409
 PATCH /api/training/course-types/{typeCode}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict

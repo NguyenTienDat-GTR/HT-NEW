@@ -39,7 +39,7 @@ public class TrainingCourseTypeRepository extends BaseRepo<TrainingCourseType, S
         return results.stream().findFirst();
     }
 
-    // Loại khóa có yêu cầu chứng nhận: có cấp độ đạt được (resultingLevel khác null/NONE), đang hoạt động.
+    // Loại khóa có cấp chứng nhận (hasCertificate = true), đang hoạt động.
     // dioceseId != null chỉ lấy danh mục của giáo phận đó; null (super admin) lấy của mọi giáo phận.
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public List<TrainingCourseType> findCertifiedTypes(java.util.UUID dioceseId) {
@@ -47,15 +47,13 @@ public class TrainingCourseTypeRepository extends BaseRepo<TrainingCourseType, S
                         """
                                 select ct
                                 from TrainingCourseType ct
-                                where ct.resultingLevel is not null
-                                  and ct.resultingLevel <> :none
+                                where ct.hasCertificate = true
                                   and ct.status = true
                                   and (:dioceseId is null or ct.dioceseId = :dioceseId)
                                 order by ct.typeName
                                 """,
                         TrainingCourseType.class
                 )
-                .setParameter("none", "NONE")
                 .setParameter("dioceseId", dioceseId)
                 .getResultList();
     }
@@ -69,5 +67,81 @@ public class TrainingCourseTypeRepository extends BaseRepo<TrainingCourseType, S
                 .setParameter("typeCode", typeCode)
                 .getSingleResult();
         return count != null && count > 0;
+    }
+
+    // Mọi loại khóa của một giáo phận (cả hai cấp), kèm khóa tiên quyết của từng loại: nguồn chọn khóa tiên quyết.
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<TrainingCourseType> findAllInDioceseWithPrerequisite(java.util.UUID dioceseId) {
+        return entityManager.createQuery(
+                        """
+                                select ct
+                                from TrainingCourseType ct
+                                left join fetch ct.prerequisiteType
+                                where ct.dioceseId = :dioceseId
+                                order by ct.typeName
+                                """,
+                        TrainingCourseType.class
+                )
+                .setParameter("dioceseId", dioceseId)
+                .getResultList();
+    }
+
+    // Số khóa đã tạo theo từng loại khóa của giáo phận.
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public java.util.Map<String, Long> countCoursesByType(java.util.UUID dioceseId) {
+        return toCountMap(entityManager.createQuery(
+                        """
+                                select tc.courseType.typeCode, count(tc)
+                                from TrainingCourse tc
+                                where tc.courseType.dioceseId = :dioceseId
+                                group by tc.courseType.typeCode
+                                """,
+                        Object[].class
+                )
+                .setParameter("dioceseId", dioceseId)
+                .getResultList());
+    }
+
+    // Số huynh trưởng (không trùng) đã đạt khóa theo từng loại khóa của giáo phận, cùng quy tắc với điều kiện khóa tiên quyết:
+    // loại khóa có cấp chứng nhận tính theo chứng nhận được duyệt, loại khóa không cấp chứng nhận tính theo kết quả khóa.
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public java.util.Map<String, Long> countCompletedLeadersByType(java.util.UUID dioceseId) {
+        return toCountMap(entityManager.createQuery(
+                        """
+                                select cp.course.courseType.typeCode, count(distinct cp.leader.id)
+                                from CourseParticipation cp
+                                where cp.course.courseType.dioceseId = :dioceseId
+                                  and %s
+                                group by cp.course.courseType.typeCode
+                                """.formatted(phucuong.ht.modules.training.TrainingWorkflowSupport.PASSED_AS_PREREQUISITE_JPQL),
+                        Object[].class
+                )
+                .setParameter("dioceseId", dioceseId)
+                .getResultList());
+    }
+
+    // Có loại khóa cấp giáo hạt nào đang lấy loại khóa này làm tiên quyết không.
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public boolean existsDeaneryTypeWithPrerequisite(String typeCode) {
+        Long count = entityManager.createQuery(
+                        """
+                                select count(ct)
+                                from TrainingCourseType ct
+                                where ct.prerequisiteType.typeCode = :typeCode
+                                  and ct.managementUnitType = phucuong.ht.common.enums.UnitType.DEANERY
+                                """,
+                        Long.class
+                )
+                .setParameter("typeCode", typeCode)
+                .getSingleResult();
+        return count != null && count > 0;
+    }
+
+    private static java.util.Map<String, Long> toCountMap(List<Object[]> rows) {
+        java.util.Map<String, Long> result = new java.util.HashMap<>();
+        for (Object[] row : rows) {
+            result.put((String) row[0], ((Number) row[1]).longValue());
+        }
+        return result;
     }
 }

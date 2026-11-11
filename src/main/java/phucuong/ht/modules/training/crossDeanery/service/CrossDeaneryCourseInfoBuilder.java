@@ -35,7 +35,11 @@ public class CrossDeaneryCourseInfoBuilder {
             }
             if (type.getPrerequisiteType() != null) {
                 String within = type.getMaxYearsAfterPrerequisite() == null ? "" : " (trong vòng " + type.getMaxYearsAfterPrerequisite() + " năm)";
-                requirements.add("Đã đạt khóa " + type.getPrerequisiteType().getTypeName() + within);
+                // Khóa tiên quyết cấp giáo hạt: học ở giáo hạt nào trong giáo phận cũng được tính.
+                String anyDeanery = type.getPrerequisiteType().getManagementUnitType() == phucuong.ht.common.enums.UnitType.DEANERY
+                        && type.getPrerequisiteType().getOwnerDeaneryId() == null
+                        ? " (cấp giáo hạt, tổ chức ở giáo hạt nào cũng được)" : "";
+                requirements.add("Đã đạt khóa " + type.getPrerequisiteType().getTypeName() + anyDeanery + within);
             }
         }
         return new CourseInfo(type == null ? null : type.getTypeName(), course.getLocation(), course.getStartDate(), course.getEndDate(),
