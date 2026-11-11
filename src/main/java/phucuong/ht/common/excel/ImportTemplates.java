@@ -30,6 +30,14 @@ import java.util.List;
  */
 public final class ImportTemplates {
 
+    /** Quy tắc kiểm tra trùng hồ sơ huynh trưởng (khớp với LeaderDuplicateMatcher) dùng chung cho các hướng dẫn import có thông tin huynh trưởng. */
+    private static final String DUPLICATE_RULES = "Kiểm tra trùng với hồ sơ đã có: hệ thống so Tên thánh, Họ và tên, Ngày sinh và Giáo xứ (không phân biệt hoa/thường và dấu). "
+            + "(a) Trùng cả bốn thông tin và trùng Số điện thoại: coi là người đã có trong hệ thống. "
+            + "(b) Trùng bốn thông tin nhưng KHÁC Số điện thoại: dòng được giữ lại, các dòng còn lại vẫn được import; sau đó hệ thống hỏi bạn đó là cùng một người hay hai người khác nhau. "
+            + "(c) Trùng Số điện thoại với một huynh trưởng khác (khác Tên thánh, Họ và tên, Ngày sinh hoặc Giáo xứ): báo lỗi. "
+            + "(d) Email đã thuộc về một huynh trưởng khác: báo lỗi.";
+
+
     public static final String LEADERS_SHEET = "Huynh trưởng";
     public static final String DEANERIES_SHEET = "Giáo hạt";
     public static final String PARISHES_SHEET = "Giáo xứ";
@@ -70,7 +78,8 @@ public final class ImportTemplates {
                 "2. Tất cả các cột đều bắt buộc (tiêu đề màu đỏ), TRỪ cột Email, Cấp độ và Tên file ảnh: Tên thánh, Họ và tên, Ngày sinh, Giới tính, Số điện thoại, Giáo hạt, Giáo xứ.",
                 "3. Ngày sinh theo dạng dd/MM/yyyy (ví dụ 07/03/1995), không được sau ngày hiện tại.",
                 "4. Giới tính chỉ nhận: Nam hoặc Nữ (chọn từ danh sách).",
-                "5. Email (không bắt buộc, nếu nhập phải đúng định dạng) và Số điện thoại không được trùng với huynh trưởng đã có trong hệ thống hoặc trùng giữa các dòng trong file. Số điện thoại gồm 10 chữ số và bắt đầu bằng 0 (cột đã để định dạng Text để không mất số 0 đầu).",
+                "5. Số điện thoại gồm 10 chữ số và bắt đầu bằng 0 (cột đã để định dạng Text để không mất số 0 đầu); Email (không bắt buộc) nếu nhập phải đúng định dạng. Số điện thoại và Email không được trùng giữa các dòng trong file. "
+                        + DUPLICATE_RULES + " Người đã có thì dòng được bỏ qua (không tạo mới, không sửa hồ sơ); chọn \"hai người khác nhau\" thì tạo hồ sơ mới.",
                 "6. Cấp độ: chọn từ danh sách (sheet \"" + LOOKUP_SHEET + "\") hoặc nhập tên / mã cấp độ trong danh mục của giáo phận. Để trống nghĩa là \"Chưa có cấp\".",
                 "7. Giáo hạt và Giáo xứ (cột Giáo xứ cũng nhận tên giáo họ / giáo điểm) phải ĐÃ CÓ trong hệ thống (nhập đúng tên) và giáo xứ phải thuộc đúng giáo hạt đã nhập; nếu chưa có, dòng đó báo lỗi (hệ thống không tự tạo giáo hạt / giáo xứ).",
                 "8. Chỉ nhập được huynh trưởng cho giáo xứ trong phạm vi tài khoản của bạn. Chỉ cần một dòng lỗi thì toàn bộ file không được lưu; hệ thống báo rõ sheet, dòng, cột bị lỗi ở khay tác vụ để bạn sửa rồi import lại.",
@@ -159,8 +168,9 @@ public final class ImportTemplates {
                 "1. Chỉ dùng cho khóa huấn luyện quá khứ (tạo bằng nút \"Tạo khóa quá khứ\"). Mở chi tiết khóa, vào tab \"Danh sách tham dự\" và bấm \"Import Excel\".",
                 "2. Điền dữ liệu ở sheet \"" + PARTICIPANTS_SHEET + "\" (sheet đầu tiên), từ dòng 2. Xóa các dòng ví dụ trước khi import.",
                 "3. MỌI DÒNG đều phải nhập đủ tất cả các cột (tiêu đề màu đỏ), chỉ được để trống cột Email, Nhận xét, Cấp độ, Ghi chú và Tên file ảnh: Số điện thoại, Tổng điểm, Kết quả, Tên thánh, Họ và tên, Ngày sinh, Giới tính, Giáo hạt, Giáo xứ.",
-                "4. Huynh trưởng được tìm theo Số điện thoại (bắt buộc) và Email (nếu có nhập); hai thông tin này là duy nhất, nếu khớp hai huynh trưởng khác nhau thì báo lỗi. Không dùng mã định danh (UUID).",
-                "5. Huynh trưởng ĐÃ CÓ HỒ SƠ: hệ thống chỉ thêm huynh trưởng đó vào khóa, KHÔNG tạo mới và KHÔNG sửa hồ sơ (thông tin trong dòng chỉ để kiểm tra đủ dữ liệu). Huynh trưởng CHƯA CÓ HỒ SƠ: hệ thống tạo hồ sơ từ chính dòng này rồi thêm vào khóa.",
+                "4. Số điện thoại là bắt buộc, Email không bắt buộc; cả hai là duy nhất trong hệ thống. Không dùng mã định danh (UUID). "
+                        + DUPLICATE_RULES + " Người đã có thì chỉ được thêm vào khóa (không tạo mới, không sửa hồ sơ); chọn \"hai người khác nhau\" thì tạo hồ sơ mới rồi thêm vào khóa.",
+                "5. Huynh trưởng ĐÃ CÓ HỒ SƠ: hệ thống chỉ thêm huynh trưởng đó vào khóa, KHÔNG tạo mới và KHÔNG sửa hồ sơ (thông tin trong dòng dùng để đối chiếu với hồ sơ đã có, không dùng để sửa hồ sơ). Huynh trưởng CHƯA CÓ HỒ SƠ: hệ thống tạo hồ sơ từ chính dòng này rồi thêm vào khóa.",
                 "6. Ngày sinh theo dạng dd/MM/yyyy; Giới tính chọn Nam hoặc Nữ; Số điện thoại gồm 10 chữ số và bắt đầu bằng 0; Cấp độ chọn từ sheet \"" + LOOKUP_SHEET + "\" (để trống là Chưa có cấp).",
                 "7. Giáo hạt và Giáo xứ (cột Giáo xứ cũng nhận tên giáo họ / giáo điểm) phải ĐÃ CÓ trong hệ thống, giáo xứ phải thuộc đúng giáo hạt đã nhập và thuộc giáo phận (khóa giáo phận) hoặc giáo hạt (khóa giáo hạt) của khóa; giáo xứ phải đang hoạt động. Huynh trưởng đã có hồ sơ cũng phải thuộc giáo phận / giáo hạt của khóa.",
                 "8. Kết quả: Đạt hoặc Không đạt (chọn từ danh sách). Tổng điểm từ 0 đến 1000.",
@@ -197,7 +207,8 @@ public final class ImportTemplates {
                 "1. Dùng cho khóa huấn luyện thường (không phải khóa quá khứ). Mở chi tiết khóa, vào tab \"Danh sách tham dự\" và bấm \"Nhập excel danh sách tham dự\".",
                 "2. Có hai sheet dữ liệu, điền từ dòng 2 và xóa các dòng ví dụ trước khi import: sheet \"" + PARTICIPANTS_SHEET + "\" (sheet đầu tiên) cho huynh trưởng ĐỦ điều kiện của khóa; sheet \"" + EXCEPTION_SHEET + "\" cho huynh trưởng KHÔNG đủ điều kiện của khóa (điều kiện hiển thị ở phần \"Điều kiện của khóa\" trong chi tiết khóa). Có thể bỏ trống một trong hai sheet.",
                 "3. MỌI DÒNG đều phải nhập đủ các cột (tiêu đề màu đỏ), chỉ được để trống cột Email và Cấp độ: Số điện thoại, Tên thánh, Họ và tên, Ngày sinh, Giới tính, Giáo hạt, Giáo xứ. Sheet \"" + EXCEPTION_SHEET + "\" có thêm cột bắt buộc \"Lí do ngoại lệ\".",
-                "4. Huynh trưởng được tìm theo Số điện thoại (bắt buộc) và Email (nếu có nhập); hai thông tin này là duy nhất, nếu khớp hai huynh trưởng khác nhau thì báo lỗi. Không dùng mã định danh (UUID).",
+                "4. Số điện thoại là bắt buộc, Email không bắt buộc; cả hai là duy nhất trong hệ thống. Không dùng mã định danh (UUID). "
+                        + DUPLICATE_RULES + " Người đã có thì chỉ được thêm vào khóa (không tạo mới, không sửa hồ sơ); chọn \"hai người khác nhau\" thì tạo hồ sơ mới rồi thêm vào khóa.",
                 "5. Huynh trưởng ĐÃ CÓ HỒ SƠ: hệ thống chỉ thêm huynh trưởng đó vào khóa, KHÔNG tạo mới và KHÔNG sửa hồ sơ. Huynh trưởng CHƯA CÓ HỒ SƠ (ở cả hai sheet): hệ thống tạo hồ sơ từ chính dòng này rồi thêm vào khóa.",
                 "6. Ngày sinh theo dạng dd/MM/yyyy; Giới tính chọn Nam hoặc Nữ; Số điện thoại gồm 10 chữ số và bắt đầu bằng 0; Cấp độ chọn từ sheet \"" + LOOKUP_SHEET + "\" (để trống là Chưa có cấp).",
                 "7. Giáo hạt và Giáo xứ (cột Giáo xứ cũng nhận tên giáo họ / giáo điểm) phải ĐÃ CÓ trong hệ thống, giáo xứ phải thuộc đúng giáo hạt đã nhập và thuộc giáo phận (khóa giáo phận) hoặc giáo hạt (khóa giáo hạt) của khóa; giáo xứ phải đang hoạt động.",
@@ -233,7 +244,8 @@ public final class ImportTemplates {
                 "1. Dùng cho khóa huấn luyện thường (không phải khóa quá khứ). Mở chi tiết khóa, vào tab \"Chia đội\" và bấm \"Nhập excel chia đội\".",
                 "2. Chỉ có một sheet dữ liệu \"" + PARTICIPANTS_SHEET + "\" (sheet đầu tiên), không có sheet Ngoại lệ; điền từ dòng 2 và xóa các dòng ví dụ trước khi import.",
                 "3. MỌI DÒNG đều phải nhập đủ các cột (tiêu đề màu đỏ), chỉ được để trống cột Email và Cấp độ: Số điện thoại, Tên thánh, Họ và tên, Ngày sinh, Giới tính, Giáo hạt, Giáo xứ, Tên đội (tối đa 150 ký tự).",
-                "4. Huynh trưởng được tìm theo Số điện thoại (bắt buộc) và Email (nếu có nhập); hai thông tin này là duy nhất, nếu khớp hai huynh trưởng khác nhau thì báo lỗi. Huynh trưởng ĐÃ CÓ HỒ SƠ chỉ được thêm vào khóa (hồ sơ không bị sửa); CHƯA CÓ HỒ SƠ thì được tạo mới từ chính dòng này.",
+                "4. Số điện thoại là bắt buộc, Email không bắt buộc; cả hai là duy nhất trong hệ thống. "
+                        + DUPLICATE_RULES + " Người đã có thì chỉ được thêm vào khóa (không tạo mới, không sửa hồ sơ); chọn \"hai người khác nhau\" thì tạo hồ sơ mới rồi thêm vào khóa.",
                 "5. Hồ sơ được import mặc định là ĐÃ DUYỆT đăng ký: vào thẳng danh sách tham dự của khóa và gắn vào đội theo cột Tên đội. Hệ thống không kiểm tra điều kiện tham dự của khóa ở bước này.",
                 "6. Ngày sinh theo dạng dd/MM/yyyy; Giới tính chọn Nam hoặc Nữ; Số điện thoại gồm 10 chữ số và bắt đầu bằng 0; Cấp độ chọn từ sheet \"" + LOOKUP_SHEET + "\" (để trống là Chưa có cấp).",
                 "7. Giáo hạt và Giáo xứ (cột Giáo xứ cũng nhận tên giáo họ / giáo điểm) phải ĐÃ CÓ trong hệ thống, giáo xứ phải thuộc đúng giáo hạt đã nhập và thuộc giáo phận (khóa giáo phận) hoặc giáo hạt (khóa giáo hạt) của khóa; giáo xứ phải đang hoạt động.",
