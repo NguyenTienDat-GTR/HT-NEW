@@ -472,6 +472,9 @@ public class PastCourseParticipantImportService extends AbstractExcelImporter<Pa
                             } else if (chosen != null) {
                                 // Người dùng xác nhận là người đã có: chỉ thêm hồ sơ đó vào khóa.
                                 leader = existingLeaderOrEmailError(chosen, emailOwner, row, errors);
+                            } else if (emailOwner != null && match.candidate(emailOwner.getId()) == null) {
+                                // Email đã thuộc về huynh trưởng khác (không phải hồ sơ nghi trùng): báo lỗi như trùng số điện thoại.
+                                row.error(errors, COL_EMAIL, "Email đã tồn tại trong hệ thống ở một huynh trưởng khác");
                             } else {
                                 // Chưa có quyết định: giữ lại chờ xác nhận, vẫn đăng ký số điện thoại / email để bắt trùng trong file.
                                 if (planNewLeader(row, errors, data, plannedEmails, plannedPhones) != null) {

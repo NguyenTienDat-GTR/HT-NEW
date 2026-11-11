@@ -1374,6 +1374,17 @@ class ExcelImportExportIntegrationTest {
                 conflictError.getErrors().toString());
         assertEquals(before, countLeaders());
 
+        // Email đã thuộc về huynh trưởng khác báo lỗi như trùng số điện thoại: cả khi dòng là người mới, là chính An (cùng sđt) hoặc nghi trùng với An.
+        MockMultipartFile emailTaken = excel(LEADER_HEADERS, List.of(
+                new Row("Rosa", "Người Mới Trùng Email", "01/01/1990", "Nữ", "binh@example.com", "0944000009", "", "Thủ Dầu Một", "Bà Lụa"),
+                new Row("Phêrô", "Nguyễn Văn An", "07/03/1995", "Nam", "cuong@example.com", "0901234567", "", "Thủ Dầu Một", "Bà Lụa"),
+                new Row("Phêrô", "Nguyễn Văn An", "07/03/1995", "Nam", "giang@example.com", "0944000008", "", "Thủ Dầu Một", "Bà Lụa")));
+        ImportValidationException emailError = assertThrows(ImportValidationException.class,
+                () -> leaderImportService.importLeaders(path(emailTaken), phuCuongAdmin(), JobProgress.NONE));
+        assertEquals(3, emailError.getErrors().stream().filter(e -> e.column().equals("Email") && e.message().contains("huynh trưởng khác")).count(),
+                emailError.getErrors().toString());
+        assertEquals(before, countLeaders());
+
         MockMultipartFile file = excel(LEADER_HEADERS, List.of(
                 new Row("Rosa", "Phạm Thị Mới Nhất", "01/01/1990", "Nữ", "rosa.moi@example.com", "0944000001", "", "Thủ Dầu Một", "Bà Lụa"),
                 // Cùng danh tính và cùng số điện thoại với An (tên không phân biệt hoa/thường, dấu): người đã có, bỏ qua.

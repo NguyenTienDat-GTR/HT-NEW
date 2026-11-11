@@ -256,6 +256,17 @@ public class LeaderImportService extends AbstractExcelImporter<LeaderImportServi
             Leader emailOwner = email == null ? null : existingEmails.get(email.toLowerCase(Locale.ROOT));
             LeaderDuplicateMatcher.Match match = duplicateMatcher.classify(
                     new LeaderDuplicateMatcher.Identity(holyName, fullName, birthDate, parish.getId()), phone, existing);
+            // Email đã thuộc về một huynh trưởng khác (không phải chính người dòng này trùng) thì báo lỗi như trùng số điện thoại.
+            boolean emailTaken = emailOwner != null && switch (match.kind()) {
+                case NEW -> true;
+                case SAME_PERSON -> !emailOwner.getId().equals(match.leader().getId());
+                case POSSIBLE_DUPLICATE -> match.candidate(emailOwner.getId()) == null;
+                case PHONE_CONFLICT -> false;
+            };
+            if (emailTaken) {
+                row.error(errors, COL_EMAIL, "Email đã tồn tại trong hệ thống ở một huynh trưởng khác");
+                continue;
+            }
             switch (match.kind()) {
                 case SAME_PERSON -> run.skipped++;
                 case PHONE_CONFLICT -> row.error(errors, COL_PHONE, PHONE_CONFLICT_MESSAGE);
