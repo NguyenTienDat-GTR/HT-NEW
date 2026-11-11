@@ -55,25 +55,8 @@ public class CourseParticipationRepository extends BaseRepo<CourseParticipation,
         return results.stream().findFirst();
     }
 
-    public boolean existsApprovedParticipationByLeaderAndCourseType(UUID leaderId, String prerequisiteTypeCode) {
-        Long count = entityManager.createQuery(
-                        """
-                                select count(cp)
-                                from CourseParticipation cp
-                                where cp.leader.id = :leaderId
-                                  and cp.course.courseType.typeCode = :typeCode
-                                  and cp.result = phucuong.ht.modules.training.enums.CourseResult.COMPLETED
-                                """,
-                        Long.class
-                )
-                .setParameter("leaderId", leaderId)
-                .setParameter("typeCode", prerequisiteTypeCode)
-                .getSingleResult();
-        return count != null && count > 0;
-    }
-
-    // Năm đạt GẦN NHẤT của huynh trưởng ở khóa thuộc loại này: ưu tiên năm duyệt chứng nhận, nếu thiếu (khóa không cấp chứng nhận)
-    // thì lấy năm tổ chức/kết thúc khóa.
+    // Năm đạt GẦN NHẤT của huynh trưởng ở khóa thuộc loại này (đạt theo TrainingWorkflowSupport.PASSED_AS_PREREQUISITE_JPQL):
+    // loại khóa có cấp chứng nhận lấy năm duyệt chứng nhận, loại khóa không cấp chứng nhận lấy năm tổ chức/kết thúc khóa.
     public Optional<Integer> findLatestCompletedYearByLeaderAndCourseType(UUID leaderId, String typeCode) {
         List<Integer> years = entityManager.createQuery(
                         """
@@ -84,8 +67,8 @@ public class CourseParticipationRepository extends BaseRepo<CourseParticipation,
                                 from CourseParticipation cp
                                 where cp.leader.id = :leaderId
                                   and cp.course.courseType.typeCode = :typeCode
-                                  and cp.result = phucuong.ht.modules.training.enums.CourseResult.COMPLETED
-                                """,
+                                  and %s
+                                """.formatted(phucuong.ht.modules.training.TrainingWorkflowSupport.PASSED_AS_PREREQUISITE_JPQL),
                         Integer.class
                 )
                 .setParameter("leaderId", leaderId)

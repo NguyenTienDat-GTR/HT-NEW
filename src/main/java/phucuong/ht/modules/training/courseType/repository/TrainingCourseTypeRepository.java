@@ -102,7 +102,8 @@ public class TrainingCourseTypeRepository extends BaseRepo<TrainingCourseType, S
                 .getResultList());
     }
 
-    // Số huynh trưởng (không trùng) đã hoàn thành khóa theo từng loại khóa của giáo phận.
+    // Số huynh trưởng (không trùng) đã đạt khóa theo từng loại khóa của giáo phận, cùng quy tắc với điều kiện khóa tiên quyết:
+    // loại khóa có cấp chứng nhận tính theo chứng nhận được duyệt, loại khóa không cấp chứng nhận tính theo kết quả khóa.
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public java.util.Map<String, Long> countCompletedLeadersByType(java.util.UUID dioceseId) {
         return toCountMap(entityManager.createQuery(
@@ -110,9 +111,9 @@ public class TrainingCourseTypeRepository extends BaseRepo<TrainingCourseType, S
                                 select cp.course.courseType.typeCode, count(distinct cp.leader.id)
                                 from CourseParticipation cp
                                 where cp.course.courseType.dioceseId = :dioceseId
-                                  and cp.result = phucuong.ht.modules.training.enums.CourseResult.COMPLETED
+                                  and %s
                                 group by cp.course.courseType.typeCode
-                                """,
+                                """.formatted(phucuong.ht.modules.training.TrainingWorkflowSupport.PASSED_AS_PREREQUISITE_JPQL),
                         Object[].class
                 )
                 .setParameter("dioceseId", dioceseId)

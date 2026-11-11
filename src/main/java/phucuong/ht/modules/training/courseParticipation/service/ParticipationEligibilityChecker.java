@@ -29,7 +29,8 @@ public class ParticipationEligibilityChecker {
             if (courseType.getRequiredCurrentLevel() != null && !courseType.getRequiredCurrentLevel().equals(leaderLevel)) {
                 return false;
             }
-            if (courseType.getRequiredMinAge() != null) {
+            // Tuổi tối thiểu trống hoặc 0 = không yêu cầu (không cần ngày sinh).
+            if (courseType.getRequiredMinAge() != null && courseType.getRequiredMinAge() > 0) {
                 if (birthDate == null) {
                     return false;
                 }

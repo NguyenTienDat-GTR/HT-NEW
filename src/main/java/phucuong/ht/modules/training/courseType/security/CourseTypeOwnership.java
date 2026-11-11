@@ -5,6 +5,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.common.repository.BaseSearchRequest;
+import phucuong.ht.common.utils.RequestMemo;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.modules.auth.repository.AccountRepository;
@@ -61,7 +62,15 @@ public class CourseTypeOwnership {
     public record Scope(boolean unscoped, boolean directDiocese, UUID directDeaneryId, UUID activeDeaneryId) {
     }
 
+    // Một request hỏi phạm vi nhiều lần (kiểm tra quyền ở controller, kiểm tra chủ sở hữu, dựng dữ liệu trả về): chỉ tra DB một lần.
+    // Ghi nhớ cả ở request ghi vì thao tác với loại khóa / khóa / cấu hình chứng nhận không đổi đơn vị của tài khoản.
     public Scope scope(Authentication authentication) {
+        return username(authentication)
+                .map(name -> RequestMemo.getInAnyRequest("courseTypeScope:" + name, () -> loadScope(authentication)))
+                .orElseGet(() -> loadScope(authentication));
+    }
+
+    private Scope loadScope(Authentication authentication) {
         boolean unscoped = username(authentication).flatMap(accountRepository::findActiveDioceseIdByUsername).isEmpty();
         return new Scope(unscoped, hasDirectDiocese(authentication), directDeaneryId(authentication).orElse(null), activeDeaneryId(authentication).orElse(null));
     }
@@ -71,11 +80,11 @@ public class CourseTypeOwnership {
         if (managementUnitType != UnitType.DEANERY) {
             return Owner.DIOCESE;
         }
-        Optional<UUID> deanery = directDeaneryId(authentication);
-        if (deanery.isPresent()) {
-            return new Owner(UnitType.DEANERY, deanery.get());
+        Scope scope = scope(authentication);
+        if (scope.directDeaneryId() != null) {
+            return new Owner(UnitType.DEANERY, scope.directDeaneryId());
         }
-        if (hasDirectDiocese(authentication)) {
+        if (scope.directDiocese()) {
             return Owner.DIOCESE;
         }
         throw validation.forbidden("Chỉ tài khoản giáo phận hoặc giáo hạt mới tạo được loại khóa cấp giáo hạt");

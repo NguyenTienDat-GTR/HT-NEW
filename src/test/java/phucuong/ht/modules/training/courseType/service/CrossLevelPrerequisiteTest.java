@@ -30,6 +30,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
@@ -179,6 +180,48 @@ class CrossLevelPrerequisiteTest {
         type.setOwnerUnitType(UnitType.DEANERY);
         type.setOwnerDeaneryId(UUID.randomUUID());
         return type;
+    }
+
+    @Test
+    void clearingCompletionLevelStopsPromotionAndWinsOverASubmittedLevel() {
+        dioceseBasic.setResultingLevel("C1");
+        when(leaderLevelService.requireExistingOrNull("C1", "Cấp độ đạt được", DIOCESE)).thenReturn("C1");
+        var keep = new TrainingCourseTypeUpdateRequest();
+        keep.setTypeName("Đổi tên");
+        assertEquals("C1", service.update("DB_GP", keep, authentication).getResultingLevel(), "không gửi cấp độ thì giữ giá trị đã lưu");
+
+        var clear = new TrainingCourseTypeUpdateRequest();
+        clear.setClearResultingLevel(true);
+        clear.setResultingLevel("C1");
+        assertNull(service.update("DB_GP", clear, authentication).getResultingLevel());
+    }
+
+    @Test
+    void zeroMinimumAgeMeansNoRequirementAndNegativeIsRejected() {
+        var create = createRequest(UnitType.DIOCESE, null);
+        create.setRequiredMinAge(0);
+        assertNull(service.create(create, authentication).getRequiredMinAge());
+
+        dioceseBasic.setRequiredMinAge(18);
+        var update = new TrainingCourseTypeUpdateRequest();
+        update.setRequiredMinAge(0);
+        assertNull(service.update("DB_GP", update, authentication).getRequiredMinAge());
+
+        var negative = new TrainingCourseTypeUpdateRequest();
+        negative.setRequiredMinAge(-1);
+        ApiException error = assertThrows(ApiException.class, () -> service.update("DB_GP", negative, authentication));
+        assertTrue(error.getMessage().contains("Tuổi tối thiểu"));
+    }
+
+    @Test
+    void updateLooksUpTheActorDioceseOnlyOnce() {
+        when(leaderLevelService.requireExistingOrNull("C1", "Cấp yêu cầu", DIOCESE)).thenReturn("C1");
+        when(leaderLevelService.requireExistingOrNull("C1", "Cấp độ đạt được", DIOCESE)).thenReturn("C1");
+        var request = new TrainingCourseTypeUpdateRequest();
+        request.setRequiredCurrentLevel("C1");
+        request.setResultingLevel("C1");
+        service.update("DB_GP", request, authentication);
+        org.mockito.Mockito.verify(leaderLevelService, org.mockito.Mockito.times(1)).activeDioceseId(authentication);
     }
 
     private static TrainingCourseTypeCreateRequest createRequest(UnitType level, String prerequisiteCode) {

@@ -2,7 +2,10 @@ package phucuong.ht.modules.training.courseType.security;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.common.exception.ApiException;
 import phucuong.ht.common.repository.BaseSearchRequest;
@@ -18,6 +21,8 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /** Loại khóa do giáo phận tạo giáo hạt chỉ được dùng; loại giáo hạt tự tạo chỉ giáo hạt đó thấy và sửa. */
@@ -99,6 +104,41 @@ class CourseTypeOwnershipTest {
         BaseSearchRequest forDeanery = ownership.scopeList(new BaseSearchRequest(), deaneryAccount("a", DEANERY_A));
         assertEquals(2, forDeanery.getScopeAnyOf().size());
         assertEquals(DEANERY_A, forDeanery.getScopeAnyOf().get(1).get("ownerDeaneryId"));
+    }
+
+    @Test
+    void scopeIsLookedUpOncePerRequestEvenForWriteRequests() {
+        Authentication a = deaneryAccount("a", DEANERY_A);
+        bindRequest("PUT");
+        try {
+            assertTrue(ownership.canSee(ownA, a));
+            assertTrue(ownership.canManage(ownA, a));
+            ownership.requireManageable(ownA, a);
+            assertEquals(DEANERY_A, ownership.ownerForNewType(UnitType.DEANERY, a).deaneryId());
+        } finally {
+            RequestContextHolder.resetRequestAttributes();
+        }
+        verify(accounts, times(1)).findActiveDioceseIdByUsername("a");
+        verify(accounts, times(1)).findDirectActiveDioceseIdByUsername("a");
+        verify(accounts, times(1)).findDirectActiveDeaneryIdByUsername("a");
+        verify(accounts, times(1)).findActiveDeaneryIdByUsername("a");
+    }
+
+    @Test
+    void scopeOfDifferentAccountsIsNotMixedWithinOneRequest() {
+        Authentication a = deaneryAccount("a", DEANERY_A);
+        Authentication b = deaneryAccount("b", DEANERY_B);
+        bindRequest("PUT");
+        try {
+            assertTrue(ownership.canManage(ownA, a));
+            assertFalse(ownership.canManage(ownA, b));
+        } finally {
+            RequestContextHolder.resetRequestAttributes();
+        }
+    }
+
+    private static void bindRequest(String method) {
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest(method, "/api/training/course-types/x")));
     }
 
     private static Authentication auth(String username) {

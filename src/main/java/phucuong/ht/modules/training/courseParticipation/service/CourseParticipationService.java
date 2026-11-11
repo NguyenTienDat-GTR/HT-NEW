@@ -11,7 +11,6 @@ import org.springframework.transaction.annotation.Transactional;
 import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.repository.SearchRequests;
-import phucuong.ht.common.security.AuthorityChecks;
 import phucuong.ht.common.utils.LeaderNames;
 import phucuong.ht.common.validation.AccountScopeValidationHelper;
 import phucuong.ht.common.security.AccountScopeResolver;
@@ -1260,15 +1259,11 @@ public class CourseParticipationService {
     }
 
     // Người duyệt đăng ký đúng đơn vị sở hữu khóa (giáo hạt với khóa giáo hạt, giáo phận với khóa giáo phận).
+    // Kiểm tra cho một thao tác: có quyền duyệt mà tài khoản không gắn đơn vị đúng cấp thì báo lỗi phạm vi.
     public boolean canApproveCourse(TrainingCourse course, Authentication authentication) {
-        if (trainingWorkflowSupport.isDeaneryManaged(course)) {
-            return AuthorityChecks.hasAuthority(authentication, CourseParticipationAccessEvaluator.APPROVE_DEANERY)
-                    && course.getDeanery() != null
-                    && course.getDeanery().getId().equals(accountScopeValidationHelper.requireActiveDeaneryId(authentication, CourseParticipationAccessEvaluator.APPROVE_DEANERY));
-        }
-        return AuthorityChecks.hasAuthority(authentication, CourseParticipationAccessEvaluator.APPROVE_DIOCESE)
-                && course.getDiocese() != null
-                && course.getDiocese().getId().equals(accountScopeValidationHelper.requireActiveDioceseId(authentication, CourseParticipationAccessEvaluator.APPROVE_DIOCESE));
+        return phucuong.ht.modules.training.CourseApproverRule.canApprove(trainingWorkflowSupport.isDeaneryManaged(course), course, authentication,
+                () -> accountScopeValidationHelper.requireActiveDioceseId(authentication, CourseParticipationAccessEvaluator.APPROVE_DIOCESE),
+                () -> accountScopeValidationHelper.requireActiveDeaneryId(authentication, CourseParticipationAccessEvaluator.APPROVE_DEANERY));
     }
 
     // Hồ sơ ngoại lệ (chưa đủ điều kiện) khi duyệt phải có cấp độ đạt được do người duyệt chọn:

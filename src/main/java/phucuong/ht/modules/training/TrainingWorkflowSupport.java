@@ -9,6 +9,18 @@ import java.util.Optional;
 @Component
 public class TrainingWorkflowSupport {
 
+    /**
+     * Điều kiện JPQL "hồ sơ cp đã đạt khóa" khi khóa đó được dùng làm khóa tiên quyết (bí danh hồ sơ phải là cp):
+     * loại khóa có cấp chứng nhận thì tính theo chứng nhận được duyệt (đang chờ duyệt, bị từ chối hoặc đã thu hồi đều không tính,
+     * kể cả khi kết quả khóa đạt); loại khóa không cấp chứng nhận thì tính theo kết quả khóa.
+     * Dùng chung cho kiểm tra điều kiện tham dự và số huynh trưởng đã đạt ở ô chọn khóa tiên quyết.
+     */
+    public static final String PASSED_AS_PREREQUISITE_JPQL = """
+            ((cp.course.courseType.hasCertificate = true
+                  and cp.certificateApprovalStatus = phucuong.ht.modules.training.enums.WorkflowApprovalStatus.APPROVED)
+              or (cp.course.courseType.hasCertificate = false
+                  and cp.result = phucuong.ht.modules.training.enums.CourseResult.COMPLETED))""";
+
     // Khóa do giáo hạt quản lý (trước đây là khóa DT: SMTL_DT, SMKN_DT).
     public boolean isDeaneryManaged(TrainingCourseType courseType) {
         return courseType != null && courseType.getManagementUnitType() == UnitType.DEANERY;

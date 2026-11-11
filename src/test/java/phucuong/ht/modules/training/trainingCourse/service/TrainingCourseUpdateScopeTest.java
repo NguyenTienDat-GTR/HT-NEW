@@ -92,6 +92,78 @@ class TrainingCourseUpdateScopeTest {
     }
 
     @Test
+    void endedCourseCannotBeEditedByManualFinishOrByPassingTheEndDate() {
+        UUID deaneryId = UUID.randomUUID();
+        TrainingCourse finished = deaneryCourse("DT-E1", deaneryId);
+        finished.setStartDate(TrainingCourseStatusSupport.today().minusDays(1));
+        finished.setEndDate(TrainingCourseStatusSupport.today().plusDays(5));
+        finished.setFinishedAt(java.time.OffsetDateTime.now());
+        TrainingCourse pastEndDate = deaneryCourse("DT-E2", deaneryId);
+        pastEndDate.setStartDate(TrainingCourseStatusSupport.today().minusDays(5));
+        pastEndDate.setEndDate(TrainingCourseStatusSupport.today().minusDays(1));
+        TrainingCourse ongoing = deaneryCourse("DT-E3", deaneryId);
+        ongoing.setStartDate(TrainingCourseStatusSupport.today().minusDays(1));
+        ongoing.setEndDate(TrainingCourseStatusSupport.today().plusDays(1));
+        var authentication = authentication("admin-deanery", "training.course.update.deanery");
+        when(trainingCourseRepository.findByCodeWithType("DT-E1")).thenReturn(Optional.of(finished));
+        when(trainingCourseRepository.findByCodeWithType("DT-E2")).thenReturn(Optional.of(pastEndDate));
+        when(trainingCourseRepository.findByCodeWithType("DT-E3")).thenReturn(Optional.of(ongoing));
+        when(accountScopeValidationHelper.requireActiveDeaneryId(eq(authentication), anyString())).thenReturn(deaneryId);
+        when(deaneryRepository.getRequired(deaneryId)).thenReturn(ongoing.getDeanery());
+        TrainingCourseUpdateRequest request = new TrainingCourseUpdateRequest();
+        request.setLocation("Địa điểm mới");
+
+        var finishedError = assertThrows(RuntimeException.class, () -> service().update("DT-E1", request, authentication));
+        var pastEndError = assertThrows(RuntimeException.class, () -> service().update("DT-E2", request, authentication));
+
+        org.junit.jupiter.api.Assertions.assertTrue(finishedError.getMessage().contains("đã kết thúc"));
+        org.junit.jupiter.api.Assertions.assertTrue(pastEndError.getMessage().contains("đã kết thúc"));
+        // Khóa đang diễn ra vẫn sửa được.
+        assertEquals("Địa điểm mới", service().update("DT-E3", request, authentication).getLocation());
+    }
+
+    @Test
+    void dioceseCourseCannotSwitchToADeaneryManagedTypeButCanSwitchToAnotherDioceseType() {
+        UUID dioceseId = UUID.randomUUID();
+        TrainingCourse course = dioceseCourse("KH-T1", dioceseId);
+        course.setStartDate(TrainingCourseStatusSupport.today().plusDays(5));
+        course.setEndDate(TrainingCourseStatusSupport.today().plusDays(7));
+        var authentication = authentication("admin-diocese", "training.course.update.diocese", "training.course.update.deanery");
+        TrainingCourseUpdateRequest toDeaneryType = new TrainingCourseUpdateRequest();
+        toDeaneryType.setCourseTypeCode("SHARED_DEANERY");
+        TrainingCourseUpdateRequest toDioceseType = new TrainingCourseUpdateRequest();
+        toDioceseType.setCourseTypeCode("OTHER_DIOCESE");
+        when(trainingCourseRepository.findByCodeWithType("KH-T1")).thenReturn(Optional.of(course));
+        when(trainingCourseTypeRepository.findByCodeWithPrerequisite("SHARED_DEANERY"))
+                .thenReturn(Optional.of(courseType("SHARED_DEANERY", UnitType.DEANERY)));
+        when(trainingCourseTypeRepository.findByCodeWithPrerequisite("OTHER_DIOCESE"))
+                .thenReturn(Optional.of(courseType("OTHER_DIOCESE", UnitType.DIOCESE)));
+        when(accountScopeValidationHelper.requireActiveDioceseId(eq(authentication), anyString())).thenReturn(dioceseId);
+        when(dioceseRepository.getRequired(dioceseId)).thenReturn(course.getDiocese());
+
+        var error = assertThrows(RuntimeException.class, () -> service().update("KH-T1", toDeaneryType, authentication));
+
+        org.junit.jupiter.api.Assertions.assertTrue(error.getMessage().contains("chỉ dùng được loại khóa cấp giáo phận"));
+        assertEquals("OTHER_DIOCESE", service().update("KH-T1", toDioceseType, authentication).getCourseTypeCode());
+    }
+
+    @Test
+    void dioceseAccountCannotCreateACourseWithADeaneryManagedTypeEvenWhenTheDioceseCreatedIt() {
+        var authentication = authentication("admin-diocese", "training.course.create.diocese", "training.course.create.deanery");
+        phucuong.ht.modules.training.trainingCourse.model.request.TrainingCourseCreateRequest request =
+                new phucuong.ht.modules.training.trainingCourse.model.request.TrainingCourseCreateRequest();
+        request.setCourseTypeCode("SHARED_DEANERY");
+        when(trainingCourseTypeRepository.findByCodeWithPrerequisite("SHARED_DEANERY"))
+                .thenReturn(Optional.of(courseType("SHARED_DEANERY", UnitType.DEANERY)));
+        when(accountRepository.findDirectActiveDioceseIdByUsername("admin-diocese")).thenReturn(Optional.of(UUID.randomUUID()));
+
+        var error = assertThrows(RuntimeException.class, () -> service().create(request, authentication));
+
+        org.junit.jupiter.api.Assertions.assertTrue(error.getMessage().contains("chỉ dùng được loại khóa cấp giáo phận"));
+        verify(trainingCourseRepository, never()).save(any());
+    }
+
+    @Test
     void registrationWindowCannotBeAfterTheCourseStartDate() {
         UUID deaneryId = UUID.randomUUID();
         TrainingCourse course = deaneryCourse("DT-R1", deaneryId);
