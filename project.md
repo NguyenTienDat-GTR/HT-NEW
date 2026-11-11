@@ -1637,6 +1637,9 @@ Ma trận endpoint (`endpoint-contract-matrix.psv`) hiện có 124 route.
 
 - Khóa đã diễn ra (tới ngày bắt đầu hoặc đã kết thúc; `TrainingCourseStatusSupport.isCourseStarted`, `CourseActivityGuard.requireNotStarted`): trạng thái đăng ký luôn `ENDED` dù cờ `registration_enabled` còn bật, không mở lại thủ công được, gửi đăng ký bị từ chối; không sao chép vào danh sách tham dự (`CourseCopyService.requireWritable`) và không nhập Excel danh sách tham dự / chia đội (`PastCourseParticipantImportService.requireImportAllowed`, khóa thường). Thời gian đăng ký (khi mở đăng ký) không được sau ngày bắt đầu của khóa (`validateRegistrationWindow`).
 
+## Gửi sự kiện RabbitMQ không làm hỏng request (nhánh fix/domain-event-publish-nonfatal)
+
+- `DomainEventPublisher` bắt `AmqpException` khi gửi sự kiện (sau commit hoặc ngoài giao dịch) và chỉ ghi log lỗi; trước đây RabbitMQ lỗi (ví dụ vhost không tồn tại) làm request đã lưu dữ liệu vẫn trả 500 "Lỗi không xác định". Test: `DomainEventPublisherTest`.
 ## Khóa tiên quyết liên cấp và chủ sở hữu loại khóa (nhánh feat/cross-level-prerequisite)
 
 - `training_course_type` có `owner_unit_type` (DIOCESE | DEANERY) và `owner_deanery_id` (migration V134). Loại khóa giáo phận tạo (cấp giáo phận, hoặc cấp giáo hạt dùng chung): mọi giáo hạt thấy và dùng, chỉ tài khoản giáo phận sửa / đổi trạng thái. Loại khóa giáo hạt tự tạo: chỉ giáo hạt đó thấy và sửa, giáo phận không thấy. Quy tắc nằm ở `CourseTypeOwnership`; danh sách lọc bằng `scopeAnyOf`; response có `ownerUnitType`, `editable`.
