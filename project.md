@@ -1636,3 +1636,7 @@ Ma trận endpoint (`endpoint-contract-matrix.psv`) hiện có 124 route.
 - Sao chép danh sách tham dự ở form tạo / sửa khóa chỉ lấy từ **khóa tiên quyết đã kết thúc** của loại khóa đang chọn (cùng giáo phận; khóa giáo hạt chỉ nhận khóa của giáo hạt đó và cấp giáo phận): `GET /api/training/courses/copy-sources` và `/copy-sources/candidates` (mỗi huynh trưởng một dòng, kèm `blockedReason`), `copyLeaderIds` trong request tạo / sửa khóa để chọn riêng từng người. Không còn nút sao chép từ khóa nguồn bất kỳ ở tab Danh sách tham dự; nút "Sao chép từ khóa tiên quyết" cũ vẫn giữ.
 
 - Khóa đã diễn ra (tới ngày bắt đầu hoặc đã kết thúc; `TrainingCourseStatusSupport.isCourseStarted`, `CourseActivityGuard.requireNotStarted`): trạng thái đăng ký luôn `ENDED` dù cờ `registration_enabled` còn bật, không mở lại thủ công được, gửi đăng ký bị từ chối; không sao chép vào danh sách tham dự (`CourseCopyService.requireWritable`) và không nhập Excel danh sách tham dự / chia đội (`PastCourseParticipantImportService.requireImportAllowed`, khóa thường). Thời gian đăng ký (khi mở đăng ký) không được sau ngày bắt đầu của khóa (`validateRegistrationWindow`).
+
+## Gửi sự kiện RabbitMQ không làm hỏng request (nhánh fix/domain-event-publish-nonfatal)
+
+- `DomainEventPublisher` bắt `AmqpException` khi gửi sự kiện (sau commit hoặc ngoài giao dịch) và chỉ ghi log lỗi; trước đây RabbitMQ lỗi (ví dụ vhost không tồn tại) làm request đã lưu dữ liệu vẫn trả 500 "Lỗi không xác định". Test: `DomainEventPublisherTest`.
