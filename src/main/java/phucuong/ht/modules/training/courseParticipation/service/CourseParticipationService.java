@@ -11,7 +11,6 @@ import org.springframework.transaction.annotation.Transactional;
 import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.repository.SearchRequests;
-import phucuong.ht.common.security.AuthorityChecks;
 import phucuong.ht.common.utils.LeaderNames;
 import phucuong.ht.common.validation.AccountScopeValidationHelper;
 import phucuong.ht.common.security.AccountScopeResolver;
@@ -159,7 +158,7 @@ public class CourseParticipationService {
         TrainingCourse course = requireCourse(courseCode);
         courseActivityGuard.requireActive(course);
         requireActiveRegistrationData(course);
-        requireRegistrationWindowOpen(course);
+        requireRegistrationAllowed(course, authentication);
 
         // Đơn vị gửi: giáo xứ (khóa giáo phận/giáo hạt trong phạm vi), giáo phận (chỉ khóa giáo phận) hoặc giáo hạt (chỉ khóa giáo hạt).
         boolean deaneryManaged = trainingWorkflowSupport.isDeaneryManaged(course);
@@ -316,7 +315,18 @@ public class CourseParticipationService {
 
         int from = Math.min(page * size, matched.size());
         int to = Math.min(from + size, matched.size());
-        return new PageImpl<>(matched.subList(from, to), org.springframework.data.domain.PageRequest.of(page, size), matched.size());
+        // Năm đạt cấp độ chỉ tra cho các dòng của trang hiện tại (một truy vấn gộp).
+        List<RegistrationCandidateResponse> pageRows = withAchievedYears(matched.subList(from, to));
+        return new PageImpl<>(pageRows, org.springframework.data.domain.PageRequest.of(page, size), matched.size());
+    }
+
+    private List<RegistrationCandidateResponse> withAchievedYears(List<RegistrationCandidateResponse> rows) {
+        Map<UUID, Map<String, Integer>> years = eligibilityChecker.achievedYears(rows.stream().map(RegistrationCandidateResponse::getId).toList());
+        return rows.stream()
+                .map(row -> row.toBuilder()
+                        .levelAchievedYear(years.getOrDefault(row.getId(), Map.of()).get(row.getLeaderLevel()))
+                        .build())
+                .toList();
     }
 
     // Bộ lọc cấp huynh trưởng của danh sách ứng viên: rỗng là không lọc; huynh trưởng chưa có cấp (null) tính là NONE.
@@ -596,7 +606,7 @@ public class CourseParticipationService {
             throw commonValidationHelper.conflict("Khóa huấn luyện đã kết thúc nên không thể tạo chứng nhận ngoại lệ");
         }
         if (!trainingWorkflowSupport.requiresCertificate(course)) {
-            throw commonValidationHelper.conflict("Khóa huấn luyện không có cấp độ đạt được nên không có chứng nhận");
+            throw commonValidationHelper.conflict("Khóa huấn luyện không cấp chứng nhận nên không có chứng nhận");
         }
         requireApprovedForScoring(participation);
         if (participation.getTotalScore() == null || participation.getResult() == CourseResult.COMPLETED) {
@@ -760,6 +770,18 @@ public class CourseParticipationService {
     private TrainingCourse requireCourse(String courseCode) {
         return trainingCourseRepository.findByCodeWithType(courseCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy khóa huấn luyện " + courseCode));
+    }
+
+    // Khóa không mở đăng ký (registrationEnabled = false): người duyệt đăng ký đúng cấp quản lý khóa vẫn đăng ký được cho tới khi khóa diễn ra;
+    // các trường hợp còn lại theo cửa sổ đăng ký thông thường.
+    public void requireRegistrationAllowed(TrainingCourse course, Authentication authentication) {
+        if (Boolean.FALSE.equals(course.getRegistrationEnabled()) && canApproveCourse(course, authentication)) {
+            if (course.isPast() || TrainingCourseStatusSupport.isCourseStarted(course, OffsetDateTime.now())) {
+                throw commonValidationHelper.validationError("Khóa huấn luyện đã diễn ra nên đã đóng đăng ký");
+            }
+            return;
+        }
+        requireRegistrationWindowOpen(course);
     }
 
     public void requireRegistrationWindowOpen(TrainingCourse course) {
@@ -1248,15 +1270,11 @@ public class CourseParticipationService {
     }
 
     // Người duyệt đăng ký đúng đơn vị sở hữu khóa (giáo hạt với khóa giáo hạt, giáo phận với khóa giáo phận).
+    // Kiểm tra cho một thao tác: có quyền duyệt mà tài khoản không gắn đơn vị đúng cấp thì báo lỗi phạm vi.
     public boolean canApproveCourse(TrainingCourse course, Authentication authentication) {
-        if (trainingWorkflowSupport.isDeaneryManaged(course)) {
-            return AuthorityChecks.hasAuthority(authentication, CourseParticipationAccessEvaluator.APPROVE_DEANERY)
-                    && course.getDeanery() != null
-                    && course.getDeanery().getId().equals(accountScopeValidationHelper.requireActiveDeaneryId(authentication, CourseParticipationAccessEvaluator.APPROVE_DEANERY));
-        }
-        return AuthorityChecks.hasAuthority(authentication, CourseParticipationAccessEvaluator.APPROVE_DIOCESE)
-                && course.getDiocese() != null
-                && course.getDiocese().getId().equals(accountScopeValidationHelper.requireActiveDioceseId(authentication, CourseParticipationAccessEvaluator.APPROVE_DIOCESE));
+        return phucuong.ht.modules.training.CourseApproverRule.canApprove(trainingWorkflowSupport.isDeaneryManaged(course), course, authentication,
+                () -> accountScopeValidationHelper.requireActiveDioceseId(authentication, CourseParticipationAccessEvaluator.APPROVE_DIOCESE),
+                () -> accountScopeValidationHelper.requireActiveDeaneryId(authentication, CourseParticipationAccessEvaluator.APPROVE_DEANERY));
     }
 
     // Hồ sơ ngoại lệ (chưa đủ điều kiện) khi duyệt phải có cấp độ đạt được do người duyệt chọn:

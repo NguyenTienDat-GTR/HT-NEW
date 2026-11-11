@@ -1636,3 +1636,29 @@ Ma trận endpoint (`endpoint-contract-matrix.psv`) hiện có 124 route.
 - Sao chép danh sách tham dự ở form tạo / sửa khóa chỉ lấy từ **khóa tiên quyết đã kết thúc** của loại khóa đang chọn (cùng giáo phận; khóa giáo hạt chỉ nhận khóa của giáo hạt đó và cấp giáo phận): `GET /api/training/courses/copy-sources` và `/copy-sources/candidates` (mỗi huynh trưởng một dòng, kèm `blockedReason`), `copyLeaderIds` trong request tạo / sửa khóa để chọn riêng từng người. Không còn nút sao chép từ khóa nguồn bất kỳ ở tab Danh sách tham dự; nút "Sao chép từ khóa tiên quyết" cũ vẫn giữ.
 
 - Khóa đã diễn ra (tới ngày bắt đầu hoặc đã kết thúc; `TrainingCourseStatusSupport.isCourseStarted`, `CourseActivityGuard.requireNotStarted`): trạng thái đăng ký luôn `ENDED` dù cờ `registration_enabled` còn bật, không mở lại thủ công được, gửi đăng ký bị từ chối; không sao chép vào danh sách tham dự (`CourseCopyService.requireWritable`) và không nhập Excel danh sách tham dự / chia đội (`PastCourseParticipantImportService.requireImportAllowed`, khóa thường). Thời gian đăng ký (khi mở đăng ký) không được sau ngày bắt đầu của khóa (`validateRegistrationWindow`).
+
+
+## Năm đạt cấp độ ở danh sách ứng viên đăng ký (feat/registration-achieved-year)
+
+- `GET /training/courses/{code}/registration-candidates` trả thêm `levelAchievedYear`: năm đạt cấp độ HIỆN TẠI của huynh trưởng, chỉ tra cho các dòng của trang trả về (một truy vấn gộp `RankHistoryRepository.findAchievedYearsByLeaders`, gọi qua `ParticipationEligibilityChecker.achievedYears`).
+- Năm đạt lấy từ dòng lịch sử cấp bậc chưa hạ cấp có `newLevel` = cấp hiện tại, năm lớn nhất nếu có nhiều dòng: năm duyệt chứng nhận (`certificateApprovedAt`) của khóa sinh ra dòng đó; khóa không cấp chứng nhận thì `hostYear` (thiếu thì năm `endDate`); dòng không gắn khóa thì năm `promotionDate`. Huynh trưởng chưa có lịch sử cấp bậc (cấp nhập thẳng) trả null.
+- Test: `RankHistoryAchievedYearTest`.
+## Gửi sự kiện RabbitMQ không làm hỏng request (nhánh fix/domain-event-publish-nonfatal)
+
+- `DomainEventPublisher` bắt `AmqpException` khi gửi sự kiện (sau commit hoặc ngoài giao dịch) và chỉ ghi log lỗi; trước đây RabbitMQ lỗi (ví dụ vhost không tồn tại) làm request đã lưu dữ liệu vẫn trả 500 "Lỗi không xác định". Test: `DomainEventPublisherTest`.
+## Khóa tiên quyết liên cấp và chủ sở hữu loại khóa (nhánh feat/cross-level-prerequisite)
+
+- `training_course_type` có `owner_unit_type` (DIOCESE | DEANERY) và `owner_deanery_id` (migration V134). Loại khóa giáo phận tạo (cấp giáo phận, hoặc cấp giáo hạt dùng chung): mọi giáo hạt thấy và dùng, chỉ tài khoản giáo phận sửa / đổi trạng thái. Loại khóa giáo hạt tự tạo: chỉ giáo hạt đó thấy và sửa, giáo phận không thấy. Quy tắc nằm ở `CourseTypeOwnership`; danh sách lọc bằng `scopeAnyOf`; response có `ownerUnitType`, `editable`.
+- Khóa tiên quyết: loại cấp giáo phận chọn được loại cấp giáo phận hoặc cấp giáo hạt do giáo phận tạo (dùng chung); loại cấp giáo hạt chỉ chọn cấp giáo hạt dùng chung hoặc của chính giáo hạt. Chặn vòng lặp và loại đã ngừng hoạt động. API lựa chọn: `GET /training/course-types/prerequisite-options`. Cách tính năm đạt không đổi (năm duyệt chứng nhận, không có thì năm tổ chức khóa).
+- Test: `CourseTypeOwnershipTest`, `CrossLevelPrerequisiteTest`.
+
+## Bỏ trống cấp độ khi hoàn thành, quy tắc đạt khóa tiên quyết (nhánh fix/course-type-level-clear-prerequisite-rule)
+
+- Sửa loại khóa: `clearResultingLevel = true` xóa cấp độ khi hoàn thành (ưu tiên hơn `resultingLevel`); trước đây không có cách nào xóa vì `resultingLevel` null nghĩa là giữ nguyên. `requiredMinAge` bằng 0 được lưu thành trống (không yêu cầu tuổi), số âm bị từ chối; `ParticipationEligibilityChecker` coi tuổi tối thiểu trống hoặc 0 là không yêu cầu nên không đòi ngày sinh.
+- Đạt khóa tiên quyết (`TrainingWorkflowSupport.PASSED_AS_PREREQUISITE_JPQL`): loại khóa có cấp chứng nhận tính theo chứng nhận được duyệt (`certificateApprovalStatus = APPROVED`; chờ duyệt, từ chối, thu hồi đều không tính), loại khóa không cấp chứng nhận tính theo kết quả khóa (`result = COMPLETED`). Áp dụng cho `findLatestCompletedYearByLeaderAndCourseType` (điều kiện tham dự) và `countCompletedLeadersByType` (ô chọn khóa tiên quyết). Trước đây cả hai chỉ xét kết quả khóa. Bỏ `existsApprovedParticipationByLeaderAndCourseType` (không còn nơi gọi).
+- `CourseTypeOwnership.scope()` ghi nhớ theo request cho cả request ghi (`RequestMemo.getInAnyRequest`), nên kiểm tra quyền ở controller, kiểm tra chủ sở hữu và dựng response dùng chung một lần tra; `update` tra giáo phận của người thao tác một lần. Request đọc vốn đã được `AccountLookupMemoConfig` ghi nhớ.
+- `CourseApproverRule.canApprove` giữ quy tắc "người duyệt đăng ký đúng cấp và đúng đơn vị của khóa" cho cả `CourseParticipationService.canApproveCourse` và danh sách khóa đăng ký được (`TrainingCourseService.findRegistrable`); ở danh sách, tài khoản có quyền duyệt nhưng không gắn đơn vị đúng cấp thì bỏ qua khóa thay vì báo lỗi cả danh sách.
+- Test: `CrossLevelPrerequisiteTest`, `CourseTypeOwnershipTest`, `CourseApproverRuleTest`, `ParticipationEligibilityMinAgeTest`, `PrerequisitePassRuleIntegrationTest` (Testcontainers).
+- Khóa đã kết thúc không sửa được: `TrainingCourseService.update` chặn khi `TrainingCourseStatusSupport.isCourseEnded` (kết thúc thủ công hoặc quá ngày kết thúc), báo 409 "Khóa huấn luyện đã kết thúc nên không thể sửa". Khóa quá khứ vẫn sửa ở chức năng riêng.
+- Khóa cấp giáo phận chỉ dùng loại khóa cấp giáo phận: tài khoản gắn trực tiếp giáo phận (không gắn giáo hạt) tạo khóa, và khóa cấp giáo phận đổi loại khi sửa, đều bị từ chối nếu loại khóa có `managementUnitType = DEANERY` (kể cả loại do giáo phận tạo dùng chung). Kiểm tra ở `TrainingCourseService.requireDioceseLevelType`.
+- Test: `TrainingCourseUpdateScopeTest` (khóa đã kết thúc, đổi sang loại giáo hạt, tạo khóa với loại giáo hạt).

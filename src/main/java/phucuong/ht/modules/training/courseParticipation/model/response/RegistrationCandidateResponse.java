@@ -7,7 +7,7 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 @Getter
-@Builder
+@Builder(toBuilder = true)
 public class RegistrationCandidateResponse {
     private UUID id;
     private String holyName;
@@ -16,6 +16,8 @@ public class RegistrationCandidateResponse {
     private String phoneNumber;
     private String email;
     private String leaderLevel;
+    // Năm đạt cấp độ hiện tại (theo năm duyệt chứng nhận, hoặc năm tổ chức khóa nếu khóa không cấp chứng nhận); null nếu chưa có lịch sử cấp bậc.
+    private Integer levelAchievedYear;
     private UUID parishId;
     private String parishName;
     private UUID deaneryId;

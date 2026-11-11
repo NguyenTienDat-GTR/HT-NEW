@@ -9,6 +9,18 @@ import java.util.Optional;
 @Component
 public class TrainingWorkflowSupport {
 
+    /**
+     * Điều kiện JPQL "hồ sơ cp đã đạt khóa" khi khóa đó được dùng làm khóa tiên quyết (bí danh hồ sơ phải là cp):
+     * loại khóa có cấp chứng nhận thì tính theo chứng nhận được duyệt (đang chờ duyệt, bị từ chối hoặc đã thu hồi đều không tính,
+     * kể cả khi kết quả khóa đạt); loại khóa không cấp chứng nhận thì tính theo kết quả khóa.
+     * Dùng chung cho kiểm tra điều kiện tham dự và số huynh trưởng đã đạt ở ô chọn khóa tiên quyết.
+     */
+    public static final String PASSED_AS_PREREQUISITE_JPQL = """
+            ((cp.course.courseType.hasCertificate = true
+                  and cp.certificateApprovalStatus = phucuong.ht.modules.training.enums.WorkflowApprovalStatus.APPROVED)
+              or (cp.course.courseType.hasCertificate = false
+                  and cp.result = phucuong.ht.modules.training.enums.CourseResult.COMPLETED))""";
+
     // Khóa do giáo hạt quản lý (trước đây là khóa DT: SMTL_DT, SMKN_DT).
     public boolean isDeaneryManaged(TrainingCourseType courseType) {
         return courseType != null && courseType.getManagementUnitType() == UnitType.DEANERY;
@@ -58,10 +70,15 @@ public class TrainingWorkflowSupport {
         return Optional.ofNullable(courseType.getResultingLevel());
     }
 
-    // Chỉ khóa có cấp độ đạt được (resultingLevel khác rỗng/NONE) mới có chứng nhận và duyệt chứng nhận;
-    // các khóa còn lại chỉ cần kết quả điểm đạt hay không.
+    // Chỉ loại khóa bật cờ "có cấp chứng nhận" mới có chứng nhận và duyệt chứng nhận (cờ này không phụ thuộc cấp độ khi hoàn thành);
+    // thăng cấp: có chứng nhận thì theo chứng nhận được duyệt, không thì theo kết quả khóa.
     public boolean requiresCertificate(TrainingCourseType courseType) {
-        return certificateLevelFor(courseType).filter(level -> !"NONE".equals(level)).isPresent();
+        return courseType != null && courseType.isHasCertificate();
+    }
+
+    // Có cấp độ khi hoàn thành (khác rỗng/NONE) thì hoàn thành khóa mới thăng cấp.
+    public boolean promotesLevel(phucuong.ht.modules.training.trainingCourse.model.entity.TrainingCourse course) {
+        return certificateLevelFor(course).filter(level -> !"NONE".equals(level)).isPresent();
     }
 
     // Cấp độ đạt được của khóa: khóa quá khứ lưu trực tiếp trên khóa, khóa thường lấy theo loại khóa.
@@ -75,8 +92,12 @@ public class TrainingWorkflowSupport {
         return certificateLevelFor(course.getCourseType());
     }
 
+    // Khóa quá khứ không có loại khóa: có cấp độ đạt được thì có chứng nhận (giữ hành vi cũ).
     public boolean requiresCertificate(phucuong.ht.modules.training.trainingCourse.model.entity.TrainingCourse course) {
-        return certificateLevelFor(course).filter(level -> !"NONE".equals(level)).isPresent();
+        if (course == null) {
+            return false;
+        }
+        return course.isPast() ? promotesLevel(course) : requiresCertificate(course.getCourseType());
     }
 
     public boolean needsAutomaticEligibilityApproval(TrainingCourseType courseType) {

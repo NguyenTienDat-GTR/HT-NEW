@@ -20,6 +20,7 @@ public class TrainingCourseTypeCreateRequest {
 
     private String requiredCurrentLevel;
 
+    // 0 = không yêu cầu tuổi tối thiểu (lưu thành trống).
     private Integer requiredMinAge;
 
     @jakarta.validation.constraints.Min(1)
@@ -28,6 +29,8 @@ public class TrainingCourseTypeCreateRequest {
     private String prerequisiteTypeCode;
 
     private String resultingLevel;
+
+    private Boolean hasCertificate;
 
     private String certificateShortCode;
 }

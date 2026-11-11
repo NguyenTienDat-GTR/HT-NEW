@@ -115,6 +115,9 @@ public class TrainingCourseService {
     @Transactional
     public TrainingCourseResponse create(TrainingCourseCreateRequest request, Authentication authentication) {
         TrainingCourseType courseType = resolveCourseType(request.getCourseTypeCode(), authentication);
+        if (isDioceseAccount(authentication)) {
+            requireDioceseLevelType(courseType);
+        }
         String auditActor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tạo khóa huấn luyện");
         OffsetDateTime now = OffsetDateTime.now();
 
@@ -234,7 +237,23 @@ public class TrainingCourseService {
             throw commonValidationHelper.forbidden("Tài khoản hiện tại không có phạm vi hợp lệ để đăng ký khóa huấn luyện");
         }
         Viewer viewer = viewerOf(authentication);
-        return trainingCourseRepository.findOpenForRegistration(dioceseId, deaneryId).stream()
+        java.util.Map<String, TrainingCourse> registrable = new LinkedHashMap<>();
+        trainingCourseRepository.findOpenForRegistration(dioceseId, deaneryId).forEach(course -> registrable.put(course.getCourseCode(), course));
+        // Khóa không mở đăng ký: người duyệt đăng ký đúng cấp quản lý khóa vẫn đăng ký được cho tới khi khóa diễn ra.
+        OffsetDateTime now = OffsetDateTime.now();
+        List<TrainingCourse> closedNotStarted = trainingCourseRepository.findRegistrationDisabledCourses(dioceseId, deaneryId).stream()
+                .filter(course -> !TrainingCourseStatusSupport.isCourseStarted(course, now))
+                .toList();
+        if (!closedNotStarted.isEmpty()) {
+            // Đơn vị của tài khoản tra một lần cho cả danh sách. Tài khoản có quyền duyệt nhưng không gắn đơn vị đúng cấp
+            // thì không duyệt được khóa đó (bỏ qua khóa, không báo lỗi làm hỏng cả danh sách).
+            UUID actorDeaneryId = deaneryId != null ? deaneryId : accountRepository.findActiveDeaneryIdByUsername(username).orElse(null);
+            closedNotStarted.stream()
+                    .filter(course -> phucuong.ht.modules.training.CourseApproverRule.canApprove(
+                            trainingWorkflowSupport.isDeaneryManaged(course), course, authentication, () -> dioceseId, () -> actorDeaneryId))
+                    .forEach(course -> registrable.putIfAbsent(course.getCourseCode(), course));
+        }
+        return registrable.values().stream()
                 .map(course -> forViewer(toResponse(course), course, viewer))
                 .toList();
     }
@@ -310,11 +329,18 @@ public class TrainingCourseService {
         if (existing.isPast()) {
             throw commonValidationHelper.conflict("Khóa quá khứ được sửa tại chức năng riêng của khóa quá khứ");
         }
+        // Khóa đã kết thúc (thủ công hoặc quá ngày kết thúc) chỉ còn xem: không sửa thông tin khóa nữa.
+        if (TrainingCourseStatusSupport.isCourseEnded(existing, OffsetDateTime.now())) {
+            throw commonValidationHelper.conflict("Khóa huấn luyện đã kết thúc nên không thể sửa");
+        }
         TrainingCourseType currentType = existing.getCourseType();
         boolean typeChanging = request.getCourseTypeCode() != null
                 && !request.getCourseTypeCode().isBlank()
                 && !request.getCourseTypeCode().trim().equals(currentType.getTypeCode());
         TrainingCourseType targetType = typeChanging ? resolveCourseType(request.getCourseTypeCode(), authentication) : currentType;
+        if (typeChanging && !trainingWorkflowSupport.isDeaneryManaged(existing)) {
+            requireDioceseLevelType(targetType);
+        }
 
         requireUpdateScope(authentication, existing, targetType);
 
@@ -521,6 +547,25 @@ public class TrainingCourseService {
             throw commonValidationHelper.validationError("Loại khóa huấn luyện đang bị tạm ngưng: " + courseType.getTypeCode());
         }
         return courseType;
+    }
+
+    // Tài khoản gắn trực tiếp với giáo phận (không gắn giáo hạt): khóa nó tạo là khóa cấp giáo phận.
+    private boolean isDioceseAccount(Authentication authentication) {
+        String username = securityUtils.currentUsername(authentication);
+        if (username == null || username.isBlank()) {
+            return false;
+        }
+        return accountRepository.findDirectActiveDioceseIdByUsername(username).isPresent()
+                && accountRepository.findDirectActiveDeaneryIdByUsername(username).isEmpty();
+    }
+
+    // Khóa cấp giáo phận chỉ dùng loại khóa cấp giáo phận; loại do giáo phận tạo nhưng thuộc cấp quản lý giáo hạt (dùng chung)
+    // chỉ dành cho khóa của giáo hạt.
+    private void requireDioceseLevelType(TrainingCourseType courseType) {
+        if (trainingWorkflowSupport.isDeaneryManaged(courseType)) {
+            throw commonValidationHelper.validationError("Khóa cấp giáo phận chỉ dùng được loại khóa cấp giáo phận. Loại khóa \""
+                    + courseType.getTypeName() + "\" thuộc cấp quản lý giáo hạt nên chỉ dùng cho khóa của giáo hạt");
+        }
     }
 
     private void applyOwnerScope(TrainingCourse course, TrainingCourseType courseType, Authentication authentication) {
@@ -901,6 +946,10 @@ public class TrainingCourseService {
                 .requiredMinAge(hasParticipations != null && courseType != null ? courseType.getRequiredMinAge() : null)
                 .prerequisiteTypeName(hasParticipations != null && courseType != null && courseType.getPrerequisiteType() != null
                         ? courseType.getPrerequisiteType().getTypeName() : null)
+                .prerequisiteManagementUnitType(hasParticipations != null && courseType != null && courseType.getPrerequisiteType() != null
+                        ? courseType.getPrerequisiteType().getManagementUnitType() : null)
+                .prerequisiteOwnerDeaneryId(hasParticipations != null && courseType != null && courseType.getPrerequisiteType() != null
+                        ? courseType.getPrerequisiteType().getOwnerDeaneryId() : null)
                 .maxYearsAfterPrerequisite(hasParticipations != null && courseType != null ? courseType.getMaxYearsAfterPrerequisite() : null)
                 .approvedParticipantCount(approvedParticipantCount)
                 .scoreLocked(Boolean.TRUE.equals(course.getScoreLocked()))

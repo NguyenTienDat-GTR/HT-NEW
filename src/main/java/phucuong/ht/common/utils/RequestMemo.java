@@ -24,12 +24,28 @@ public final class RequestMemo {
     private RequestMemo() {
     }
 
-    @SuppressWarnings("unchecked")
     public static <T> T get(String key, Supplier<T> loader) {
         RequestAttributes attributes = RequestContextHolder.getRequestAttributes();
         if (!(attributes instanceof ServletRequestAttributes servlet) || !isRead(servlet.getRequest())) {
             return loader.get();
         }
+        return remember(attributes, key, loader);
+    }
+
+    /**
+     * Như {@link #get} nhưng ghi nhớ trong mọi request, kể cả request ghi. Chỉ dùng cho giá trị mà các request gọi tới nó
+     * chắc chắn không sửa (vd. phạm vi tài khoản khi thao tác loại khóa); nếu không, request sẽ đọc lại giá trị cũ.
+     */
+    public static <T> T getInAnyRequest(String key, Supplier<T> loader) {
+        RequestAttributes attributes = RequestContextHolder.getRequestAttributes();
+        if (!(attributes instanceof ServletRequestAttributes)) {
+            return loader.get();
+        }
+        return remember(attributes, key, loader);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> T remember(RequestAttributes attributes, String key, Supplier<T> loader) {
         String name = PREFIX + key;
         Object cached = attributes.getAttribute(name, RequestAttributes.SCOPE_REQUEST);
         if (cached != null) {
