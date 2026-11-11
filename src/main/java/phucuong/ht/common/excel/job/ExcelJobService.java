@@ -17,6 +17,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
+import phucuong.ht.common.excel.DuplicateDecision;
+import phucuong.ht.common.excel.ImportDuplicate;
 import phucuong.ht.common.excel.ImportError;
 import phucuong.ht.common.excel.AvatarWarning;
 import phucuong.ht.common.exception.errorCode;
@@ -31,9 +33,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -151,6 +155,74 @@ public class ExcelJobService {
         return toResponse(repository.findById(id.get()).orElseThrow()).withReplayed(false);
     }
 
+    /**
+     * Xử lý các dòng nghi trùng của một lần import đã xong theo quyết định của người dùng: tạo một job import mới chạy lại đúng file đó,
+     * chỉ với các dòng đã có quyết định (cùng một người: không tạo mới; hai người khác nhau: tạo hồ sơ mới). Mỗi lần import chỉ xử lý một lần.
+     */
+    public ExcelJobResponse resolveDuplicates(UUID id, List<DuplicateDecision> decisions, Authentication authentication) {
+        ExcelJobRepository.Row source = requireOwned(id, authentication);
+        String key = "resolve-" + id;
+        String paramsJson = toJson(Map.of("decisions", decisions));
+        String hash = IdempotencyService.sha256("RESOLVE|" + id + "|" + paramsJson);
+        Optional<ExcelJobRepository.Row> existing = repository.findByKey(source.owner(), source.kind(), key);
+        if (existing.isPresent()) {
+            return replay(existing.get(), hash);
+        }
+        if (!source.kind().isImport() || !"SUCCEEDED".equals(source.status()) || source.pendingInputPath() == null
+                || !Files.isRegularFile(Path.of(source.pendingInputPath()))) {
+            throw new ApiException(HttpStatus.CONFLICT, errorCode.CONFLICT,
+                    "Không còn hồ sơ nghi trùng nào cần xác nhận (đã xử lý hoặc đã quá hạn lưu). Vui lòng import lại file nếu cần");
+        }
+        Set<String> expected = new HashSet<>();
+        for (ImportDuplicate duplicate : listDuplicates(source.resultJson())) {
+            expected.add(DuplicateDecision.key(duplicate.sheet(), duplicate.row()));
+        }
+        Set<String> given = new HashSet<>();
+        for (DuplicateDecision decision : decisions) {
+            if (!expected.contains(decision.key()) || !given.add(decision.key())) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, errorCode.VALIDATION_ERROR,
+                        "Quyết định không khớp với các hồ sơ nghi trùng của lần import này");
+            }
+        }
+        if (!given.equals(expected)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, errorCode.VALIDATION_ERROR,
+                    "Vui lòng xác nhận tất cả " + expected.size() + " hồ sơ nghi trùng trước khi tiếp tục");
+        }
+        Path input = Path.of(source.pendingInputPath());
+        Path images = source.pendingImagesPath() != null && Files.isRegularFile(Path.of(source.pendingImagesPath()))
+                ? Path.of(source.pendingImagesPath()) : null;
+        ExcelJobResponse response = create(source.kind(), source.target(), key, source.owner(), hash, paramsJson, input, images, authentication);
+        if (!response.replayed()) {
+            // File được chuyển cho job mới (job đó xóa file khi xong); job cũ không giữ nữa để không xử lý lần hai.
+            repository.clearPending(id);
+        }
+        return response;
+    }
+
+    public record DuplicateScope(ExcelJobKind kind, String target) {
+    }
+
+    /** Loại và đích của job để controller kiểm tra đúng quyền như lúc tạo import. */
+    public DuplicateScope scopeOf(UUID id, Authentication authentication) {
+        ExcelJobRepository.Row row = requireOwned(id, authentication);
+        return new DuplicateScope(row.kind(), row.target());
+    }
+
+    private List<ImportDuplicate> listDuplicates(String resultJson) {
+        if (resultJson == null) {
+            return List.of();
+        }
+        try {
+            JsonNode node = objectMapper.readTree(resultJson);
+            return node.has("duplicates")
+                    ? objectMapper.convertValue(node.get("duplicates"), new TypeReference<List<ImportDuplicate>>() {
+                    })
+                    : List.of();
+        } catch (JsonProcessingException exception) {
+            return List.of();
+        }
+    }
+
     private ExcelJobResponse replay(ExcelJobRepository.Row row, String hash) {
         if (!row.payloadHash().equals(hash)) {
             throw new ApiException(HttpStatus.CONFLICT, errorCode.CONFLICT,
@@ -231,6 +303,8 @@ public class ExcelJobService {
             deleteQuietly(expired.inputPath());
             deleteQuietly(expired.outputPath());
             deleteQuietly(expired.imagesPath());
+            deleteQuietly(expired.pendingInputPath());
+            deleteQuietly(expired.pendingImagesPath());
         }
     }
 
@@ -325,11 +399,17 @@ public class ExcelJobService {
         Integer avatarTotal = null;
         Integer avatarSucceeded = null;
         List<AvatarWarning> avatarWarnings = null;
+        List<ImportDuplicate> duplicates = null;
         if (row.resultJson() != null) {
             try {
                 JsonNode node = objectMapper.readTree(row.resultJson());
                 if (node.has("errors")) {
                     errors = objectMapper.convertValue(node.get("errors"), new TypeReference<List<ImportError>>() {
+                    });
+                }
+                // Chỉ trả dòng nghi trùng khi còn xử lý được (file chờ vẫn còn): đã xác nhận hoặc quá hạn thì không hiện nữa.
+                if (row.pendingInputPath() != null && node.has("duplicates")) {
+                    duplicates = objectMapper.convertValue(node.get("duplicates"), new TypeReference<List<ImportDuplicate>>() {
                     });
                 }
                 if (node.has("created")) {
@@ -352,7 +432,7 @@ public class ExcelJobService {
         boolean downloadable = "SUCCEEDED".equals(row.status()) && row.outputPath() != null && Files.isRegularFile(Path.of(row.outputPath()));
         return new ExcelJobResponse(row.id(), row.kind(), row.kind().label(), row.kind().isImport(), row.target().isEmpty() ? null : row.target(),
                 row.status(), row.processed(), row.total(), row.avatarStatus(), avatarProcessed, avatarTotal, avatarSucceeded, avatarWarnings,
-                row.warning(), row.errorMessage(), errors, created, resultMessage, downloadable,
+                row.warning(), row.errorMessage(), errors, duplicates, created, resultMessage, downloadable,
                 downloadable ? row.outputName() : null, row.createdAt(), row.finishedAt(),
                 row.createdAt() == null ? null : row.createdAt().plusDays(RETENTION_DAYS), false);
     }
