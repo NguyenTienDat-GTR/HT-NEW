@@ -21,6 +21,7 @@ public class CourseTypeDioceseGuard {
 
     private final LeaderLevelService leaderLevelService;
     private final CommonValidationHelper validation;
+    private final CourseTypeOwnership ownership;
 
     public Optional<UUID> actorDioceseId(Authentication authentication) {
         return leaderLevelService.activeDioceseId(authentication);
@@ -33,6 +34,10 @@ public class CourseTypeDioceseGuard {
 
     public void requireSameDiocese(TrainingCourseType courseType, Authentication authentication) {
         actorDioceseId(authentication).ifPresent(dioceseId -> requireInDiocese(courseType, dioceseId));
+        // Loại khóa do giáo hạt khác tự tạo thì không xem / dùng được.
+        if (courseType != null) {
+            ownership.requireVisible(courseType, authentication);
+        }
     }
 
     public void requireInDiocese(TrainingCourseType courseType, UUID dioceseId) {

@@ -24,9 +24,10 @@ import java.util.Optional;
 
 /**
  * Kết thúc khóa huấn luyện và chốt kết quả chung của từng hồ sơ.
- * Khóa có cấp độ đạt được: chỉ xét chứng nhận. Chứng nhận đã duyệt thì hồ sơ đạt và được thăng cấp theo cấu hình (resultingLevel),
+ * Khóa có cấp chứng nhận: chỉ xét chứng nhận. Chứng nhận đã duyệt thì hồ sơ đạt và (nếu loại khóa có cấp độ khi hoàn thành) được thăng cấp,
  * không phụ thuộc kết quả điểm (kể cả chứng nhận ngoại lệ cho hồ sơ không đạt). Chứng nhận chưa được duyệt tại thời điểm kết thúc khóa
- * bị chuyển sang từ chối và hồ sơ không đạt, không thăng cấp. Khóa không có cấp độ đạt được chỉ xét kết quả điểm.
+ * bị chuyển sang từ chối và hồ sơ không đạt, không thăng cấp. Khóa không có cấp chứng nhận chỉ xét kết quả điểm
+ * và thăng cấp theo kết quả khóa nếu có cấp độ khi hoàn thành.
  */
 @Service
 @RequiredArgsConstructor
@@ -108,7 +109,7 @@ public class CourseFinishService {
                 participation.getLeader().getId(), course.getCourseCode());
         boolean scorePassed = participation.getResult() == CourseResult.COMPLETED;
         boolean certificateApproved = certificate.map(item -> item.getApprovalStatus() == WorkflowApprovalStatus.APPROVED).orElse(false);
-        // Khóa có cấp độ đạt được: chỉ xét chứng nhận đã duyệt (không xét kết quả điểm). Khóa không có cấp độ: chỉ xét kết quả điểm.
+        // Khóa có cấp chứng nhận: chỉ xét chứng nhận đã duyệt (không xét kết quả điểm). Khóa không có cấp chứng nhận: chỉ xét kết quả điểm.
         boolean certificateRequired = trainingWorkflowSupport.requiresCertificate(course);
         CourseFinalResult result = (certificateRequired ? certificateApproved : scorePassed) ? CourseFinalResult.PASSED : CourseFinalResult.FAILED;
         CourseFinalResult before = participation.getFinalResult();
@@ -123,7 +124,7 @@ public class CourseFinishService {
             // Cấp đạt được: hồ sơ ngoại lệ theo cấp người duyệt đã chọn, còn lại theo cấp của loại khóa.
             String achieved = participation.getTargetLevel() != null
                     ? participation.getTargetLevel()
-                    : trainingWorkflowSupport.certificateLevelFor(course).orElse(null);
+                    : trainingWorkflowSupport.certificateLevelFor(course).filter(level -> !"NONE".equals(level)).orElse(null);
             if (achieved != null && course.isPast()) {
                 // Khóa quá khứ: luôn ghi lịch sử cấp độ theo ngày duyệt chứng nhận; cấp hiện tại chỉ tăng khi cấp mới cao hơn.
                 java.time.LocalDate approvedDate = participation.getCertificateApprovedAt() == null ? null

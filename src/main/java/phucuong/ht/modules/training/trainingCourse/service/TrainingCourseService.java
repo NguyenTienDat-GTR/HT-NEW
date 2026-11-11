@@ -234,9 +234,29 @@ public class TrainingCourseService {
             throw commonValidationHelper.forbidden("Tài khoản hiện tại không có phạm vi hợp lệ để đăng ký khóa huấn luyện");
         }
         Viewer viewer = viewerOf(authentication);
-        return trainingCourseRepository.findOpenForRegistration(dioceseId, deaneryId).stream()
+        java.util.Map<String, TrainingCourse> registrable = new LinkedHashMap<>();
+        trainingCourseRepository.findOpenForRegistration(dioceseId, deaneryId).forEach(course -> registrable.put(course.getCourseCode(), course));
+        // Khóa không mở đăng ký: người duyệt đăng ký đúng cấp quản lý khóa vẫn đăng ký được cho tới khi khóa diễn ra.
+        OffsetDateTime now = OffsetDateTime.now();
+        trainingCourseRepository.findRegistrationDisabledCourses(dioceseId, deaneryId).stream()
+                .filter(course -> !TrainingCourseStatusSupport.isCourseStarted(course, now))
+                .filter(course -> canApproveRegistrationsOf(course, authentication))
+                .forEach(course -> registrable.putIfAbsent(course.getCourseCode(), course));
+        return registrable.values().stream()
                 .map(course -> forViewer(toResponse(course), course, viewer))
                 .toList();
+    }
+
+    // Người duyệt đăng ký đúng cấp quản lý khóa: giáo hạt với khóa giáo hạt, giáo phận với khóa giáo phận.
+    private boolean canApproveRegistrationsOf(TrainingCourse course, Authentication authentication) {
+        if (trainingWorkflowSupport.isDeaneryManaged(course)) {
+            return AuthorityChecks.hasAuthority(authentication, CourseParticipationAccessEvaluator.APPROVE_DEANERY)
+                    && course.getDeanery() != null
+                    && course.getDeanery().getId().equals(accountScopeValidationHelper.requireActiveDeaneryId(authentication, CourseParticipationAccessEvaluator.APPROVE_DEANERY));
+        }
+        return AuthorityChecks.hasAuthority(authentication, CourseParticipationAccessEvaluator.APPROVE_DIOCESE)
+                && course.getDiocese() != null
+                && course.getDiocese().getId().equals(accountScopeValidationHelper.requireActiveDioceseId(authentication, CourseParticipationAccessEvaluator.APPROVE_DIOCESE));
     }
 
     // Các tư cách tài khoản có thể dùng để gửi đăng ký (giáo phận, giáo hạt, giáo xứ).
@@ -901,6 +921,10 @@ public class TrainingCourseService {
                 .requiredMinAge(hasParticipations != null && courseType != null ? courseType.getRequiredMinAge() : null)
                 .prerequisiteTypeName(hasParticipations != null && courseType != null && courseType.getPrerequisiteType() != null
                         ? courseType.getPrerequisiteType().getTypeName() : null)
+                .prerequisiteManagementUnitType(hasParticipations != null && courseType != null && courseType.getPrerequisiteType() != null
+                        ? courseType.getPrerequisiteType().getManagementUnitType() : null)
+                .prerequisiteOwnerDeaneryId(hasParticipations != null && courseType != null && courseType.getPrerequisiteType() != null
+                        ? courseType.getPrerequisiteType().getOwnerDeaneryId() : null)
                 .maxYearsAfterPrerequisite(hasParticipations != null && courseType != null ? courseType.getMaxYearsAfterPrerequisite() : null)
                 .approvedParticipantCount(approvedParticipantCount)
                 .scoreLocked(Boolean.TRUE.equals(course.getScoreLocked()))

@@ -57,6 +57,7 @@ class CourseFinishServiceTest {
         TrainingCourseType type = new TrainingCourseType();
         type.setTypeCode("T1");
         type.setResultingLevel("HT_I");
+        type.setHasCertificate(true);
         course = new TrainingCourse();
         course.setCourseCode("K1");
         course.setCourseType(type);
@@ -106,7 +107,8 @@ class CourseFinishServiceTest {
     }
 
     @Test
-    void courseWithoutResultingLevelStillUsesTheScoreResult() {
+    void courseWithoutCertificateAndLevelUsesTheScoreResult() {
+        course.getCourseType().setHasCertificate(false);
         course.getCourseType().setResultingLevel(null);
         participation.setResult(CourseResult.COMPLETED);
 
@@ -114,6 +116,38 @@ class CourseFinishServiceTest {
 
         assertEquals(1, passed);
         assertEquals(CourseFinalResult.PASSED, participation.getFinalResult());
+        verify(rankPromotionService, never()).promote(any(), anyString(), anyString(), anyString(), any());
+    }
+
+    @Test
+    void courseWithoutCertificatePromotesByScoreResultWhenResultingLevelIsSet() {
+        course.getCourseType().setHasCertificate(false);
+        participation.setResult(CourseResult.COMPLETED);
+
+        int passed = service.finish(course, "admin", OffsetDateTime.now());
+
+        assertEquals(1, passed);
+        verify(rankPromotionService).promote(eq(leader), eq("HT_I"), eq("K1"), eq("admin"), any());
+    }
+
+    @Test
+    void courseWithoutCertificateDoesNotPromoteWhenScoreFailed() {
+        course.getCourseType().setHasCertificate(false);
+
+        int passed = service.finish(course, "admin", OffsetDateTime.now());
+
+        assertEquals(0, passed);
+        verify(rankPromotionService, never()).promote(any(), anyString(), anyString(), anyString(), any());
+    }
+
+    @Test
+    void certificateCourseWithoutResultingLevelPassesButDoesNotPromote() {
+        course.getCourseType().setResultingLevel(null);
+        certificate(WorkflowApprovalStatus.APPROVED);
+
+        int passed = service.finish(course, "admin", OffsetDateTime.now());
+
+        assertEquals(1, passed);
         verify(rankPromotionService, never()).promote(any(), anyString(), anyString(), anyString(), any());
     }
 }

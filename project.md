@@ -1640,3 +1640,8 @@ Ma trận endpoint (`endpoint-contract-matrix.psv`) hiện có 124 route.
 ## Gửi sự kiện RabbitMQ không làm hỏng request (nhánh fix/domain-event-publish-nonfatal)
 
 - `DomainEventPublisher` bắt `AmqpException` khi gửi sự kiện (sau commit hoặc ngoài giao dịch) và chỉ ghi log lỗi; trước đây RabbitMQ lỗi (ví dụ vhost không tồn tại) làm request đã lưu dữ liệu vẫn trả 500 "Lỗi không xác định". Test: `DomainEventPublisherTest`.
+## Khóa tiên quyết liên cấp và chủ sở hữu loại khóa (nhánh feat/cross-level-prerequisite)
+
+- `training_course_type` có `owner_unit_type` (DIOCESE | DEANERY) và `owner_deanery_id` (migration V134). Loại khóa giáo phận tạo (cấp giáo phận, hoặc cấp giáo hạt dùng chung): mọi giáo hạt thấy và dùng, chỉ tài khoản giáo phận sửa / đổi trạng thái. Loại khóa giáo hạt tự tạo: chỉ giáo hạt đó thấy và sửa, giáo phận không thấy. Quy tắc nằm ở `CourseTypeOwnership`; danh sách lọc bằng `scopeAnyOf`; response có `ownerUnitType`, `editable`.
+- Khóa tiên quyết: loại cấp giáo phận chọn được loại cấp giáo phận hoặc cấp giáo hạt do giáo phận tạo (dùng chung); loại cấp giáo hạt chỉ chọn cấp giáo hạt dùng chung hoặc của chính giáo hạt. Chặn vòng lặp và loại đã ngừng hoạt động. API lựa chọn: `GET /training/course-types/prerequisite-options`. Cách tính năm đạt không đổi (năm duyệt chứng nhận, không có thì năm tổ chức khóa).
+- Test: `CourseTypeOwnershipTest`, `CrossLevelPrerequisiteTest`.

@@ -43,6 +43,8 @@ class CourseTypeDiocesePartitionTest {
     @Mock private TrainingCourseTypeRepository repository;
     @Mock private TrainingCourseRepository courseRepository;
     @Mock private LeaderLevelService leaderLevelService;
+    @Mock private phucuong.ht.modules.auth.repository.AccountRepository accountRepository;
+    private phucuong.ht.modules.training.courseType.security.CourseTypeOwnership ownership;
 
     private TrainingCourseTypeService service;
     private Authentication authentication;
@@ -50,9 +52,11 @@ class CourseTypeDiocesePartitionTest {
     @BeforeEach
     void setUp() {
         CommonValidationHelper validation = new CommonValidationHelper(new securityUtils());
+        ownership = new phucuong.ht.modules.training.courseType.security.CourseTypeOwnership(new securityUtils(), accountRepository, validation);
         service = new TrainingCourseTypeService(repository, courseRepository, validation, leaderLevelService,
-                new CourseTypeDioceseGuard(leaderLevelService, validation),
-                org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class));
+                new CourseTypeDioceseGuard(leaderLevelService, validation, ownership),
+                org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class),
+                ownership);
         AuthUserDetails principal = AuthUserDetails.tokenPrincipal("phucuongadmin", null, List.of("ADMIN_DIOCESE"),
                 List.of("training.course_type.read.diocese", "training.course_type.create.diocese"));
         authentication = new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
