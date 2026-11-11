@@ -7,6 +7,8 @@ import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.modules.auth.model.AuthUserDetails;
 import phucuong.ht.modules.auth.repository.AccountRepository;
+import phucuong.ht.modules.diocese.model.entity.Diocese;
+import phucuong.ht.modules.training.enums.CourseRegistrationStatus;
 import phucuong.ht.modules.training.TrainingWorkflowSupport;
 import phucuong.ht.modules.training.courseType.model.entity.TrainingCourseType;
 import phucuong.ht.modules.training.courseType.repository.TrainingCourseTypeRepository;
@@ -78,6 +80,56 @@ class TrainingCourseAccessEvaluatorTest {
         assertTrue(evaluator.canToggle(auth, "DEANERY-COURSE"));
         assertTrue(evaluator.canFinish(auth, "DEANERY-COURSE"));
         assertTrue(evaluator.canLockScore(auth, "DEANERY-COURSE"));
+    }
+
+    private static final List<String> DEANERY_ADMIN_ONLY = List.of(
+            "training.course.read.deanery", "training.participation.submit.deanery");
+
+    // Khóa giáo phận của giáo phận ownerDioceseId; tài khoản "multi-role" thuộc giáo phận dioceseId (cả hai giáo hạt / giáo xứ đều hoạt động).
+    private void dioceseCourse(String code, UUID ownerDioceseId, CourseRegistrationStatus registrationStatus, boolean active) {
+        course(code, UnitType.DIOCESE);
+        Diocese owner = new Diocese();
+        owner.setId(ownerDioceseId);
+        TrainingCourse course = courseRepository.findByCodeWithType(code).orElseThrow();
+        course.setDiocese(owner);
+        course.setRegistrationStatus(registrationStatus);
+        course.setStatus(active);
+        when(accountRepository.findActiveParishIdByUsername("multi-role")).thenReturn(Optional.empty());
+    }
+
+    @Test
+    void deaneryAdminWithoutParishRoleSeesAnOpenCourseOfItsOwnDiocese() {
+        dioceseCourse("OPEN-DIOCESE-COURSE", dioceseId, CourseRegistrationStatus.OPEN, true);
+        Authentication auth = authentication(DEANERY_ADMIN_ONLY);
+
+        assertTrue(evaluator.canList(auth));
+        assertTrue(evaluator.canRead(auth, "OPEN-DIOCESE-COURSE"));
+        // Chỉ được xem, không được sửa hay quản lý khóa giáo phận.
+        assertFalse(evaluator.canUpdate(auth, "OPEN-DIOCESE-COURSE"));
+        assertFalse(evaluator.canFinish(auth, "OPEN-DIOCESE-COURSE"));
+    }
+
+    @Test
+    void deaneryAdminDoesNotSeeDioceseCourseThatIsNotOpenOrBelongsToAnotherDiocese() {
+        Authentication auth = authentication(DEANERY_ADMIN_ONLY);
+
+        dioceseCourse("CLOSED-DIOCESE-COURSE", dioceseId, CourseRegistrationStatus.CLOSED, true);
+        assertFalse(evaluator.canRead(auth, "CLOSED-DIOCESE-COURSE"));
+
+        dioceseCourse("DISABLED-DIOCESE-COURSE", dioceseId, CourseRegistrationStatus.OPEN, false);
+        assertFalse(evaluator.canRead(auth, "DISABLED-DIOCESE-COURSE"));
+
+        dioceseCourse("OTHER-DIOCESE-COURSE", UUID.randomUUID(), CourseRegistrationStatus.OPEN, true);
+        when(accountRepository.findActiveDioceseIdByUsername("multi-role")).thenReturn(Optional.of(dioceseId));
+        assertFalse(evaluator.canRead(auth, "OTHER-DIOCESE-COURSE"));
+    }
+
+    @Test
+    void deaneryAdminWhoseDeaneryIsInactiveSeesNothing() {
+        dioceseCourse("OPEN-DIOCESE-COURSE", dioceseId, CourseRegistrationStatus.OPEN, true);
+        when(accountRepository.findActiveDeaneryIdByUsername("multi-role")).thenReturn(Optional.empty());
+
+        assertFalse(evaluator.canRead(authentication(DEANERY_ADMIN_ONLY), "OPEN-DIOCESE-COURSE"));
     }
 
     @Test

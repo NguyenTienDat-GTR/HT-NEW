@@ -66,16 +66,23 @@ public class TrainingCourseAccessEvaluator {
     }
 
     public static final String SUBMIT_PARISH = "training.participation.submit.parish";
+    public static final String SUBMIT_DEANERY = "training.participation.submit.deanery";
     public static final String LOCK_SCORE_DIOCESE = "training.participation.lock.diocese";
     public static final String LOCK_SCORE_DEANERY = "training.participation.lock.deanery";
     public static final String FINISH_DIOCESE = "training.course.finish.diocese";
     public static final String FINISH_DEANERY = "training.course.finish.deanery";
 
-    // Tài khoản giáo xứ cũng xem được danh sách khóa, nhưng chỉ các khóa đang mở đăng ký trong phạm vi.
+    // Tài khoản giáo xứ hoặc giáo hạt (quyền gửi đăng ký) cũng xem được danh sách khóa, nhưng chỉ các khóa đang mở đăng ký trong phạm vi.
     public boolean canList(Authentication authentication) {
         return securityUtils.hasAuthority(authentication, READ_DIOCESE)
                 || securityUtils.hasAuthority(authentication, READ_DEANERY)
-                || securityUtils.hasAuthority(authentication, SUBMIT_PARISH);
+                || canSeeOpenCourses(authentication);
+    }
+
+    // Quyền gửi đăng ký của cấp giáo xứ hoặc giáo hạt: được xem khóa đang mở đăng ký trong phạm vi dù không có quyền xem khóa của cấp đó.
+    public boolean canSeeOpenCourses(Authentication authentication) {
+        return securityUtils.hasAuthority(authentication, SUBMIT_PARISH)
+                || securityUtils.hasAuthority(authentication, SUBMIT_DEANERY);
     }
 
     public boolean canListRegistrable(Authentication authentication) {
@@ -86,16 +93,24 @@ public class TrainingCourseAccessEvaluator {
 
     public boolean canRead(Authentication authentication, String courseCode) {
         return hasScopedAccess(authentication, courseCode, READ_DIOCESE, READ_DEANERY)
-                || canReadOpenCourseAsParish(authentication, courseCode);
+                || canReadOpenCourseAsSubmitter(authentication, courseCode);
     }
 
-    // Giáo xứ chỉ xem khóa đang mở đăng ký thuộc giáo phận (khóa thường) hoặc giáo hạt (khóa giáo hạt) của mình.
-    private boolean canReadOpenCourseAsParish(Authentication authentication, String courseCode) {
-        if (courseCode == null || courseCode.isBlank() || !securityUtils.hasAuthority(authentication, SUBMIT_PARISH)) {
+    // Giáo xứ hoặc giáo hạt (có quyền gửi đăng ký và đơn vị còn hoạt động) chỉ xem khóa đang mở đăng ký
+    // thuộc giáo phận (khóa thường) hoặc giáo hạt (khóa giáo hạt) của mình.
+    private boolean canReadOpenCourseAsSubmitter(Authentication authentication, String courseCode) {
+        if (courseCode == null || courseCode.isBlank() || !canSeeOpenCourses(authentication)) {
             return false;
         }
         String username = securityUtils.currentUsername(authentication);
-        if (username == null || username.isBlank() || accountRepository.findActiveParishIdByUsername(username).isEmpty()) {
+        if (username == null || username.isBlank()) {
+            return false;
+        }
+        boolean asParish = securityUtils.hasAuthority(authentication, SUBMIT_PARISH)
+                && accountRepository.findActiveParishIdByUsername(username).isPresent();
+        boolean asDeanery = securityUtils.hasAuthority(authentication, SUBMIT_DEANERY)
+                && accountRepository.findActiveDeaneryIdByUsername(username).isPresent();
+        if (!asParish && !asDeanery) {
             return false;
         }
         return trainingCourseRepository.findByCodeWithType(courseCode)
