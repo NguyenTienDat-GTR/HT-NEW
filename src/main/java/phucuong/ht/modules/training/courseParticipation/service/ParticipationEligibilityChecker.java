@@ -50,6 +50,11 @@ public class ParticipationEligibilityChecker {
                 .orElse(true);
     }
 
+    // Năm đạt từng cấp độ của huynh trưởng (cấp độ -> năm), dùng hiển thị ở danh sách đăng ký.
+    public java.util.Map<UUID, java.util.Map<String, Integer>> achievedYears(java.util.Collection<UUID> leaderIds) {
+        return rankHistoryRepository.findAchievedYearsByLeaders(leaderIds);
+    }
+
     // Số năm hoạt động yêu cầu do từng khóa đặt (loại khóa không còn cấu hình số năm).
     private int requiredYearsActive(TrainingCourse course) {
         return course.getYearsActive() == null ? 0 : course.getYearsActive();

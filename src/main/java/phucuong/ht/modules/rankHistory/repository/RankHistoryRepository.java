@@ -77,6 +77,50 @@ public class RankHistoryRepository {
                 .stream().filter(java.util.Objects::nonNull).findFirst();
     }
 
+    // Năm đạt từng cấp độ của nhiều huynh trưởng (cấp độ -> năm GẦN NHẤT), bỏ qua lần đã bị hạ cấp.
+    // Năm đạt: năm duyệt chứng nhận của khóa sinh ra lần thăng cấp; khóa không cấp chứng nhận thì năm tổ chức (hostYear, thiếu thì năm kết thúc) của khóa;
+    // dòng lịch sử không gắn khóa (nhập tay, dữ liệu cũ) thì năm ngày thăng cấp.
+    public Map<UUID, Map<String, Integer>> findAchievedYearsByLeaders(Collection<UUID> leaderIds) {
+        Map<UUID, Map<String, Integer>> result = new HashMap<>();
+        if (leaderIds == null || leaderIds.isEmpty()) {
+            return result;
+        }
+        List<Object[]> rows = entityManager.createQuery(
+                        """
+                                select rh.leader.id, rh.newLevel, rh.promotionDate, cp.certificateApprovedAt, c.hostYear, c.endDate
+                                from RankHistory rh
+                                left join TrainingCourse c on c.courseCode = rh.courseCode
+                                left join CourseParticipation cp on cp.course = c and cp.leader = rh.leader
+                                where rh.leader.id in :leaderIds
+                                  and rh.reverted = false
+                                  and rh.newLevel is not null
+                                """,
+                        Object[].class
+                )
+                .setParameter("leaderIds", leaderIds)
+                .getResultList();
+        for (Object[] row : rows) {
+            Integer year = achievedYear((java.time.LocalDate) row[2], (java.time.OffsetDateTime) row[3], (Integer) row[4], (java.time.LocalDate) row[5]);
+            if (year != null) {
+                result.computeIfAbsent((UUID) row[0], key -> new HashMap<>()).merge((String) row[1], year, Math::max);
+            }
+        }
+        return result;
+    }
+
+    static Integer achievedYear(java.time.LocalDate promotionDate, java.time.OffsetDateTime certificateApprovedAt, Integer hostYear, java.time.LocalDate courseEndDate) {
+        if (certificateApprovedAt != null) {
+            return certificateApprovedAt.getYear();
+        }
+        if (hostYear != null) {
+            return hostYear;
+        }
+        if (courseEndDate != null) {
+            return courseEndDate.getYear();
+        }
+        return promotionDate == null ? null : promotionDate.getYear();
+    }
+
     // Lần thăng cấp gần nhất chưa bị hạ cấp của huynh trưởng do một khóa sinh ra.
     public java.util.Optional<RankHistory> findLatestActivePromotion(UUID leaderId, String courseCode) {
         return entityManager.createQuery(

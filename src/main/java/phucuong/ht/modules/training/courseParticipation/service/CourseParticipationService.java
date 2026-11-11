@@ -315,7 +315,18 @@ public class CourseParticipationService {
 
         int from = Math.min(page * size, matched.size());
         int to = Math.min(from + size, matched.size());
-        return new PageImpl<>(matched.subList(from, to), org.springframework.data.domain.PageRequest.of(page, size), matched.size());
+        // Năm đạt cấp độ chỉ tra cho các dòng của trang hiện tại (một truy vấn gộp).
+        List<RegistrationCandidateResponse> pageRows = withAchievedYears(matched.subList(from, to));
+        return new PageImpl<>(pageRows, org.springframework.data.domain.PageRequest.of(page, size), matched.size());
+    }
+
+    private List<RegistrationCandidateResponse> withAchievedYears(List<RegistrationCandidateResponse> rows) {
+        Map<UUID, Map<String, Integer>> years = eligibilityChecker.achievedYears(rows.stream().map(RegistrationCandidateResponse::getId).toList());
+        return rows.stream()
+                .map(row -> row.toBuilder()
+                        .levelAchievedYear(years.getOrDefault(row.getId(), Map.of()).get(row.getLeaderLevel()))
+                        .build())
+                .toList();
     }
 
     // Bộ lọc cấp huynh trưởng của danh sách ứng viên: rỗng là không lọc; huynh trưởng chưa có cấp (null) tính là NONE.

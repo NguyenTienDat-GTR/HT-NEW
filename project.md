@@ -1637,6 +1637,12 @@ Ma trận endpoint (`endpoint-contract-matrix.psv`) hiện có 124 route.
 
 - Khóa đã diễn ra (tới ngày bắt đầu hoặc đã kết thúc; `TrainingCourseStatusSupport.isCourseStarted`, `CourseActivityGuard.requireNotStarted`): trạng thái đăng ký luôn `ENDED` dù cờ `registration_enabled` còn bật, không mở lại thủ công được, gửi đăng ký bị từ chối; không sao chép vào danh sách tham dự (`CourseCopyService.requireWritable`) và không nhập Excel danh sách tham dự / chia đội (`PastCourseParticipantImportService.requireImportAllowed`, khóa thường). Thời gian đăng ký (khi mở đăng ký) không được sau ngày bắt đầu của khóa (`validateRegistrationWindow`).
 
+
+## Năm đạt cấp độ ở danh sách ứng viên đăng ký (feat/registration-achieved-year)
+
+- `GET /training/courses/{code}/registration-candidates` trả thêm `levelAchievedYear`: năm đạt cấp độ HIỆN TẠI của huynh trưởng, chỉ tra cho các dòng của trang trả về (một truy vấn gộp `RankHistoryRepository.findAchievedYearsByLeaders`, gọi qua `ParticipationEligibilityChecker.achievedYears`).
+- Năm đạt lấy từ dòng lịch sử cấp bậc chưa hạ cấp có `newLevel` = cấp hiện tại, năm lớn nhất nếu có nhiều dòng: năm duyệt chứng nhận (`certificateApprovedAt`) của khóa sinh ra dòng đó; khóa không cấp chứng nhận thì `hostYear` (thiếu thì năm `endDate`); dòng không gắn khóa thì năm `promotionDate`. Huynh trưởng chưa có lịch sử cấp bậc (cấp nhập thẳng) trả null.
+- Test: `RankHistoryAchievedYearTest`.
 ## Gửi sự kiện RabbitMQ không làm hỏng request (nhánh fix/domain-event-publish-nonfatal)
 
 - `DomainEventPublisher` bắt `AmqpException` khi gửi sự kiện (sau commit hoặc ngoài giao dịch) và chỉ ghi log lỗi; trước đây RabbitMQ lỗi (ví dụ vhost không tồn tại) làm request đã lưu dữ liệu vẫn trả 500 "Lỗi không xác định". Test: `DomainEventPublisherTest`.
