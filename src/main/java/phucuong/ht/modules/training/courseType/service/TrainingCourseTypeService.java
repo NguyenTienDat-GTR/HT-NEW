@@ -66,10 +66,10 @@ public class TrainingCourseTypeService {
         courseType.setOwnerDeaneryId(owner.deaneryId());
         courseType.setTypeName(normalizeText(request.getTypeName()));
         courseType.setManagementUnitType(request.getManagementUnitType());
-        courseType.setRequiredCurrentLevel(leaderLevelService.requireExistingOrNull(request.getRequiredCurrentLevel(), "Cấp yêu cầu", actorDioceseId(authentication)));
-        courseType.setRequiredMinAge(request.getRequiredMinAge());
+        courseType.setRequiredCurrentLevel(leaderLevelService.requireExistingOrNull(request.getRequiredCurrentLevel(), "Cấp yêu cầu", dioceseId));
+        courseType.setRequiredMinAge(normalizeMinAge(request.getRequiredMinAge()));
         courseType.setMaxYearsAfterPrerequisite(request.getMaxYearsAfterPrerequisite());
-        courseType.setResultingLevel(leaderLevelService.requireExistingOrNull(request.getResultingLevel(), "Cấp độ đạt được", actorDioceseId(authentication)));
+        courseType.setResultingLevel(leaderLevelService.requireExistingOrNull(request.getResultingLevel(), "Cấp độ đạt được", dioceseId));
         courseType.setHasCertificate(Boolean.TRUE.equals(request.getHasCertificate()));
         courseType.setCertificateShortCode(normalizeText(request.getCertificateShortCode()));
         requireShortCodeForCertified(courseType);
@@ -138,7 +138,10 @@ public class TrainingCourseTypeService {
     @Transactional
     public TrainingCourseTypeResponse update(String typeCode, TrainingCourseTypeUpdateRequest request, Authentication authentication) {
         TrainingCourseType courseType = requireType(typeCode);
-        dioceseGuard.requireSameDiocese(courseType, authentication);
+        // Giáo phận của người thao tác tra một lần, dùng cho cả kiểm tra cùng giáo phận lẫn đối chiếu danh mục cấp độ.
+        UUID actorDiocese = actorDioceseId(authentication);
+        dioceseGuard.requireInDiocese(courseType, actorDiocese);
+        ownership.requireVisible(courseType, authentication);
         ownership.requireManageable(courseType, authentication);
 
         if (request.getManagementUnitType() != null && request.getManagementUnitType() != courseType.getManagementUnitType()) {
@@ -159,18 +162,21 @@ public class TrainingCourseTypeService {
             courseType.setTypeName(normalizeText(request.getTypeName()));
         }
         if (request.getRequiredCurrentLevel() != null) {
-            courseType.setRequiredCurrentLevel(leaderLevelService.requireExistingOrNull(request.getRequiredCurrentLevel(), "Cấp yêu cầu", actorDioceseId(authentication)));
+            courseType.setRequiredCurrentLevel(leaderLevelService.requireExistingOrNull(request.getRequiredCurrentLevel(), "Cấp yêu cầu", actorDiocese));
         }
         if (request.getRequiredMinAge() != null) {
-            courseType.setRequiredMinAge(request.getRequiredMinAge());
+            courseType.setRequiredMinAge(normalizeMinAge(request.getRequiredMinAge()));
         }
         if (Boolean.TRUE.equals(request.getClearMaxYearsAfterPrerequisite())) {
             courseType.setMaxYearsAfterPrerequisite(null);
         } else if (request.getMaxYearsAfterPrerequisite() != null) {
             courseType.setMaxYearsAfterPrerequisite(request.getMaxYearsAfterPrerequisite());
         }
-        if (request.getResultingLevel() != null) {
-            courseType.setResultingLevel(leaderLevelService.requireExistingOrNull(request.getResultingLevel(), "Cấp độ đạt được", actorDioceseId(authentication)));
+        // Bỏ trống cấp độ khi hoàn thành: từ đó hoàn thành khóa thuộc loại này không thăng cấp nữa.
+        if (Boolean.TRUE.equals(request.getClearResultingLevel())) {
+            courseType.setResultingLevel(null);
+        } else if (request.getResultingLevel() != null) {
+            courseType.setResultingLevel(leaderLevelService.requireExistingOrNull(request.getResultingLevel(), "Cấp độ đạt được", actorDiocese));
         }
         if (request.getHasCertificate() != null) {
             courseType.setHasCertificate(request.getHasCertificate());
@@ -211,6 +217,17 @@ public class TrainingCourseTypeService {
         if (courseType.isHasCertificate() && (courseType.getCertificateShortCode() == null || courseType.getCertificateShortCode().isBlank())) {
             throw commonValidationHelper.validationError("Phải nhập mã viết tắt chứng chỉ cho loại khóa có cấp chứng nhận");
         }
+    }
+
+    // Tuổi tối thiểu: 0 hoặc bỏ trống = không yêu cầu (lưu thành trống); số âm không hợp lệ.
+    private Integer normalizeMinAge(Integer requiredMinAge) {
+        if (requiredMinAge == null || requiredMinAge == 0) {
+            return null;
+        }
+        if (requiredMinAge < 0) {
+            throw commonValidationHelper.validationError("Tuổi tối thiểu không được nhỏ hơn 0");
+        }
+        return requiredMinAge;
     }
 
     // Giáo phận của người thao tác, để đối chiếu cấp độ với danh mục của giáo phận (null nếu không xác định).
