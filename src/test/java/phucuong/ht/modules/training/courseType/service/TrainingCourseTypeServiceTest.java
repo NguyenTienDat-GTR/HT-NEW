@@ -36,9 +36,11 @@ class TrainingCourseTypeServiceTest {
         TrainingCourseType type = new TrainingCourseType();
         type.setTypeCode("SMKN_I");
         when(trainingCourseTypeRepository.findByCodeWithPrerequisite("SMKN_I")).thenReturn(Optional.of(type));
+        var ownership = new phucuong.ht.modules.training.courseType.security.CourseTypeOwnership(new securityUtils(), org.mockito.Mockito.mock(phucuong.ht.modules.auth.repository.AccountRepository.class), new CommonValidationHelper(new securityUtils()));
         var service = new TrainingCourseTypeService(trainingCourseTypeRepository, trainingCourseRepository,
                 new CommonValidationHelper(new securityUtils()), leaderLevelService, org.mockito.Mockito.mock(phucuong.ht.modules.training.courseType.security.CourseTypeDioceseGuard.class),
-                org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class));
+                org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class),
+                ownership);
         AuthUserDetails principal = AuthUserDetails.tokenPrincipal("admin", null, List.of("ADMIN_DIOCESE"), List.of());
         var authentication = new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
 

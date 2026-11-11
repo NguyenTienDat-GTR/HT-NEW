@@ -901,6 +901,10 @@ public class TrainingCourseService {
                 .requiredMinAge(hasParticipations != null && courseType != null ? courseType.getRequiredMinAge() : null)
                 .prerequisiteTypeName(hasParticipations != null && courseType != null && courseType.getPrerequisiteType() != null
                         ? courseType.getPrerequisiteType().getTypeName() : null)
+                .prerequisiteManagementUnitType(hasParticipations != null && courseType != null && courseType.getPrerequisiteType() != null
+                        ? courseType.getPrerequisiteType().getManagementUnitType() : null)
+                .prerequisiteOwnerDeaneryId(hasParticipations != null && courseType != null && courseType.getPrerequisiteType() != null
+                        ? courseType.getPrerequisiteType().getOwnerDeaneryId() : null)
                 .maxYearsAfterPrerequisite(hasParticipations != null && courseType != null ? courseType.getMaxYearsAfterPrerequisite() : null)
                 .approvedParticipantCount(approvedParticipantCount)
                 .scoreLocked(Boolean.TRUE.equals(course.getScoreLocked()))

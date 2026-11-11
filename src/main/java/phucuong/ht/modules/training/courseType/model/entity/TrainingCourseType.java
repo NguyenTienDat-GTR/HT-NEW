@@ -33,6 +33,15 @@ public class TrainingCourseType extends BaseModel {
     @Column(name = "management_unit_type")
     private UnitType managementUnitType;
 
+    // Chủ sở hữu loại khóa: DIOCESE = do giáo phận tạo (loại khóa cấp giáo phận, hoặc loại khóa cấp giáo hạt dùng chung cho mọi giáo hạt;
+    // giáo hạt chỉ được dùng, không sửa). DEANERY = do giáo hạt ownerDeaneryId tự tạo (chỉ giáo hạt đó thấy và sửa).
+    @Enumerated(EnumType.STRING)
+    @Column(name = "owner_unit_type", nullable = false)
+    private UnitType ownerUnitType = UnitType.DIOCESE;
+
+    @Column(name = "owner_deanery_id")
+    private UUID ownerDeaneryId;
+
     // Điều kiện tham dự (gộp từ course_requirement cũ).
     @Column(name = "required_current_level")
     private String requiredCurrentLevel;
