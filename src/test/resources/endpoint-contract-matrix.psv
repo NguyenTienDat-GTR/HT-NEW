@@ -250,6 +250,7 @@ GET /api/excel-jobs|200|401|N/A: every authenticated user lists only their own j
 GET /api/excel-jobs/{id}|200|401|N/A: jobs of other users are reported as not found|400|404|N/A: read-only endpoint does not mutate state
 GET /api/excel-jobs/{id}/file|200|401|N/A: jobs of other users are reported as not found|400|404|N/A: read-only endpoint does not mutate state
 POST /api/excel-jobs/{id}/cancel|200|401|N/A: jobs of other users are reported as not found|400|404|409
+POST /api/excel-jobs/{id}/resolve-duplicates|202|401|403|400|404|409
 POST /api/leaders/import|202|401|403|400|N/A: import resolves parishes by name inside the file, no path resource|409
 POST /api/deaneries/import|202|401|403|400|N/A: import resolves units by name inside the file, no path resource|409
 POST /api/parishes/import|202|401|403|400|N/A: import resolves units by name inside the file, no path resource|409

@@ -121,10 +121,12 @@ public class CourseFinishService {
             if (entityLockService != null) {
                 entityLockService.lock(participation.getLeader());
             }
-            // Cấp đạt được: hồ sơ ngoại lệ theo cấp người duyệt đã chọn, còn lại theo cấp của loại khóa.
-            String achieved = participation.getTargetLevel() != null
-                    ? participation.getTargetLevel()
-                    : trainingWorkflowSupport.certificateLevelFor(course).filter(level -> !"NONE".equals(level)).orElse(null);
+            // Chỉ thăng cấp khi khóa có cấp độ đạt được khi hoàn thành (kể cả khóa quá khứ): khóa không có thì dù hồ sơ đã chọn cấp
+            // (ví dụ cột "Cấp độ đạt được" trong file Excel) cũng không thăng cấp. Khóa có thì hồ sơ đã chọn cấp riêng (ngoại lệ / file Excel)
+            // thăng theo cấp đó, còn lại theo cấp của khóa.
+            String courseLevel = trainingWorkflowSupport.certificateLevelFor(course).filter(level -> !"NONE".equals(level)).orElse(null);
+            String achieved = courseLevel == null ? null
+                    : participation.getTargetLevel() != null ? participation.getTargetLevel() : courseLevel;
             if (achieved != null && course.isPast()) {
                 // Khóa quá khứ: luôn ghi lịch sử cấp độ theo ngày duyệt chứng nhận; cấp hiện tại chỉ tăng khi cấp mới cao hơn.
                 java.time.LocalDate approvedDate = participation.getCertificateApprovedAt() == null ? null

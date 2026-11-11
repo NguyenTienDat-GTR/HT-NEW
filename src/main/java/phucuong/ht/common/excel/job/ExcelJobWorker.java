@@ -19,6 +19,8 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 import phucuong.ht.common.excel.ImportSummary;
 import phucuong.ht.common.excel.AvatarZip;
+import phucuong.ht.common.excel.DuplicateDecision;
+import phucuong.ht.common.excel.ImportOptions;
 import phucuong.ht.common.excel.ImportValidationException;
 import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.config.CacheNames;
@@ -215,14 +217,18 @@ public class ExcelJobWorker {
                 }
             }
             AvatarZip importImages = images;
+            ImportOptions options = optionsOf(row.paramsJson());
             JobProgress progress = (processed, total) -> shortTx.executeWithoutResult(status -> repository.touch(row.id(), processed, total, LEASE_SECONDS));
             ImportSummary summary = runTx.execute(status -> {
-                ImportSummary result = handlers.runImport(row.kind(), row.target(), Path.of(row.inputPath()), authentication, progress, importImages);
+                ImportSummary result = handlers.runImport(row.kind(), row.target(), Path.of(row.inputPath()), authentication, progress, importImages, options);
                 boolean avatarRequested = row.imagesPath() != null || !result.avatarPlan().isEmpty() || !result.avatarWarnings().isEmpty();
                 String avatarStatus = avatarRequested ? (result.avatarPlan().isEmpty() ? "DONE" : "PENDING") : null;
                 Map<String, Object> resultJson = new LinkedHashMap<>();
                 resultJson.put("created", result.created());
                 resultJson.put("message", result.message());
+                if (!result.duplicates().isEmpty()) {
+                    resultJson.put("duplicates", result.duplicates());
+                }
                 if (avatarRequested) {
                     resultJson.put("avatarProcessed", 0);
                     resultJson.put("avatarTotal", result.avatarPlan().size());
@@ -234,6 +240,9 @@ public class ExcelJobWorker {
                 if (updated != 1) {
                     // Job không còn ở trạng thái RUNNING (bị thay đổi từ nơi khác): hủy ghi dữ liệu.
                     throw new IllegalStateException("Trạng thái tác vụ đã thay đổi, hủy ghi dữ liệu");
+                }
+                if (!result.duplicates().isEmpty()) {
+                    keepFilesForDuplicates(row);
                 }
                 return result;
             });
@@ -279,6 +288,42 @@ public class ExcelJobWorker {
             if (deleteImages) {
                 ExcelJobService.deleteQuietly(row.imagesPath());
             }
+        }
+    }
+
+    /** Quyết định xác nhận hồ sơ nghi trùng nằm trong params_json của job xử lý quyết định; import thường không có. */
+    private ImportOptions optionsOf(String paramsJson) {
+        if (paramsJson == null || paramsJson.isBlank()) {
+            return ImportOptions.NONE;
+        }
+        try {
+            DecisionParams params = objectMapper.readValue(paramsJson, DecisionParams.class);
+            return new ImportOptions(params.decisions());
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Không đọc được quyết định xác nhận hồ sơ trùng", exception);
+        }
+    }
+
+    record DecisionParams(List<DuplicateDecision> decisions) {
+    }
+
+    /**
+     * Còn dòng nghi trùng chờ xác nhận: giữ bản sao file Excel (và ZIP ảnh) vì file gốc bị xóa khi job kết thúc, ZIP ảnh bị xóa sau khi gắn ảnh;
+     * job xử lý quyết định sẽ dùng lại các bản sao này.
+     */
+    private void keepFilesForDuplicates(ExcelJobRepository.Row row) {
+        try {
+            Path dir = Files.createDirectories(Path.of(baseDir, "pending"));
+            Path input = dir.resolve(row.id() + ".xlsx");
+            Files.copy(Path.of(row.inputPath()), input, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            Path images = null;
+            if (row.imagesPath() != null && Files.isRegularFile(Path.of(row.imagesPath()))) {
+                images = dir.resolve(row.id() + ".zip");
+                Files.copy(Path.of(row.imagesPath()), images, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+            repository.markPending(row.id(), input.toString(), images == null ? null : images.toString());
+        } catch (IOException exception) {
+            throw new UncheckedIOException("Không lưu được file chờ xác nhận hồ sơ trùng", exception);
         }
     }
 

@@ -1,5 +1,7 @@
 ﻿# BE
 
+> Cách dùng file này: đây là tài liệu tra cứu dài (khoảng 200 KB), không đọc từ đầu đến cuối trước mỗi việc. Tìm theo từ khóa (tên module, endpoint, tên quyền, số migration) rồi chỉ đọc đúng mục liên quan. Mã nguồn và migration là nguồn sự thật; mục nào lệch với mã thì mã đúng và phải sửa lại mục đó. Quy tắc bắt buộc cho mọi phiên nằm ở mục "Session Rules".
+
 ## Dashboard phân tích theo scope
 
 - API (quyền `analytics.dashboard.read.all|diocese|deanery|parish`; backend tự resolve scope từ account, không nhận ID scope từ client):
@@ -100,13 +102,16 @@ This project manages organization data, leaders, training, certificates, and sys
 
 The backend currently relies on:
 
-- Spring Boot 3
+- Spring Boot 3.5 on Java 21 (Gradle wrapper)
 - Spring Data JPA
-- PostgreSQL
+- PostgreSQL 16
 - Flyway
 - Spring Security
 - Redis / Spring Session
+- RabbitMQ (Spring AMQP) for async messaging (notifications, registration auto-approval)
+- WebSocket (STOMP) for realtime notifications
 - JWT for stateless authentication
+- Cloudinary for media storage (see `docs/media-storage.md`)
 
 ## Core Model
 
@@ -1667,3 +1672,19 @@ Ma trận endpoint (`endpoint-contract-matrix.psv`) hiện có 124 route.
 - Admin giáo hạt (chỉ có `training.participation.submit.deanery`, không kèm quyền giáo xứ) trước đây gửi đăng ký được cho khóa giáo phận nhưng không thấy khóa đó ở danh sách khóa và bị từ chối khi mở chi tiết, vì chỉ `submit.parish` mới được xem khóa đang mở đăng ký. Nay `submit.deanery` cũng được: `TrainingCourseAccessEvaluator.canSeeOpenCourses` (dùng cho `canList`) và `canReadOpenCourseAsSubmitter` (dùng cho `canRead`, cần giáo xứ hoặc giáo hạt của tài khoản còn hoạt động), `TrainingCourseService.findAll` thêm nhóm khóa đang mở theo giáo phận / giáo hạt của tài khoản.
 - Vẫn chỉ xem: khóa `OPEN`, `status = true`, đúng giáo phận (khóa thường) hoặc đúng giáo hạt (khóa giáo hạt); không có quyền sửa, kết thúc, khóa điểm.
 - Test: `TrainingCourseAccessEvaluatorTest` (admin giáo hạt thuần thấy khóa mở của giáo phận mình; không thấy khóa đóng, vô hiệu, giáo phận khác, hoặc khi giáo hạt ngưng hoạt động).
+
+## feat/canh-bao-trung-ho-so-ht
+- Cảnh báo trùng hồ sơ huynh trưởng khi import Excel (hồ sơ huynh trưởng `IMPORT_LEADERS`, danh sách tham dự `IMPORT_PARTICIPANTS`, chia đội `IMPORT_TEAM_PARTICIPANTS`). Quy tắc ở `LeaderDuplicateMatcher`: "cùng danh tính" = trùng tên thánh, họ và tên (không phân biệt hoa/thường và dấu), ngày sinh, giáo xứ.
+  - Số điện thoại đã có ở huynh trưởng cùng danh tính: coi là người đã có (import hồ sơ: bỏ qua dòng, đếm "bỏ qua N hồ sơ đã có"; import khóa: thêm hồ sơ đó vào khóa, không sửa hồ sơ).
+  - Số điện thoại đã có ở huynh trưởng khác danh tính: lỗi trùng (cả file bị từ chối như mọi lỗi dòng). Chặt hơn trước: import khóa không còn tự nhận người theo số điện thoại / email khi các trường kia khác; email đã có ở huynh trưởng khác (không phải chính người dòng đó trùng hoặc hồ sơ nghi trùng của họ) báo lỗi như trùng số điện thoại, cả ở import hồ sơ lẫn import khóa; email không dùng để nhận diện trùng. Sheet hướng dẫn của các file Excel mẫu (`ImportTemplates`, hằng `DUPLICATE_RULES`) đã mô tả quy tắc này.
+  - Số điện thoại chưa có nhưng có huynh trưởng cùng danh tính: nghi trùng. Dòng được giữ lại (vẫn kiểm tra đủ các cột), các dòng còn lại import bình thường; kết quả job có `duplicates` (`ImportDuplicate`: dòng, thông tin dòng, hồ sơ đã có với số điện thoại che bớt).
+- Xác nhận: `POST /api/excel-jobs/{id}/resolve-duplicates` body `{decisions:[{sheet,row,sameLeaderId|null}]}` (phải đủ mọi dòng nghi trùng; kiểm tra lại quyền theo loại job như lúc tạo import). `ExcelJobService.resolveDuplicates` tạo job import mới (khóa idempotency `resolve-<id job cũ>`, nên mỗi lần import chỉ xử lý một lần) chạy lại đúng file với `ImportOptions` (params_json): chỉ các dòng có quyết định được xử lý; `sameLeaderId` có giá trị = cùng một người (bỏ qua / thêm vào khóa), null = hai người khác nhau (tạo hồ sơ mới).
+- File chờ: khi job có `duplicates`, worker sao chép file Excel (và ZIP ảnh) sang `<app.excel-jobs.dir>/pending/` và ghi `excel_job.pending_input_path` / `pending_images_path` (migration `V135__excel_job_pending_duplicates.sql`); job xử lý quyết định nhận các file này, job cũ được xóa tham chiếu. `purgeExpired` (3 ngày) dọn cả hai. Hết hạn hoặc đã xử lý thì `ExcelJobResponse.duplicates` rỗng.
+- Test: `ExcelImportExportIntegrationTest` (order 33, 34 và các test import cũ đã cập nhật theo quy tắc mới).
+
+## feat/cap-do-dat-duoc-import-excel
+- Cột "Cấp độ đạt được" (`PastCourseParticipantImportService.COL_ACHIEVED_LEVEL`, tùy chọn, có danh sách chọn như cột Cấp độ) trong file Excel mẫu của **khóa quá khứ** (sau cột Kết quả). Chọn thì lưu vào `course_participation.target_level` của dòng Đạt, huynh trưởng được thăng theo cấp đó khi chứng nhận được duyệt (ghi lịch sử cấp độ theo ngày duyệt, cấp hiện tại chỉ tăng nếu cấp mới cao hơn). Bỏ trống thì `target_level` để null và `CourseFinishService` lấy cấp độ đạt được của khóa. Không cần migration. File mẫu khóa thường (kể cả sheet Ngoại lệ) không có cột này; hồ sơ ngoại lệ vẫn chờ duyệt đăng ký và người duyệt chọn cấp như cũ.
+- Kiểm tra mỗi dòng (`parseAchievedLevel`, dùng `LeaderLevelService.achievableProblem` chung với duyệt đăng ký ngoại lệ): phải có trong danh mục cấp độ của giáo phận, không phải "Chưa có cấp", không cao hơn cấp độ đạt được của khóa; không bắt buộc cao hơn cấp hiện tại vì khóa quá khứ chỉ ghi lịch sử. Khóa quá khứ không có cấp độ đạt được thì cột bị bỏ qua, không lỗi; thông báo kết quả import ghi số dòng bị bỏ qua. Dòng Không đạt không lưu cấp.
+- `CourseFinishService.evaluate`: chỉ thăng cấp khi khóa có cấp độ đạt được (khác rỗng / NONE); khóa không có thì dù hồ sơ có `target_level` cũng không thăng cấp. Khóa có thì hồ sơ có `target_level` (chọn trong file Excel khóa quá khứ hoặc do người duyệt chọn cho hồ sơ ngoại lệ) thăng theo cấp đó, còn lại theo cấp của khóa.
+- Sheet "Hướng dẫn" của hai mẫu cập nhật; mẫu khóa thường có dòng cảnh báo in đậm đỏ (`WARNING_PREFIX`) nhắc xóa dòng ví dụ ở cả hai sheet, nhất là sheet Ngoại lệ nếu không dùng.
+- Test: `CourseFinishServiceTest` (cấp chọn riêng, bỏ qua khi khóa không có cấp, khóa quá khứ), `ImportTemplatesTest` (cột mới ở mẫu khóa quá khứ, dropdown, mẫu khóa thường không có cột và có cảnh báo), `ExcelImportExportIntegrationTest` (order 35-36: khóa quá khứ chọn / bỏ trống / lỗi / khóa không có cấp; order 37: sheet Ngoại lệ vẫn chờ duyệt đăng ký).

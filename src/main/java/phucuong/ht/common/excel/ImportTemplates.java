@@ -30,6 +30,14 @@ import java.util.List;
  */
 public final class ImportTemplates {
 
+    /** Quy tắc kiểm tra trùng hồ sơ huynh trưởng (khớp với LeaderDuplicateMatcher) dùng chung cho các hướng dẫn import có thông tin huynh trưởng. */
+    private static final String DUPLICATE_RULES = "Kiểm tra trùng với hồ sơ đã có: hệ thống so Tên thánh, Họ và tên, Ngày sinh và Giáo xứ (không phân biệt hoa/thường và dấu). "
+            + "(a) Trùng cả bốn thông tin và trùng Số điện thoại: coi là người đã có trong hệ thống. "
+            + "(b) Trùng bốn thông tin nhưng KHÁC Số điện thoại: dòng được giữ lại, các dòng còn lại vẫn được import; sau đó hệ thống hỏi bạn đó là cùng một người hay hai người khác nhau. "
+            + "(c) Trùng Số điện thoại với một huynh trưởng khác (khác Tên thánh, Họ và tên, Ngày sinh hoặc Giáo xứ): báo lỗi. "
+            + "(d) Email đã thuộc về một huynh trưởng khác: báo lỗi.";
+
+
     public static final String LEADERS_SHEET = "Huynh trưởng";
     public static final String DEANERIES_SHEET = "Giáo hạt";
     public static final String PARISHES_SHEET = "Giáo xứ";
@@ -40,6 +48,8 @@ public final class ImportTemplates {
     private static final String LOOKUP_DEANERY_HEADER = "Giáo hạt (" + ParishImportService.COL_DEANERY + ")";
     private static final String LOOKUP_LEVEL_HEADER = "Cấp độ (" + LeaderImportService.COL_LEVEL + ")";
     private static final int VALIDATED_ROWS = 5000;
+    // Dòng hướng dẫn bắt đầu bằng tiền tố này được tô đậm màu đỏ trong sheet "Hướng dẫn".
+    private static final String WARNING_PREFIX = "LƯU Ý QUAN TRỌNG:";
 
     private ImportTemplates() {
     }
@@ -70,7 +80,8 @@ public final class ImportTemplates {
                 "2. Tất cả các cột đều bắt buộc (tiêu đề màu đỏ), TRỪ cột Email, Cấp độ và Tên file ảnh: Tên thánh, Họ và tên, Ngày sinh, Giới tính, Số điện thoại, Giáo hạt, Giáo xứ.",
                 "3. Ngày sinh theo dạng dd/MM/yyyy (ví dụ 07/03/1995), không được sau ngày hiện tại.",
                 "4. Giới tính chỉ nhận: Nam hoặc Nữ (chọn từ danh sách).",
-                "5. Email (không bắt buộc, nếu nhập phải đúng định dạng) và Số điện thoại không được trùng với huynh trưởng đã có trong hệ thống hoặc trùng giữa các dòng trong file. Số điện thoại gồm 10 chữ số và bắt đầu bằng 0 (cột đã để định dạng Text để không mất số 0 đầu).",
+                "5. Số điện thoại gồm 10 chữ số và bắt đầu bằng 0 (cột đã để định dạng Text để không mất số 0 đầu); Email (không bắt buộc) nếu nhập phải đúng định dạng. Số điện thoại và Email không được trùng giữa các dòng trong file. "
+                        + DUPLICATE_RULES + " Người đã có thì dòng được bỏ qua (không tạo mới, không sửa hồ sơ); chọn \"hai người khác nhau\" thì tạo hồ sơ mới.",
                 "6. Cấp độ: chọn từ danh sách (sheet \"" + LOOKUP_SHEET + "\") hoặc nhập tên / mã cấp độ trong danh mục của giáo phận. Để trống nghĩa là \"Chưa có cấp\".",
                 "7. Giáo hạt và Giáo xứ (cột Giáo xứ cũng nhận tên giáo họ / giáo điểm) phải ĐÃ CÓ trong hệ thống (nhập đúng tên) và giáo xứ phải thuộc đúng giáo hạt đã nhập; nếu chưa có, dòng đó báo lỗi (hệ thống không tự tạo giáo hạt / giáo xứ).",
                 "8. Chỉ nhập được huynh trưởng cho giáo xứ trong phạm vi tài khoản của bạn. Chỉ cần một dòng lỗi thì toàn bộ file không được lưu; hệ thống báo rõ sheet, dòng, cột bị lỗi ở khay tác vụ để bạn sửa rồi import lại.",
@@ -135,13 +146,14 @@ public final class ImportTemplates {
         return build(PARISHES_SHEET, "Hướng dẫn import danh sách giáo xứ", columns, samples, guide, deaneryNames, null, null, null, LOOKUP_DEANERY_HEADER);
     }
 
-    /** Mẫu import danh sách tham dự khóa quá khứ (mọi cột bắt buộc trừ Cấp độ và Nhận xét). */
+    /** Mẫu import danh sách tham dự khóa quá khứ (mọi cột bắt buộc trừ Cấp độ, Cấp độ đạt được và Nhận xét). */
     public static byte[] participants(List<String> levelNames) {
         List<Column> columns = List.of(
                 new Column(PastCourseParticipantImportService.COL_EMAIL, false, 32, Kind.GENERAL),
                 new Column(PastCourseParticipantImportService.COL_PHONE, true, 16, Kind.TEXT),
                 new Column(PastCourseParticipantImportService.COL_SCORE, true, 12, Kind.NUMBER),
                 new Column(PastCourseParticipantImportService.COL_RESULT, true, 14, Kind.RESULT),
+                new Column(PastCourseParticipantImportService.COL_ACHIEVED_LEVEL, false, 26, Kind.LEVEL),
                 new Column(PastCourseParticipantImportService.COL_REVIEW, false, 30, Kind.GENERAL),
                 new Column(LeaderImportService.COL_HOLY_NAME, true, 14, Kind.GENERAL),
                 new Column(LeaderImportService.COL_FULL_NAME, true, 26, Kind.GENERAL),
@@ -153,22 +165,24 @@ public final class ImportTemplates {
                 new Column(PastCourseParticipantImportService.COL_NOTE, false, 30, Kind.GENERAL),
                 avatarColumn());
         List<List<Object>> samples = List.of(
-                List.of("nguyen.van.an@example.com", "0901234567", 8.5, "Đạt", "Hoàn thành tốt khóa huấn luyện", "Phêrô", "Nguyễn Văn An", LocalDate.of(1995, 3, 7), "Nam", "", "Tên giáo hạt", "Tên giáo xứ", "Ghi chú tùy chọn", "nguyen-van-an.jpg"),
-                List.of("tran.thi.binh@example.com", "0912345678", 5, "Không đạt", "", "Maria", "Trần Thị Bình", LocalDate.of(1998, 11, 21), "Nữ", "", "Tên giáo hạt", "Tên giáo xứ", "", ""));
+                List.of("nguyen.van.an@example.com", "0901234567", 8.5, "Đạt", "", "Hoàn thành tốt khóa huấn luyện", "Phêrô", "Nguyễn Văn An", LocalDate.of(1995, 3, 7), "Nam", "", "Tên giáo hạt", "Tên giáo xứ", "Ghi chú tùy chọn", "nguyen-van-an.jpg"),
+                List.of("tran.thi.binh@example.com", "0912345678", 5, "Không đạt", "", "", "Maria", "Trần Thị Bình", LocalDate.of(1998, 11, 21), "Nữ", "", "Tên giáo hạt", "Tên giáo xứ", "", ""));
         List<String> guide = List.of(
                 "1. Chỉ dùng cho khóa huấn luyện quá khứ (tạo bằng nút \"Tạo khóa quá khứ\"). Mở chi tiết khóa, vào tab \"Danh sách tham dự\" và bấm \"Import Excel\".",
                 "2. Điền dữ liệu ở sheet \"" + PARTICIPANTS_SHEET + "\" (sheet đầu tiên), từ dòng 2. Xóa các dòng ví dụ trước khi import.",
-                "3. MỌI DÒNG đều phải nhập đủ tất cả các cột (tiêu đề màu đỏ), chỉ được để trống cột Email, Nhận xét, Cấp độ, Ghi chú và Tên file ảnh: Số điện thoại, Tổng điểm, Kết quả, Tên thánh, Họ và tên, Ngày sinh, Giới tính, Giáo hạt, Giáo xứ.",
-                "4. Huynh trưởng được tìm theo Số điện thoại (bắt buộc) và Email (nếu có nhập); hai thông tin này là duy nhất, nếu khớp hai huynh trưởng khác nhau thì báo lỗi. Không dùng mã định danh (UUID).",
-                "5. Huynh trưởng ĐÃ CÓ HỒ SƠ: hệ thống chỉ thêm huynh trưởng đó vào khóa, KHÔNG tạo mới và KHÔNG sửa hồ sơ (thông tin trong dòng chỉ để kiểm tra đủ dữ liệu). Huynh trưởng CHƯA CÓ HỒ SƠ: hệ thống tạo hồ sơ từ chính dòng này rồi thêm vào khóa.",
+                "3. MỌI DÒNG đều phải nhập đủ tất cả các cột (tiêu đề màu đỏ), chỉ được để trống cột Email, Nhận xét, Cấp độ, Cấp độ đạt được, Ghi chú và Tên file ảnh: Số điện thoại, Tổng điểm, Kết quả, Tên thánh, Họ và tên, Ngày sinh, Giới tính, Giáo hạt, Giáo xứ.",
+                "4. Số điện thoại là bắt buộc, Email không bắt buộc; cả hai là duy nhất trong hệ thống. Không dùng mã định danh (UUID). "
+                        + DUPLICATE_RULES + " Người đã có thì chỉ được thêm vào khóa (không tạo mới, không sửa hồ sơ); chọn \"hai người khác nhau\" thì tạo hồ sơ mới rồi thêm vào khóa.",
+                "5. Huynh trưởng ĐÃ CÓ HỒ SƠ: hệ thống chỉ thêm huynh trưởng đó vào khóa, KHÔNG tạo mới và KHÔNG sửa hồ sơ (thông tin trong dòng dùng để đối chiếu với hồ sơ đã có, không dùng để sửa hồ sơ). Huynh trưởng CHƯA CÓ HỒ SƠ: hệ thống tạo hồ sơ từ chính dòng này rồi thêm vào khóa.",
                 "6. Ngày sinh theo dạng dd/MM/yyyy; Giới tính chọn Nam hoặc Nữ; Số điện thoại gồm 10 chữ số và bắt đầu bằng 0; Cấp độ chọn từ sheet \"" + LOOKUP_SHEET + "\" (để trống là Chưa có cấp).",
                 "7. Giáo hạt và Giáo xứ (cột Giáo xứ cũng nhận tên giáo họ / giáo điểm) phải ĐÃ CÓ trong hệ thống, giáo xứ phải thuộc đúng giáo hạt đã nhập và thuộc giáo phận (khóa giáo phận) hoặc giáo hạt (khóa giáo hạt) của khóa; giáo xứ phải đang hoạt động. Huynh trưởng đã có hồ sơ cũng phải thuộc giáo phận / giáo hạt của khóa.",
                 "8. Kết quả: Đạt hoặc Không đạt (chọn từ danh sách). Tổng điểm từ 0 đến 1000.",
                 "9. Một huynh trưởng chỉ xuất hiện một lần trong file và một lần trong khóa; huynh trưởng đã có trong danh sách tham dự của khóa sẽ báo lỗi.",
-                "10. Nếu khóa có \"Cấp độ đạt được\", học viên Đạt sẽ tự chuyển sang tab \"Duyệt chứng nhận\". Khi duyệt phải chọn ngày duyệt; sau khi duyệt, cấp độ được ghi vào lịch sử cấp độ (cấp hiện tại chỉ tăng nếu cấp mới cao hơn).",
-                "11. Chỉ cần một dòng lỗi thì toàn bộ file không được lưu (kể cả huynh trưởng mới); lỗi được báo rõ sheet, dòng, cột ở khay tác vụ để sửa rồi import lại. Mỗi lần import tối đa 5.000 dòng.",
-                "12. Cột \"Ghi chú\" là TÙY CHỌN (có thể bỏ trống, tối đa 1.000 ký tự): ghi chú của hồ sơ đăng ký, hiển thị ở danh sách tham dự và sửa được sau khi import.",
-                avatarGuide(13, false));
+                "10. Nếu khóa có \"Cấp độ đạt được\", học viên Đạt sẽ tự chuyển sang tab \"Duyệt chứng nhận\". Khi duyệt phải chọn ngày duyệt; sau khi duyệt, cấp độ được ghi vào lịch sử cấp độ (cấp hiện tại chỉ tăng nếu cấp mới cao hơn). Khóa KHÔNG có \"Cấp độ đạt được\" thì không có chứng nhận và học viên không được thăng cấp.",
+                "11. Cột \"Cấp độ đạt được\" (TÙY CHỌN, chọn từ danh sách giống cột Cấp độ): cấp độ học viên được thăng khi chứng nhận được duyệt. Để trống thì lấy theo \"Cấp độ đạt được\" của khóa. Nếu chọn thì phải có trong danh mục cấp độ của giáo phận và không được cao hơn \"Cấp độ đạt được\" của khóa (không bắt buộc cao hơn cấp hiện tại: cấp được ghi vào lịch sử, cấp hiện tại chỉ tăng nếu cấp mới cao hơn). Chỉ có hiệu lực với dòng Đạt. Nếu khóa không cấu hình \"Cấp độ đạt được\" thì cột này bị bỏ qua và không thăng cấp. Đừng nhầm với cột \"Cấp độ\" (cấp hiện tại của huynh trưởng, chỉ dùng khi tạo hồ sơ mới).",
+                "12. Chỉ cần một dòng lỗi thì toàn bộ file không được lưu (kể cả huynh trưởng mới); lỗi được báo rõ sheet, dòng, cột ở khay tác vụ để sửa rồi import lại. Mỗi lần import tối đa 5.000 dòng.",
+                "13. Cột \"Ghi chú\" là TÙY CHỌN (có thể bỏ trống, tối đa 1.000 ký tự): ghi chú của hồ sơ đăng ký, hiển thị ở danh sách tham dự và sửa được sau khi import.",
+                avatarGuide(14, false));
         return build(PARTICIPANTS_SHEET, "Hướng dẫn import danh sách tham dự khóa huấn luyện quá khứ", columns, samples, guide, levelNames);
     }
 
@@ -194,10 +208,14 @@ public final class ImportTemplates {
                 List.of("nguyen.van.an@example.com", "0901234567", "Phêrô", "Nguyễn Văn An", LocalDate.of(1995, 3, 7), "Nam", "", "Tên giáo hạt", "Tên giáo xứ", "Ghi chú tùy chọn", "nguyen-van-an.jpg"),
                 List.of("tran.thi.binh@example.com", "0912345678", "Maria", "Trần Thị Bình", LocalDate.of(1998, 11, 21), "Nữ", "", "Tên giáo hạt", "Tên giáo xứ", "", ""));
         List<String> guide = List.of(
+                WARNING_PREFIX + " các dòng ví dụ ở sheet \"" + PARTICIPANTS_SHEET + "\" và sheet \"" + EXCEPTION_SHEET + "\" chỉ để minh họa: hãy XÓA HẾT dòng ví dụ ở mỗi sheet trước khi import "
+                        + "(sheet \"" + EXCEPTION_SHEET + "\" nếu không dùng thì để trống hoặc xóa dòng ví dụ), nếu không hệ thống sẽ tạo hồ sơ cho cả dòng ví dụ "
+                        + "(hồ sơ ở sheet \"" + EXCEPTION_SHEET + "\" nằm trong danh sách chờ duyệt đăng ký).",
                 "1. Dùng cho khóa huấn luyện thường (không phải khóa quá khứ). Mở chi tiết khóa, vào tab \"Danh sách tham dự\" và bấm \"Nhập excel danh sách tham dự\".",
                 "2. Có hai sheet dữ liệu, điền từ dòng 2 và xóa các dòng ví dụ trước khi import: sheet \"" + PARTICIPANTS_SHEET + "\" (sheet đầu tiên) cho huynh trưởng ĐỦ điều kiện của khóa; sheet \"" + EXCEPTION_SHEET + "\" cho huynh trưởng KHÔNG đủ điều kiện của khóa (điều kiện hiển thị ở phần \"Điều kiện của khóa\" trong chi tiết khóa). Có thể bỏ trống một trong hai sheet.",
                 "3. MỌI DÒNG đều phải nhập đủ các cột (tiêu đề màu đỏ), chỉ được để trống cột Email và Cấp độ: Số điện thoại, Tên thánh, Họ và tên, Ngày sinh, Giới tính, Giáo hạt, Giáo xứ. Sheet \"" + EXCEPTION_SHEET + "\" có thêm cột bắt buộc \"Lí do ngoại lệ\".",
-                "4. Huynh trưởng được tìm theo Số điện thoại (bắt buộc) và Email (nếu có nhập); hai thông tin này là duy nhất, nếu khớp hai huynh trưởng khác nhau thì báo lỗi. Không dùng mã định danh (UUID).",
+                "4. Số điện thoại là bắt buộc, Email không bắt buộc; cả hai là duy nhất trong hệ thống. Không dùng mã định danh (UUID). "
+                        + DUPLICATE_RULES + " Người đã có thì chỉ được thêm vào khóa (không tạo mới, không sửa hồ sơ); chọn \"hai người khác nhau\" thì tạo hồ sơ mới rồi thêm vào khóa.",
                 "5. Huynh trưởng ĐÃ CÓ HỒ SƠ: hệ thống chỉ thêm huynh trưởng đó vào khóa, KHÔNG tạo mới và KHÔNG sửa hồ sơ. Huynh trưởng CHƯA CÓ HỒ SƠ (ở cả hai sheet): hệ thống tạo hồ sơ từ chính dòng này rồi thêm vào khóa.",
                 "6. Ngày sinh theo dạng dd/MM/yyyy; Giới tính chọn Nam hoặc Nữ; Số điện thoại gồm 10 chữ số và bắt đầu bằng 0; Cấp độ chọn từ sheet \"" + LOOKUP_SHEET + "\" (để trống là Chưa có cấp).",
                 "7. Giáo hạt và Giáo xứ (cột Giáo xứ cũng nhận tên giáo họ / giáo điểm) phải ĐÃ CÓ trong hệ thống, giáo xứ phải thuộc đúng giáo hạt đã nhập và thuộc giáo phận (khóa giáo phận) hoặc giáo hạt (khóa giáo hạt) của khóa; giáo xứ phải đang hoạt động.",
@@ -233,7 +251,8 @@ public final class ImportTemplates {
                 "1. Dùng cho khóa huấn luyện thường (không phải khóa quá khứ). Mở chi tiết khóa, vào tab \"Chia đội\" và bấm \"Nhập excel chia đội\".",
                 "2. Chỉ có một sheet dữ liệu \"" + PARTICIPANTS_SHEET + "\" (sheet đầu tiên), không có sheet Ngoại lệ; điền từ dòng 2 và xóa các dòng ví dụ trước khi import.",
                 "3. MỌI DÒNG đều phải nhập đủ các cột (tiêu đề màu đỏ), chỉ được để trống cột Email và Cấp độ: Số điện thoại, Tên thánh, Họ và tên, Ngày sinh, Giới tính, Giáo hạt, Giáo xứ, Tên đội (tối đa 150 ký tự).",
-                "4. Huynh trưởng được tìm theo Số điện thoại (bắt buộc) và Email (nếu có nhập); hai thông tin này là duy nhất, nếu khớp hai huynh trưởng khác nhau thì báo lỗi. Huynh trưởng ĐÃ CÓ HỒ SƠ chỉ được thêm vào khóa (hồ sơ không bị sửa); CHƯA CÓ HỒ SƠ thì được tạo mới từ chính dòng này.",
+                "4. Số điện thoại là bắt buộc, Email không bắt buộc; cả hai là duy nhất trong hệ thống. "
+                        + DUPLICATE_RULES + " Người đã có thì chỉ được thêm vào khóa (không tạo mới, không sửa hồ sơ); chọn \"hai người khác nhau\" thì tạo hồ sơ mới rồi thêm vào khóa.",
                 "5. Hồ sơ được import mặc định là ĐÃ DUYỆT đăng ký: vào thẳng danh sách tham dự của khóa và gắn vào đội theo cột Tên đội. Hệ thống không kiểm tra điều kiện tham dự của khóa ở bước này.",
                 "6. Ngày sinh theo dạng dd/MM/yyyy; Giới tính chọn Nam hoặc Nữ; Số điện thoại gồm 10 chữ số và bắt đầu bằng 0; Cấp độ chọn từ sheet \"" + LOOKUP_SHEET + "\" (để trống là Chưa có cấp).",
                 "7. Giáo hạt và Giáo xứ (cột Giáo xứ cũng nhận tên giáo họ / giáo điểm) phải ĐÃ CÓ trong hệ thống, giáo xứ phải thuộc đúng giáo hạt đã nhập và thuộc giáo phận (khóa giáo phận) hoặc giáo hạt (khóa giáo hạt) của khóa; giáo xứ phải đang hoạt động.",
@@ -301,10 +320,16 @@ public final class ImportTemplates {
             Cell titleCell = guideSheet.createRow(0).createCell(0);
             titleCell.setCellValue(guideTitle);
             titleCell.setCellStyle(titleStyle);
+            Font warningFont = workbook.createFont();
+            warningFont.setBold(true);
+            warningFont.setColor(IndexedColors.RED.getIndex());
+            CellStyle warning = workbook.createCellStyle();
+            warning.cloneStyleFrom(wrap);
+            warning.setFont(warningFont);
             for (int i = 0; i < guide.size(); i++) {
                 Cell cell = guideSheet.createRow(i + 2).createCell(0);
                 cell.setCellValue(guide.get(i));
-                cell.setCellStyle(wrap);
+                cell.setCellStyle(guide.get(i).startsWith(WARNING_PREFIX) ? warning : wrap);
             }
 
             workbook.write(out);

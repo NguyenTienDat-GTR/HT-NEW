@@ -15,8 +15,8 @@ public class ExcelImportHandlerConfig {
 
     @Bean
     ExcelImportHandler leaderImport(LeaderImportService service) {
-        return ExcelImportHandler.of(ExcelJobKind.IMPORT_LEADERS,
-                (target, file, auth, progress, images) -> service.importLeaders(file, auth, progress, images));
+        return ExcelImportHandler.ofOptions(ExcelJobKind.IMPORT_LEADERS,
+                (target, file, auth, progress, images, options) -> service.importLeaders(file, auth, progress, images, options));
     }
 
     @Bean
@@ -33,13 +33,13 @@ public class ExcelImportHandlerConfig {
 
     @Bean
     ExcelImportHandler participantImport(PastCourseParticipantImportService service) {
-        return ExcelImportHandler.of(ExcelJobKind.IMPORT_PARTICIPANTS,
-                (target, file, auth, progress, images) -> service.importParticipants(target, file, auth, progress, false, images));
+        return ExcelImportHandler.ofOptions(ExcelJobKind.IMPORT_PARTICIPANTS,
+                (target, file, auth, progress, images, options) -> service.importParticipants(target, file, auth, progress, false, images, options));
     }
 
     @Bean
     ExcelImportHandler teamParticipantImport(PastCourseParticipantImportService service) {
-        return ExcelImportHandler.of(ExcelJobKind.IMPORT_TEAM_PARTICIPANTS,
-                (target, file, auth, progress, images) -> service.importParticipants(target, file, auth, progress, true, images));
+        return ExcelImportHandler.ofOptions(ExcelJobKind.IMPORT_TEAM_PARTICIPANTS,
+                (target, file, auth, progress, images, options) -> service.importParticipants(target, file, auth, progress, true, images, options));
     }
 }
