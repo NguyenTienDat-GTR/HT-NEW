@@ -70,6 +70,7 @@ public class TrainingCourseTypeService {
         courseType.setRequiredMinAge(request.getRequiredMinAge());
         courseType.setMaxYearsAfterPrerequisite(request.getMaxYearsAfterPrerequisite());
         courseType.setResultingLevel(leaderLevelService.requireExistingOrNull(request.getResultingLevel(), "Cấp độ đạt được", actorDioceseId(authentication)));
+        courseType.setHasCertificate(Boolean.TRUE.equals(request.getHasCertificate()));
         courseType.setCertificateShortCode(normalizeText(request.getCertificateShortCode()));
         requireShortCodeForCertified(courseType);
         courseType.setPrerequisiteType(resolvePrerequisite(typeCode, request.getPrerequisiteTypeCode(), dioceseId, request.getManagementUnitType(), owner.deaneryId(), null));
@@ -171,6 +172,9 @@ public class TrainingCourseTypeService {
         if (request.getResultingLevel() != null) {
             courseType.setResultingLevel(leaderLevelService.requireExistingOrNull(request.getResultingLevel(), "Cấp độ đạt được", actorDioceseId(authentication)));
         }
+        if (request.getHasCertificate() != null) {
+            courseType.setHasCertificate(request.getHasCertificate());
+        }
         if (request.getCertificateShortCode() != null) {
             courseType.setCertificateShortCode(normalizeText(request.getCertificateShortCode()));
         }
@@ -202,12 +206,10 @@ public class TrainingCourseTypeService {
         return findById(typeCode, authentication);
     }
 
-    // Loại khóa có cấp độ đạt được (yêu cầu chứng nhận) bắt buộc có mã viết tắt để sinh mã chứng chỉ.
+    // Loại khóa có cấp chứng nhận bắt buộc có mã viết tắt để sinh mã chứng chỉ.
     private void requireShortCodeForCertified(TrainingCourseType courseType) {
-        String level = courseType.getResultingLevel();
-        boolean certified = level != null && !"NONE".equals(level);
-        if (certified && (courseType.getCertificateShortCode() == null || courseType.getCertificateShortCode().isBlank())) {
-            throw commonValidationHelper.validationError("Phải nhập mã viết tắt chứng chỉ cho loại khóa có cấp độ đạt được");
+        if (courseType.isHasCertificate() && (courseType.getCertificateShortCode() == null || courseType.getCertificateShortCode().isBlank())) {
+            throw commonValidationHelper.validationError("Phải nhập mã viết tắt chứng chỉ cho loại khóa có cấp chứng nhận");
         }
     }
 
@@ -402,6 +404,7 @@ public class TrainingCourseTypeService {
                 .prerequisiteManagementUnitType(courseType.getPrerequisiteType() == null ? null : courseType.getPrerequisiteType().getManagementUnitType())
                 .prerequisiteOwnerDeaneryId(courseType.getPrerequisiteType() == null ? null : courseType.getPrerequisiteType().getOwnerDeaneryId())
                 .resultingLevel(courseType.getResultingLevel())
+                .hasCertificate(courseType.isHasCertificate())
                 .certificateShortCode(courseType.getCertificateShortCode())
                 .status(courseType.getStatus())
                 .createdBy(courseType.getCreatedBy())

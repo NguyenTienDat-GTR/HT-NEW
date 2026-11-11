@@ -315,8 +315,8 @@ public class CertificateConfigService {
         TrainingCourseType type = courseTypeRepository.findByCodeWithPrerequisite(typeCode)
                 .orElseThrow(() -> validationHelper.notFound("Không tìm thấy loại khóa: " + typeCode));
         courseTypeDioceseGuard.requireSameDiocese(type, authentication);
-        if (type.getResultingLevel() == null || "NONE".equals(type.getResultingLevel())) {
-            throw validationHelper.conflict("Loại khóa này không có yêu cầu chứng nhận nên không cấu hình được");
+        if (!type.isHasCertificate()) {
+            throw validationHelper.conflict("Loại khóa này không cấp chứng nhận nên không cấu hình được");
         }
 
         Optional<CertificateConfigAssignment> existing = assignmentRepository.findByTypeAndScope(typeCode, actor.key());

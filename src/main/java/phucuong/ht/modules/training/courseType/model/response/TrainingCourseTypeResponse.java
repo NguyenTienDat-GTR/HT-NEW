@@ -27,6 +27,7 @@ public class TrainingCourseTypeResponse {
     // Khác null: khóa tiên quyết do giáo hạt này tự tạo (không dùng chung); null: của giáo phận.
     private java.util.UUID prerequisiteOwnerDeaneryId;
     private String resultingLevel;
+    private Boolean hasCertificate;
     private String certificateShortCode;
     private Boolean status;
     private String createdBy;

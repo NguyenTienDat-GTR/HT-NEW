@@ -26,6 +26,8 @@ public class TrainingCourseTypeUpdateRequest {
 
     private String resultingLevel;
 
+    private Boolean hasCertificate;
+
     private String certificateShortCode;
 
     // Cho phép gỡ khóa tiên quyết khi gửi true.

@@ -58,9 +58,13 @@ public class TrainingCourseType extends BaseModel {
     @JoinColumn(name = "prerequisite_type_code")
     private TrainingCourseType prerequisiteType;
 
-    // Cấp bậc được thăng khi chứng chỉ của khóa thuộc loại này được duyệt.
+    // Cấp bậc được thăng khi hoàn thành khóa thuộc loại này (có cấp chứng nhận thì theo chứng nhận được duyệt, không thì theo kết quả khóa).
     @Column(name = "resulting_level")
     private String resultingLevel;
+
+    // Khóa thuộc loại này có cấp chứng nhận (chỉ lo việc cấp chứng nhận, không liên quan thăng cấp).
+    @Column(name = "has_certificate", nullable = false)
+    private boolean hasCertificate;
 
     // Mã viết tắt dùng khi sinh mã chứng chỉ.
     @Column(name = "certificate_short_code")

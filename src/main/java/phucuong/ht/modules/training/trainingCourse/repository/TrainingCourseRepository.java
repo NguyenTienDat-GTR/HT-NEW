@@ -71,6 +71,31 @@ public class TrainingCourseRepository extends BaseRepo<TrainingCourse, String> {
         return results.stream().findFirst();
     }
 
+    // Khóa không mở đăng ký (registrationEnabled = false), chưa kết thúc, thuộc giáo phận / giáo hạt của tài khoản:
+    // người duyệt đăng ký của cấp quản lý khóa vẫn đăng ký được (lọc quyền và ngày diễn ra ở service).
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<TrainingCourse> findRegistrationDisabledCourses(UUID dioceseId, UUID deaneryId) {
+        StringBuilder jpql = new StringBuilder("""
+                select tc
+                from TrainingCourse tc
+                left join fetch tc.courseType
+                left join fetch tc.diocese
+                left join fetch tc.deanery
+                where tc.status = true
+                  and tc.pastCourse = false
+                  and tc.registrationEnabled = false
+                  and tc.finishedAt is null
+                  and (1 = 0
+                """);
+        if (dioceseId != null) jpql.append(" or tc.diocese.id = :dioceseId");
+        if (deaneryId != null) jpql.append(" or tc.deanery.id = :deaneryId");
+        jpql.append(") order by tc.startDate desc, tc.courseName");
+        var query = entityManager.createQuery(jpql.toString(), TrainingCourse.class);
+        if (dioceseId != null) query.setParameter("dioceseId", dioceseId);
+        if (deaneryId != null) query.setParameter("deaneryId", deaneryId);
+        return query.getResultList();
+    }
+
     // Khóa đang mở đăng ký thuộc giáo phận (khóa thường) hoặc giáo hạt (khóa Dự trưởng) của tài khoản.
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public List<TrainingCourse> findOpenForRegistration(UUID dioceseId, UUID deaneryId) {
