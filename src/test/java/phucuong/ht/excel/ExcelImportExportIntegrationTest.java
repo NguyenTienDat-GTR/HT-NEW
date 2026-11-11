@@ -1486,6 +1486,139 @@ class ExcelImportExportIntegrationTest {
         assertEquals(1, jdbc.queryForObject("select count(*) from leader where phone_number='0944100002'", Integer.class));
     }
 
+    private static final List<String> ACHIEVED_HEADERS = java.util.stream.Stream.concat(PARTICIPANT_HEADERS.stream(), java.util.stream.Stream.of("Cấp độ đạt được")).toList();
+
+    private static Row achievedRow(String email, String phone, String name, String result, String achievedLevel) {
+        return new Row(email, phone, "7", result, "", "Phêrô", name, "01/01/1991", "Nam", "", "Thủ Dầu Một", "Búng", achievedLevel);
+    }
+
+    private String targetLevelOf(String email, String course) {
+        return jdbc.queryForObject("select cp.target_level from course_participation cp join leader l on l.id=cp.leader_id where l.email=? and cp.course_id=?",
+                String.class, email, course);
+    }
+
+    @Test
+    @Order(35)
+    void achievedLevelColumnChoosesThePromotionOfPastCourseParticipantsAndDefaultsToTheCourseLevel() {
+        String course = createPastCourse("Khóa HT cấp II 2012", 2012, "HT_II");
+
+        // Cấp không có trong danh mục, cao hơn cấp của khóa, "Chưa có cấp": báo lỗi đúng cột, cả file không được lưu.
+        MockMultipartFile bad = excel(ACHIEVED_HEADERS, List.of(
+                achievedRow("kt1@example.com", "0944200001", "Nguyễn Kiểm Một", "Đạt", "Cấp không tồn tại"),
+                achievedRow("kt2@example.com", "0944200002", "Nguyễn Kiểm Hai", "Đạt", "Huynh trưởng cấp III"),
+                achievedRow("kt3@example.com", "0944200003", "Nguyễn Kiểm Ba", "Đạt", "Chưa có cấp")));
+        ImportValidationException exception = assertThrows(ImportValidationException.class,
+                () -> participantImportService.importParticipants(course, path(bad), phuCuongAdmin(), JobProgress.NONE));
+        var messages = exception.getErrors().stream().map(error -> error.row() + ":" + error.column() + ":" + error.message()).toList();
+        assertTrue(messages.stream().anyMatch(m -> m.startsWith("2:Cấp độ đạt được:") && m.contains("không có trong danh mục")), messages.toString());
+        assertTrue(messages.stream().anyMatch(m -> m.startsWith("3:Cấp độ đạt được:") && m.contains("không được cao hơn")), messages.toString());
+        assertTrue(messages.stream().anyMatch(m -> m.startsWith("4:Cấp độ đạt được:") && m.contains("cấp cụ thể")), messages.toString());
+        assertEquals(0, jdbc.queryForObject("select count(*) from course_participation where course_id=?", Integer.class, course));
+
+        // Hợp lệ: chọn "Huynh trưởng cấp I" (thấp hơn cấp của khóa), để trống (theo cấp của khóa), dòng Không đạt (bỏ qua cột này).
+        MockMultipartFile good = excel(ACHIEVED_HEADERS, List.of(
+                achievedRow("kt1@example.com", "0944200001", "Nguyễn Kiểm Một", "Đạt", "Huynh trưởng cấp I"),
+                achievedRow("kt2@example.com", "0944200002", "Nguyễn Kiểm Hai", "Đạt", ""),
+                achievedRow("kt3@example.com", "0944200003", "Nguyễn Kiểm Ba", "Không đạt", "HT_I")));
+        assertEquals(3, participantImportService.importParticipants(course, path(good), phuCuongAdmin(), JobProgress.NONE).created());
+        assertEquals("HT_I", targetLevelOf("kt1@example.com", course));
+        assertNull(targetLevelOf("kt2@example.com", course));
+        assertNull(targetLevelOf("kt3@example.com", course));
+
+        // Duyệt chứng nhận: người chọn cấp I thăng lên cấp I (không phải cấp II của khóa), người để trống thăng theo cấp của khóa.
+        certificateService.approve(certificateCodeOf("kt1@example.com", course), approval(LocalDate.of(2012, 6, 1)), phuCuongAdmin());
+        certificateService.approve(certificateCodeOf("kt2@example.com", course), approval(LocalDate.of(2012, 6, 2)), phuCuongAdmin());
+        assertEquals("HT_I", levelOf("kt1@example.com"));
+        assertEquals("HT_II", levelOf("kt2@example.com"));
+        assertEquals("HT_I", jdbc.queryForObject("select rh.new_level from rank_history rh join leader l on l.id=rh.leader_id where l.email='kt1@example.com'", String.class));
+    }
+
+    @Test
+    @Order(36)
+    void pastCourseWithoutAResultingLevelIgnoresTheAchievedLevelColumnAndNeverPromotes() {
+        String course = createPastCourse("Khóa không cấp độ 2011", 2011, null);
+        MockMultipartFile file = excel(ACHIEVED_HEADERS, List.of(
+                achievedRow("kt4@example.com", "0944200004", "Nguyễn Kiểm Bốn", "Đạt", "Huynh trưởng cấp I")));
+
+        ImportSummary summary = participantImportService.importParticipants(course, path(file), phuCuongAdmin(), JobProgress.NONE);
+
+        assertEquals(1, summary.created());
+        assertTrue(summary.message().contains("bị bỏ qua"), summary.message());
+        assertNull(targetLevelOf("kt4@example.com", course));
+        assertEquals(0, jdbc.queryForObject("select count(*) from certificate where course_code=?", Integer.class, course));
+        assertEquals("NONE", levelOf("kt4@example.com"));
+        assertEquals(0, historyCount("kt4@example.com"));
+    }
+
+    private static org.springframework.mock.web.MockMultipartFile twoSheetExcel(List<String> headers, List<Row> main, List<String> exceptionHeaders, List<Row> exceptions) {
+        try (org.apache.poi.xssf.usermodel.XSSFWorkbook workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook();
+             java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {
+            fillSheet(workbook.createSheet(phucuong.ht.common.excel.ImportTemplates.PARTICIPANTS_SHEET), headers, main);
+            fillSheet(workbook.createSheet(phucuong.ht.common.excel.ImportTemplates.EXCEPTION_SHEET), exceptionHeaders, exceptions);
+            workbook.write(out);
+            return new MockMultipartFile("file", "import.xlsx", ExcelResponses.XLSX.toString(), out.toByteArray());
+        } catch (java.io.IOException exception) {
+            throw new java.io.UncheckedIOException(exception);
+        }
+    }
+
+    private static void fillSheet(org.apache.poi.ss.usermodel.Sheet sheet, List<String> headers, List<Row> rows) {
+        org.apache.poi.ss.usermodel.Row header = sheet.createRow(0);
+        for (int c = 0; c < headers.size(); c++) {
+            header.createCell(c).setCellValue(headers.get(c));
+        }
+        for (int r = 0; r < rows.size(); r++) {
+            org.apache.poi.ss.usermodel.Row row = sheet.createRow(r + 1);
+            for (int c = 0; c < rows.get(r).cells().length; c++) {
+                if (!rows.get(r).cells()[c].isEmpty()) {
+                    row.createCell(c).setCellValue(rows.get(r).cells()[c]);
+                }
+            }
+        }
+    }
+
+    private static final List<String> REGULAR_HEADERS = List.of("Email", "Số điện thoại *", "Tên thánh *", "Họ và tên *", "Ngày sinh *", "Giới tính *",
+            "Cấp độ", "Giáo hạt *", "Giáo xứ *");
+    private static final List<String> EXCEPTION_HEADERS = java.util.stream.Stream.concat(REGULAR_HEADERS.stream(),
+            java.util.stream.Stream.of("Lí do ngoại lệ *")).toList();
+
+    private static Row exceptionRow(String email, String phone, String name, String reason) {
+        return new Row(email, phone, "Phêrô", name, "01/01/1992", "Nam", "", "Thủ Dầu Một", "Búng", reason);
+    }
+
+    private static Authentication dioceseApprover() {
+        return admin(USERNAME, "training.participation.approve.diocese");
+    }
+
+    @Test
+    @Order(37)
+    void exceptionSheetRowsStillWaitForRegistrationApprovalWithoutAChosenLevel() {
+        jdbc.update("insert into training_course_type (type_code, type_name, management_unit_type, required_current_level, resulting_level, diocese_id, created_at) "
+                + "values ('HT_II_IT', 'Huynh trưởng II', 'DIOCESE', 'HT_XU', 'HT_II', ?, now())", dioceseId);
+        jdbc.update("insert into training_course (course_code, course_name, host_year, start_date, end_date, course_type_code, diocese_id, passing_score, created_at) "
+                + "values ('KH-EXC-1', 'Khóa ngoại lệ', 2026, ?, ?, 'HT_II_IT', ?, 5, now())", LocalDate.now().plusDays(10), LocalDate.now().plusDays(14), dioceseId);
+
+        MockMultipartFile file = twoSheetExcel(REGULAR_HEADERS, List.of(), EXCEPTION_HEADERS, List.of(
+                exceptionRow("ex1@example.com", "0944300001", "Trần Ngoại Một", "Được đề cử"),
+                exceptionRow("ex2@example.com", "0944300002", "Trần Ngoại Hai", "Được đề cử")));
+        ImportSummary summary = participantImportService.importParticipants("KH-EXC-1", path(file), dioceseApprover(), JobProgress.NONE);
+
+        assertEquals(2, summary.created());
+        assertTrue(summary.message().contains("chờ duyệt đăng ký"), summary.message());
+        // Hồ sơ ngoại lệ chờ duyệt đăng ký ở tab Duyệt đăng ký (người duyệt chọn cấp độ đạt được), chưa vào danh sách tham dự.
+        var rows = jdbc.queryForList("select cp.approval_status, cp.participation_status, cp.eligible, cp.exception_reason, cp.target_level, cp.approved_by "
+                + "from course_participation cp where cp.course_id='KH-EXC-1'");
+        assertEquals(2, rows.size());
+        for (var row : rows) {
+            assertEquals("PENDING", row.get("approval_status"));
+            assertEquals("REGISTERED", row.get("participation_status"));
+            assertEquals(false, row.get("eligible"));
+            assertEquals("Được đề cử", row.get("exception_reason"));
+            assertNull(row.get("target_level"));
+            assertNull(row.get("approved_by"));
+        }
+    }
+
     private void awaitIdle() {
         long end = System.currentTimeMillis() + 20_000;
         while (System.currentTimeMillis() < end) {

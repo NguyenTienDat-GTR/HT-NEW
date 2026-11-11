@@ -110,6 +110,72 @@ class ImportTemplatesTest {
     }
 
     @Test
+    void pastParticipantTemplateHasAnOptionalAchievedLevelColumnWithTheSameDropdownAsLevel() throws Exception {
+        byte[] content = ImportTemplates.participants(List.of("Dự trưởng", "Huynh trưởng cấp I"));
+        try (ExcelWorkbookReader reader = ExcelWorkbookReader.open(upload(content))) {
+            ExcelSheetData sheet = reader.firstSheet();
+            assertTrue(sheet.hasColumn(PastCourseParticipantImportService.COL_ACHIEVED_LEVEL));
+            // Cột mới là tùy chọn và không làm lệch các cột khác (cấp độ hiện tại, nhận xét, họ tên vẫn đọc đúng).
+            assertTrue(sheet.requireColumns(new ImportErrors(), PastCourseParticipantImportService.COL_RESULT, PastCourseParticipantImportService.COL_SCORE));
+            assertEquals("Hoàn thành tốt khóa huấn luyện", sheet.rows().get(0).text(PastCourseParticipantImportService.COL_REVIEW));
+            assertEquals("Nguyễn Văn An", sheet.rows().get(0).text(LeaderImportService.COL_FULL_NAME));
+            assertEquals(null, sheet.rows().get(0).text(PastCourseParticipantImportService.COL_ACHIEVED_LEVEL));
+        }
+        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(content))) {
+            org.apache.poi.ss.usermodel.Row header = workbook.getSheetAt(0).getRow(0);
+            int achievedColumn = -1;
+            int levelColumn = -1;
+            for (int c = 0; c < header.getLastCellNum(); c++) {
+                String title = header.getCell(c).getStringCellValue();
+                if (title.equals(PastCourseParticipantImportService.COL_ACHIEVED_LEVEL)) {
+                    achievedColumn = c;
+                } else if (title.equals(LeaderImportService.COL_LEVEL)) {
+                    levelColumn = c;
+                }
+            }
+            assertTrue(achievedColumn >= 0 && levelColumn >= 0);
+            final int achieved = achievedColumn;
+            final int level = levelColumn;
+            // Hai cột đều dùng danh sách chọn lấy từ sheet "Danh mục".
+            for (int column : new int[]{achieved, level}) {
+                assertTrue(workbook.getSheetAt(0).getDataValidations().stream().anyMatch(validation ->
+                        validation.getRegions().getCellRangeAddress(0).getFirstColumn() == column
+                                && validation.getValidationConstraint().getFormula1().contains("Danh mục")), "cột " + column);
+            }
+        }
+    }
+
+    @Test
+    void regularTemplateHasNoAchievedLevelColumnAndWarnsAboutExampleRows() throws Exception {
+        byte[] content = ImportTemplates.regularParticipants(List.of("Dự trưởng", "Huynh trưởng cấp I"));
+        try (ExcelWorkbookReader reader = ExcelWorkbookReader.open(upload(content))) {
+            ExcelSheetData main = reader.firstSheet();
+            ExcelSheetData exceptions = reader.sheet(ImportTemplates.EXCEPTION_SHEET);
+            // Cấp độ đạt được chỉ có ở mẫu khóa quá khứ; sheet Ngoại lệ vẫn chờ duyệt đăng ký nên người duyệt chọn cấp.
+            assertFalse(main.hasColumn(PastCourseParticipantImportService.COL_ACHIEVED_LEVEL));
+            assertFalse(exceptions.hasColumn(PastCourseParticipantImportService.COL_ACHIEVED_LEVEL));
+            // Lí do ngoại lệ vẫn bắt buộc và đọc đúng sau khi thêm cột.
+            assertTrue(exceptions.requireColumns(new ImportErrors(), PastCourseParticipantImportService.COL_EXCEPTION_REASON));
+            assertEquals("Chưa đủ số năm hoạt động nhưng được giáo xứ đề cử",
+                    exceptions.rows().get(0).text(PastCourseParticipantImportService.COL_EXCEPTION_REASON));
+        }
+        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(content))) {
+            org.apache.poi.ss.usermodel.Sheet guide = workbook.getSheet("Hướng dẫn");
+            StringBuilder text = new StringBuilder();
+            for (int r = 0; r <= guide.getLastRowNum(); r++) {
+                if (guide.getRow(r) != null && guide.getRow(r).getCell(0) != null) {
+                    text.append(guide.getRow(r).getCell(0).getStringCellValue()).append('\n');
+                }
+            }
+            // Cảnh báo xóa dòng ví dụ; sheet Ngoại lệ vẫn được mô tả là chờ duyệt đăng ký.
+            assertTrue(text.toString().contains("LƯU Ý QUAN TRỌNG"), text.toString());
+            assertTrue(text.toString().contains("XÓA HẾT dòng ví dụ"), text.toString());
+            assertTrue(text.toString().contains("CHỜ DUYỆT đăng ký"), text.toString());
+            assertFalse(text.toString().contains("Cấp độ đạt được"), text.toString());
+        }
+    }
+
+    @Test
     void templatesHaveGuideAndLevelLookupSheetsAfterTheDataSheetAndDropdownsForChoices() throws Exception {
         try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(ImportTemplates.participants(List.of("Dự trưởng", "Huynh trưởng cấp I"))))) {
             assertEquals(ImportTemplates.PARTICIPANTS_SHEET, workbook.getSheetName(0));
@@ -117,8 +183,8 @@ class ImportTemplatesTest {
             assertEquals("Hướng dẫn", workbook.getSheetName(2));
             assertEquals("Huynh trưởng cấp I", workbook.getSheet("Danh mục").getRow(2).getCell(0).getStringCellValue());
             List<? extends DataValidation> validations = workbook.getSheetAt(0).getDataValidations();
-            // Kết quả, Giới tính và Cấp độ có danh sách chọn.
-            assertEquals(3, validations.size());
+            // Kết quả, Giới tính, Cấp độ và Cấp độ đạt được có danh sách chọn.
+            assertEquals(4, validations.size());
             assertFalse(validations.stream().anyMatch(validation -> validation.getShowErrorBox()), "vẫn cho nhập tay giá trị khác");
         }
     }

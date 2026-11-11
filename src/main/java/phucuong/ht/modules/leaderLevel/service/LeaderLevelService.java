@@ -167,19 +167,28 @@ public class LeaderLevelService {
         if (level == null) {
             throw validationHelper.validationError("Phải chọn cấp độ đạt được khi duyệt hồ sơ ngoại lệ");
         }
-        LevelOrder levelOrder = order(dioceseId);
-        if (levelOrder.rank(level) < 0) {
-            throw validationHelper.validationError("Cấp độ đạt được không tồn tại: " + level);
-        }
-        if (!levelOrder.higher(level, currentLevel)) {
-            throw validationHelper.validationError("Cấp độ đạt được (" + levelOrder.nameOf(level) + ") phải cao hơn cấp hiện tại ("
-                    + levelOrder.nameOf(currentLevel) + ")");
-        }
-        if (!levelOrder.atMost(level, courseLevel)) {
-            throw validationHelper.validationError("Cấp độ đạt được (" + levelOrder.nameOf(level) + ") không được cao hơn cấp độ đạt được của khóa ("
-                    + levelOrder.nameOf(courseLevel) + ")");
+        String problem = achievableProblem(order(dioceseId), level, currentLevel, courseLevel, true);
+        if (problem != null) {
+            throw validationHelper.validationError(problem);
         }
         return level;
+    }
+
+    // Lỗi của một cấp độ đạt được (null nếu hợp lệ): phải có trong danh mục, không cao hơn cấp độ đạt được của khóa
+    // và (mustExceedCurrent) phải cao hơn cấp hiện tại của huynh trưởng. Dùng chung cho duyệt đăng ký ngoại lệ và import Excel.
+    public static String achievableProblem(LevelOrder levelOrder, String level, String currentLevel, String courseLevel, boolean mustExceedCurrent) {
+        if (levelOrder.rank(level) < 0) {
+            return "Cấp độ đạt được không tồn tại: " + level;
+        }
+        if (mustExceedCurrent && !levelOrder.higher(level, currentLevel)) {
+            return "Cấp độ đạt được (" + levelOrder.nameOf(level) + ") phải cao hơn cấp hiện tại ("
+                    + levelOrder.nameOf(currentLevel) + ")";
+        }
+        if (!levelOrder.atMost(level, courseLevel)) {
+            return "Cấp độ đạt được (" + levelOrder.nameOf(level) + ") không được cao hơn cấp độ đạt được của khóa ("
+                    + levelOrder.nameOf(courseLevel) + ")";
+        }
+        return null;
     }
 
     // Tạo danh mục mặc định cho giáo phận chưa có cấp nào (giáo phận mới). Không làm gì nếu đã có.
