@@ -5,7 +5,7 @@ vì cần đăng nhập tài khoản của bạn.
 
 ## 1. DNS + proxy + SSL
 1. Thêm tên miền vào Cloudflare, đổi nameserver tại nơi mua tên miền.
-2. Tạo bản ghi `A` cho `@`, `*` (wildcard, cho subdomain giáo phận) và host test, trỏ về IP EC2, bật **Proxied** (đám mây cam).
+2. Tạo bản ghi `A` cho `@` và `*` (wildcard, cho subdomain giáo phận), trỏ về IP EC2, bật **Proxied** (đám mây cam).
 3. SSL/TLS > Overview: chọn **Full (strict)**. Caddy vẫn tự xin chứng chỉ Let's Encrypt nên origin có chứng chỉ hợp lệ.
 4. SSL/TLS > Edge Certificates: bật **Always Use HTTPS**, **Automatic HTTPS Rewrites**, **Minimum TLS 1.2**, bật **HSTS**.
    Universal SSL chỉ phủ `@` và `*.tên-miền` (một cấp), đủ cho `<subdomain-giáo-phận>.<tên-miền>`.

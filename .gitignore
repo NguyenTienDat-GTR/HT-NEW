@@ -44,4 +44,3 @@ out/
 /uploads/media/
 
 !.env.example
-!.env.test.example

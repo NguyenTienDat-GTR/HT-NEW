@@ -2,7 +2,7 @@ name: CI
 
 on:
   pull_request:
-    branches: [main, test]
+    branches: [main]
   workflow_call:
 
 concurrency:
@@ -10,19 +10,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Quy trình: mọi PR vào `test` trước; chỉ nhánh `test` mới được tạo PR vào `main`.
-  # Job bị bỏ qua (tính là đạt) với PR vào nhánh khác, nên đặt làm check bắt buộc cho `main` được.
-  source-branch:
-    if: github.event_name == 'pull_request' && github.base_ref == 'main'
-    runs-on: ubuntu-latest
-    steps:
-      - name: PR vào main phải đến từ nhánh test
-        run: |
-          if [ "${{ github.head_ref }}" != "test" ]; then
-            echo "::error::PR vào main chỉ được tạo từ nhánh 'test' (đang là '${{ github.head_ref }}'). Hãy tạo PR vào 'test' trước, thử trên môi trường test, rồi mới tạo PR test -> main."
-            exit 1
-          fi
-
   # Chia test thành 3 phần chạy song song (mỗi phần có Postgres/Redis/RabbitMQ riêng) để rút ngắn thời gian chờ.
   test:
     runs-on: ubuntu-latest

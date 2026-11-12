@@ -1704,3 +1704,9 @@ Ma trận endpoint (`endpoint-contract-matrix.psv`) hiện có 124 route.
 - `PATCH /api/leaders/{id}/birth-date` nhận `LeaderBirthDateUpdateRequest { birthDate }` (`@NotNull`, `@PastOrPresent`), qua `LeaderAccessEvaluator.canUpdateBirthDate`: quản trị giáo phận / giáo hạt / giáo xứ có quyền đúng phạm vi và huynh trưởng thuộc đơn vị của mình (giống `canUpdate`). Quyền `update` không cho sửa ngày sinh và ngược lại. Đơn vị bị khóa thì không sửa được. Không ghi xác nhận đồng ý dữ liệu cá nhân (chỉ sửa một trường đã có).
 - `LeaderAccessEvaluator`: gom điều kiện vai trò + phạm vi vào `hasAdminScopedAccess`; `canUpdate`, `canToggle`, `canTransfer`, `canUpdateBirthDate` dùng chung (không đổi hành vi).
 - Test: `LeaderAccessEvaluatorTest`, `LeaderControllerSecurityIntegrationTest`, `LeaderServiceTest` (mục birth date).
+
+## chore/remove-test-env
+- Bỏ hẳn môi trường test trên server: xóa service `app-test`, `fe-test` trong `compose.prod.yaml`, khối `{$TEST_HOST}` trong `deploy/Caddyfile`, workflow `cd-test.yml` và `sync-test.yml`, file mẫu `.env.test.example`, biến `TEST_HOST` trong `.env.example`. Lần deploy production đầu tiên sau khi merge tự gỡ hai container test (`--remove-orphans` trong `cd.yml`).
+- Quy trình mới: tạo nhánh từ `main`, mở PR thẳng vào `main`, thử ở máy local, chủ repo merge (merge xong là deploy production). CI chỉ chạy cho PR vào `main`, bỏ job `source-branch`. Nhánh `main` được bảo vệ (bắt buộc PR + check `build-test`, cấm force-push và xóa nhánh).
+- Dữ liệu database `ht_management_test` đã chép về Postgres local (database `ht_management`) trước khi xóa; chạy local dùng `compose.yaml` + `compose.override.yaml` như cũ, không còn tunnel sang server.
+- Nhãn `test`, `staging` vẫn nằm trong `SiteHostPolicy.RESERVED_LABELS` (không cho giáo phận đăng ký làm trang riêng).

@@ -32,7 +32,7 @@ services:
     command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
-    # Chỉ mở trên loopback của server để dev đi qua SSH tunnel (tunnel-test-db.ps1); không ra internet.
+    # Chỉ mở trên loopback của server (vào qua SSH tunnel khi cần chẩn đoán); không ra internet.
     ports:
       - "127.0.0.1:6379:6379"
     volumes:
@@ -51,7 +51,7 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
-    # Chỉ mở trên loopback của server để dev đi qua SSH tunnel (tunnel-test-db.ps1); không ra internet.
+    # Chỉ mở trên loopback của server (vào qua SSH tunnel khi cần chẩn đoán); không ra internet.
     ports:
       - "127.0.0.1:5672:5672"
     volumes:
@@ -72,7 +72,7 @@ services:
     env_file: .env
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      # Máy 4GB RAM chạy chung 6 container: giới hạn heap của JVM.
+      # Máy 4GB RAM chạy chung nhiều container: giới hạn heap của JVM.
       JAVA_TOOL_OPTIONS: -Xms256m -Xmx1024m
       # Health không phụ thuộc SMTP (Gmail chậm/chặn sẽ làm app bị coi là DOWN).
       MANAGEMENT_HEALTH_MAIL_ENABLED: "false"
@@ -108,38 +108,6 @@ services:
     restart: unless-stopped
     depends_on:
       app: { condition: service_healthy }
-    networks: [ht-network]
-
-  # ===== Môi trường TEST: chung máy với production nhưng cách ly (database, Redis số 1, vhost RabbitMQ, JWT riêng).
-  # Cấu hình nằm hết trong .env.test (do cd-test.yml đưa lên từ secret TEST_ENV_FILE). Chỉ chạy khi được gọi tên.
-  app-test:
-    image: ${APP_TEST_IMAGE:-ghcr.io/nguyentiendat-gtr/ht-new:test}
-    container_name: ht-app-test
-    restart: unless-stopped
-    # Cho BE tắt nhẹ nhàng (xử lý xong request đang chạy) trước khi bị buộc dừng; khớp spring.lifecycle.timeout-per-shutdown-phase.
-    stop_grace_period: 40s
-    env_file:
-      - path: .env.test
-        required: false
-    environment:
-      SPRING_PROFILES_ACTIVE: prod
-      JAVA_TOOL_OPTIONS: -Xms128m -Xmx512m
-      MANAGEMENT_HEALTH_MAIL_ENABLED: "false"
-      TZ: Asia/Ho_Chi_Minh
-    expose:
-      - "1007"
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:1007/actuator/health | grep -q UP"]
-      interval: 15s
-      timeout: 5s
-      retries: 10
-      start_period: 90s
-    networks: [ht-network]
-
-  fe-test:
-    image: ${FE_TEST_IMAGE:-ghcr.io/nguyentiendat-gtr/ht-new-fe:test}
-    container_name: ht-fe-test
-    restart: unless-stopped
     networks: [ht-network]
 
   caddy:

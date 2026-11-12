@@ -51,7 +51,7 @@ Huynh trưởng chuyển sang giáo phận khác thì job dọn dẹp tự chuy�
 |---|---|---|
 | `MEDIA_ACTIVE_PROVIDER` | trống = tự chọn: có `CLOUDINARY_URL` thì Cloudinary, không thì `local` | Nhà cung cấp ghi ảnh mới |
 | `CLOUDINARY_URL` | rỗng | `cloudinary://API_KEY:API_SECRET@CLOUD_NAME` (bắt buộc khi dùng Cloudinary) |
-| `MEDIA_ROOT_PREFIX` | `c-lead/dev` / `c-lead/prod` (test đặt `c-lead/test`) | Tiền tố gốc, tách môi trường trên cùng tài khoản cloud |
+| `MEDIA_ROOT_PREFIX` | `c-lead/dev` / `c-lead/prod` | Tiền tố gốc, tách môi trường trên cùng tài khoản cloud |
 | `MEDIA_SIGNING_SECRET` | rỗng | Khóa ký URL ảnh. Nếu trống sẽ suy ra từ `JWT_ACCESS_SECRET` — **nên đặt riêng ở production** |
 | `MEDIA_LOCAL_ENABLED` / `MEDIA_LOCAL_DIR` | `true` (dev) / `false` (prod), `./uploads/media` | Nhà cung cấp thư mục cục bộ |
 | `MEDIA_LEGACY_MIGRATION_ENABLED` | `true` | Job chuyển ảnh base64 cũ lên cloud |

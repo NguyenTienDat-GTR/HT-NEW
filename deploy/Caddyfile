@@ -105,22 +105,6 @@ www.{$SITE_HOSTS} {
 	}
 }
 
-# Môi trường test: trang riêng, app-test + fe-test, database ht_management_test.
-{$TEST_HOST} {
-	encode gzip
-	import security_headers
-	import maintenance
-
-	@ws path /ws/*
-	reverse_proxy @ws app-test:1007 {
-		import proxy_opts
-	}
-
-	reverse_proxy fe-test:3000 {
-		import proxy_opts
-	}
-}
-
 # Mọi tên miền khác (trang giáo phận): chứng chỉ cấp theo yêu cầu, chỉ khi BE cho phép ở trên.
 https:// {
 	tls {
