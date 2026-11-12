@@ -32,13 +32,6 @@ public interface MediaStorageProvider {
     default void syncFolder(String key) {
     }
 
-    /**
-     * Xóa thư mục (đã hết tệp) và mọi thứ còn sót trong đó; không lỗi nếu thư mục không tồn tại.
-     * Nơi nào không có khái niệm thư mục thì bỏ qua.
-     */
-    default void deleteFolder(String prefix) {
-    }
-
     /** Tạo sẵn thư mục (nơi nào không có khái niệm thư mục thì bỏ qua). */
     default void ensureFolder(String prefix) {
     }

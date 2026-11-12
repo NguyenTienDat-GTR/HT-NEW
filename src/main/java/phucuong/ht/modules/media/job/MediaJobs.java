@@ -77,7 +77,7 @@ public final class MediaJobs {
         private final MediaMaintenanceService service;
 
         @Scheduled(
-                fixedDelayString = "${app.media.cleanup.fixed-delay-ms:300000}",
+                fixedDelayString = "${app.media.cleanup.fixed-delay-ms:3600000}",
                 initialDelayString = "${app.media.cleanup.initial-delay-ms:120000}")
         public void run() {
             try {

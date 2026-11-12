@@ -116,20 +116,12 @@ public class MediaAssetService {
             log.error("Chuyển ảnh {} vào thư mục giáo phận thất bại", assetId, e);
             throw new ApiException(HttpStatus.BAD_GATEWAY, errorCode.INTERNAL_ERROR, "Không lưu được ảnh, vui lòng thử lại sau");
         }
-        String pendingBase = asset.getBaseKey();
         asset.setVariants(moved);
         asset.setBaseKey(base);
         asset.setDioceseId(dioceseId);
         asset.setStatus(MediaStatus.ACTIVE);
         asset.setUpdatedAt(OffsetDateTime.now());
         repository.save(asset);
-        // Các biến thể đã rời pending: dọn thư mục rỗng của riêng ảnh này (chỉ thư mục trực tiếp, giữ nguyên pending/{loại}).
-        // Lỗi chỉ ghi log vì ảnh đã được gắn thành công.
-        try {
-            provider.deleteFolder(pendingBase);
-        } catch (RuntimeException e) {
-            log.warn("Không xóa được thư mục pending {} sau khi gắn ảnh: {}", pendingBase, e.getMessage());
-        }
         return asset.getId();
     }
 
@@ -236,19 +228,6 @@ public class MediaAssetService {
             provider.delete(info.key());
             cache.evict(asset.getId() + "/" + info.name());
         }
-    }
-
-    /**
-     * Hủy ảnh PENDING hết hạn ngay, không qua thời gian lưu: xóa các biến thể, xóa thư mục chứa ảnh (pending/{loại}/{id})
-     * rồi xóa dòng. Lỗi ở bước nào thì ném ra, dòng vẫn còn nên lần dọn sau thử lại.
-     */
-    public void discardPending(MediaAsset asset) {
-        if (asset.getStatus() != MediaStatus.PENDING) {
-            return;
-        }
-        purgeFiles(asset);
-        registry.require(asset.getProvider()).deleteFolder(asset.getBaseKey());
-        repository.delete(asset);
     }
 
     /** Gỡ ảnh khỏi bản ghi nghiệp vụ: đánh dấu DELETED, job dọn sẽ xóa thật trên cloud sau thời gian lưu. */
