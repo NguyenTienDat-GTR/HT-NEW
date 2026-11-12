@@ -59,6 +59,7 @@ jobs:
           mkdir out
           printf '%s\n' "$PROD_ENV_FILE" > out/env.deploy
           cp compose.prod.yaml out/
+          cp deploy/sync-db-password.sql out/
           # Gửi với tên khác rồi ghi đè TẠI CHỖ trên server: giữ nguyên inode để container Caddy thấy file mới.
           cp deploy/Caddyfile out/Caddyfile.new
         env:
@@ -133,9 +134,9 @@ jobs:
               docker compose -f compose.prod.yaml logs --tail=100 postgres
               exit 1
             fi
-            docker exec -i ht-postgres sh -c 'psql -U "$POSTGRES_USER" -d postgres -v ON_ERROR_STOP=1 -v usr="$POSTGRES_USER" -v pw="$POSTGRES_PASSWORD"' <<'SQL'
-            ALTER ROLE :"usr" WITH PASSWORD :'pw';
-            SQL
+            # Không dùng heredoc ở đây: ssh-action chèn dòng `DRONE_SSH_PREV_COMMAND_EXIT_CODE=$?` sau mỗi dòng script,
+            # nên nội dung heredoc bị lẫn vào SQL. SQL nằm trong file riêng (deploy/sync-db-password.sql) được gửi cùng.
+            docker exec -i ht-postgres sh -c 'psql -U "$POSTGRES_USER" -d postgres -v ON_ERROR_STOP=1 -v usr="$POSTGRES_USER" -v pw="$POSTGRES_PASSWORD"' < sync-db-password.sql
             echo "Đã đồng bộ mật khẩu PostgreSQL theo .env"
             docker compose -f compose.prod.yaml up -d --remove-orphans postgres redis rabbitmq app
             # Caddyfile là bind mount một file (theo inode): ghi đè tại chỗ rồi nạp lại bằng `caddy reload`, không cần

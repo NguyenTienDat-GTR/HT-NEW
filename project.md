@@ -1714,3 +1714,7 @@ Ma trận endpoint (`endpoint-contract-matrix.psv`) hiện có 124 route.
 ## fix/cd-sync-db-password
 - Nguyên nhân CD lỗi `password authentication failed for user "ht_user"`: `POSTGRES_PASSWORD` chỉ có tác dụng khi khởi tạo volume lần đầu, nên đổi `DB_PASSWORD` trong secret `PROD_ENV_FILE` mà không đổi trong database thì app không kết nối được.
 - `cd.yml` (bước deploy): khởi động riêng `postgres`, chờ healthy rồi chạy `ALTER ROLE ... WITH PASSWORD` qua socket cục bộ trong container (mật khẩu truyền bằng biến psql, không lộ trong log), sau đó mới khởi động `redis`, `rabbitmq`, `app`. Từ nay đổi mật khẩu DB chỉ cần cập nhật `PROD_ENV_FILE` rồi deploy; `.env` là nguồn duy nhất.
+
+## fix/cd-sync-db-password-file
+- Bản đồng bộ mật khẩu đầu tiên lỗi vì `ssh-action` (drone-ssh) chèn dòng `DRONE_SSH_PREV_COMMAND_EXIT_CODE=$?` sau MỖI dòng của `script`, nên nội dung heredoc bị lẫn vào SQL (`syntax error at or near "DRONE_SSH_PREV_COMMAND_EXIT_CODE"`). Không dùng heredoc trong `script` của bước deploy.
+- SQL chuyển sang `deploy/sync-db-password.sql`, được `cp` vào `out/` cùng `compose.prod.yaml`, gửi lên server và nạp bằng `docker exec -i ht-postgres sh -c 'psql ...' < sync-db-password.sql` (một dòng).
