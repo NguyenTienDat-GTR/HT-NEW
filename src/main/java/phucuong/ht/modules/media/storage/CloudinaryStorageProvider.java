@@ -157,18 +157,6 @@ public class CloudinaryStorageProvider implements MediaStorageProvider {
         }
     }
 
-    /** Cloudinary chỉ xóa được thư mục rỗng: gọi sau khi đã xóa hết các biến thể của ảnh. */
-    @Override
-    public void deleteFolder(String prefix) {
-        try {
-            cloudinary.api().deleteFolder(prefix, Map.of());
-        } catch (com.cloudinary.api.exceptions.NotFound e) {
-            // Thư mục không còn: coi như đã xóa.
-        } catch (Exception e) {
-            throw new MediaStorageException("Không xóa được thư mục " + prefix + " trên Cloudinary", e);
-        }
-    }
-
     /** Thư mục chứa khóa: "a/b/c.jpg" → "a/b"; null nếu khóa không có thư mục. */
     static String folderOf(String key) {
         int slash = key.lastIndexOf('/');

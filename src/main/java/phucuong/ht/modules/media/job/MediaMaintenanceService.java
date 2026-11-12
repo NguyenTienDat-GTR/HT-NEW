@@ -19,7 +19,7 @@ import java.util.UUID;
 /**
  * Dọn dẹp và di dời ảnh:
  * <ul>
- *   <li>PENDING quá hạn (tải lên mà không lưu) → xóa ngay tệp, thư mục chứa ảnh và dòng, không qua thời gian lưu.</li>
+ *   <li>PENDING quá hạn (tải lên mà không lưu) → DELETED.</li>
  *   <li>ACTIVE mồ côi (không bản ghi nào tham chiếu, ví dụ lưu hồ sơ thất bại sau khi gắn ảnh) → DELETED.</li>
  *   <li>DELETED quá thời gian lưu → xóa tệp trên cloud rồi xóa dòng.</li>
  *   <li>Avatar của huynh trưởng đã chuyển sang giáo phận khác → chuyển sang thư mục giáo phận mới.</li>
@@ -69,17 +69,8 @@ public class MediaMaintenanceService {
         OffsetDateTime now = OffsetDateTime.now();
         int batch = config.getBatchSize();
 
-        int discarded = 0;
         for (MediaAsset asset : repository.findByStatusAndCreatedAtBefore(MediaStatus.PENDING, now.minus(config.getPendingTtl()), PageRequest.of(0, batch))) {
-            try {
-                assets.discardPending(asset);
-                discarded++;
-            } catch (RuntimeException e) {
-                log.warn("Chưa xóa được ảnh pending {} (sẽ thử lại): {}", asset.getId(), e.getMessage());
-            }
-        }
-        if (discarded > 0) {
-            log.info("Đã xóa {} ảnh pending hết hạn", discarded);
+            assets.release(asset.getId());
         }
         for (MediaAsset asset : repository.findUnreferencedActive(now.minus(config.getOrphanGrace()), batch)) {
             assets.release(asset.getId());

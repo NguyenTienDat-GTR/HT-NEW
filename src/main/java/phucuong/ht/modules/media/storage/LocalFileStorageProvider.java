@@ -73,24 +73,6 @@ public class LocalFileStorageProvider implements MediaStorageProvider {
         }
     }
 
-    @Override
-    public void deleteFolder(String prefix) {
-        Path dir = resolve(prefix);
-        if (dir.equals(root)) {
-            throw new MediaStorageException("Không được xóa thư mục gốc lưu ảnh", false);
-        }
-        if (!Files.isDirectory(dir)) {
-            return;
-        }
-        try (var paths = Files.walk(dir)) {
-            for (Path path : paths.sorted(java.util.Comparator.reverseOrder()).toList()) {
-                Files.deleteIfExists(path);
-            }
-        } catch (IOException e) {
-            throw new MediaStorageException("Không xóa được thư mục ảnh", e);
-        }
-    }
-
     private Path resolve(String key) {
         Path resolved = root.resolve(key).normalize();
         if (!resolved.startsWith(root)) {
