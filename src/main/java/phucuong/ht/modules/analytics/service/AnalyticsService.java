@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.config.CacheNames;
 import phucuong.ht.modules.analytics.model.AnalyticsScope;
 import phucuong.ht.modules.analytics.model.PeriodRange;
@@ -18,6 +19,7 @@ import phucuong.ht.modules.analytics.model.AnalyticsScopeType;
 import phucuong.ht.modules.analytics.repository.AnalyticsRepository;
 import phucuong.ht.modules.analytics.model.response.WorkQueueItemResponse;
 import phucuong.ht.modules.analytics.security.AnalyticsScopeResolver;
+import phucuong.ht.modules.training.courseParticipation.security.CourseParticipationAccessEvaluator;
 
 import java.util.List;
 import java.util.Map;
@@ -35,6 +37,7 @@ public class AnalyticsService {
     private final TrainingAnalytics training;
     private final RecordsAnalytics records;
     private final AnalyticsRepository repository;
+    private final securityUtils securityUtils;
 
     @Cacheable(cacheNames = CacheNames.ANALYTICS_OVERVIEW, key = "@cacheScopeKeyHelper.analyticsKey(#authentication, 'overview', #request.cacheKey())")
     public AnalyticsResponse overview(AnalyticsFilterRequest request, Authentication authentication) {
@@ -56,8 +59,17 @@ public class AnalyticsService {
     public List<OpenCourseResponse> openCourses(AnalyticsFilterRequest request, Authentication authentication) {
         AnalyticsFilterRequest filters = validate(request);
         AnalyticsScope scope = scopeResolver.resolve(authentication, true, filters.getScope());
-        if (scope.isSystemOverview()) return List.of();
+        if (scope.isSystemOverview() || !canRegisterAt(authentication, scope)) return List.of();
         return overview.openCourses(new AnalyticsContext(scope, filters));
+    }
+
+    /** Giáo hạt và giáo phận chỉ thấy khóa đang mở đăng ký khi tài khoản có quyền gửi đăng ký của đúng cấp đó; giáo xứ luôn thấy. */
+    private boolean canRegisterAt(Authentication authentication, AnalyticsScope scope) {
+        return switch (scope.type()) {
+            case DIOCESE -> securityUtils.hasAuthority(authentication, CourseParticipationAccessEvaluator.SUBMIT_DIOCESE);
+            case DEANERY -> securityUtils.hasAuthority(authentication, CourseParticipationAccessEvaluator.SUBMIT_DEANERY);
+            default -> true;
+        };
     }
 
     /** Các phạm vi tài khoản được xem (kèm tên đơn vị) để FE hiện bộ chọn khi có từ hai phạm vi trở lên. */

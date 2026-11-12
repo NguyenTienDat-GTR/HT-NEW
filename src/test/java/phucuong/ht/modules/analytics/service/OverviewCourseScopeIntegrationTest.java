@@ -76,4 +76,12 @@ class OverviewCourseScopeIntegrationTest {
             overview.overview(ctx);
         }
     }
+
+    @Test
+    void openCoursesShouldRunAgainstTheRealSchemaForParishScope() {
+        AnalyticsContext ctx = new AnalyticsContext(
+                new AnalyticsScope(AnalyticsScopeType.PARISH, null, null, UUID.randomUUID()), new AnalyticsFilterRequest());
+
+        assertTrue(overview.openCourses(ctx).isEmpty(), "Giáo xứ không tồn tại thì không có khóa nào hiển thị");
+    }
 }
