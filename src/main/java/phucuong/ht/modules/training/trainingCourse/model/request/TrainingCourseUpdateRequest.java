@@ -1,6 +1,7 @@
 package phucuong.ht.modules.training.trainingCourse.model.request;
 
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.Getter;
 import lombok.Setter;
@@ -18,6 +19,9 @@ public class TrainingCourseUpdateRequest {
 
     private String courseTypeCode;
 
+    // null = giữ nguyên; có giá trị thì phải là năm hợp lệ (cùng khoảng với khi tạo).
+    @Min(value = 1900, message = "Năm tổ chức không hợp lệ")
+    @Max(value = 2200, message = "Năm tổ chức không hợp lệ")
     private Integer hostYear;
 
     @Min(value = 0, message = "Số năm hoạt động không được âm")
