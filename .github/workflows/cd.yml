@@ -58,11 +58,24 @@ jobs:
         run: |
           mkdir out
           printf '%s\n' "$PROD_ENV_FILE" > out/env.deploy
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          env_file = Path("out/env.deploy")
+          lines = env_file.read_text(encoding="utf-8").splitlines()
+          matches = [index for index, line in enumerate(lines) if line.startswith("DB_PASSWORD=")]
+          if len(matches) != 1:
+              raise SystemExit(f"PROD_ENV_FILE phải có đúng một dòng DB_PASSWORD, hiện có {len(matches)}")
+          lines[matches[0]] = f"DB_PASSWORD={os.environ['PROD_DB_PASSWORD']}"
+          env_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          PY
           cp compose.prod.yaml out/
           # Gửi với tên khác rồi ghi đè TẠI CHỖ trên server: giữ nguyên inode để container Caddy thấy file mới.
           cp deploy/Caddyfile out/Caddyfile.new
         env:
           PROD_ENV_FILE: ${{ secrets.PROD_ENV_FILE }}
+          PROD_DB_PASSWORD: ${{ secrets.PROD_DB_PASSWORD }}
 
       - name: Mở cầu nối SSH qua Cloudflare Tunnel (cổng 22 của server đã đóng với internet)
         env:

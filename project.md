@@ -1710,3 +1710,7 @@ Ma trận endpoint (`endpoint-contract-matrix.psv`) hiện có 124 route.
 - Quy trình mới: tạo nhánh từ `main`, mở PR thẳng vào `main`, thử ở máy local, chủ repo merge (merge xong là deploy production). CI chỉ chạy cho PR vào `main`, bỏ job `source-branch`. Nhánh `main` được bảo vệ (bắt buộc PR + check `build-test`, cấm force-push và xóa nhánh).
 - Dữ liệu database `ht_management_test` đã chép về Postgres local (database `ht_management`) trước khi xóa; chạy local dùng `compose.yaml` + `compose.override.yaml` như cũ, không còn tunnel sang server.
 - Nhãn `test`, `staging` vẫn nằm trong `SiteHostPolicy.RESERVED_LABELS` (không cho giáo phận đăng ký làm trang riêng).
+
+## fix/prod-db-password
+- Mật khẩu PostgreSQL production được lưu riêng trong GitHub secret `PROD_DB_PASSWORD`. Khi đóng gói file deploy, CD thay đúng dòng `DB_PASSWORD` của `PROD_ENV_FILE` bằng secret này; workflow dừng nếu file không có đúng một dòng tương ứng.
+- Cách này cho phép đổi riêng mật khẩu DB mà không phải tải lại toàn bộ `.env.prod` chứa các secret không liên quan.
