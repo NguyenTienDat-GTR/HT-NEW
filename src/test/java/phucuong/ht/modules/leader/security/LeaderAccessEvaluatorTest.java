@@ -223,6 +223,52 @@ class LeaderAccessEvaluatorTest {
         assertFalse(leaderAccessEvaluator.canTransfer(parish, leaderId));
     }
 
+    @Test
+    void canUpdateBirthDateShouldAllowParishAdminWithBirthDatePermissionInSameParish() {
+        UUID parishId = UUID.randomUUID();
+        UUID leaderId = UUID.randomUUID();
+        Authentication authentication = authentication(
+                "admin-parish", "LEADER1", List.of("ADMIN_PARISH"), List.of(LeaderAccessEvaluator.UPDATE_BIRTH_DATE_PARISH));
+        when(accountRepository.findActiveParishIdByUsername("admin-parish")).thenReturn(Optional.of(parishId));
+        when(leaderRepository.findParishIdByLeaderId(leaderId)).thenReturn(Optional.of(parishId));
+
+        assertTrue(leaderAccessEvaluator.canUpdateBirthDate(authentication, leaderId));
+        // Quyền chỉ sửa ngày sinh không cho sửa hồ sơ.
+        assertFalse(leaderAccessEvaluator.canUpdate(authentication, leaderId));
+    }
+
+    @Test
+    void canUpdateBirthDateShouldDenyLeaderUpdatePermissionAlone() {
+        Authentication authentication = authentication(
+                "admin-parish", "LEADER1", List.of("ADMIN_PARISH"), List.of(LeaderAccessEvaluator.UPDATE_PARISH));
+
+        assertFalse(leaderAccessEvaluator.canUpdateBirthDate(authentication, UUID.randomUUID()));
+    }
+
+    @Test
+    void canUpdateBirthDateShouldAllowDeaneryAdminInSameDeaneryAndDenyOtherDeanery() {
+        UUID deaneryId = UUID.randomUUID();
+        UUID leaderId = UUID.randomUUID();
+        UUID otherLeaderId = UUID.randomUUID();
+        Authentication authentication = authentication(
+                "admin-deanery", null, List.of("ADMIN_DEANERY"), List.of(LeaderAccessEvaluator.UPDATE_BIRTH_DATE_DEANERY));
+        when(accountRepository.findActiveDeaneryIdByUsername("admin-deanery")).thenReturn(Optional.of(deaneryId));
+        when(leaderRepository.findDeaneryIdByLeaderId(leaderId)).thenReturn(Optional.of(deaneryId));
+        when(leaderRepository.findDeaneryIdByLeaderId(otherLeaderId)).thenReturn(Optional.of(UUID.randomUUID()));
+
+        assertTrue(leaderAccessEvaluator.canUpdateBirthDate(authentication, leaderId));
+        assertFalse(leaderAccessEvaluator.canUpdateBirthDate(authentication, otherLeaderId));
+    }
+
+    @Test
+    void canUpdateBirthDateShouldRequireMatchingAdminRole() {
+        // Có quyền phạm vi giáo phận nhưng không phải quản trị giáo phận thì không được sửa.
+        Authentication authentication = authentication(
+                "admin-parish", "LEADER1", List.of("ADMIN_PARISH"), List.of(LeaderAccessEvaluator.UPDATE_BIRTH_DATE_DIOCESE));
+
+        assertFalse(leaderAccessEvaluator.canUpdateBirthDate(authentication, UUID.randomUUID()));
+    }
+
     private Authentication authentication(String username, String leaderId, List<String> roles, List<String> permissions) {
         AuthUserDetails principal = AuthUserDetails.tokenPrincipal(username, leaderId, roles, permissions);
         return new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());

@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 import phucuong.ht.common.dto.apiResponse;
 import phucuong.ht.common.model.request.StatusToggleRequest;
 import phucuong.ht.common.repository.BaseSearchRequest;
+import phucuong.ht.modules.leader.model.request.LeaderBirthDateUpdateRequest;
 import phucuong.ht.modules.leader.model.request.LeaderCreateRequest;
 import phucuong.ht.modules.leader.model.request.LeaderTransferRequest;
 import phucuong.ht.modules.leader.model.request.LeaderUpdateRequest;
@@ -110,6 +111,16 @@ public class LeaderController {
         LeaderResponse updated = leaderService.update(id, request, authentication);
         privacyConsent.recordAttestation(authentication, id, PrivacyConsentSource.LEADER_FORM);
         return apiResponse.success("Cập nhật Huynh Trưởng thành công", updated);
+    }
+
+    @PatchMapping("/{id}/birth-date")
+    @PreAuthorize("@leaderAccessEvaluator.canUpdateBirthDate(authentication, #id)")
+    public apiResponse<LeaderResponse> updateBirthDate(
+            @PathVariable UUID id,
+            @Valid @RequestBody LeaderBirthDateUpdateRequest request,
+            Authentication authentication
+    ) {
+        return apiResponse.success("Cập nhật ngày sinh huynh trưởng thành công", leaderService.updateBirthDate(id, request, authentication));
     }
 
     @PostMapping("/{id}/transfer")
