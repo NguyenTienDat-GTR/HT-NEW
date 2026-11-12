@@ -1710,3 +1710,7 @@ Ma trận endpoint (`endpoint-contract-matrix.psv`) hiện có 124 route.
 - Quy trình mới: tạo nhánh từ `main`, mở PR thẳng vào `main`, thử ở máy local, chủ repo merge (merge xong là deploy production). CI chỉ chạy cho PR vào `main`, bỏ job `source-branch`. Nhánh `main` được bảo vệ (bắt buộc PR + check `build-test`, cấm force-push và xóa nhánh).
 - Dữ liệu database `ht_management_test` đã chép về Postgres local (database `ht_management`) trước khi xóa; chạy local dùng `compose.yaml` + `compose.override.yaml` như cũ, không còn tunnel sang server.
 - Nhãn `test`, `staging` vẫn nằm trong `SiteHostPolicy.RESERVED_LABELS` (không cho giáo phận đăng ký làm trang riêng).
+
+## fix/cd-sync-db-password
+- Nguyên nhân CD lỗi `password authentication failed for user "ht_user"`: `POSTGRES_PASSWORD` chỉ có tác dụng khi khởi tạo volume lần đầu, nên đổi `DB_PASSWORD` trong secret `PROD_ENV_FILE` mà không đổi trong database thì app không kết nối được.
+- `cd.yml` (bước deploy): khởi động riêng `postgres`, chờ healthy rồi chạy `ALTER ROLE ... WITH PASSWORD` qua socket cục bộ trong container (mật khẩu truyền bằng biến psql, không lộ trong log), sau đó mới khởi động `redis`, `rabbitmq`, `app`. Từ nay đổi mật khẩu DB chỉ cần cập nhật `PROD_ENV_FILE` rồi deploy; `.env` là nguồn duy nhất.

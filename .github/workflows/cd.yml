@@ -118,6 +118,25 @@ jobs:
             mv env.deploy .env && chmod 600 .env
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
             docker compose -f compose.prod.yaml pull app
+            docker compose -f compose.prod.yaml up -d --remove-orphans postgres
+            # POSTGRES_PASSWORD chỉ có tác dụng khi khởi tạo volume lần đầu: đổi DB_PASSWORD trong secret mà không đổi
+            # trong database thì app báo "password authentication failed". Nên mỗi lần deploy đặt lại mật khẩu role theo
+            # đúng giá trị container đang nhận (kết nối qua socket cục bộ trong container nên không cần mật khẩu cũ;
+            # mật khẩu truyền bằng biến psql, không nằm trong dòng lệnh hay log).
+            pg_ok=false
+            for i in $(seq 1 40); do
+              if [ "$(docker inspect -f '{{.State.Health.Status}}' ht-postgres 2>/dev/null)" = "healthy" ]; then pg_ok=true; break; fi
+              sleep 3
+            done
+            if [ "$pg_ok" != "true" ]; then
+              echo "Postgres không healthy sau 2 phút"
+              docker compose -f compose.prod.yaml logs --tail=100 postgres
+              exit 1
+            fi
+            docker exec -i ht-postgres sh -c 'psql -U "$POSTGRES_USER" -d postgres -v ON_ERROR_STOP=1 -v usr="$POSTGRES_USER" -v pw="$POSTGRES_PASSWORD"' <<'SQL'
+            ALTER ROLE :"usr" WITH PASSWORD :'pw';
+            SQL
+            echo "Đã đồng bộ mật khẩu PostgreSQL theo .env"
             docker compose -f compose.prod.yaml up -d --remove-orphans postgres redis rabbitmq app
             # Caddyfile là bind mount một file (theo inode): ghi đè tại chỗ rồi nạp lại bằng `caddy reload`, không cần
             # tạo lại container nên không đứt kết nối. `up -d caddy` chỉ tạo lại khi biến môi trường của Caddy đổi.
