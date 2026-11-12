@@ -15,6 +15,7 @@ import phucuong.ht.common.utils.jwtUtils;
 import phucuong.ht.modules.auth.model.AuthUserDetails;
 import phucuong.ht.modules.auth.service.RedisTokenSessionService;
 import phucuong.ht.modules.leader.model.enums.LeaderGender;
+import phucuong.ht.modules.leader.model.request.LeaderBirthDateUpdateRequest;
 import phucuong.ht.modules.leader.model.request.LeaderCreateRequest;
 import phucuong.ht.modules.leader.model.request.LeaderUpdateRequest;
 import phucuong.ht.modules.leader.model.response.LeaderResponse;
@@ -147,6 +148,50 @@ class LeaderControllerSecurityIntegrationTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.id").value(leaderId.toString()));
+    }
+
+    @Test
+    void shouldAllowBirthDateUpdateWhenEvaluatorAllows() throws Exception {
+        UUID leaderId = UUID.randomUUID();
+        LeaderBirthDateUpdateRequest request = new LeaderBirthDateUpdateRequest();
+        request.setBirthDate(java.time.LocalDate.of(2000, 1, 1));
+        when(leaderAccessEvaluator.canUpdateBirthDate(any(), eq(leaderId))).thenReturn(true);
+        when(leaderService.updateBirthDate(eq(leaderId), any(LeaderBirthDateUpdateRequest.class), any())).thenReturn(sampleLeader(leaderId));
+
+        mockMvc.perform(patch("/api/leaders/" + leaderId + "/birth-date")
+                        .header("Authorization", bearer(parishAdminToken(List.of(LeaderAccessEvaluator.UPDATE_BIRTH_DATE_PARISH))))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value(leaderId.toString()));
+    }
+
+    @Test
+    void shouldForbidBirthDateUpdateWhenEvaluatorRejects() throws Exception {
+        UUID leaderId = UUID.randomUUID();
+        LeaderBirthDateUpdateRequest request = new LeaderBirthDateUpdateRequest();
+        request.setBirthDate(java.time.LocalDate.of(2000, 1, 1));
+        when(leaderAccessEvaluator.canUpdateBirthDate(any(), eq(leaderId))).thenReturn(false);
+
+        mockMvc.perform(patch("/api/leaders/" + leaderId + "/birth-date")
+                        .header("Authorization", bearer(parishAdminToken(List.of(LeaderAccessEvaluator.UPDATE_PARISH))))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void shouldRejectFutureBirthDate() throws Exception {
+        UUID leaderId = UUID.randomUUID();
+        LeaderBirthDateUpdateRequest request = new LeaderBirthDateUpdateRequest();
+        request.setBirthDate(java.time.LocalDate.now().plusDays(1));
+        when(leaderAccessEvaluator.canUpdateBirthDate(any(), eq(leaderId))).thenReturn(true);
+
+        mockMvc.perform(patch("/api/leaders/" + leaderId + "/birth-date")
+                        .header("Authorization", bearer(parishAdminToken(List.of(LeaderAccessEvaluator.UPDATE_BIRTH_DATE_PARISH))))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

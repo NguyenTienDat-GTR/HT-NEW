@@ -82,6 +82,7 @@ GET /api/leaders/account-candidates|200|401|403|400|N/A: collection endpoint doe
 GET /api/leaders/{id}|200|401|403|400|404|N/A: read-only endpoint does not mutate state
 GET /api/leaders/{id}/rank-history|200|401|403|N/A: endpoint accepts no client request data|404|N/A: read-only endpoint does not mutate state
 PUT /api/leaders/{id}|200|401|403|400|404|409
+PATCH /api/leaders/{id}/birth-date|200|401|403|400|404|N/A: birth date is not a unique field
 POST /api/leaders/{id}/transfer|200|401|403|400|404|N/A: moving a leader to another parish does not touch a unique field
 PATCH /api/leaders/{id}/toggle-status|200|401|403|400|404|N/A: status change has no uniqueness conflict
 
