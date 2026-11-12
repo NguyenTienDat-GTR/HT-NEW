@@ -1710,3 +1710,10 @@ Ma trận endpoint (`endpoint-contract-matrix.psv`) hiện có 124 route.
 - Quy trình mới: tạo nhánh từ `main`, mở PR thẳng vào `main`, thử ở máy local, chủ repo merge (merge xong là deploy production). CI chỉ chạy cho PR vào `main`, bỏ job `source-branch`. Nhánh `main` được bảo vệ (bắt buộc PR + check `build-test`, cấm force-push và xóa nhánh).
 - Dữ liệu database `ht_management_test` đã chép về Postgres local (database `ht_management`) trước khi xóa; chạy local dùng `compose.yaml` + `compose.override.yaml` như cũ, không còn tunnel sang server.
 - Nhãn `test`, `staging` vẫn nằm trong `SiteHostPolicy.RESERVED_LABELS` (không cho giáo phận đăng ký làm trang riêng).
+
+## fix/media-pending-ttl-1h
+- Ảnh PENDING (tải lên mà chưa gắn vào bản ghi) giữ tối đa 1 giờ (`app.media.cleanup.pending-ttl`, trước đây 24 giờ). Quá hạn thì `MediaAssetService.discardPending` xóa ngay các biến thể, xóa thư mục chứa ảnh (`{root}/pending/{loại}/{assetId}`) rồi xóa dòng `media_asset`; không còn đi qua trạng thái DELETED và 7 ngày `deleted-retention` (mốc này vẫn áp cho ảnh đã gỡ). Lỗi ở bước nào thì dòng còn nguyên, lần dọn sau thử lại.
+- Chỉ xóa thư mục trực tiếp của ảnh (`pending/{loại}/{assetId}`), giữ nguyên `pending` và `pending/{loại}`. Khi gắn ảnh thành công (`attach`) cũng dọn thư mục pending rỗng của ảnh đó (lỗi chỉ ghi log, không làm hỏng việc lưu).
+- Thêm `MediaStorageProvider.deleteFolder(prefix)` (mặc định không làm gì): Cloudinary gọi `api().deleteFolder` (thư mục rỗng, bỏ qua NotFound), local xóa đệ quy trong thư mục gốc.
+- Chu kỳ job dọn giảm từ 1 giờ xuống 5 phút (`app.media.cleanup.fixed-delay-ms=300000`) để ảnh pending sống tối đa khoảng 1 giờ 5 phút. Người dùng để form mở quá 1 giờ rồi mới lưu sẽ gặp "Ảnh không tồn tại hoặc đã bị xóa" và phải chọn lại ảnh.
+- Test: `MediaStorageIntegrationTest#cleanupDeletesStalePendingOrphanAndExpiredDeletedAssets`.
