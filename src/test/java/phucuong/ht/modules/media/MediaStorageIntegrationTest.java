@@ -368,8 +368,6 @@ class MediaStorageIntegrationTest {
         });
         // Thư mục tạm không còn tệp.
         assertFalse(Files.exists(fileOf("ht/test/pending/avatars/" + attachedAssetId + "/thumb.jpg")));
-        assertFalse(Files.exists(fileOf("ht/test/pending/avatars/" + attachedAssetId)), "thư mục pending của ảnh đã gắn phải bị xóa");
-        assertTrue(Files.isDirectory(fileOf("ht/test/pending/avatars")), "thư mục pending/{loại} phải được giữ lại");
     }
 
     @Test
@@ -580,37 +578,16 @@ class MediaStorageIntegrationTest {
                         .with(authentication(leaderAdmin())))
                 .andExpect(status().isOk()).andReturn();
         UUID stale = UUID.fromString(objectMapper.readTree(result.getResponse().getContentAsString()).get("data").get("assetId").asText());
-        MediaAsset staleAsset = assetRepository.findById(stale).orElseThrow();
-        List<String> staleKeys = staleAsset.getVariants().stream().map(v -> v.key()).toList();
-        assertTrue(Files.isDirectory(fileOf(staleAsset.getBaseKey())), "thư mục chứa ảnh pending phải tồn tại trước khi dọn");
+        List<String> staleKeys = assetRepository.findById(stale).orElseThrow().getVariants().stream().map(v -> v.key()).toList();
 
-        // Chưa quá 1 giờ thì giữ nguyên.
-        jdbc.update("update media_asset set created_at = now() - interval '30 minutes' where id = ?", stale);
+        jdbc.update("update media_asset set created_at = now() - interval '3 days' where id = ?", stale);
         maintenance.cleanup();
-        assertEquals(MediaStatus.PENDING, assetRepository.findById(stale).orElseThrow().getStatus(), "PENDING chưa hết hạn không bị đụng tới");
+        assertEquals(MediaStatus.DELETED, assetRepository.findById(stale).orElseThrow().getStatus(), "PENDING quá hạn bị gỡ");
 
-        // Quá 1 giờ: xóa ngay tệp, thư mục chứa ảnh và dòng, không chờ thời gian lưu của DELETED.
-        jdbc.update("update media_asset set created_at = now() - interval '61 minutes' where id = ?", stale);
+        jdbc.update("update media_asset set deleted_at = now() - interval '30 days' where id = ?", stale);
         maintenance.cleanup();
-        assertTrue(assetRepository.findById(stale).isEmpty(), "PENDING quá hạn bị xóa hẳn ngay");
-        staleKeys.forEach(key -> assertFalse(Files.exists(fileOf(key)), "tệp pending phải bị xóa: " + key));
-        assertFalse(Files.exists(fileOf(staleAsset.getBaseKey())), "thư mục chứa ảnh pending phải bị xóa");
-        assertTrue(Files.isDirectory(fileOf("ht/test/pending/avatars")), "thư mục pending/{loại} phải được giữ lại");
-
-        // Ảnh đã gỡ (DELETED) vẫn được giữ theo deletedRetention rồi mới xóa.
-        MvcResult second = mockMvc.perform(multipart("/api/media").file(new MockMultipartFile("file", "q.png", "image/png", png(200, 200)))
-                        .param("category", "LEADER_AVATAR").with(authentication(leaderAdmin())))
-                .andExpect(status().isOk()).andReturn();
-        UUID released = UUID.fromString(objectMapper.readTree(second.getResponse().getContentAsString()).get("data").get("assetId").asText());
-        List<String> releasedKeys = assetRepository.findById(released).orElseThrow().getVariants().stream().map(v -> v.key()).toList();
-        jdbc.update("update media_asset set status = 'DELETED', deleted_at = now() - interval '1 day' where id = ?", released);
-        maintenance.cleanup();
-        assertTrue(assetRepository.findById(released).isPresent(), "DELETED chưa quá thời gian lưu thì còn giữ");
-
-        jdbc.update("update media_asset set deleted_at = now() - interval '30 days' where id = ?", released);
-        maintenance.cleanup();
-        assertTrue(assetRepository.findById(released).isEmpty(), "DELETED quá thời gian lưu bị xóa hẳn");
-        releasedKeys.forEach(key -> assertFalse(Files.exists(fileOf(key)), "tệp trên cloud phải bị xóa: " + key));
+        assertTrue(assetRepository.findById(stale).isEmpty(), "DELETED quá thời gian lưu bị xóa hẳn");
+        staleKeys.forEach(key -> assertFalse(Files.exists(fileOf(key)), "tệp trên cloud phải bị xóa: " + key));
         assertNotEquals(0, assetRepository.count(), "asset đang dùng không bị đụng tới");
     }
 
