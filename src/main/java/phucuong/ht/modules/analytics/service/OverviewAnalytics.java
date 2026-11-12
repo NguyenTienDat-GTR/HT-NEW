@@ -77,15 +77,19 @@ class OverviewAnalytics {
         return AnalyticsResponse.builder().kpis(kpis).breakdowns(breakdowns).trends(trends).previousTrends(previousTrends).alerts(alerts).build();
     }
 
-    /** Khóa đang mở đăng ký, khóa sắp hết hạn lên trước. Giáo xứ thấy khóa của giáo hạt và giáo phận mình trực thuộc; cấp khác thấy khóa do mình tổ chức. */
+    /**
+     * Khóa đang mở đăng ký, khóa sắp hết hạn lên trước: đúng các khóa mà phạm vi này gửi đăng ký được (khớp {@code RegistrationSenderResolver}).
+     * Giáo xứ và giáo hạt thấy khóa của giáo hạt mình và khóa của giáo phận chủ quản; giáo phận chỉ thấy khóa giáo phận mình
+     * (khóa do giáo hạt quản lý thì giáo hạt đó gửi). Khóa giáo phận chỉ gắn {@code diocese_id}, khóa giáo hạt chỉ gắn {@code deanery_id}.
+     */
     List<OpenCourseResponse> openCourses(AnalyticsContext ctx) {
-        String visible;
-        if (ctx.scope.type() == AnalyticsScopeType.PARISH) {
-            Object[] parents = repository.row("select d.id, d.diocese_id from parish p join deanery d on d.id = p.deanery_id where p.id = :parishId", ctx.params);
-            ctx.params.put("parentDeanery", parents[0]);
-            ctx.params.put("parentDiocese", parents[1]);
-            visible = "(c.deanery_id = :parentDeanery or c.diocese_id = :parentDiocese)";
-        } else visible = ctx.organizedCourses();
+        String visible = switch (ctx.scope.type()) {
+            case PARISH -> "(c.deanery_id = (select p.deanery_id from parish p where p.id = :parishId)"
+                    + " or c.diocese_id = (select d.diocese_id from parish p join deanery d on d.id = p.deanery_id where p.id = :parishId))";
+            case DEANERY -> "(c.deanery_id = :deaneryId or c.diocese_id = (select d.diocese_id from deanery d where d.id = :deaneryId))";
+            case DIOCESE -> "c.diocese_id = :dioceseId";
+            default -> "1=0";
+        };
         String registered = "(select count(*) from course_participation cp where cp.course_id = c.course_code and cp.status = true and " + PS + " not in ('CANCELLED', 'REJECTED')"
                 + " and cp.leader_id in (select l.id" + LEADER_FROM + " where " + ctx.leaders(false) + "))";
         String sql = "select c.course_code, c.course_name, ct.type_name, c.location, c.start_date, c.end_date, c.registration_end_at,"
