@@ -1,6 +1,7 @@
 package phucuong.ht.modules.training.trainingCourse.model.request;
 
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -24,6 +25,10 @@ public class TrainingCourseCreateRequest {
     @NotBlank
     private String courseTypeCode;
 
+    // Bắt buộc: mã chứng nhận sinh ra từ năm tổ chức của khóa (FE mặc định bằng năm của ngày bắt đầu).
+    @NotNull(message = "Năm tổ chức là bắt buộc")
+    @Min(value = 1900, message = "Năm tổ chức không hợp lệ")
+    @Max(value = 2200, message = "Năm tổ chức không hợp lệ")
     private Integer hostYear;
 
     @Min(value = 0, message = "Số năm hoạt động không được âm")
