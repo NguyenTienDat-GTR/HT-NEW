@@ -1,6 +1,7 @@
 package phucuong.ht.modules.training.courseAttendance.service;
 
 import com.google.zxing.BinaryBitmap;
+import com.google.zxing.DecodeHintType;
 import com.google.zxing.RGBLuminanceSource;
 import com.google.zxing.common.BitMatrix;
 import com.google.zxing.common.HybridBinarizer;
@@ -10,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -124,8 +126,12 @@ class AttendanceTokenServiceTest {
         int width = image.getWidth();
         int height = image.getHeight();
         int[] pixels = image.getRGB(0, 0, width, height, null, 0, width);
+        // Ảnh do chính hệ thống vẽ (sạch, không xoay) nên đọc ở chế độ PURE_BARCODE. Chế độ mặc định dò mã như ảnh chụp
+        // và thỉnh thoảng không tìm ra mã với một số ID ngẫu nhiên (khoảng 0,6%), làm test lúc đạt lúc không.
         String decoded = new QRCodeReader()
-                .decode(new BinaryBitmap(new HybridBinarizer(new RGBLuminanceSource(width, height, pixels)))).getText();
+                .decode(new BinaryBitmap(new HybridBinarizer(new RGBLuminanceSource(width, height, pixels))),
+                        Map.of(DecodeHintType.PURE_BARCODE, Boolean.TRUE))
+                .getText();
         assertEquals(service.tokenFor(COURSE, id), decoded);
         assertEquals(id, service.verify(decoded).orElseThrow().participationId());
     }

@@ -1,11 +1,10 @@
 <!--
-Quy trình: feature/fix -> PR vào `test` -> thử trên https://test.clead.io.vn -> PR `test` -> `main` (deploy production).
-PR vào `main` chỉ được tạo từ nhánh `test`.
+Quy trình: tạo nhánh từ `main` -> PR thẳng vào `main` -> thử ở máy local -> chủ repo merge (merge xong là deploy production).
 -->
 
 ## Thay đổi
 -
 
-## Đã thử trên môi trường test
-- [ ] Đã thử các luồng bị ảnh hưởng trên test (nếu PR vào `main`)
+## Đã thử ở local
+- [ ] Đã thử các luồng bị ảnh hưởng ở máy local
 - [ ] Có migration/đổi cấu hình cần lưu ý khi lên production
