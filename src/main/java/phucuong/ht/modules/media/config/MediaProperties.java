@@ -104,9 +104,11 @@ public class MediaProperties {
     @Setter
     public static class Cleanup {
         private boolean enabled = true;
-        private long fixedDelayMs = 3_600_000;
+        /** Chu kỳ chạy job; đủ ngắn để ảnh pending sống không quá nhiều so với pendingTtl. */
+        private long fixedDelayMs = 300_000;
         private long initialDelayMs = 120_000;
-        private Duration pendingTtl = Duration.ofHours(24);
+        /** Ảnh tải lên mà chưa gắn vào bản ghi nghiệp vụ được giữ tối đa chừng này rồi bị xóa hẳn (không qua deletedRetention). */
+        private Duration pendingTtl = Duration.ofHours(1);
         private Duration deletedRetention = Duration.ofDays(7);
         private Duration orphanGrace = Duration.ofDays(1);
         private int batchSize = 50;
