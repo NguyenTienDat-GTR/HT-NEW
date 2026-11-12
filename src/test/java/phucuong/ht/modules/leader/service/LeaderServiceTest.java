@@ -16,6 +16,7 @@ import phucuong.ht.modules.leader.helper.LeaderValidationHelper;
 import phucuong.ht.modules.leader.model.entity.Leader;
 import phucuong.ht.modules.leader.model.enums.LeaderGender;
 import phucuong.ht.modules.leader.model.request.LeaderCreateRequest;
+import phucuong.ht.modules.leader.model.request.LeaderBirthDateUpdateRequest;
 import phucuong.ht.modules.leader.model.request.LeaderTransferRequest;
 import phucuong.ht.modules.leader.model.request.LeaderUpdateRequest;
 import phucuong.ht.modules.leader.model.response.LeaderResponse;
@@ -293,6 +294,21 @@ class LeaderServiceTest {
         verify(leaderScopeHelper).enforceTransferScope(authentication, newParishId);
         verify(leaderRepository).setParish(leaderId, newParishId, "ADMIN1");
         verify(leaderTransferNotifier).announce(existing, existing.getParish(), targetParish, "ADMIN1");
+    }
+
+    @Test
+    void updateBirthDateShouldPersistOnlyBirthDate() {
+        UUID leaderId = UUID.randomUUID();
+        LeaderBirthDateUpdateRequest request = new LeaderBirthDateUpdateRequest();
+        request.setBirthDate(java.time.LocalDate.of(1999, 5, 20));
+        Leader existing = leader(leaderId, parish(UUID.randomUUID()));
+        Authentication authentication = org.mockito.Mockito.mock(Authentication.class);
+        when(leaderValidationHelper.requireExistingLeaderWithParish(leaderId)).thenReturn(existing, existing);
+        when(leaderValidationHelper.getRequiredAuditActor(authentication)).thenReturn("ADMIN1");
+
+        leaderService.updateBirthDate(leaderId, request, authentication);
+
+        verify(leaderRepository).update(leaderId, request, "ADMIN1");
     }
 
     @Test

@@ -22,6 +22,7 @@ import phucuong.ht.modules.auth.repository.AccountRepository;
 import phucuong.ht.modules.leader.helper.LeaderScopeHelper;
 import phucuong.ht.modules.leader.helper.LeaderValidationHelper;
 import phucuong.ht.modules.leader.model.entity.Leader;
+import phucuong.ht.modules.leader.model.request.LeaderBirthDateUpdateRequest;
 import phucuong.ht.modules.leader.model.request.LeaderCreateRequest;
 import phucuong.ht.modules.leader.model.request.LeaderSelfUpdateRequest;
 import phucuong.ht.modules.leader.model.request.LeaderTransferRequest;
@@ -262,6 +263,24 @@ public class LeaderService {
         } catch (DataIntegrityViolationException exception) {
             throw new ApiException(HttpStatus.CONFLICT, errorCode.CONFLICT, "Dữ liệu Huynh Trưởng bị trùng hoặc xung đột với dữ liệu hiện có");
         }
+    }
+
+    /**
+     * Chỉ sửa ngày sinh: chức năng riêng (quyền riêng) tách khỏi sửa hồ sơ, không đụng tới các trường khác.
+     * Đơn vị bị khóa thì không được sửa, giống sửa hồ sơ.
+     */
+    @EvictCaches.Leaders
+    @EvictCaches.Analytics
+    // Khóa / chứng nhận có hiển thị ngày sinh huynh trưởng nên cũng phải xóa cache.
+    @EvictCaches.Courses
+    @EvictCaches.Certificates
+    public LeaderResponse updateBirthDate(UUID id, LeaderBirthDateUpdateRequest request, Authentication authentication) {
+        Leader existingLeader = leaderValidationHelper.requireExistingLeaderWithParish(id);
+        String auditActor = leaderValidationHelper.getRequiredAuditActor(authentication);
+        requireParishOperational(existingLeader.getParish() == null ? null : existingLeader.getParish().getId());
+
+        leaderRepository.update(id, request, auditActor);
+        return toLeaderResponse(leaderValidationHelper.requireExistingLeaderWithParish(id));
     }
 
     /**

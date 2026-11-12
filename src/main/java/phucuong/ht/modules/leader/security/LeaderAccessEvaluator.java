@@ -24,6 +24,10 @@ public class LeaderAccessEvaluator {
     public static final String UPDATE_DIOCESE = "organization.leader.update.diocese";
     public static final String UPDATE_DEANERY = "organization.leader.update.deanery";
     public static final String UPDATE_PARISH = "organization.leader.update.parish";
+    // Quyền chỉ sửa ngày sinh: tách khỏi quyền chỉnh sửa hồ sơ, cùng các phạm vi với quyền chỉnh sửa.
+    public static final String UPDATE_BIRTH_DATE_DIOCESE = "organization.leader.update_birth_date.diocese";
+    public static final String UPDATE_BIRTH_DATE_DEANERY = "organization.leader.update_birth_date.deanery";
+    public static final String UPDATE_BIRTH_DATE_PARISH = "organization.leader.update_birth_date.parish";
     public static final String TRANSFER_DIOCESE = "organization.leader.transfer.diocese";
     public static final String TRANSFER_DEANERY = "organization.leader.transfer.deanery";
     public static final String TOGGLE_DIOCESE = "organization.leader.toggle.diocese";
@@ -53,21 +57,32 @@ public class LeaderAccessEvaluator {
     }
 
     public boolean canUpdate(Authentication authentication, UUID id) {
-        return (hasRole(authentication, "ADMIN_DIOCESE") && hasDioceseScopedAccess(authentication, id, UPDATE_DIOCESE))
-                || (hasRole(authentication, "ADMIN_DEANERY") && hasDeaneryScopedAccess(authentication, id, UPDATE_DEANERY))
-                || (hasRole(authentication, "ADMIN_PARISH") && hasParishScopedAccess(authentication, id, UPDATE_PARISH));
+        return hasAdminScopedAccess(authentication, id, UPDATE_DIOCESE, UPDATE_DEANERY, UPDATE_PARISH);
+    }
+
+    // Chỉ sửa ngày sinh: cùng điều kiện vai trò + phạm vi với quyền chỉnh sửa, nhưng là quyền riêng.
+    public boolean canUpdateBirthDate(Authentication authentication, UUID id) {
+        return hasAdminScopedAccess(authentication, id, UPDATE_BIRTH_DATE_DIOCESE, UPDATE_BIRTH_DATE_DEANERY, UPDATE_BIRTH_DATE_PARISH);
     }
 
     // Quyền chuyển giáo xứ tách riêng khỏi quyền sửa; quản trị giáo xứ không có quyền này.
     public boolean canTransfer(Authentication authentication, UUID id) {
-        return (hasRole(authentication, "ADMIN_DIOCESE") && hasDioceseScopedAccess(authentication, id, TRANSFER_DIOCESE))
-                || (hasRole(authentication, "ADMIN_DEANERY") && hasDeaneryScopedAccess(authentication, id, TRANSFER_DEANERY));
+        return hasAdminScopedAccess(authentication, id, TRANSFER_DIOCESE, TRANSFER_DEANERY, null);
     }
 
     public boolean canToggle(Authentication authentication, UUID id) {
-        return (hasRole(authentication, "ADMIN_DIOCESE") && hasDioceseScopedAccess(authentication, id, TOGGLE_DIOCESE))
-                || (hasRole(authentication, "ADMIN_DEANERY") && hasDeaneryScopedAccess(authentication, id, TOGGLE_DEANERY))
-                || (hasRole(authentication, "ADMIN_PARISH") && hasParishScopedAccess(authentication, id, TOGGLE_PARISH));
+        return hasAdminScopedAccess(authentication, id, TOGGLE_DIOCESE, TOGGLE_DEANERY, TOGGLE_PARISH);
+    }
+
+    /**
+     * Quản trị giáo phận / giáo hạt / giáo xứ có quyền tương ứng và huynh trưởng thuộc đúng đơn vị của mình.
+     * Truyền null cho phạm vi không áp dụng (vd. quản trị giáo xứ không được chuyển xứ).
+     */
+    private boolean hasAdminScopedAccess(Authentication authentication, UUID id,
+                                         String dioceseAuthority, String deaneryAuthority, String parishAuthority) {
+        return (hasRole(authentication, "ADMIN_DIOCESE") && hasDioceseScopedAccess(authentication, id, dioceseAuthority))
+                || (hasRole(authentication, "ADMIN_DEANERY") && hasDeaneryScopedAccess(authentication, id, deaneryAuthority))
+                || (hasRole(authentication, "ADMIN_PARISH") && hasParishScopedAccess(authentication, id, parishAuthority));
     }
 
     private boolean hasDioceseScopedAccess(Authentication authentication, UUID id, String scopedAuthority) {

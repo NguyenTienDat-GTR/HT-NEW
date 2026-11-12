@@ -1698,3 +1698,9 @@ Ma trận endpoint (`endpoint-contract-matrix.psv`) hiện có 124 route.
 - `TrainingCourseCreateRequest.hostYear` bắt buộc (`@NotNull`) và nằm trong 1900–2200 vì mã chứng nhận (`CertificateCodeGenerator`) sinh từ năm tổ chức của khóa; thiếu năm trả lỗi "Năm tổ chức là bắt buộc". `TrainingCourseUpdateRequest.hostYear` vẫn tùy chọn (null = giữ nguyên), có giá trị thì phải trong 1900–2200. Khóa quá khứ (`PastTrainingCourseRequest`) vốn đã bắt buộc.
 - Không migration: cột `training_course.host_year` vẫn cho null để khóa cũ chưa có năm không hỏng; khóa như vậy sinh chứng nhận sẽ báo thiếu năm tổ chức cho tới khi được bổ sung năm.
 - Test: `TrainingCourseHostYearValidationTest`.
+
+## feature/leader-birth-date-permission
+- Quyền mới chỉ sửa ngày sinh huynh trưởng, tách khỏi quyền chỉnh sửa hồ sơ, cùng các phạm vi: `organization.leader.update_birth_date.diocese|deanery|parish` (action `update_birth_date`, migration V136). Chỉ tạo quyền, không gán cho vai trò nào.
+- `PATCH /api/leaders/{id}/birth-date` nhận `LeaderBirthDateUpdateRequest { birthDate }` (`@NotNull`, `@PastOrPresent`), qua `LeaderAccessEvaluator.canUpdateBirthDate`: quản trị giáo phận / giáo hạt / giáo xứ có quyền đúng phạm vi và huynh trưởng thuộc đơn vị của mình (giống `canUpdate`). Quyền `update` không cho sửa ngày sinh và ngược lại. Đơn vị bị khóa thì không sửa được. Không ghi xác nhận đồng ý dữ liệu cá nhân (chỉ sửa một trường đã có).
+- `LeaderAccessEvaluator`: gom điều kiện vai trò + phạm vi vào `hasAdminScopedAccess`; `canUpdate`, `canToggle`, `canTransfer`, `canUpdateBirthDate` dùng chung (không đổi hành vi).
+- Test: `LeaderAccessEvaluatorTest`, `LeaderControllerSecurityIntegrationTest`, `LeaderServiceTest` (mục birth date).
