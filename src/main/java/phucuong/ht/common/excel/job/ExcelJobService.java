@@ -75,9 +75,51 @@ public class ExcelJobService {
         params.put("status", request.getStatus());
         params.put("sortBy", request.getSortBy());
         params.put("sortDirection", request.getSortDirection());
+        ExportSelection selection = ExportSelection.fromCurrentRequest();
+        if (!selection.columns().isEmpty()) {
+            params.put("columns", selection.columns());
+        }
+        if (!selection.options().isEmpty()) {
+            params.put("options", selection.options());
+        }
         String paramsJson = toJson(params);
         return create(kind, "", key, owner, IdempotencyService.sha256(kind.name() + "|" + paramsJson), paramsJson, null, null, authentication);
     }
+
+    /**
+     * Cột và tùy chọn xuất đi kèm query của nút Xuất Excel: {@code columns} (lặp lại, theo tên cột) và các tùy chọn trong
+     * {@link #EXPORT_OPTIONS}. Đọc thẳng từ request hiện tại để các controller xuất không phải khai báo thêm tham số;
+     * gọi ngoài request (test, tác vụ nội bộ) thì không có lựa chọn nào = xuất mọi cột.
+     */
+    record ExportSelection(List<String> columns, Map<String, String> options) {
+        static ExportSelection fromCurrentRequest() {
+            if (!(org.springframework.web.context.request.RequestContextHolder.getRequestAttributes()
+                    instanceof org.springframework.web.context.request.ServletRequestAttributes attributes)) {
+                return new ExportSelection(List.of(), Map.of());
+            }
+            jakarta.servlet.http.HttpServletRequest http = attributes.getRequest();
+            List<String> columns = new java.util.ArrayList<>();
+            String[] values = http.getParameterValues("columns");
+            if (values != null) {
+                for (String value : values) {
+                    if (value != null && !value.isBlank() && !columns.contains(value.trim()) && columns.size() < 100) {
+                        columns.add(value.trim());
+                    }
+                }
+            }
+            Map<String, String> options = new LinkedHashMap<>();
+            for (String name : EXPORT_OPTIONS) {
+                String value = http.getParameter(name);
+                if (value != null && !value.isBlank()) {
+                    options.put(name, value.trim().length() > 64 ? value.trim().substring(0, 64) : value.trim());
+                }
+            }
+            return new ExportSelection(columns, options);
+        }
+    }
+
+    /** Tên các tùy chọn xuất được nhận từ query (ngoài bộ lọc danh sách). */
+    public static final List<String> EXPORT_OPTIONS = List.of("template", "groupBy", "layout");
 
     public ExcelJobResponse createImport(ExcelJobKind kind, String target, MultipartFile file, String idempotencyKey, Authentication authentication) {
         return createImport(kind, target, file, null, idempotencyKey, authentication);

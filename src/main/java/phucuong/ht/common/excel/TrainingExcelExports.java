@@ -16,8 +16,8 @@ public final class TrainingExcelExports {
     private TrainingExcelExports() {
     }
 
-    public static byte[] leaders(List<LeaderResponse> rows, Map<String, String> levelNames) {
-        return ExcelExportWriter.write("Hồ sơ huynh trưởng", List.of(
+    public static List<ExcelColumn<LeaderResponse>> leaderColumns(Map<String, String> levelNames) {
+        return List.of(
                 ExcelColumn.<LeaderResponse>of("Tên thánh", 16, LeaderResponse::getHolyName),
                 ExcelColumn.<LeaderResponse>of("Họ và tên", 28, LeaderResponse::getFullName),
                 ExcelColumn.<LeaderResponse>of("Ngày sinh", 14, LeaderResponse::getBirthDate),
@@ -30,11 +30,11 @@ public final class TrainingExcelExports {
                 ExcelColumn.<LeaderResponse>of("Trạng thái", 16, row -> ExcelLabels.status(row.getStatus())),
                 ExcelColumn.<LeaderResponse>of("Ngày tạo", 18, LeaderResponse::getCreatedAt),
                 ExcelColumn.<LeaderResponse>of("Người tạo", 22, LeaderResponse::getCreatedByName)
-        ), rows);
+        );
     }
 
-    public static byte[] courses(List<TrainingCourseResponse> rows) {
-        return ExcelExportWriter.write("Khóa huấn luyện", List.of(
+    public static List<ExcelColumn<TrainingCourseResponse>> courseColumns() {
+        return List.of(
                 ExcelColumn.<TrainingCourseResponse>of("Mã khóa", 38, TrainingCourseResponse::getCourseCode),
                 ExcelColumn.<TrainingCourseResponse>of("Tên khóa", 36, TrainingCourseResponse::getCourseName),
                 ExcelColumn.<TrainingCourseResponse>of("Loại khóa", 28, row -> Boolean.TRUE.equals(row.getPastCourse()) ? "Khóa quá khứ" : row.getCourseTypeName()),
@@ -55,11 +55,11 @@ public final class TrainingExcelExports {
                 ExcelColumn.<TrainingCourseResponse>of("Trạng thái", 16, row -> ExcelLabels.status(row.getStatus())),
                 ExcelColumn.<TrainingCourseResponse>of("Ngày tạo", 18, TrainingCourseResponse::getCreatedAt),
                 ExcelColumn.<TrainingCourseResponse>of("Người tạo", 22, TrainingCourseResponse::getCreatedByName)
-        ), rows);
+        );
     }
 
-    public static byte[] participations(List<CourseParticipationResponse> rows) {
-        return ExcelExportWriter.write("Hồ sơ tham dự", List.of(
+    public static List<ExcelColumn<CourseParticipationResponse>> participationColumns() {
+        return List.of(
                 ExcelColumn.<CourseParticipationResponse>of("Tên thánh", 16, CourseParticipationResponse::getLeaderHolyName),
                 ExcelColumn.<CourseParticipationResponse>of("Họ và tên", 28, CourseParticipationResponse::getLeaderFullName),
                 ExcelColumn.<CourseParticipationResponse>of("Giáo xứ / giáo họ / giáo điểm", 30, CourseParticipationResponse::getParishName),
@@ -83,12 +83,12 @@ public final class TrainingExcelExports {
                 ExcelColumn.<CourseParticipationResponse>of("Trạng thái chứng nhận", 22, row -> ExcelLabels.approval(row.getCertificateApprovalStatus())),
                 ExcelColumn.<CourseParticipationResponse>of("Ngày tạo", 18, CourseParticipationResponse::getCreatedAt),
                 ExcelColumn.<CourseParticipationResponse>of("Người tạo", 22, CourseParticipationResponse::getCreatedByName)
-        ), rows);
+        );
     }
 
-    /** Danh sách chia đội: tên khóa ở dòng tiêu đề, các cột chỉ gồm tên thánh, họ và tên, giáo xứ, giáo hạt, đội. */
-    public static byte[] teams(String courseName, List<CourseParticipationResponse> rows) {
-        return ExcelExportWriter.write("Chia đội", courseName == null || courseName.isBlank() ? null : courseName, List.of(
+    /** Danh sách chia đội: tên thánh, họ và tên, liên lạc, giáo xứ, giáo hạt, đội. */
+    public static List<ExcelColumn<CourseParticipationResponse>> teamColumns() {
+        return List.of(
                 ExcelColumn.<CourseParticipationResponse>of("Tên thánh", 16, CourseParticipationResponse::getLeaderHolyName),
                 ExcelColumn.<CourseParticipationResponse>of("Họ và tên", 28, CourseParticipationResponse::getLeaderFullName),
                 ExcelColumn.<CourseParticipationResponse>of("Email", 32, CourseParticipationResponse::getLeaderEmail),
@@ -97,11 +97,11 @@ public final class TrainingExcelExports {
                 ExcelColumn.<CourseParticipationResponse>of("Giáo hạt", 26, CourseParticipationResponse::getDeaneryName),
                 ExcelColumn.<CourseParticipationResponse>of("Đội", 20, CourseParticipationResponse::getTeamName),
                 ExcelColumn.<CourseParticipationResponse>of("Ghi chú", 30, CourseParticipationResponse::getRegistrationNote)
-        ), rows);
+        );
     }
 
-    public static byte[] certificates(List<CertificateResponse> rows) {
-        return ExcelExportWriter.write("Chứng nhận", List.of(
+    public static List<ExcelColumn<CertificateResponse>> certificateColumns() {
+        return List.of(
                 ExcelColumn.<CertificateResponse>of("Mã chứng nhận", 30, CertificateResponse::getCertificateCode),
                 ExcelColumn.<CertificateResponse>of("Mã chứng nhận cũ", 24, CertificateResponse::getOldCertificateCode),
                 ExcelColumn.<CertificateResponse>of("Tên chứng nhận", 30, CertificateResponse::getCertificateName),
@@ -123,7 +123,7 @@ public final class TrainingExcelExports {
                 ExcelColumn.<CertificateResponse>of("Ngày thu hồi", 18, CertificateResponse::getRevokedAt),
                 ExcelColumn.<CertificateResponse>of("Lý do thu hồi", 30, CertificateResponse::getRevocationReason),
                 ExcelColumn.<CertificateResponse>of("Ngày tạo", 18, CertificateResponse::getCreatedAt)
-        ), rows);
+        );
     }
 
     private static String componentScores(List<ComponentScoreResponse> scores) {

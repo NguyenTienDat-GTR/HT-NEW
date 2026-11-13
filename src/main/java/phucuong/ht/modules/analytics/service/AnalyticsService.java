@@ -38,6 +38,7 @@ public class AnalyticsService {
     private final RecordsAnalytics records;
     private final AnalyticsRepository repository;
     private final securityUtils securityUtils;
+    private final phucuong.ht.common.excel.ExcelReportHeaderResolver reportHeaderResolver;
 
     @Cacheable(cacheNames = CacheNames.ANALYTICS_OVERVIEW, key = "@cacheScopeKeyHelper.analyticsKey(#authentication, 'overview', #request.cacheKey())")
     public AnalyticsResponse overview(AnalyticsFilterRequest request, Authentication authentication) {
@@ -128,7 +129,18 @@ public class AnalyticsService {
     public AnalyticsRecordsResponse export(AnalyticsRecordRequest request, Authentication authentication) {
         AnalyticsRecordRequest source = request == null ? new AnalyticsRecordRequest() : request;
         AnalyticsContext ctx = detailed(source, authentication);
-        return records.records(ctx, source, 0, AnalyticsRecordRequest.MAX_EXPORT_ROWS);
+        phucuong.ht.common.repository.BaseSearchRequest unitFilter = new phucuong.ht.common.repository.BaseSearchRequest();
+        java.util.Map<String, Object> filters = new java.util.LinkedHashMap<>();
+        if (source.getParishId() != null) {
+            filters.put("parishId", source.getParishId().toString());
+        }
+        if (source.getDeaneryId() != null) {
+            filters.put("deaneryId", source.getDeaneryId().toString());
+        }
+        unitFilter.setFilters(filters);
+        return records.records(ctx, source, 0, AnalyticsRecordRequest.MAX_EXPORT_ROWS).toBuilder()
+                .unitLines(reportHeaderResolver.resolve(unitFilter, authentication, "", false).unitLines())
+                .build();
     }
 
     private AnalyticsContext detailed(AnalyticsFilterRequest request, Authentication authentication) {

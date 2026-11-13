@@ -3,9 +3,14 @@ package phucuong.ht.common.excel.job.handler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
+import phucuong.ht.common.excel.ExcelColumns;
 import phucuong.ht.common.excel.ExcelExportSupport;
+import phucuong.ht.common.excel.ExcelExportWriter;
+import phucuong.ht.common.excel.ExcelReportHeaderResolver;
 import phucuong.ht.common.excel.TrainingExcelExports;
+import phucuong.ht.common.excel.job.ExcelExportFile;
 import phucuong.ht.common.excel.job.ExcelExportHandler;
+import phucuong.ht.common.excel.job.ExcelExportRequest;
 import phucuong.ht.common.excel.job.ExcelJobKind;
 import phucuong.ht.common.excel.job.JobProgress;
 import phucuong.ht.common.repository.BaseSearchRequest;
@@ -23,6 +28,7 @@ public class TeamsExcelExportHandler implements ExcelExportHandler {
 
     private final CourseParticipationService courseParticipationService;
     private final TrainingCourseRepository trainingCourseRepository;
+    private final ExcelReportHeaderResolver headerResolver;
 
     @Override
     public ExcelJobKind kind() {
@@ -30,14 +36,22 @@ public class TeamsExcelExportHandler implements ExcelExportHandler {
     }
 
     @Override
-    public byte[] export(BaseSearchRequest request, Authentication authentication, JobProgress progress) {
+    public ExcelExportFile export(ExcelExportRequest request, Authentication authentication, JobProgress progress) {
         List<CourseParticipationResponse> rows = ExcelExportSupport.collectAll(
-                request, page -> courseParticipationService.findParticipants(page, authentication), progress);
-        return TrainingExcelExports.teams(rows.isEmpty() ? null : rows.get(0).getCourseName(), rows);
+                request.search(), page -> courseParticipationService.findParticipants(page, authentication), progress);
+        return ExcelExportFile.xlsx(ExcelExportWriter.write("Chia đội",
+                headerResolver.resolve(request.search(), authentication, "Danh sách chia đội", true),
+                ExcelColumns.select(TrainingExcelExports.teamColumns(), request.columns()), rows));
     }
 
     @Override
-    public String fileBase(BaseSearchRequest request) {
+    public List<String> columns() {
+        return ExcelColumns.headers(TrainingExcelExports.teamColumns());
+    }
+
+    @Override
+    public String fileBase(ExcelExportRequest exportRequest) {
+        BaseSearchRequest request = exportRequest == null ? null : exportRequest.search();
         if (request == null || request.getFilters() == null) {
             return kind().fileBase();
         }
@@ -51,7 +65,7 @@ public class TeamsExcelExportHandler implements ExcelExportHandler {
         return slug.isEmpty() ? kind().fileBase() : kind().fileBase() + "-" + slug;
     }
 
-    private static String slug(String text) {
+    public static String slug(String text) {
         if (text == null) {
             return "";
         }

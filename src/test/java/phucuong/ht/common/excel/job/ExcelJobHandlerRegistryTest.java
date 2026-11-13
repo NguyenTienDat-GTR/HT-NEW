@@ -40,7 +40,7 @@ class ExcelJobHandlerRegistryTest {
         ExcelExportHandler handler = registry.exportHandler(ExcelJobKind.EXPORT_LEADERS);
 
         assertSame(ExcelJobKind.EXPORT_LEADERS, handler.kind());
-        assertEquals(ExcelJobKind.EXPORT_LEADERS.fileBase(), handler.fileBase(new BaseSearchRequest()));
+        assertEquals(ExcelJobKind.EXPORT_LEADERS.fileBase(), handler.fileBase(ExcelExportRequest.of(new BaseSearchRequest())));
         assertSame(ExcelJobKind.IMPORT_LEADERS, registry.importHandler(ExcelJobKind.IMPORT_LEADERS).kind());
     }
 
