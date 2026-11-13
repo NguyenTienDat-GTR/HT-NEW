@@ -1737,3 +1737,8 @@ Ma trận endpoint (`endpoint-contract-matrix.psv`) hiện có 124 route.
 
 ## feat/mau-dang-ky-kho-giay
 - Thêm `POST /api/training/registration-template/preview` (multipart `file` + `data` JSON `{values, rows}`, quyền chỉnh sửa file xuất danh sách đăng ký): dựng file xem trước từ mẫu đang soạn bằng `RegistrationTemplateRenderer` với dữ liệu minh họa FE gửi, không ghi gì vào hệ thống (`RegistrationTemplateService.preview`). Giới hạn 300 trường, 50 dòng. Bộ dựng giữ nguyên khổ giấy / hướng in của mẫu (test `keepsPaperSizeAndOrientationOfTheTemplate`). Ma trận hợp đồng endpoint: 41 controller, 281 route.
+
+## feat/xuat-excel-cot-diem-thanh-phan
+- Xuất Excel danh sách đăng ký / tham dự: cột chọn được "Điểm thành phần" khi xuất được **tách thành mỗi thành phần điểm một cột** (`TrainingExcelExports.expandComponentScores`, thứ tự theo `displayOrder`, hợp các thành phần có trong các dòng xuất; điểm bị ẩn thì để trống; tên trùng cột khác thì thêm "(2)"). `ExcelExportHandlerConfig.listing` có thêm tham số `expand` để đổi danh sách cột sau khi đã đọc dữ liệu. Danh sách tên cột trả về `/excel-jobs/export-columns` vẫn chỉ có một mục "Điểm thành phần".
+- Thêm cột "Email", "Số điện thoại" cho xuất đăng ký / tham dự; xuất chứng nhận thêm "Tên thánh", "Họ và tên", "Số điện thoại", "Giáo xứ / giáo họ / giáo điểm" (thay cột "Huynh trưởng"). `CertificateResponse.leaderPhone` chỉ điền ở danh sách; giáo xứ lấy từ hồ sơ tham dự (`findAllByLeaderIdsAndCourseCodes` nạp kèm `l.parish`).
+- Test: `TrainingExcelExportsTest`.

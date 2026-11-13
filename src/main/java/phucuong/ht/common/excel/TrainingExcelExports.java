@@ -6,12 +6,19 @@ import phucuong.ht.modules.training.courseParticipation.model.response.Component
 import phucuong.ht.modules.training.courseParticipation.model.response.CourseParticipationResponse;
 import phucuong.ht.modules.training.trainingCourse.model.response.TrainingCourseResponse;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
+import java.util.Set;
 
 /** Cột Excel của danh sách huynh trưởng, khóa huấn luyện, hồ sơ tham dự và chứng nhận. */
 public final class TrainingExcelExports {
+
+    /** Tên cột chọn được cho điểm thành phần; khi xuất được tách thành mỗi thành phần một cột. */
+    public static final String COMPONENT_SCORES = "Điểm thành phần";
 
     private TrainingExcelExports() {
     }
@@ -62,6 +69,8 @@ public final class TrainingExcelExports {
         return List.of(
                 ExcelColumn.<CourseParticipationResponse>of("Tên thánh", 16, CourseParticipationResponse::getLeaderHolyName),
                 ExcelColumn.<CourseParticipationResponse>of("Họ và tên", 28, CourseParticipationResponse::getLeaderFullName),
+                ExcelColumn.<CourseParticipationResponse>of("Email", 32, CourseParticipationResponse::getLeaderEmail),
+                ExcelColumn.<CourseParticipationResponse>of("Số điện thoại", 16, CourseParticipationResponse::getLeaderPhone),
                 ExcelColumn.<CourseParticipationResponse>of("Giáo xứ / giáo họ / giáo điểm", 30, CourseParticipationResponse::getParishName),
                 ExcelColumn.<CourseParticipationResponse>of("Giáo hạt", 26, CourseParticipationResponse::getDeaneryName),
                 ExcelColumn.<CourseParticipationResponse>of("Khóa huấn luyện", 36, CourseParticipationResponse::getCourseName),
@@ -71,7 +80,8 @@ public final class TrainingExcelExports {
                 ExcelColumn.<CourseParticipationResponse>of("Cấp độ hiện tại", 22, CourseParticipationResponse::getLeaderLevel),
                 ExcelColumn.<CourseParticipationResponse>of("Điểm đạt", 10, CourseParticipationResponse::getPassingScore),
                 ExcelColumn.<CourseParticipationResponse>of("Tổng điểm", 10, row -> Boolean.TRUE.equals(row.getScoreHidden()) ? null : row.getTotalScore()),
-                ExcelColumn.<CourseParticipationResponse>of("Điểm thành phần", 40, row -> Boolean.TRUE.equals(row.getScoreHidden()) ? null : componentScores(row.getComponentScores())),
+                // Cột giữ chỗ: khi xuất sẽ được tách thành mỗi thành phần điểm một cột (xem expandComponentScores).
+                ExcelColumn.<CourseParticipationResponse>of(COMPONENT_SCORES, 40, row -> null),
                 ExcelColumn.<CourseParticipationResponse>of("Kết quả", 16, row -> ExcelLabels.courseResult(row.getResult())),
                 ExcelColumn.<CourseParticipationResponse>of("Đạt / Không đạt", 16, row -> ExcelLabels.finalResult(row.getFinalResult())),
                 ExcelColumn.<CourseParticipationResponse>of("Nhận xét", 30, CourseParticipationResponse::getReview),
@@ -105,7 +115,10 @@ public final class TrainingExcelExports {
                 ExcelColumn.<CertificateResponse>of("Mã chứng nhận", 30, CertificateResponse::getCertificateCode),
                 ExcelColumn.<CertificateResponse>of("Mã chứng nhận cũ", 24, CertificateResponse::getOldCertificateCode),
                 ExcelColumn.<CertificateResponse>of("Tên chứng nhận", 30, CertificateResponse::getCertificateName),
-                ExcelColumn.<CertificateResponse>of("Huynh trưởng", 28, CertificateResponse::getLeaderFullName),
+                ExcelColumn.<CertificateResponse>of("Tên thánh", 16, CertificateResponse::getLeaderHolyName),
+                ExcelColumn.<CertificateResponse>of("Họ và tên", 28, CertificateResponse::getLeaderFullName),
+                ExcelColumn.<CertificateResponse>of("Số điện thoại", 16, CertificateResponse::getLeaderPhone),
+                ExcelColumn.<CertificateResponse>of("Giáo xứ / giáo họ / giáo điểm", 30, CertificateResponse::getLeaderParishName),
                 ExcelColumn.<CertificateResponse>of("Khóa huấn luyện", 36, CertificateResponse::getCourseName),
                 ExcelColumn.<CertificateResponse>of("Tổng điểm", 10, row -> Boolean.TRUE.equals(row.getScoreHidden()) ? null : row.getTotalScore()),
                 ExcelColumn.<CertificateResponse>of("Điểm đạt", 10, CertificateResponse::getPassingScore),
@@ -126,13 +139,76 @@ public final class TrainingExcelExports {
         );
     }
 
-    private static String componentScores(List<ComponentScoreResponse> scores) {
-        if (scores == null || scores.isEmpty()) {
-            return "";
+    /**
+     * Tách cột "Điểm thành phần" thành mỗi thành phần điểm một cột (theo thứ tự hiển thị của khóa), lấy danh sách thành phần
+     * từ chính các dòng sẽ xuất. Không chọn cột này, hoặc không dòng nào có điểm thành phần thì giữ nguyên danh sách cột.
+     */
+    public static List<ExcelColumn<CourseParticipationResponse>> expandComponentScores(
+            List<ExcelColumn<CourseParticipationResponse>> columns, List<CourseParticipationResponse> rows) {
+        int index = -1;
+        for (int i = 0; i < columns.size(); i++) {
+            if (COMPONENT_SCORES.equals(columns.get(i).header())) {
+                index = i;
+                break;
+            }
         }
-        return scores.stream()
-                .filter(score -> score.getScore() != null)
-                .map(score -> score.getComponentName() + ": " + score.getScore().stripTrailingZeros().toPlainString())
-                .collect(Collectors.joining("; "));
+        if (index < 0) {
+            return columns;
+        }
+        Map<String, ComponentScoreResponse> components = new LinkedHashMap<>();
+        for (CourseParticipationResponse row : rows) {
+            if (Boolean.TRUE.equals(row.getScoreHidden()) || row.getComponentScores() == null) {
+                continue;
+            }
+            for (ComponentScoreResponse score : row.getComponentScores()) {
+                components.putIfAbsent(componentKey(score), score);
+            }
+        }
+        if (components.isEmpty()) {
+            return columns;
+        }
+        List<Map.Entry<String, ComponentScoreResponse>> ordered = components.entrySet().stream()
+                .sorted(Comparator.comparing((Map.Entry<String, ComponentScoreResponse> entry) -> entry.getValue().getDisplayOrder(), Comparator.nullsLast(Integer::compareTo)))
+                .toList();
+        Set<String> taken = new HashSet<>();
+        for (int i = 0; i < columns.size(); i++) {
+            if (i != index) {
+                taken.add(columns.get(i).header());
+            }
+        }
+        List<ExcelColumn<CourseParticipationResponse>> expanded = new ArrayList<>(columns.subList(0, index));
+        for (Map.Entry<String, ComponentScoreResponse> entry : ordered) {
+            String key = entry.getKey();
+            String header = uniqueHeader(entry.getValue().getComponentName(), taken);
+            expanded.add(ExcelColumn.<CourseParticipationResponse>of(header, Math.max(12, Math.min(header.length() + 4, 28)), row -> componentScore(row, key)));
+        }
+        expanded.addAll(columns.subList(index + 1, columns.size()));
+        return expanded;
+    }
+
+    private static String componentKey(ComponentScoreResponse score) {
+        return score.getComponentId() != null ? score.getComponentId() : String.valueOf(score.getComponentName());
+    }
+
+    /** Tên thành phần trùng một cột khác (hoặc thành phần khác của khóa khác cùng tên) thì thêm số thứ tự để tiêu đề cột không lẫn. */
+    private static String uniqueHeader(String name, Set<String> taken) {
+        String base = name == null || name.isBlank() ? "Điểm thành phần" : name.trim();
+        String header = base;
+        for (int n = 2; !taken.add(header); n++) {
+            header = base + " (" + n + ")";
+        }
+        return header;
+    }
+
+    private static Object componentScore(CourseParticipationResponse row, String key) {
+        if (Boolean.TRUE.equals(row.getScoreHidden()) || row.getComponentScores() == null) {
+            return null;
+        }
+        return row.getComponentScores().stream()
+                .filter(score -> key.equals(componentKey(score)))
+                .map(ComponentScoreResponse::getScore)
+                .filter(java.util.Objects::nonNull)
+                .findFirst()
+                .orElse(null);
     }
 }

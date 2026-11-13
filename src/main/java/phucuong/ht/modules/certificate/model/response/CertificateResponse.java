@@ -59,6 +59,8 @@ public class CertificateResponse {
 
     // Chỉ có ở chi tiết (findById): thông tin huynh trưởng, khóa và kết quả để hiển thị theo nhóm.
     private String leaderHolyName;
+    // Chỉ điền ở danh sách (dùng khi xuất Excel).
+    private String leaderPhone;
     private LocalDate leaderBirthDate;
     private String leaderParishName;
     private String leaderDeaneryName;

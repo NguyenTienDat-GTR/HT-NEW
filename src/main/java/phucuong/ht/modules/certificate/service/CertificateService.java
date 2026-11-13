@@ -532,8 +532,16 @@ public class CertificateService {
             participations.putIfAbsent(participationKey(participation.getLeader().getId(), participation.getCourse().getCourseCode()), participation);
         }
         return certificates.stream()
-                .map(certificate -> responseBuilder(certificate, certificate.getLeader() == null || certificate.getCourse() == null ? null
-                        : participations.get(participationKey(certificate.getLeader().getId(), certificate.getCourse().getCourseCode()))).build())
+                .map(certificate -> {
+                    CourseParticipation participation = certificate.getLeader() == null || certificate.getCourse() == null ? null
+                            : participations.get(participationKey(certificate.getLeader().getId(), certificate.getCourse().getCourseCode()));
+                    // Giáo xứ lấy từ hồ sơ tham dự (đã nạp kèm giáo xứ của huynh trưởng) để danh sách không phải nạp thêm từng dòng.
+                    var parish = participation == null || participation.getLeader() == null ? null : participation.getLeader().getParish();
+                    return responseBuilder(certificate, participation)
+                            .leaderPhone(certificate.getLeader() == null ? null : certificate.getLeader().getPhoneNumber())
+                            .leaderParishName(parish == null ? null : parish.getName())
+                            .build();
+                })
                 .toList();
     }
 

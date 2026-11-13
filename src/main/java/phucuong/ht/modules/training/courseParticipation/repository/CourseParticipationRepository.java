@@ -206,6 +206,7 @@ public class CourseParticipationRepository extends BaseRepo<CourseParticipation,
                                 from CourseParticipation cp
                                 join fetch cp.course c
                                 join fetch cp.leader l
+                                left join fetch l.parish
                                 where l.id in :leaderIds
                                   and c.courseCode in :courseCodes
                                 """,
