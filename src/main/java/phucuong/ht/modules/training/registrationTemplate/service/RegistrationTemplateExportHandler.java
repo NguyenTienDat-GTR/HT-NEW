@@ -92,7 +92,7 @@ public class RegistrationTemplateExportHandler implements ExcelExportHandler {
         Context context = Objects.requireNonNull(transactionTemplate.execute(status -> load(rows)));
 
         List<RegistrationTemplateRenderer.Group> groups = groups(rows, groupBy, context, levelNames);
-        Map<String, String> common = courseValues(template.course());
+        Map<String, String> common = courseValues(template.course(), levelNames);
         String prefix = "danh-sach-dang-ky-" + RegistrationTemplateRenderer.slug(template.course().getCourseName());
         if (layout == RegistrationTemplateRenderer.Layout.FILE_PER_GROUP) {
             return ExcelExportFile.zip(RegistrationTemplateRenderer.renderZip(template.content(), common, groups, prefix));
@@ -223,7 +223,7 @@ public class RegistrationTemplateExportHandler implements ExcelExportHandler {
         return result;
     }
 
-    private static Map<String, String> courseValues(TrainingCourse course) {
+    private static Map<String, String> courseValues(TrainingCourse course, Map<String, String> levelNames) {
         Map<String, String> values = new HashMap<>();
         Diocese diocese = course.getDiocese();
         values.put("tenGiaoPhan", diocese == null ? "" : nullToEmpty(diocese.getName()));
@@ -243,6 +243,9 @@ public class RegistrationTemplateExportHandler implements ExcelExportHandler {
         values.put("tenDonVi", levelName);
         values.put("capVaTenDonVi", levelName.isBlank() ? levelLabel : levelLabel + " " + levelName);
         values.put("tenKhoa", nullToEmpty(course.getCourseName()));
+        // Cấp độ huynh trưởng cần có để đăng ký khóa (theo loại khóa); trống nếu khóa không yêu cầu cấp độ.
+        String requiredLevel = course.getCourseType() == null ? null : course.getCourseType().getRequiredCurrentLevel();
+        values.put("capDoYeuCau", requiredLevel == null || requiredLevel.isBlank() ? "" : levelNames.getOrDefault(requiredLevel, requiredLevel));
         values.put("maKhoa", nullToEmpty(course.getCourseCode()));
         values.put("loaiKhoa", course.getCourseType() == null ? "" : nullToEmpty(course.getCourseType().getTypeName()));
         values.put("namToChuc", course.getHostYear() == null ? "" : String.valueOf(course.getHostYear()));

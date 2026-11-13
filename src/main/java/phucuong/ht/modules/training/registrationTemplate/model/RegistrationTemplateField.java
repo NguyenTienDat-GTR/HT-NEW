@@ -35,6 +35,7 @@ public enum RegistrationTemplateField {
     PARTICIPANT_COUNT("soNguoi", "Số người trong danh sách", "Nhóm đang xuất", Kind.CELL),
 
     COURSE_NAME("tenKhoa", "Tên khóa", "Khóa huấn luyện", Kind.CELL),
+    REQUIRED_LEVEL("capDoYeuCau", "Cấp độ yêu cầu", "Khóa huấn luyện", Kind.CELL),
     COURSE_CODE("maKhoa", "Mã khóa", "Khóa huấn luyện", Kind.CELL),
     COURSE_TYPE("loaiKhoa", "Loại khóa", "Khóa huấn luyện", Kind.CELL),
     HOST_YEAR("namToChuc", "Năm tổ chức", "Khóa huấn luyện", Kind.CELL),

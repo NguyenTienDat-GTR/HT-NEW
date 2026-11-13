@@ -8,6 +8,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -66,6 +67,14 @@ public class RegistrationTemplateController {
                                                                          @RequestPart("file") MultipartFile file,
                                                                          Authentication authentication) {
         return apiResponse.success("Đã lưu mẫu danh sách đăng ký", service.save(unitType, unitId, file, authentication));
+    }
+
+    /** Tải file xem trước: mẫu đang soạn (chưa lưu) + dữ liệu minh họa, dựng bằng bộ dựng khi xuất thật. */
+    @PostMapping(value = "/preview", consumes = "multipart/form-data")
+    @PreAuthorize("@registrationTemplateAccessEvaluator.canUpdate(authentication)")
+    public ResponseEntity<byte[]> preview(@RequestPart("file") MultipartFile file,
+                                          @RequestPart("data") RegistrationTemplateService.PreviewData data) {
+        return ExcelResponses.xlsx(service.preview(file, data).content(), "xem-truoc-mau-danh-sach-dang-ky");
     }
 
     @DeleteMapping

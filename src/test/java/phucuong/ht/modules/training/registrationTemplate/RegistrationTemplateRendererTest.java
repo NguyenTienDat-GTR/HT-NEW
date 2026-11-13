@@ -144,6 +144,24 @@ class RegistrationTemplateRendererTest {
     }
 
     @Test
+    void keepsPaperSizeAndOrientationOfTheTemplate() throws IOException {
+        byte[] result;
+        try (XSSFWorkbook workbook = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            Sheet sheet = workbook.createSheet("x");
+            sheet.createRow(0).createCell(0).setCellValue("{{hoVaTen}}");
+            sheet.getPrintSetup().setPaperSize(org.apache.poi.ss.usermodel.PrintSetup.A4_PAPERSIZE);
+            sheet.getPrintSetup().setLandscape(true);
+            workbook.write(out);
+            result = RegistrationTemplateRenderer.renderWorkbook(out.toByteArray(), Map.of(), List.of(group("Giáo xứ A", "A", 3)),
+                    RegistrationTemplateRenderer.Layout.SINGLE_SHEET, false);
+        }
+        try (XSSFWorkbook filled = new XSSFWorkbook(new ByteArrayInputStream(result))) {
+            assertEquals(org.apache.poi.ss.usermodel.PrintSetup.A4_PAPERSIZE, filled.getSheetAt(0).getPrintSetup().getPaperSize());
+            assertTrue(filled.getSheetAt(0).getPrintSetup().getLandscape());
+        }
+    }
+
+    @Test
     void validatesTemplate() throws IOException {
         RegistrationTemplateRenderer.validateTemplate(template());
         assertTrue(RegistrationTemplateRenderer.hasDataRow(template()));
