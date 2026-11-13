@@ -1728,3 +1728,9 @@ Ma trận endpoint (`endpoint-contract-matrix.psv`) hiện có 124 route.
 - Quyền: `training.registration_template.update.diocese` / `.deanery` ("Chỉnh sửa file xuất danh sách đăng ký"), migration chỉ tạo quyền, KHÔNG gán vai trò nào (quản trị tự phân quyền).
 - Trang thống kê: `AnalyticsRecordsResponse.unitLines` cho phần đầu file xuất.
 - Test: `RegistrationTemplateRendererTest`, `TemplateCompressionTest`, `ExcelJobHandlerRegistryTest`.
+
+## chore/cd-vps-moi — CD không còn deploy, VPS tự cập nhật (2026-11-13)
+
+- Production chạy trên VPS Windows do người khác quản (tunnel Cloudflare `qlht-173`). Job `deploy` (SSH vào EC2 AWS) đã bỏ khỏi `.github/workflows/cd.yml`: CD chỉ chạy test, build và đẩy image `latest` lên GHCR.
+- Trên VPS, container `watchtower` (chủ VPS cài) định kỳ kiểm tra GHCR, thấy image mới của service có nhãn `com.centurylinklabs.watchtower.enable=true` thì pull và khởi động lại. Package GHCR (`ht-new`, `ht-new-fe`) cần để public hoặc VPS có token đọc.
+- Secret `PROD_ENV_FILE`, `SSH_USER`, `SSH_PRIVATE_KEY`, `CF_ACCESS_CLIENT_ID/SECRET` không còn được workflow dùng. `.env` production do chủ VPS giữ.
