@@ -17,8 +17,6 @@ jobs:
   ci:
     uses: ./.github/workflows/ci.yml
 
-  # Không còn bước deploy: server production là VPS của người khác, container watchtower trên đó tự pull image `latest` mới từ GHCR
-  # và khởi động lại service tương ứng. CD chỉ test, build và đẩy image.
   build-push:
     needs: ci
     runs-on: ubuntu-latest
@@ -46,3 +44,15 @@ jobs:
             ${{ steps.vars.outputs.repo }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # Chạy trên runner self-hosted đặt ở server 173. Lệnh deploy nằm trong script trên server (chủ server quản lý),
+  # runner chỉ được gọi đúng script đó qua sudo; .env không đi qua GitHub.
+  deploy:
+    needs: build-push
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, qlht-173]
+    environment: production
+    timeout-minutes: 15
+    steps:
+      - name: Kéo image vừa build và khởi động lại app trên server 173
+        run: sudo -n -u jvs /srv/qlht/deploy-image.sh app ${{ github.sha }}
