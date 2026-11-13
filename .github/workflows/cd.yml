@@ -50,21 +50,13 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     env:
-      DEPLOY_DIR: ${{ vars.DEPLOY_DIR || '/home/ubuntu/ht' }}
+      # Server production là VPS do người khác quản (không phải AWS). CD KHÔNG ghi đè .env và KHÔNG đụng Postgres/Redis/RabbitMQ/Caddy:
+      # chỉ pull image mới của service app rồi khởi động lại đúng service đó. Thư mục/tên file/tên service chỉnh bằng repo variables
+      # (Settings > Secrets and variables > Actions > Variables) mà không phải sửa workflow.
+      DEPLOY_DIR: ${{ vars.DEPLOY_DIR || '/opt/ht' }}
+      COMPOSE_FILE: ${{ vars.COMPOSE_FILE }}
+      BE_SERVICE: ${{ vars.BE_SERVICE || 'app' }}
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Gom file gửi lên server (.env lấy từ secret)
-        run: |
-          mkdir out
-          printf '%s\n' "$PROD_ENV_FILE" > out/env.deploy
-          cp compose.prod.yaml out/
-          cp deploy/sync-db-password.sql out/
-          # Gửi với tên khác rồi ghi đè TẠI CHỖ trên server: giữ nguyên inode để container Caddy thấy file mới.
-          cp deploy/Caddyfile out/Caddyfile.new
-        env:
-          PROD_ENV_FILE: ${{ secrets.PROD_ENV_FILE }}
-
       - name: Mở cầu nối SSH qua Cloudflare Tunnel (cổng 22 của server đã đóng với internet)
         env:
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
@@ -90,18 +82,7 @@ jobs:
           echo "Không mở được cầu nối SSH qua Cloudflare (kiểm tra secret CF_ACCESS_CLIENT_ID/SECRET và policy Service Auth)"
           exit 1
 
-      - name: Copy file lên server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: 172.17.0.1
-          port: 2222
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "out/*"
-          strip_components: 1
-          target: ${{ env.DEPLOY_DIR }}
-
-      - name: Pull image và khởi động lại
+      - name: Pull image BE và khởi động lại
         uses: appleboy/ssh-action@v1.2.0
         env:
           GHCR_USER: ${{ github.actor }}
@@ -111,54 +92,35 @@ jobs:
           port: 2222
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: GHCR_USER,GHCR_TOKEN,DEPLOY_DIR
+          envs: GHCR_USER,GHCR_TOKEN,DEPLOY_DIR,COMPOSE_FILE,BE_SERVICE
           script_stop: true
           script: |
             set -e
             cd "$DEPLOY_DIR"
-            mv env.deploy .env && chmod 600 .env
+            # COMPOSE_FILE để trống thì docker compose tự tìm compose.yaml / docker-compose.yml trong thư mục.
+            DC="docker compose"
+            if [ -n "$COMPOSE_FILE" ]; then DC="docker compose -f $COMPOSE_FILE"; fi
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
-            docker compose -f compose.prod.yaml pull app
-            docker compose -f compose.prod.yaml up -d --remove-orphans postgres
-            # POSTGRES_PASSWORD chỉ có tác dụng khi khởi tạo volume lần đầu: đổi DB_PASSWORD trong secret mà không đổi
-            # trong database thì app báo "password authentication failed". Nên mỗi lần deploy đặt lại mật khẩu role theo
-            # đúng giá trị container đang nhận (kết nối qua socket cục bộ trong container nên không cần mật khẩu cũ;
-            # mật khẩu truyền bằng biến psql, không nằm trong dòng lệnh hay log).
-            pg_ok=false
-            for i in $(seq 1 40); do
-              if [ "$(docker inspect -f '{{.State.Health.Status}}' ht-postgres 2>/dev/null)" = "healthy" ]; then pg_ok=true; break; fi
-              sleep 3
-            done
-            if [ "$pg_ok" != "true" ]; then
-              echo "Postgres không healthy sau 2 phút"
-              docker compose -f compose.prod.yaml logs --tail=100 postgres
-              exit 1
-            fi
-            # Không dùng heredoc ở đây: ssh-action chèn dòng `DRONE_SSH_PREV_COMMAND_EXIT_CODE=$?` sau mỗi dòng script,
-            # nên nội dung heredoc bị lẫn vào SQL. SQL nằm trong file riêng (deploy/sync-db-password.sql) được gửi cùng.
-            docker exec -i ht-postgres sh -c 'psql -U "$POSTGRES_USER" -d postgres -v ON_ERROR_STOP=1 -v usr="$POSTGRES_USER" -v pw="$POSTGRES_PASSWORD"' < sync-db-password.sql
-            echo "Đã đồng bộ mật khẩu PostgreSQL theo .env"
-            docker compose -f compose.prod.yaml up -d --remove-orphans postgres redis rabbitmq app
-            # Caddyfile là bind mount một file (theo inode): ghi đè tại chỗ rồi nạp lại bằng `caddy reload`, không cần
-            # tạo lại container nên không đứt kết nối. `up -d caddy` chỉ tạo lại khi biến môi trường của Caddy đổi.
-            cat Caddyfile.new > Caddyfile && rm -f Caddyfile.new
-            docker compose -f compose.prod.yaml up -d caddy
-            docker exec ht-caddy caddy reload --config /etc/caddy/Caddyfile || docker compose -f compose.prod.yaml up -d --force-recreate caddy
+            $DC pull "$BE_SERVICE"
+            $DC up -d --no-deps "$BE_SERVICE"
             docker logout ghcr.io
 
-            echo "Chờ app healthy..."
-            healthy=false
+            echo "Chờ $BE_SERVICE sẵn sàng..."
+            ok=false
             for i in $(seq 1 40); do
-              status="$(docker inspect -f '{{.State.Health.Status}}' ht-app 2>/dev/null || echo starting)"
-              echo "[$i/40] ht-app: $status"
-              if [ "$status" = "healthy" ]; then
-                healthy=true
-                break
+              cid="$($DC ps -q "$BE_SERVICE")"
+              status="starting"
+              if [ -n "$cid" ]; then
+                status="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$cid" 2>/dev/null || echo starting)"
               fi
+              echo "[$i/40] $BE_SERVICE: $status"
+              if [ "$status" = "healthy" ]; then ok=true; break; fi
+              # Service không khai báo healthcheck: coi là ổn khi đã chạy liên tục ~30 giây.
+              if [ "$status" = "running" ] && [ "$i" -ge 6 ]; then ok=true; break; fi
               sleep 5
             done
-            if [ "$healthy" != "true" ]; then
-              docker compose -f compose.prod.yaml logs --tail=200 app
+            if [ "$ok" != "true" ]; then
+              $DC logs --tail=200 "$BE_SERVICE"
               exit 1
             fi
             echo "Deploy BE OK"

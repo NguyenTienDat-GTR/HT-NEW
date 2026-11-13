@@ -1728,3 +1728,9 @@ Ma trận endpoint (`endpoint-contract-matrix.psv`) hiện có 124 route.
 - Quyền: `training.registration_template.update.diocese` / `.deanery` ("Chỉnh sửa file xuất danh sách đăng ký"), migration chỉ tạo quyền, KHÔNG gán vai trò nào (quản trị tự phân quyền).
 - Trang thống kê: `AnalyticsRecordsResponse.unitLines` cho phần đầu file xuất.
 - Test: `RegistrationTemplateRendererTest`, `TemplateCompressionTest`, `ExcelJobHandlerRegistryTest`.
+
+## chore/cd-vps-moi — CD deploy sang VPS mới (2026-11-13)
+
+- Production chuyển từ EC2 AWS sang VPS do người khác quản (tunnel Cloudflare `qlht-173`). Job `deploy` trong `.github/workflows/cd.yml` chỉ còn: mở cầu SSH qua `ssh.clead.io.vn` (service token), `docker compose pull` + `up -d --no-deps <service app>`, chờ healthy. KHÔNG còn ghi đè `.env` (secret `PROD_ENV_FILE` không dùng nữa), không đồng bộ mật khẩu Postgres, không gửi Caddyfile/compose.
+- Repo variables (tùy chọn): `DEPLOY_DIR` (mặc định `/opt/ht`), `COMPOSE_FILE` (trống = docker compose tự tìm file), `BE_SERVICE` (mặc định `app`). Secret cần: `SSH_USER`, `SSH_PRIVATE_KEY` (khóa `ht-vps-deploy`), `CF_ACCESS_CLIENT_ID/SECRET`.
+- Điều kiện để chạy: route `ssh.clead.io.vn` phải trỏ vào tunnel của VPS mới (hiện còn trỏ tunnel AWS `clead-prod` đã tắt) và user deploy trên VPS đã thêm khóa công khai.
