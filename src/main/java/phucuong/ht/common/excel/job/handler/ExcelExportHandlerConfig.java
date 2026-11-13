@@ -70,13 +70,13 @@ public class ExcelExportHandlerConfig {
     @Bean
     ExcelExportHandler participationExport(CourseParticipationService service, ExcelReportHeaderResolver headers) {
         return listing(ExcelJobKind.EXPORT_PARTICIPATIONS, "Đăng ký tham dự", "Danh sách đăng ký tham dự", true, headers,
-                auth -> TrainingExcelExports.participationColumns(), service::findAll);
+                auth -> TrainingExcelExports.participationColumns(), service::findAll, TrainingExcelExports::expandComponentScores);
     }
 
     @Bean
     ExcelExportHandler participantExport(CourseParticipationService service, ExcelReportHeaderResolver headers) {
         return listing(ExcelJobKind.EXPORT_PARTICIPANTS, "Danh sách tham dự", "Danh sách tham dự", true, headers,
-                auth -> TrainingExcelExports.participationColumns(), service::findParticipants);
+                auth -> TrainingExcelExports.participationColumns(), service::findParticipants, TrainingExcelExports::expandComponentScores);
     }
 
     @Bean
@@ -93,10 +93,22 @@ public class ExcelExportHandlerConfig {
                                           ExcelReportHeaderResolver headers,
                                           Function<Authentication, List<ExcelColumn<R>>> columns,
                                           BiFunction<BaseSearchRequest, Authentication, Page<R>> fetch) {
+        return listing(kind, sheetName, title, withCourse, headers, columns, fetch, (selected, rows) -> selected);
+    }
+
+    /**
+     * Như trên, nhưng cho phép biến đổi danh sách cột đã chọn sau khi đã có dữ liệu (vd. tách "Điểm thành phần"
+     * thành mỗi thành phần một cột, mà số cột chỉ biết khi đã đọc xong các dòng).
+     */
+    static <R> ExcelExportHandler listing(ExcelJobKind kind, String sheetName, String title, boolean withCourse,
+                                          ExcelReportHeaderResolver headers,
+                                          Function<Authentication, List<ExcelColumn<R>>> columns,
+                                          BiFunction<BaseSearchRequest, Authentication, Page<R>> fetch,
+                                          BiFunction<List<ExcelColumn<R>>, List<R>, List<ExcelColumn<R>>> expand) {
         return ExcelExportHandler.of(kind, ExcelColumns.headers(columns.apply(null)), (request, auth, progress) -> {
             List<R> rows = ExcelExportSupport.collectAll(request.search(), page -> fetch.apply(page, auth), progress);
-            return ExcelExportWriter.write(sheetName, headers.resolve(request.search(), auth, title, withCourse),
-                    ExcelColumns.select(columns.apply(auth), request.columns()), rows);
+            List<ExcelColumn<R>> selected = expand.apply(ExcelColumns.select(columns.apply(auth), request.columns()), rows);
+            return ExcelExportWriter.write(sheetName, headers.resolve(request.search(), auth, title, withCourse), selected, rows);
         });
     }
 }
