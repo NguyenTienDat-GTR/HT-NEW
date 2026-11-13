@@ -252,6 +252,7 @@ GET /api/excel-jobs/export-columns|200|N/A: any authenticated user may list the 
 GET /api/training/registration-template|200|401|403|400|404|N/A: read-only endpoint does not mutate state
 GET /api/training/registration-template/fields|200|401|403|N/A: endpoint has no request parameters to validate|N/A: the field list is static and not a stored resource|N/A: read-only endpoint does not mutate state
 GET /api/training/registration-template/file|200|401|403|400|404|N/A: read-only endpoint does not mutate state
+POST /api/training/registration-template/preview|200|401|403|400|N/A: the preview is built from the uploaded template and does not look up a stored resource|N/A: the preview does not change any state
 PUT /api/training/registration-template/file|200|401|403|400|404|N/A: each unit has exactly one template and saving overwrites it
 DELETE /api/training/registration-template|200|401|403|400|404|N/A: deleting the single template of a unit is idempotent
 GET /api/excel-jobs|200|401|N/A: every authenticated user lists only their own jobs|N/A: list has no request parameters|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state

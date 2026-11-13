@@ -66,6 +66,10 @@ public class RegistrationTemplateService {
     public record TemplateFile(String fileName, byte[] content) {
     }
 
+    /** Dữ liệu minh họa do trình soạn gửi lên để dựng file xem trước: giá trị các trường ô và các dòng của bảng (trường cột -> giá trị). */
+    public record PreviewData(java.util.Map<String, String> values, List<java.util.Map<String, String>> rows) {
+    }
+
     /** Mẫu dùng khi xuất cho một khóa. */
     public record ExportTemplate(TrainingCourse course, byte[] content) {
     }
@@ -153,6 +157,34 @@ public class RegistrationTemplateService {
             deleteQuietly(previousProvider, previousKey);
         }
         return toResponse(unit, saved);
+    }
+
+    /**
+     * Dựng file Excel xem trước từ mẫu đang soạn (chưa cần lưu) và dữ liệu minh họa, bằng đúng bộ dựng khi xuất thật nên giống từng chi tiết
+     * (dòng bảng nhân lên, ô gộp, khổ giấy, ảnh logo...). Không ghi gì vào hệ thống.
+     */
+    public TemplateFile preview(MultipartFile file, PreviewData data) {
+        byte[] content = readUpload(file);
+        try {
+            RegistrationTemplateRenderer.validateTemplate(content);
+        } catch (IllegalArgumentException exception) {
+            throw invalid(exception.getMessage());
+        }
+        if (!RegistrationTemplateRenderer.hasDataRow(content)) {
+            throw invalid("Mẫu chưa có dòng dữ liệu. Trong mẫu, đặt các trường như Họ và tên, Ngày sinh vào cùng một dòng của bảng");
+        }
+        java.util.Map<String, String> values = data == null || data.values() == null ? java.util.Map.of() : data.values();
+        List<java.util.Map<String, String>> rows = data == null || data.rows() == null ? List.of() : data.rows();
+        if (values.size() > 300 || rows.size() > 50 || rows.stream().anyMatch(row -> row == null || row.size() > 100)) {
+            throw invalid("Dữ liệu xem trước quá lớn");
+        }
+        List<java.util.Map<String, Object>> tableRows = new ArrayList<>();
+        for (java.util.Map<String, String> row : rows) {
+            tableRows.add(new java.util.HashMap<>(row));
+        }
+        RegistrationTemplateRenderer.Group group = new RegistrationTemplateRenderer.Group("Xem trước", java.util.Map.of(), tableRows);
+        byte[] result = RegistrationTemplateRenderer.renderWorkbook(content, values, List.of(group), RegistrationTemplateRenderer.Layout.SINGLE_SHEET, false);
+        return new TemplateFile("xem-truoc-mau-danh-sach-dang-ky.xlsx", result);
     }
 
     @Transactional
