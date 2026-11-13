@@ -51,7 +51,7 @@ public class PositionService {
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tạo chức vụ");
         UUID dioceseId = requireCurrentDioceseId(authentication, "Tài khoản không thuộc giáo phận nào nên không tạo được chức vụ");
         PositionOwnership ownership = ownership();
-        UUID unitId = ownership.ownerUnitForCreate(ownership.viewer(securityUtils.currentUsername(authentication)), request.getPositionType());
+        UUID unitId = ownership.ownerUnitForCreate(ownership.viewer(securityUtils.currentUsername(authentication), authentication), request.getPositionType());
         if (unitId == null) {
             throw commonValidationHelper.forbidden("Tài khoản không thuộc đơn vị cấp này nên không tạo được chức vụ");
         }
@@ -74,7 +74,7 @@ public class PositionService {
     @Cacheable(cacheNames = CacheNames.POSITION_LIST, key = "@cacheScopeKeyHelper.listKey(#authentication, #request)")
     public Page<PositionResponse> findAll(BaseSearchRequest request, Authentication authentication) {
         PositionOwnership ownership = ownership();
-        PositionOwnership.Viewer viewer = ownership.viewer(securityUtils.currentUsername(authentication));
+        PositionOwnership.Viewer viewer = ownership.viewer(securityUtils.currentUsername(authentication), authentication);
         List<Position> readable = loadAllMatching(request).stream()
                 .filter(position -> canReadType(authentication, position.getPositionType()))
                 .filter(position -> ownership.canAccess(viewer, position))
@@ -173,13 +173,13 @@ public class PositionService {
 
     private boolean canAccess(Position position, Authentication authentication) {
         PositionOwnership ownership = ownership();
-        return ownership.canAccess(ownership.viewer(securityUtils.currentUsername(authentication)), position);
+        return ownership.canAccess(ownership.viewer(securityUtils.currentUsername(authentication), authentication), position);
     }
 
     /** Cấp trên chỉ xem được chức vụ của đơn vị bên dưới, không sửa hay đổi trạng thái. */
     private void requireManage(Position position, Authentication authentication) {
         PositionOwnership ownership = ownership();
-        if (!ownership.canManage(ownership.viewer(securityUtils.currentUsername(authentication)), position)) {
+        if (!ownership.canManage(ownership.viewer(securityUtils.currentUsername(authentication), authentication), position)) {
             throw commonValidationHelper.forbidden("Chỉ đơn vị sở hữu mới được sửa chức vụ này");
         }
     }

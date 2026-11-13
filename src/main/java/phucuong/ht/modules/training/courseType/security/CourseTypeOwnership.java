@@ -5,6 +5,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 import phucuong.ht.common.enums.UnitType;
 import phucuong.ht.common.repository.BaseSearchRequest;
+import phucuong.ht.common.security.AuthorityChecks;
 import phucuong.ht.common.utils.RequestMemo;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.common.validation.CommonValidationHelper;
@@ -44,22 +45,17 @@ public class CourseTypeOwnership {
         return username == null || username.isBlank() ? Optional.empty() : Optional.of(username);
     }
 
-    // Giáo hạt gắn trực tiếp với tài khoản giáo hạt.
-    public Optional<UUID> directDeaneryId(Authentication authentication) {
-        return username(authentication).flatMap(accountRepository::findDirectActiveDeaneryIdByUsername);
-    }
-
-    public boolean hasDirectDiocese(Authentication authentication) {
-        return username(authentication).flatMap(accountRepository::findDirectActiveDioceseIdByUsername).isPresent();
-    }
-
     // Giáo hạt của tài khoản gắn trực tiếp hoặc suy ra từ giáo xứ / huynh trưởng.
     public Optional<UUID> activeDeaneryId(Authentication authentication) {
         return username(authentication).flatMap(accountRepository::findActiveDeaneryIdByUsername);
     }
 
-    /** Phạm vi của tài khoản, tra một lần cho cả request (tránh truy vấn lặp theo từng dòng khi dựng danh sách). */
-    public record Scope(boolean unscoped, boolean directDiocese, UUID directDeaneryId, UUID activeDeaneryId) {
+    /**
+     * Phạm vi của tài khoản, tra một lần cho cả request (tránh truy vấn lặp theo từng dòng khi dựng danh sách).
+     * dioceseLevel: tài khoản có quyền loại khóa cấp giáo phận. ownDeaneryId: giáo hạt của tài khoản cấp giáo hạt (null nếu là cấp giáo phận
+     * hoặc không có quyền cấp giáo hạt). Cấp lấy từ quyền, đơn vị suy ra từ huynh trưởng / giáo xứ: không dựa vào việc tài khoản gắn trực tiếp.
+     */
+    public record Scope(boolean unscoped, boolean dioceseLevel, UUID ownDeaneryId, UUID activeDeaneryId) {
     }
 
     // Một request hỏi phạm vi nhiều lần (kiểm tra quyền ở controller, kiểm tra chủ sở hữu, dựng dữ liệu trả về): chỉ tra DB một lần.
@@ -72,7 +68,16 @@ public class CourseTypeOwnership {
 
     private Scope loadScope(Authentication authentication) {
         boolean unscoped = username(authentication).flatMap(accountRepository::findActiveDioceseIdByUsername).isEmpty();
-        return new Scope(unscoped, hasDirectDiocese(authentication), directDeaneryId(authentication).orElse(null), activeDeaneryId(authentication).orElse(null));
+        boolean dioceseLevel = AuthorityChecks.hasAuthority(authentication, TrainingCourseTypeAccessEvaluator.CREATE_DIOCESE)
+                || AuthorityChecks.hasAuthority(authentication, TrainingCourseTypeAccessEvaluator.READ_DIOCESE)
+                || AuthorityChecks.hasAuthority(authentication, TrainingCourseTypeAccessEvaluator.UPDATE_DIOCESE)
+                || AuthorityChecks.hasAuthority(authentication, TrainingCourseTypeAccessEvaluator.TOGGLE_DIOCESE);
+        boolean deaneryLevel = !dioceseLevel && (AuthorityChecks.hasAuthority(authentication, TrainingCourseTypeAccessEvaluator.CREATE_DEANERY)
+                || AuthorityChecks.hasAuthority(authentication, TrainingCourseTypeAccessEvaluator.READ_DEANERY)
+                || AuthorityChecks.hasAuthority(authentication, TrainingCourseTypeAccessEvaluator.UPDATE_DEANERY)
+                || AuthorityChecks.hasAuthority(authentication, TrainingCourseTypeAccessEvaluator.TOGGLE_DEANERY));
+        Optional<UUID> activeDeanery = activeDeaneryId(authentication);
+        return new Scope(unscoped, dioceseLevel, deaneryLevel ? activeDeanery.orElse(null) : null, activeDeanery.orElse(null));
     }
 
     // Loại khóa cấp giáo hạt tạo bởi tài khoản giáo hạt là của giáo hạt đó; tạo bởi tài khoản giáo phận là loại dùng chung.
@@ -81,10 +86,10 @@ public class CourseTypeOwnership {
             return Owner.DIOCESE;
         }
         Scope scope = scope(authentication);
-        if (scope.directDeaneryId() != null) {
-            return new Owner(UnitType.DEANERY, scope.directDeaneryId());
+        if (scope.ownDeaneryId() != null) {
+            return new Owner(UnitType.DEANERY, scope.ownDeaneryId());
         }
-        if (scope.directDiocese()) {
+        if (scope.dioceseLevel()) {
             return Owner.DIOCESE;
         }
         throw validation.forbidden("Chỉ tài khoản giáo phận hoặc giáo hạt mới tạo được loại khóa cấp giáo hạt");
@@ -98,7 +103,7 @@ public class CourseTypeOwnership {
         if (!ownedByDeanery(type) || scope.unscoped()) {
             return true;
         }
-        return !scope.directDiocese() && scope.activeDeaneryId() != null && scope.activeDeaneryId().equals(type.getOwnerDeaneryId());
+        return !scope.dioceseLevel() && scope.activeDeaneryId() != null && scope.activeDeaneryId().equals(type.getOwnerDeaneryId());
     }
 
     public boolean canManage(TrainingCourseType type, Scope scope) {
@@ -106,9 +111,9 @@ public class CourseTypeOwnership {
             return true;
         }
         if (ownedByDeanery(type)) {
-            return scope.directDeaneryId() != null && scope.directDeaneryId().equals(type.getOwnerDeaneryId());
+            return scope.ownDeaneryId() != null && scope.ownDeaneryId().equals(type.getOwnerDeaneryId());
         }
-        return scope.directDiocese();
+        return scope.dioceseLevel();
     }
 
     public boolean canSee(TrainingCourseType type, Authentication authentication) {
@@ -142,7 +147,7 @@ public class CourseTypeOwnership {
         }
         List<Map<String, Object>> groups = new java.util.ArrayList<>();
         groups.add(group(UnitType.DIOCESE, null));
-        if (!scope.directDiocese() && scope.activeDeaneryId() != null) {
+        if (!scope.dioceseLevel() && scope.activeDeaneryId() != null) {
             groups.add(group(UnitType.DEANERY, scope.activeDeaneryId()));
         }
         request.setScopeAnyOf(groups);

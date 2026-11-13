@@ -26,7 +26,7 @@ public class PositionAccessEvaluator {
             return false;
         }
         PositionOwnership ownership = ownership();
-        return ownership.ownerUnitForCreate(ownership.viewer(securityUtils.currentUsername(authentication)), positionType) != null;
+        return ownership.ownerUnitForCreate(ownership.viewer(securityUtils.currentUsername(authentication), authentication), positionType) != null;
     }
 
     public boolean canList(Authentication authentication) {
@@ -62,13 +62,13 @@ public class PositionAccessEvaluator {
     /** Chức vụ thuộc riêng từng đơn vị: chỉ tài khoản của đơn vị đó (hoặc cấp trên trực tiếp, chỉ xem) được xem. */
     private boolean ownsPosition(Authentication authentication, Position position) {
         PositionOwnership ownership = ownership();
-        return ownership.canAccess(ownership.viewer(securityUtils.currentUsername(authentication)), position);
+        return ownership.canAccess(ownership.viewer(securityUtils.currentUsername(authentication), authentication), position);
     }
 
     /** Sửa và đổi trạng thái chỉ dành cho đơn vị sở hữu chức vụ, cấp trên không được sửa. */
     private boolean managesPosition(Authentication authentication, Position position) {
         PositionOwnership ownership = ownership();
-        return ownership.canManage(ownership.viewer(securityUtils.currentUsername(authentication)), position);
+        return ownership.canManage(ownership.viewer(securityUtils.currentUsername(authentication), authentication), position);
     }
 
     private boolean hasAuthorityForType(Authentication authentication, UnitType unitType, String action) {

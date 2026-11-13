@@ -550,14 +550,18 @@ public class TrainingCourseService {
         return courseType;
     }
 
-    // Tài khoản gắn trực tiếp với giáo phận (không gắn giáo hạt): khóa nó tạo là khóa cấp giáo phận.
+    // Tài khoản cấp giáo phận: có quyền tạo khóa giáo phận và (không có quyền tạo khóa giáo hạt hoặc không thuộc giáo hạt nào):
+    // khóa nó tạo là khóa cấp giáo phận. Cấp lấy từ quyền, đơn vị suy ra từ huynh trưởng / giáo xứ; không dựa vào việc tài khoản
+    // có gắn trực tiếp giáo phận hay không (tài khoản giáo phận gắn qua huynh trưởng vẫn là cấp giáo phận).
     private boolean isDioceseAccount(Authentication authentication) {
-        String username = securityUtils.currentUsername(authentication);
-        if (username == null || username.isBlank()) {
+        if (!AuthorityChecks.hasAuthority(authentication, TrainingCourseAccessEvaluator.CREATE_DIOCESE)) {
             return false;
         }
-        return accountRepository.findDirectActiveDioceseIdByUsername(username).isPresent()
-                && accountRepository.findDirectActiveDeaneryIdByUsername(username).isEmpty();
+        if (!AuthorityChecks.hasAuthority(authentication, TrainingCourseAccessEvaluator.CREATE_DEANERY)) {
+            return true;
+        }
+        String username = securityUtils.currentUsername(authentication);
+        return username == null || username.isBlank() || accountRepository.findActiveDeaneryIdByUsername(username).isEmpty();
     }
 
     // Khóa cấp giáo phận chỉ dùng loại khóa cấp giáo phận; loại do giáo phận tạo nhưng thuộc cấp quản lý giáo hạt (dùng chung)

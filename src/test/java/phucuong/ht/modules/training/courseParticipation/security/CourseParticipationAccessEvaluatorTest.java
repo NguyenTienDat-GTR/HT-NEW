@@ -77,7 +77,6 @@ class CourseParticipationAccessEvaluatorTest {
         participation.setCourse(course);
 
         when(participationRepository.findByIdWithLeaderAndCourse("participation-1")).thenReturn(Optional.of(participation));
-        when(accountRepository.findDirectActiveDeaneryIdByUsername("parish-admin")).thenReturn(Optional.empty());
 
         assertFalse(evaluator.canDeaneryApprove(authentication(CourseParticipationAccessEvaluator.APPROVE_DEANERY), "participation-1"));
     }

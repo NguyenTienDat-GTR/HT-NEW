@@ -37,8 +37,6 @@ public class AccountLookupMemoConfig {
             "findActiveDioceseIdByUsername",
             "findActiveDeaneryIdByUsername",
             "findActiveParishIdByUsername",
-            "findDirectActiveDioceseIdByUsername",
-            "findDirectActiveDeaneryIdByUsername",
             "findHighestActiveRoleOrder",
             "existsByUsername"
     );

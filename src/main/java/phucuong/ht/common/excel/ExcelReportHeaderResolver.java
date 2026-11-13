@@ -5,6 +5,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import phucuong.ht.common.repository.BaseSearchRequest;
+import phucuong.ht.common.security.AccountScopeResolver;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.modules.auth.repository.AccountRepository;
 import phucuong.ht.modules.deanery.model.entity.Deanery;
@@ -96,19 +97,19 @@ public class ExcelReportHeaderResolver {
         if (account == null) {
             return List.of();
         }
-        if (account.getDiocese() != null) {
-            return lines(account.getDiocese(), null, null);
-        }
-        if (account.getDeanery() != null) {
-            return lines(account.getDeanery().getDiocese(), account.getDeanery(), null);
-        }
+        // Đơn vị suy ra từ phạm vi hiệu lực (gắn trực tiếp hoặc qua huynh trưởng); số dòng in theo cấp của tài khoản (lấy từ quyền).
         Parish parish = account.getParish() != null ? account.getParish()
                 : account.getLeader() != null ? account.getLeader().getParish() : null;
-        if (parish != null) {
-            Deanery deanery = parish.getDeanery();
-            return lines(deanery == null ? null : deanery.getDiocese(), deanery, parish);
+        Deanery deanery = account.getDeanery() != null ? account.getDeanery() : parish == null ? null : parish.getDeanery();
+        Diocese diocese = account.getDiocese() != null ? account.getDiocese() : deanery == null ? null : deanery.getDiocese();
+        AccountScopeResolver.Level level = AccountScopeResolver.levelOf(authentication);
+        if (level == AccountScopeResolver.Level.DIOCESE) {
+            return lines(diocese, null, null);
         }
-        return List.of();
+        if (level == AccountScopeResolver.Level.DEANERY) {
+            return lines(diocese, deanery, null);
+        }
+        return lines(diocese, deanery, parish);
     }
 
     private static List<String> lines(Diocese diocese, Deanery deanery, Parish parish) {

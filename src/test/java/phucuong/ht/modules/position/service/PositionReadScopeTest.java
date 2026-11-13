@@ -185,7 +185,6 @@ class PositionReadScopeTest {
     void deaneryAdminOnlySeesPositionsOfItsOwnDeanery() {
         lenient().when(accountRepository.findActiveDioceseIdByUsername("de-a")).thenReturn(Optional.of(PHU_CUONG));
         lenient().when(accountRepository.findActiveDeaneryIdByUsername("de-a")).thenReturn(Optional.of(DEANERY_A));
-        lenient().when(accountRepository.findDirectActiveDeaneryIdByUsername("de-a")).thenReturn(Optional.of(DEANERY_A));
         when(positionRepository.findAll(any(BaseSearchRequest.class))).thenReturn(new PageImpl<>(
                 List.of(deaneryPosition("A-1", DEANERY_A), deaneryPosition("B-1", DEANERY_B)),
                 PageRequest.of(0, BaseSearchRequest.MAX_PAGE_SIZE), 2));
@@ -200,12 +199,11 @@ class PositionReadScopeTest {
     @Test
     void dioceseAdminSeesPositionsOfEveryDeaneryInItsDiocese() {
         lenient().when(accountRepository.findActiveDioceseIdByUsername("pc-admin")).thenReturn(Optional.of(PHU_CUONG));
-        lenient().when(accountRepository.findDirectActiveDioceseIdByUsername("pc-admin")).thenReturn(Optional.of(PHU_CUONG));
         when(positionRepository.findAll(any(BaseSearchRequest.class))).thenReturn(new PageImpl<>(
                 List.of(deaneryPosition("A-1", DEANERY_A), deaneryPosition("B-1", DEANERY_B)),
                 PageRequest.of(0, BaseSearchRequest.MAX_PAGE_SIZE), 2));
 
-        var response = service().findAll(new BaseSearchRequest(), admin("pc-admin", "organization.position.read.deanery"));
+        var response = service().findAll(new BaseSearchRequest(), admin("pc-admin", "organization.position.read.diocese", "organization.position.read.deanery"));
 
         assertEquals(2, response.getTotalElements());
     }
@@ -213,7 +211,7 @@ class PositionReadScopeTest {
     @Test
     void createStoresThePositionInTheCallersDeanery() {
         when(accountRepository.findActiveDioceseIdByUsername("de-a")).thenReturn(Optional.of(PHU_CUONG));
-        when(accountRepository.findDirectActiveDeaneryIdByUsername("de-a")).thenReturn(Optional.of(DEANERY_A));
+        when(accountRepository.findActiveDeaneryIdByUsername("de-a")).thenReturn(Optional.of(DEANERY_A));
         when(positionRepository.nextDisplayOrder(UnitType.DEANERY, DEANERY_A)).thenReturn(1);
         PositionCreateRequest request = new PositionCreateRequest();
         request.setPositionName("Thư ký");
@@ -240,11 +238,10 @@ class PositionReadScopeTest {
     @Test
     void dioceseAdminCannotUpdateOrToggleDeaneryPositions() {
         lenient().when(accountRepository.findActiveDioceseIdByUsername("pc-admin")).thenReturn(Optional.of(PHU_CUONG));
-        lenient().when(accountRepository.findDirectActiveDioceseIdByUsername("pc-admin")).thenReturn(Optional.of(PHU_CUONG));
         when(positionRepository.findById("A-1")).thenReturn(Optional.of(deaneryPosition("A-1", DEANERY_A)));
         var update = new phucuong.ht.modules.position.model.request.PositionUpdateRequest();
         update.setPositionName("Đổi tên");
-        var authentication = admin("pc-admin", "organization.position.update.deanery");
+        var authentication = admin("pc-admin", "organization.position.update.diocese", "organization.position.update.deanery");
 
         org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class, () -> service().update("A-1", update, authentication));
         org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class,
@@ -254,7 +251,7 @@ class PositionReadScopeTest {
     @Test
     void owningDeaneryCanUpdateItsOwnPosition() {
         lenient().when(accountRepository.findActiveDioceseIdByUsername("de-a")).thenReturn(Optional.of(PHU_CUONG));
-        lenient().when(accountRepository.findDirectActiveDeaneryIdByUsername("de-a")).thenReturn(Optional.of(DEANERY_A));
+        lenient().when(accountRepository.findActiveDeaneryIdByUsername("de-a")).thenReturn(Optional.of(DEANERY_A));
         Position owned = deaneryPosition("A-1", DEANERY_A);
         when(positionRepository.findById("A-1")).thenReturn(Optional.of(owned));
         var update = new phucuong.ht.modules.position.model.request.PositionUpdateRequest();
@@ -268,7 +265,6 @@ class PositionReadScopeTest {
     @Test
     void positionTypeCannotBeChangedAfterCreation() {
         lenient().when(accountRepository.findActiveDioceseIdByUsername("de-a")).thenReturn(Optional.of(PHU_CUONG));
-        lenient().when(accountRepository.findDirectActiveDeaneryIdByUsername("de-a")).thenReturn(Optional.of(DEANERY_A));
         when(positionRepository.findById("A-1")).thenReturn(Optional.of(deaneryPosition("A-1", DEANERY_A)));
         var update = new phucuong.ht.modules.position.model.request.PositionUpdateRequest();
         update.setPositionType(UnitType.PARISH);

@@ -1,6 +1,8 @@
 package phucuong.ht.modules.position.security;
 
+import org.springframework.security.core.Authentication;
 import phucuong.ht.common.enums.UnitType;
+import phucuong.ht.common.security.AuthorityChecks;
 import phucuong.ht.modules.auth.repository.AccountRepository;
 import phucuong.ht.modules.position.model.entity.Position;
 import phucuong.ht.modules.position.repository.PositionRepository;
@@ -21,27 +23,40 @@ public final class PositionOwnership {
         this.positionRepository = positionRepository;
     }
 
-    /** Phạm vi đơn vị của một tài khoản; các trường là null nếu tài khoản không thuộc đơn vị đó. */
-    public record Viewer(UUID diocese, UUID directDiocese, UUID ownDeanery, UUID directDeanery, UUID ownParish) {
+    /**
+     * Phạm vi đơn vị của một tài khoản; các trường là null nếu tài khoản không thuộc đơn vị đó. Đơn vị luôn suy ra từ phạm vi hiệu lực
+     * (gắn trực tiếp hoặc qua giáo xứ / huynh trưởng). dioceseAdmin / deaneryAdmin là đơn vị của tài khoản ở đúng cấp quản lý của nó
+     * (cấp lấy từ quyền chức vụ), null nếu tài khoản không quản lý ở cấp đó.
+     */
+    public record Viewer(UUID diocese, UUID dioceseAdmin, UUID ownDeanery, UUID deaneryAdmin, UUID ownParish) {
     }
 
-    public Viewer viewer(String username) {
+    public Viewer viewer(String username, Authentication authentication) {
         if (username == null || username.isBlank()) {
             return new Viewer(null, null, null, null, null);
         }
-        return new Viewer(
-                accountRepository.findActiveDioceseIdByUsername(username).orElse(null),
-                accountRepository.findDirectActiveDioceseIdByUsername(username).orElse(null),
-                accountRepository.findActiveDeaneryIdByUsername(username).orElse(null),
-                accountRepository.findDirectActiveDeaneryIdByUsername(username).orElse(null),
+        UUID diocese = accountRepository.findActiveDioceseIdByUsername(username).orElse(null);
+        UUID deanery = accountRepository.findActiveDeaneryIdByUsername(username).orElse(null);
+        boolean dioceseLevel = hasAnyPositionAuthority(authentication, "diocese");
+        boolean deaneryLevel = !dioceseLevel && hasAnyPositionAuthority(authentication, "deanery");
+        return new Viewer(diocese, dioceseLevel ? diocese : null, deanery, deaneryLevel ? deanery : null,
                 accountRepository.findActiveParishIdByUsername(username).orElse(null));
+    }
+
+    private static boolean hasAnyPositionAuthority(Authentication authentication, String scope) {
+        for (String action : new String[]{"create", "read", "update", "toggle"}) {
+            if (AuthorityChecks.hasAuthority(authentication, "organization.position." + action + "." + scope)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Đơn vị mà tài khoản được tạo chức vụ cho ở cấp này; null nếu tài khoản không có đơn vị ở cấp đó. */
     public UUID ownerUnitForCreate(Viewer viewer, UnitType type) {
         return switch (type) {
             case DIOCESE -> viewer.diocese();
-            case DEANERY -> viewer.directDeanery();
+            case DEANERY -> viewer.deaneryAdmin();
             case PARISH -> viewer.ownParish();
         };
     }
@@ -58,14 +73,14 @@ public final class PositionOwnership {
         if (viewer.diocese() == null || position.getPositionType() == null) {
             return false;
         }
-        boolean dioceseAdmin = viewer.directDiocese() != null && viewer.directDiocese().equals(position.getDioceseId());
+        boolean dioceseAdmin = viewer.dioceseAdmin() != null && viewer.dioceseAdmin().equals(position.getDioceseId());
         return switch (position.getPositionType()) {
             case DIOCESE -> viewer.diocese().equals(position.getDioceseId());
             case DEANERY -> dioceseAdmin || position.getUnitId().equals(viewer.ownDeanery());
             case PARISH -> dioceseAdmin
                     || position.getUnitId().equals(viewer.ownParish())
-                    || (viewer.directDeanery() != null
-                    && positionRepository.deaneryIdOfParish(position.getUnitId()).filter(viewer.directDeanery()::equals).isPresent());
+                    || (viewer.deaneryAdmin() != null
+                    && positionRepository.deaneryIdOfParish(position.getUnitId()).filter(viewer.deaneryAdmin()::equals).isPresent());
         };
     }
 }

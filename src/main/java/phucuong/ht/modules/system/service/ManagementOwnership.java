@@ -1,9 +1,9 @@
 package phucuong.ht.modules.system.service;
 
+import org.springframework.security.core.Authentication;
+import phucuong.ht.common.security.AccountScopeResolver;
 import phucuong.ht.modules.auth.repository.AccountRepository;
-import phucuong.ht.modules.system.model.entity.Account;
 
-import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -22,9 +22,10 @@ final class ManagementOwnership {
 
     /**
      * Người tạo là chính tài khoản đang thao tác, hoặc là tài khoản cùng cấp trong cùng đơn vị
-     * (cùng giáo phận / giáo hạt / giáo xứ).
+     * (cùng giáo phận / giáo hạt / giáo xứ). Cấp của người thao tác lấy từ quyền; đơn vị của hai bên suy ra từ phạm vi hiệu lực
+     * (gắn trực tiếp hoặc qua giáo xứ / huynh trưởng), cùng cấp nghĩa là cùng bậc vai trò cao nhất.
      */
-    static boolean isOwnedByActorScope(AccountRepository accountRepository, String actorUsername, String actorAuditActor, String createdBy) {
+    static boolean isOwnedByActorScope(AccountRepository accountRepository, Authentication authentication, String actorUsername, String actorAuditActor, String createdBy) {
         if (createdBy == null || createdBy.isBlank()) {
             return false;
         }
@@ -35,26 +36,23 @@ final class ManagementOwnership {
         if (actorUsername == null || accountRepository == null) {
             return false;
         }
-        Account actor = accountRepository.findById(actorUsername).orElse(null);
-        Account creatorAccount = accountRepository.findById(creator).orElse(null);
-        if (actor == null || creatorAccount == null) {
+        AccountScopeResolver.Level level = AccountScopeResolver.levelOf(authentication);
+        if (level == null || !accountRepository.existsByUsername(creator)) {
             return false;
         }
-        UUID dioceseId = idOf(actor.getDiocese());
-        UUID deaneryId = idOf(actor.getDeanery());
-        UUID parishId = idOf(actor.getParish());
-        if (dioceseId == null && deaneryId == null && parishId == null) {
-            return false;
-        }
-        return Objects.equals(dioceseId, idOf(creatorAccount.getDiocese()))
-                && Objects.equals(deaneryId, idOf(creatorAccount.getDeanery()))
-                && Objects.equals(parishId, idOf(creatorAccount.getParish()));
+        UUID actorUnit = unitAt(accountRepository, actorUsername, level);
+        Integer actorTier = accountRepository.findHighestActiveRoleOrder(actorUsername);
+        return actorUnit != null
+                && actorTier != null
+                && actorUnit.equals(unitAt(accountRepository, creator, level))
+                && actorTier.equals(accountRepository.findHighestActiveRoleOrder(creator));
     }
 
-    private static UUID idOf(Object unit) {
-        if (unit instanceof phucuong.ht.modules.diocese.model.entity.Diocese diocese) return diocese.getId();
-        if (unit instanceof phucuong.ht.modules.deanery.model.entity.Deanery deanery) return deanery.getId();
-        if (unit instanceof phucuong.ht.modules.parish.model.entity.Parish parish) return parish.getId();
-        return null;
+    private static UUID unitAt(AccountRepository accountRepository, String username, AccountScopeResolver.Level level) {
+        return switch (level) {
+            case DIOCESE -> accountRepository.findActiveDioceseIdByUsername(username).orElse(null);
+            case DEANERY -> accountRepository.findActiveDeaneryIdByUsername(username).orElse(null);
+            case PARISH -> accountRepository.findActiveParishIdByUsername(username).orElse(null);
+        };
     }
 }
