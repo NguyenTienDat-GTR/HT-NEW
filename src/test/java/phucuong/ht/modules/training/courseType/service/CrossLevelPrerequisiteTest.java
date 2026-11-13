@@ -70,9 +70,7 @@ class CrossLevelPrerequisiteTest {
         authentication = new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
         when(leaderLevelService.activeDioceseId(authentication)).thenReturn(Optional.of(DIOCESE));
         when(accountRepository.findActiveDioceseIdByUsername("admin")).thenReturn(Optional.of(DIOCESE));
-        when(accountRepository.findDirectActiveDioceseIdByUsername("admin")).thenReturn(Optional.of(DIOCESE));
         when(accountRepository.findActiveDioceseIdByUsername("admin")).thenReturn(Optional.of(DIOCESE));
-        when(accountRepository.findDirectActiveDioceseIdByUsername("admin")).thenReturn(Optional.of(DIOCESE));
         when(leaderLevelService.order(DIOCESE)).thenReturn(new LeaderLevelService.LevelOrder(Map.of(), Map.of("C1", "Cấp 1")));
         for (TrainingCourseType item : List.of(deaneryLevel1, dioceseLevel2, dioceseBasic, deaneryOld, deaneryOwn)) {
             when(repository.findByCodeWithPrerequisite(item.getTypeCode())).thenReturn(Optional.of(item));

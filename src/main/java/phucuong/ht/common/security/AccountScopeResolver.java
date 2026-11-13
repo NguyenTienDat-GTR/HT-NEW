@@ -86,6 +86,42 @@ public class AccountScopeResolver {
         return new ScopeSet(result);
     }
 
+    /**
+     * Cấp cao nhất mà tài khoản có quyền (giáo phận > giáo hạt > giáo xứ), theo hậu tố của các authority (".diocese", ".deanery", ".parish");
+     * null nếu không có quyền theo cấp nào (vd. super admin). Cấp của tài khoản luôn lấy từ quyền, còn đơn vị lấy từ {@link #unitOf}:
+     * không suy cấp từ việc tài khoản có gắn trực tiếp giáo phận / giáo hạt hay không, vì chỉ tài khoản giáo phận mới gắn trực tiếp,
+     * các tài khoản khác gắn qua huynh trưởng.
+     */
+    public static Level levelOf(Authentication authentication) {
+        if (authentication == null) {
+            return null;
+        }
+        Level highest = null;
+        for (org.springframework.security.core.GrantedAuthority granted : authentication.getAuthorities()) {
+            String authority = granted.getAuthority();
+            if (authority == null) {
+                continue;
+            }
+            Level level = authority.endsWith(".diocese") ? Level.DIOCESE : authority.endsWith(".deanery") ? Level.DEANERY : authority.endsWith(".parish") ? Level.PARISH : null;
+            if (level != null && (highest == null || level.ordinal() < highest.ordinal())) {
+                highest = level;
+            }
+        }
+        return highest;
+    }
+
+    /** Đơn vị hiệu lực của tài khoản ở một cấp: gắn trực tiếp hoặc suy ra từ giáo xứ / huynh trưởng. */
+    public UUID unitOf(String username, Level level) {
+        if (username == null || username.isBlank() || level == null) {
+            return null;
+        }
+        return switch (level) {
+            case DIOCESE -> accountRepository.findActiveDioceseIdByUsername(username).orElse(null);
+            case DEANERY -> accountRepository.findActiveDeaneryIdByUsername(username).orElse(null);
+            case PARISH -> accountRepository.findActiveParishIdByUsername(username).orElse(null);
+        };
+    }
+
     private boolean hasAny(Authentication authentication, List<String> authorities) {
         return authorities.stream().anyMatch(authority -> securityUtils.hasAuthority(authentication, authority));
     }

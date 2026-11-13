@@ -119,7 +119,7 @@ public class SystemAdminAuthorizationHelper {
 
     /** Các cấp giáo phận / giáo hạt / giáo xứ chỉ quản lý vai trò do chính mình (hoặc cấp mình) tạo. */
     private void requireRoleOwnedByActorScope(Authentication authentication, Role role) {
-        if (!ManagementOwnership.isOwnedByActorScope(accountRepository, securityUtils.currentUsername(authentication),
+        if (!ManagementOwnership.isOwnedByActorScope(accountRepository, authentication, securityUtils.currentUsername(authentication),
                 securityUtils.currentAuditActor(authentication), role == null ? null : role.getCreatedBy())) {
             throw commonValidationHelper.forbidden("Chỉ được quản lý vai trò do cấp của mình tạo; vai trò khác chỉ được xem");
         }

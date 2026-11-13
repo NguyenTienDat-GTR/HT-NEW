@@ -46,8 +46,7 @@ class RegistrationTemplateServiceScopeTest {
         securityUtils security = mock(securityUtils.class);
         when(security.currentUsername(authentication)).thenReturn(USERNAME);
         when(access.isSuperAdmin(authentication)).thenReturn(false);
-        when(accounts.findDirectActiveDioceseIdByUsername(USERNAME)).thenReturn(Optional.empty());
-        when(accounts.findDirectActiveDeaneryIdByUsername(USERNAME)).thenReturn(Optional.empty());
+        when(accounts.findActiveDioceseIdByUsername(USERNAME)).thenReturn(Optional.empty());
         Deanery deanery = new Deanery();
         deanery.setName("Lái Thiêu");
         when(deaneries.findById(deaneryId)).thenReturn(Optional.of(deanery));

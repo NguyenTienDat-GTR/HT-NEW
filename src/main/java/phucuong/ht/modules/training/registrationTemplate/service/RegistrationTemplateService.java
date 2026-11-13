@@ -253,9 +253,8 @@ public class RegistrationTemplateService {
             id = requestedId;
         } else {
             String username = securityUtils.currentUsername(authentication);
-            UUID dioceseId = username == null ? null : accountRepository.findDirectActiveDioceseIdByUsername(username).orElse(null);
-            // Tài khoản giáo hạt gắn qua huynh trưởng (không có cột deanery trực tiếp) nên giáo hạt phải suy ra như các màn khác;
-            // chỉ giáo phận mới gắn trực tiếp vào tài khoản.
+            UUID dioceseId = username == null ? null : accountRepository.findActiveDioceseIdByUsername(username).orElse(null);
+            // Đơn vị luôn suy ra từ phạm vi hiệu lực của tài khoản (gắn trực tiếp hoặc qua giáo xứ / huynh trưởng); cấp do quyền quyết định.
             UUID deaneryId = username == null ? null : accountRepository.findActiveDeaneryIdByUsername(username).orElse(null);
             String action = write ? "update" : "read";
             boolean diocese = dioceseId != null && (accessEvaluator.has(authentication, action, "diocese") || (!write && accessEvaluator.has(authentication, "update", "diocese")));

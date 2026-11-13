@@ -135,8 +135,8 @@ public class AccountManagementAuthorizationHelper {
             return;
         }
         String username = currentUsername(authentication);
-        if (!ManagementOwnership.isOwnedByActorScope(accountRepository, username, username, target.getCreatedBy())
-                && !ManagementOwnership.isOwnedByActorScope(accountRepository, username, auditActor(authentication), target.getCreatedBy())) {
+        if (!ManagementOwnership.isOwnedByActorScope(accountRepository, authentication, username, username, target.getCreatedBy())
+                && !ManagementOwnership.isOwnedByActorScope(accountRepository, authentication, username, auditActor(authentication), target.getCreatedBy())) {
             throw validation.forbidden("Chỉ được thay đổi tài khoản do cấp của mình tạo");
         }
     }

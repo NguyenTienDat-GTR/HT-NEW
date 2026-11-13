@@ -25,17 +25,6 @@ public class AccountScopeValidationHelper {
         return username;
     }
 
-    // Tài khoản gắn trực tiếp với giáo phận/giáo hạt (khác tài khoản giáo xứ suy ra phạm vi lên cấp trên).
-    public boolean hasDirectDiocese(Authentication authentication) {
-        String username = securityUtils.currentUsername(authentication);
-        return StringUtils.hasText(username) && accountRepository.findDirectActiveDioceseIdByUsername(username).isPresent();
-    }
-
-    public boolean hasDirectDeanery(Authentication authentication) {
-        String username = securityUtils.currentUsername(authentication);
-        return StringUtils.hasText(username) && accountRepository.findDirectActiveDeaneryIdByUsername(username).isPresent();
-    }
-
     public UUID requireActiveDioceseId(Authentication authentication, String permissionCode) {
         String username = requireCurrentUsername(authentication, "Không xác định được tài khoản hiện tại cho quyền " + permissionCode);
         return accountRepository.findActiveDioceseIdByUsername(username)

@@ -41,15 +41,13 @@ class CourseTypeOwnershipTest {
 
     private Authentication dioceseAccount() {
         when(accounts.findActiveDioceseIdByUsername("gp")).thenReturn(Optional.of(DIOCESE));
-        when(accounts.findDirectActiveDioceseIdByUsername("gp")).thenReturn(Optional.of(DIOCESE));
-        return auth("gp");
+        return auth("gp", "training.course_type.create.diocese", "training.course_type.read.diocese", "training.course_type.update.diocese", "training.course_type.create.deanery");
     }
 
     private Authentication deaneryAccount(String username, UUID deanery) {
         when(accounts.findActiveDioceseIdByUsername(username)).thenReturn(Optional.of(DIOCESE));
-        when(accounts.findDirectActiveDeaneryIdByUsername(username)).thenReturn(Optional.of(deanery));
         when(accounts.findActiveDeaneryIdByUsername(username)).thenReturn(Optional.of(deanery));
-        return auth(username);
+        return auth(username, "training.course_type.create.deanery", "training.course_type.read.deanery", "training.course_type.update.deanery");
     }
 
     @Test
@@ -119,8 +117,6 @@ class CourseTypeOwnershipTest {
             RequestContextHolder.resetRequestAttributes();
         }
         verify(accounts, times(1)).findActiveDioceseIdByUsername("a");
-        verify(accounts, times(1)).findDirectActiveDioceseIdByUsername("a");
-        verify(accounts, times(1)).findDirectActiveDeaneryIdByUsername("a");
         verify(accounts, times(1)).findActiveDeaneryIdByUsername("a");
     }
 
@@ -141,8 +137,8 @@ class CourseTypeOwnershipTest {
         RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest(method, "/api/training/course-types/x")));
     }
 
-    private static Authentication auth(String username) {
-        AuthUserDetails principal = AuthUserDetails.tokenPrincipal(username, null, List.of(), List.of());
+    private static Authentication auth(String username, String... permissions) {
+        AuthUserDetails principal = AuthUserDetails.tokenPrincipal(username, null, List.of(), List.of(permissions));
         return new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
     }
 

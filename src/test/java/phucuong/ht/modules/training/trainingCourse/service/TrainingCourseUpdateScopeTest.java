@@ -155,7 +155,6 @@ class TrainingCourseUpdateScopeTest {
         request.setCourseTypeCode("SHARED_DEANERY");
         when(trainingCourseTypeRepository.findByCodeWithPrerequisite("SHARED_DEANERY"))
                 .thenReturn(Optional.of(courseType("SHARED_DEANERY", UnitType.DEANERY)));
-        when(accountRepository.findDirectActiveDioceseIdByUsername("admin-diocese")).thenReturn(Optional.of(UUID.randomUUID()));
 
         var error = assertThrows(RuntimeException.class, () -> service().create(request, authentication));
 
