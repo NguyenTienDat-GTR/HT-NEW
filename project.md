@@ -1729,8 +1729,8 @@ Ma trận endpoint (`endpoint-contract-matrix.psv`) hiện có 124 route.
 - Trang thống kê: `AnalyticsRecordsResponse.unitLines` cho phần đầu file xuất.
 - Test: `RegistrationTemplateRendererTest`, `TemplateCompressionTest`, `ExcelJobHandlerRegistryTest`.
 
-## chore/cd-vps-moi — CD deploy sang VPS mới (2026-11-13)
+## chore/cd-vps-moi — CD không còn deploy, VPS tự cập nhật (2026-11-13)
 
-- Production chuyển từ EC2 AWS sang VPS do người khác quản (tunnel Cloudflare `qlht-173`). Job `deploy` trong `.github/workflows/cd.yml` chỉ còn: mở cầu SSH qua `ssh.clead.io.vn` (service token), `docker compose pull` + `up -d --no-deps <service app>`, chờ healthy. KHÔNG còn ghi đè `.env` (secret `PROD_ENV_FILE` không dùng nữa), không đồng bộ mật khẩu Postgres, không gửi Caddyfile/compose.
-- Repo variables (tùy chọn): `DEPLOY_DIR` (mặc định `/opt/ht`), `COMPOSE_FILE` (trống = docker compose tự tìm file), `BE_SERVICE` (mặc định `app`). Secret cần: `SSH_USER`, `SSH_PRIVATE_KEY` (khóa `ht-vps-deploy`), `CF_ACCESS_CLIENT_ID/SECRET`.
-- Điều kiện để chạy: route `ssh.clead.io.vn` phải trỏ vào tunnel của VPS mới (hiện còn trỏ tunnel AWS `clead-prod` đã tắt) và user deploy trên VPS đã thêm khóa công khai.
+- Production chạy trên VPS Windows do người khác quản (tunnel Cloudflare `qlht-173`). Job `deploy` (SSH vào EC2 AWS) đã bỏ khỏi `.github/workflows/cd.yml`: CD chỉ chạy test, build và đẩy image `latest` lên GHCR.
+- Trên VPS, container `watchtower` (chủ VPS cài) định kỳ kiểm tra GHCR, thấy image mới của service có nhãn `com.centurylinklabs.watchtower.enable=true` thì pull và khởi động lại. Package GHCR (`ht-new`, `ht-new-fe`) cần để public hoặc VPS có token đọc.
+- Secret `PROD_ENV_FILE`, `SSH_USER`, `SSH_PRIVATE_KEY`, `CF_ACCESS_CLIENT_ID/SECRET` không còn được workflow dùng. `.env` production do chủ VPS giữ.
