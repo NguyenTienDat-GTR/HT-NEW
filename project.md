@@ -1737,3 +1737,8 @@ Ma trận endpoint (`endpoint-contract-matrix.psv`) hiện có 124 route.
 
 ## feat/mau-dang-ky-kho-giay
 - Thêm `POST /api/training/registration-template/preview` (multipart `file` + `data` JSON `{values, rows}`, quyền chỉnh sửa file xuất danh sách đăng ký): dựng file xem trước từ mẫu đang soạn bằng `RegistrationTemplateRenderer` với dữ liệu minh họa FE gửi, không ghi gì vào hệ thống (`RegistrationTemplateService.preview`). Giới hạn 300 trường, 50 dòng. Bộ dựng giữ nguyên khổ giấy / hướng in của mẫu (test `keepsPaperSizeAndOrientationOfTheTemplate`). Ma trận hợp đồng endpoint: 41 controller, 281 route.
+
+## fix/mau-dang-ky-admin-giao-hat-gan-qua-huynh-truong
+- Màn "Mẫu danh sách đăng ký" báo "Bạn chỉ quản lý được mẫu của đơn vị mình" với tài khoản `ADMIN_DEANERY` dù đã có quyền: `RegistrationTemplateService.resolveUnit` lấy giáo hạt bằng `findDirectActiveDeaneryIdByUsername` (cột `account.deanery_id`), mà tài khoản giáo hạt chỉ gắn qua huynh trưởng (chỉ giáo phận gắn trực tiếp) nên luôn rỗng. Đổi sang `findActiveDeaneryIdByUsername` (gắn trực tiếp hoặc suy ra qua giáo xứ / huynh trưởng). Giáo phận giữ nguyên.
+- Lưu ý: `CourseTypeOwnership.directDeaneryId` và `TrainingCourseService.isDioceseAccount` cũng dùng bản "Direct" cho giáo hạt, chưa kiểm tra có cùng lỗi không.
+- Test: `RegistrationTemplateServiceScopeTest`.
