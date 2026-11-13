@@ -88,18 +88,30 @@ public class CourseParticipationService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private phucuong.ht.modules.training.CourseScoreVisibility courseScoreVisibility;
 
+    /**
+     * Hồ sơ đăng ký trong phạm vi tài khoản (hợp của mọi cấp tài khoản có quyền):
+     * giáo phận thấy hồ sơ của các khóa giáo phận mình (không thấy khóa của giáo hạt); giáo hạt thấy hồ sơ của khóa giáo hạt mình
+     * và hồ sơ của huynh trưởng thuộc giáo hạt mình ở bất kỳ khóa nào (kể cả khóa giáo phận); giáo xứ thấy hồ sơ của huynh trưởng giáo xứ mình.
+     */
     @Transactional(readOnly = true)
     public Page<CourseParticipationResponse> findAll(BaseSearchRequest request, Authentication authentication) {
+        return findScoped(request, authentication, true);
+    }
+
+    private Page<CourseParticipationResponse> findScoped(BaseSearchRequest request, Authentication authentication, boolean includeOwnDeaneryLeaders) {
         BaseSearchRequest scoped = SearchRequests.copy(request);
-        // Hồ sơ trong phạm vi giáo phận, giáo hạt hoặc giáo xứ của tài khoản (hợp của mọi cấp tài khoản có quyền).
-        List<java.util.Map<String, Object>> groups = accountScopeResolver.scopesAny(authentication,
-                        List.of(CourseParticipationAccessEvaluator.READ_DIOCESE, CourseParticipationAccessEvaluator.APPROVE_DIOCESE, CourseParticipationAccessEvaluator.SCORE_DIOCESE),
-                        List.of(CourseParticipationAccessEvaluator.READ_DEANERY, CourseParticipationAccessEvaluator.APPROVE_DEANERY, CourseParticipationAccessEvaluator.SCORE_DEANERY),
-                        List.of(CourseParticipationAccessEvaluator.READ_PARISH))
-                .groups(java.util.Map.of(
-                        AccountScopeResolver.Level.DIOCESE, "course.diocese.id",
-                        AccountScopeResolver.Level.DEANERY, "course.deanery.id",
-                        AccountScopeResolver.Level.PARISH, "leader.parish.id"));
+        AccountScopeResolver.ScopeSet scopes = accountScopeResolver.scopesAny(authentication,
+                List.of(CourseParticipationAccessEvaluator.READ_DIOCESE, CourseParticipationAccessEvaluator.APPROVE_DIOCESE, CourseParticipationAccessEvaluator.SCORE_DIOCESE),
+                List.of(CourseParticipationAccessEvaluator.READ_DEANERY, CourseParticipationAccessEvaluator.APPROVE_DEANERY, CourseParticipationAccessEvaluator.SCORE_DEANERY),
+                List.of(CourseParticipationAccessEvaluator.READ_PARISH));
+        List<java.util.Map<String, Object>> groups = new ArrayList<>(scopes.groups(java.util.Map.of(
+                AccountScopeResolver.Level.DIOCESE, "course.diocese.id",
+                AccountScopeResolver.Level.DEANERY, "course.deanery.id",
+                AccountScopeResolver.Level.PARISH, "leader.parish.id")));
+        UUID deaneryId = scopes.unitId(AccountScopeResolver.Level.DEANERY);
+        if (includeOwnDeaneryLeaders && deaneryId != null) {
+            groups.add(java.util.Map.of("leader.parish.deanery.id", deaneryId));
+        }
         if (groups.isEmpty()) {
             throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền xem hồ sơ đào tạo");
         }
@@ -133,7 +145,8 @@ public class CourseParticipationService {
     public Page<CourseParticipationResponse> findParticipants(BaseSearchRequest request, Authentication authentication) {
         BaseSearchRequest approvedOnly = SearchRequests.copy(request);
         approvedOnly.getFilters().put("approvalStatus", WorkflowApprovalStatus.APPROVED.name());
-        return findAll(approvedOnly, authentication);
+        // Danh sách tham dự theo đúng cấp quản lý của khóa; việc giáo hạt xem hồ sơ huynh trưởng của mình ở khóa giáo phận chỉ áp dụng cho danh sách đăng ký.
+        return findScoped(approvedOnly, authentication, false);
     }
 
     @Transactional(readOnly = true)

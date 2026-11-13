@@ -119,6 +119,49 @@ class CourseParticipationServiceTest {
     }
 
     @Test
+    void findAllLetsDeaneryAdminSeeOwnCoursesAndOwnLeadersInAnyCourse() {
+        courseParticipationService = buildService();
+        UUID deaneryId = UUID.randomUUID();
+        when(scopeAccountRepository.findActiveDeaneryIdByUsername("admin-deanery")).thenReturn(Optional.of(deaneryId));
+        when(courseParticipationRepository.findAll(any(BaseSearchRequest.class))).thenReturn(new PageImpl<>(List.of()));
+        ArgumentCaptor<BaseSearchRequest> requestCaptor = ArgumentCaptor.forClass(BaseSearchRequest.class);
+
+        courseParticipationService.findAll(new BaseSearchRequest(), authentication("admin-deanery", CourseParticipationAccessEvaluator.READ_DEANERY));
+
+        verify(courseParticipationRepository).findAll(requestCaptor.capture());
+        assertEquals(List.of(java.util.Map.of("course.deanery.id", deaneryId), java.util.Map.of("leader.parish.deanery.id", deaneryId)),
+                requestCaptor.getValue().getScopeAnyOf());
+    }
+
+    @Test
+    void findAllLetsDioceseAdminSeeDioceseCoursesOnly() {
+        courseParticipationService = buildService();
+        UUID dioceseId = UUID.randomUUID();
+        when(scopeAccountRepository.findActiveDioceseIdByUsername("admin-diocese")).thenReturn(Optional.of(dioceseId));
+        when(courseParticipationRepository.findAll(any(BaseSearchRequest.class))).thenReturn(new PageImpl<>(List.of()));
+        ArgumentCaptor<BaseSearchRequest> requestCaptor = ArgumentCaptor.forClass(BaseSearchRequest.class);
+
+        courseParticipationService.findAll(new BaseSearchRequest(), authentication("admin-diocese", CourseParticipationAccessEvaluator.READ_DIOCESE));
+
+        verify(courseParticipationRepository).findAll(requestCaptor.capture());
+        assertEquals(List.of(java.util.Map.of("course.diocese.id", dioceseId)), requestCaptor.getValue().getScopeAnyOf());
+    }
+
+    @Test
+    void participantListStaysWithinTheCoursesTheDeaneryManages() {
+        courseParticipationService = buildService();
+        UUID deaneryId = UUID.randomUUID();
+        when(scopeAccountRepository.findActiveDeaneryIdByUsername("admin-deanery")).thenReturn(Optional.of(deaneryId));
+        when(courseParticipationRepository.findAll(any(BaseSearchRequest.class))).thenReturn(new PageImpl<>(List.of()));
+        ArgumentCaptor<BaseSearchRequest> requestCaptor = ArgumentCaptor.forClass(BaseSearchRequest.class);
+
+        courseParticipationService.findParticipants(new BaseSearchRequest(), authentication("admin-deanery", CourseParticipationAccessEvaluator.READ_DEANERY));
+
+        verify(courseParticipationRepository).findAll(requestCaptor.capture());
+        assertEquals(List.of(java.util.Map.of("course.deanery.id", deaneryId)), requestCaptor.getValue().getScopeAnyOf());
+    }
+
+    @Test
     void registerShouldRequireExceptionReasonWhenLeaderNotEligible() {
         courseParticipationService = buildService();
 

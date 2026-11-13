@@ -139,6 +139,10 @@ public class CourseParticipationAccessEvaluator {
                     if (securityUtils.hasAuthority(authentication, READ_PARISH) && scopedParish(authentication, participation)) {
                         return true;
                     }
+                    // Giáo hạt xem được hồ sơ của huynh trưởng thuộc giáo hạt mình ở bất kỳ khóa nào (khớp với danh sách đăng ký).
+                    if (hasDeaneryReadAuthority(authentication) && scopedLeaderDeanery(authentication, participation)) {
+                        return true;
+                    }
                     if (trainingWorkflowSupport.isDeaneryManaged(participation.getCourse())) {
                         return hasDeaneryReadAuthority(authentication)
                                 && scopedDeanery(authentication, participation.getCourse().getCourseCode());
@@ -210,6 +214,19 @@ public class CourseParticipationAccessEvaluator {
         }
         return accountRepository.findActiveParishIdByUsername(username)
                 .map(activeId -> activeId.equals(participation.getLeader().getParish().getId()))
+                .orElse(false);
+    }
+
+    private boolean scopedLeaderDeanery(Authentication authentication, CourseParticipation participation) {
+        String username = securityUtils.currentUsername(authentication);
+        if (username == null || username.isBlank()
+                || participation.getLeader() == null
+                || participation.getLeader().getParish() == null
+                || participation.getLeader().getParish().getDeanery() == null) {
+            return false;
+        }
+        return accountRepository.findActiveDeaneryIdByUsername(username)
+                .map(activeId -> activeId.equals(participation.getLeader().getParish().getDeanery().getId()))
                 .orElse(false);
     }
 

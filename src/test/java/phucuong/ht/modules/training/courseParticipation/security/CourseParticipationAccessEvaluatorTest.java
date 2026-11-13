@@ -136,6 +136,25 @@ class CourseParticipationAccessEvaluatorTest {
         return course;
     }
 
+    @Test
+    void deaneryCanReadOwnLeadersRegistrationInADioceseCourseButNotOtherDeaneriesOnes() {
+        AccountRepository accountRepository = mock(AccountRepository.class);
+        CourseParticipationRepository participationRepository = mock(CourseParticipationRepository.class);
+        CourseParticipationAccessEvaluator evaluator = evaluator(accountRepository, mock(TrainingCourseRepository.class), participationRepository);
+        UUID deaneryId = UUID.randomUUID();
+        CourseParticipation participation = participationWithLeaderParish(UUID.randomUUID(), UnitType.DIOCESE);
+        phucuong.ht.modules.deanery.model.entity.Deanery deanery = new phucuong.ht.modules.deanery.model.entity.Deanery();
+        deanery.setId(deaneryId);
+        participation.getLeader().getParish().setDeanery(deanery);
+        when(participationRepository.findByIdWithLeaderAndCourse("p-1")).thenReturn(Optional.of(participation));
+        when(accountRepository.findActiveDeaneryIdByUsername("parish-admin")).thenReturn(Optional.of(deaneryId));
+
+        assertTrue(evaluator.canReadOne(authentication(CourseParticipationAccessEvaluator.READ_DEANERY), "p-1"));
+
+        when(accountRepository.findActiveDeaneryIdByUsername("parish-admin")).thenReturn(Optional.of(UUID.randomUUID()));
+        assertFalse(evaluator.canReadOne(authentication(CourseParticipationAccessEvaluator.READ_DEANERY), "p-1"));
+    }
+
     private CourseParticipation participationWithLeaderParish(UUID parishId, UnitType courseType) {
         Parish parish = new Parish();
         parish.setId(parishId);
