@@ -38,6 +38,7 @@ public class CourseParticipationController {
 
     private final CourseParticipationService courseParticipationService;
     private final phucuong.ht.common.excel.job.ExcelJobService excelJobService;
+    private final phucuong.ht.modules.training.registrationTemplate.service.RegistrationTemplateService registrationTemplateService;
 
     @GetMapping("/participations")
     @PreAuthorize("@courseParticipationAccessEvaluator.canRead(authentication)")
@@ -54,6 +55,20 @@ public class CourseParticipationController {
             Authentication authentication) {
         return phucuong.ht.common.excel.job.ExcelJobResponses.accepted(
                 excelJobService.createExport(phucuong.ht.common.excel.job.ExcelJobKind.EXPORT_PARTICIPATIONS, request, idempotencyKey, authentication));
+    }
+
+    // Xuất danh sách đăng ký của một khóa theo mẫu Excel của giáo phận (chạy nền). Kiểm tra trước khóa và mẫu để báo lỗi ngay.
+    // Tùy chọn: groupBy = NONE | DEANERY | PARISH; layout = SINGLE_SHEET | SHEET_PER_GROUP | FILE_PER_GROUP.
+    @org.springframework.web.bind.annotation.PostMapping("/participations/template-export")
+    @PreAuthorize("@courseParticipationAccessEvaluator.canRead(authentication)")
+    public org.springframework.http.ResponseEntity<apiResponse<phucuong.ht.common.excel.job.ExcelJobResponse>> exportParticipationsByTemplate(
+            BaseSearchRequest request,
+            @org.springframework.web.bind.annotation.RequestHeader(value = phucuong.ht.common.idempotency.IdempotencyService.HEADER, required = false) String idempotencyKey,
+            Authentication authentication) {
+        Object courseCode = request.getFilters() == null ? null : request.getFilters().get("course.courseCode");
+        registrationTemplateService.forCourse(courseCode == null ? null : String.valueOf(courseCode));
+        return phucuong.ht.common.excel.job.ExcelJobResponses.accepted(
+                excelJobService.createExport(phucuong.ht.common.excel.job.ExcelJobKind.EXPORT_REGISTRATION_TEMPLATE, request, idempotencyKey, authentication));
     }
 
     // Xuất Excel chạy nền theo đúng bộ lọc/tìm kiếm/sắp xếp của danh sách; trả 202 + tác vụ, theo dõi tại /api/excel-jobs.

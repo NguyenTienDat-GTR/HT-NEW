@@ -5,9 +5,11 @@ import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.FillPatternType;
 import org.apache.poi.ss.usermodel.Font;
+import org.apache.poi.ss.usermodel.HorizontalAlignment;
 import org.apache.poi.ss.usermodel.IndexedColors;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.VerticalAlignment;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
 
@@ -21,7 +23,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.List;
 
-/** Ghi danh sách dữ liệu ra file .xlsx (dòng tiêu đề đậm, cố định dòng đầu, có bộ lọc). */
+/** Ghi danh sách dữ liệu ra file .xlsx (phần đầu đơn vị + tiêu đề, dòng tiêu đề cột đậm, cố định tới dòng tiêu đề cột, có bộ lọc). */
 public final class ExcelExportWriter {
 
     private static final ZoneId ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
@@ -30,11 +32,14 @@ public final class ExcelExportWriter {
     }
 
     public static <T> byte[] write(String sheetName, List<ExcelColumn<T>> columns, List<T> rows) {
-        return write(sheetName, null, columns, rows);
+        return write(sheetName, (ExcelReportHeader) null, columns, rows);
     }
 
-    /** title != null: dòng đầu là tiêu đề (gộp ô, in đậm), dòng tiêu đề cột nằm ngay dưới. */
-    public static <T> byte[] write(String sheetName, String title, List<ExcelColumn<T>> columns, List<T> rows) {
+    /**
+     * header != null: các dòng đơn vị rồi dòng tiêu đề (gộp ô theo số cột, căn giữa, in đậm), một dòng trống,
+     * sau đó mới tới dòng tiêu đề cột.
+     */
+    public static <T> byte[] write(String sheetName, ExcelReportHeader header, List<ExcelColumn<T>> columns, List<T> rows) {
         SXSSFWorkbook workbook = new SXSSFWorkbook(200);
         try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             Sheet sheet = workbook.createSheet(safeSheetName(sheetName));
@@ -53,23 +58,22 @@ public final class ExcelExportWriter {
             dateTimeStyle.setDataFormat(workbook.getCreationHelper().createDataFormat().getFormat("dd/MM/yyyy HH:mm"));
 
             int headerIndex = 0;
-            if (title != null && !columns.isEmpty()) {
-                CellStyle titleStyle = workbook.createCellStyle();
-                Font titleFont = workbook.createFont();
-                titleFont.setBold(true);
-                titleFont.setFontHeightInPoints((short) 14);
-                titleStyle.setFont(titleFont);
-                Cell titleCell = sheet.createRow(0).createCell(0);
-                titleCell.setCellValue(title);
-                titleCell.setCellStyle(titleStyle);
-                if (columns.size() > 1) {
-                    sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, columns.size() - 1));
+            if (header != null && !header.isEmpty() && !columns.isEmpty()) {
+                CellStyle unitStyle = centered(workbook, 12);
+                for (String line : header.unitLines()) {
+                    mergedLine(sheet, headerIndex++, line, unitStyle, columns.size());
                 }
-                headerIndex = 1;
+                if (header.title() != null && !header.title().isBlank()) {
+                    if (headerIndex > 0) {
+                        headerIndex++;
+                    }
+                    mergedLine(sheet, headerIndex++, header.title(), centered(workbook, 14), columns.size());
+                }
+                headerIndex++;
             }
-            Row header = sheet.createRow(headerIndex);
+            Row headerRow = sheet.createRow(headerIndex);
             for (int c = 0; c < columns.size(); c++) {
-                Cell cell = header.createCell(c);
+                Cell cell = headerRow.createCell(c);
                 cell.setCellValue(columns.get(c).header());
                 cell.setCellStyle(headerStyle);
                 sheet.setColumnWidth(c, Math.min(Math.max(columns.get(c).width(), 8), 80) * 256);
@@ -97,6 +101,26 @@ public final class ExcelExportWriter {
             } catch (IOException ignored) {
                 // không ảnh hưởng kết quả
             }
+        }
+    }
+
+    private static CellStyle centered(SXSSFWorkbook workbook, int size) {
+        CellStyle style = workbook.createCellStyle();
+        Font font = workbook.createFont();
+        font.setBold(true);
+        font.setFontHeightInPoints((short) size);
+        style.setFont(font);
+        style.setAlignment(HorizontalAlignment.CENTER);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+        return style;
+    }
+
+    private static void mergedLine(Sheet sheet, int rowIndex, String text, CellStyle style, int columnCount) {
+        Cell cell = sheet.createRow(rowIndex).createCell(0);
+        cell.setCellValue(text);
+        cell.setCellStyle(style);
+        if (columnCount > 1) {
+            sheet.addMergedRegion(new CellRangeAddress(rowIndex, rowIndex, 0, columnCount - 1));
         }
     }
 

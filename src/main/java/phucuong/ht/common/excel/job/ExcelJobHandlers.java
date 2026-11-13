@@ -6,9 +6,9 @@ import org.springframework.stereotype.Component;
 import phucuong.ht.common.excel.AvatarZip;
 import phucuong.ht.common.excel.ImportOptions;
 import phucuong.ht.common.excel.ImportSummary;
-import phucuong.ht.common.repository.BaseSearchRequest;
 
 import java.nio.file.Path;
+import java.util.List;
 
 /**
  * Cửa vào cho worker: chuyển việc cho handler đúng loại trong {@link ExcelJobHandlerRegistry}.
@@ -21,12 +21,17 @@ public class ExcelJobHandlers {
     private final ExcelJobHandlerRegistry registry;
 
     /** Phần đầu tên file xuất. */
-    public String exportFileBase(ExcelJobKind kind, BaseSearchRequest request) {
+    public String exportFileBase(ExcelJobKind kind, ExcelExportRequest request) {
         return registry.exportHandler(kind).fileBase(request);
     }
 
-    public byte[] export(ExcelJobKind kind, BaseSearchRequest request, Authentication authentication, JobProgress progress) {
+    public ExcelExportFile export(ExcelJobKind kind, ExcelExportRequest request, Authentication authentication, JobProgress progress) {
         return registry.exportHandler(kind).export(request, authentication, progress);
+    }
+
+    /** Các cột chọn được của một loại xuất. */
+    public List<String> exportColumns(ExcelJobKind kind) {
+        return registry.exportHandler(kind).columns();
     }
 
     public ImportSummary runImport(ExcelJobKind kind, String target, Path file, Authentication authentication, JobProgress progress,

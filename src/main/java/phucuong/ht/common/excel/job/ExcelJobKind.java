@@ -11,6 +11,7 @@ public enum ExcelJobKind {
     EXPORT_PARTICIPANTS("Xuất Excel danh sách tham dự", "danh-sach-tham-du", false),
     EXPORT_TEAMS("Xuất Excel chia đội", "chia-doi", false),
     EXPORT_CERTIFICATES("Xuất Excel chứng nhận", "chung-nhan", false),
+    EXPORT_REGISTRATION_TEMPLATE("Xuất danh sách đăng ký theo mẫu", "danh-sach-dang-ky", false),
     IMPORT_LEADERS("Import hồ sơ huynh trưởng", "", true),
     IMPORT_DEANERIES("Import danh sách giáo hạt", "", true),
     IMPORT_PARISHES("Import danh sách giáo xứ", "", true),

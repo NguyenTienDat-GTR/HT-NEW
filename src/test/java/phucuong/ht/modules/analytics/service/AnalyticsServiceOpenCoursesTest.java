@@ -42,7 +42,7 @@ class AnalyticsServiceOpenCoursesTest {
 
     @BeforeEach
     void setUp() {
-        service = new AnalyticsService(scopeResolver, overview, people, training, records, repository, new securityUtils());
+        service = new AnalyticsService(scopeResolver, overview, people, training, records, repository, new securityUtils(), null);
     }
 
     @Test

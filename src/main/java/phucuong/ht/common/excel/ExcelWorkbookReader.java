@@ -29,6 +29,7 @@ import java.util.Map;
 public final class ExcelWorkbookReader implements AutoCloseable {
 
     public static final int MAX_DATA_ROWS = 5_000;
+    private static final int HEADER_SCAN_ROWS = 15;
     private static final long MAX_FILE_BYTES = 20L * 1024 * 1024;
     private static final DateTimeFormatter[] DATE_FORMATS = {
             DateTimeFormatter.ofPattern("d/M/uuuu"),
@@ -106,7 +107,7 @@ public final class ExcelWorkbookReader implements AutoCloseable {
     }
 
     private ExcelSheetData read(Sheet sheet) {
-        Row headerRow = sheet.getRow(sheet.getFirstRowNum());
+        Row headerRow = headerRow(sheet);
         Map<String, Integer> columns = new LinkedHashMap<>();
         Map<String, String> displayNames = new LinkedHashMap<>();
         if (headerRow != null) {
@@ -119,7 +120,7 @@ public final class ExcelWorkbookReader implements AutoCloseable {
             }
         }
         List<ExcelRowData> rows = new ArrayList<>();
-        int first = sheet.getFirstRowNum() + 1;
+        int first = (headerRow == null ? sheet.getFirstRowNum() : headerRow.getRowNum()) + 1;
         for (int r = first; r <= sheet.getLastRowNum(); r++) {
             Row row = sheet.getRow(r);
             if (row == null) {
@@ -143,6 +144,28 @@ public final class ExcelWorkbookReader implements AutoCloseable {
             rows.add(new ExcelRowData(sheet.getSheetName(), r + 1, values));
         }
         return new ExcelSheetData(sheet.getSheetName(), displayNames, rows);
+    }
+
+    /**
+     * Dòng tiêu đề cột: dòng đầu tiên (trong {@value #HEADER_SCAN_ROWS} dòng đầu) có từ 2 ô có chữ trở lên. File xuất ra có
+     * các dòng đơn vị / tiêu đề gộp ô ở trên (chỉ 1 ô có chữ) nên được bỏ qua; xuất ra, sửa rồi import lại vẫn đọc được.
+     */
+    private static Row headerRow(Sheet sheet) {
+        int start = sheet.getFirstRowNum();
+        for (int r = start; r <= Math.min(sheet.getLastRowNum(), start + HEADER_SCAN_ROWS - 1); r++) {
+            Row row = sheet.getRow(r);
+            if (row == null) {
+                continue;
+            }
+            int filled = 0;
+            for (Cell cell : row) {
+                String text = text(cell);
+                if (text != null && !text.isBlank() && ++filled >= 2) {
+                    return row;
+                }
+            }
+        }
+        return sheet.getRow(start);
     }
 
     private static Object value(Cell cell) {

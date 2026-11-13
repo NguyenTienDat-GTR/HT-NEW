@@ -14,10 +14,12 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import phucuong.ht.common.dto.apiResponse;
 import phucuong.ht.common.excel.DuplicateDecision;
 import phucuong.ht.common.excel.ExcelResponses;
+import phucuong.ht.common.excel.job.ExcelJobHandlers;
 import phucuong.ht.common.excel.job.ExcelJobKind;
 import phucuong.ht.common.excel.job.ExcelJobResponses;
 import phucuong.ht.common.exception.ApiException;
@@ -42,6 +44,16 @@ public class ExcelJobController {
     private final LeaderAccessEvaluator leaderAccessEvaluator;
     private final TrainingCourseAccessEvaluator trainingCourseAccessEvaluator;
     private final PastCourseParticipantImportService pastCourseParticipantImportService;
+    private final ExcelJobHandlers excelJobHandlers;
+
+    /** Các cột chọn được khi xuất một loại danh sách (vd. kind=EXPORT_LEADERS), theo đúng thứ tự trong file. */
+    @GetMapping("/export-columns")
+    public apiResponse<List<String>> exportColumns(@RequestParam ExcelJobKind kind) {
+        if (kind.isImport()) {
+            throw new ApiException(org.springframework.http.HttpStatus.BAD_REQUEST, errorCode.VALIDATION_ERROR, "Không phải loại xuất Excel");
+        }
+        return apiResponse.success("Lấy danh sách cột thành công", excelJobHandlers.exportColumns(kind));
+    }
 
     @GetMapping
     public apiResponse<List<ExcelJobResponse>> listMine(Authentication authentication) {
@@ -59,7 +71,7 @@ public class ExcelJobController {
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment().filename(download.fileName(), StandardCharsets.UTF_8).build().toString())
                 .header(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS, HttpHeaders.CONTENT_DISPOSITION)
-                .contentType(ExcelResponses.XLSX)
+                .contentType(download.fileName().endsWith(".zip") ? org.springframework.http.MediaType.parseMediaType("application/zip") : ExcelResponses.XLSX)
                 .body(new FileSystemResource(download.path()));
     }
 

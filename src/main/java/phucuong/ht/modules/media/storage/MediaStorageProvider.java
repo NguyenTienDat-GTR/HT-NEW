@@ -18,6 +18,22 @@ public interface MediaStorageProvider {
     /** Xóa, không lỗi nếu khóa không tồn tại. */
     void delete(String key);
 
+    /**
+     * Lưu một file không phải ảnh (vd. mẫu Excel) theo khóa logic có đủ phần mở rộng; cùng khóa thì ghi đè bản cũ.
+     * Mặc định dùng chung thao tác với ảnh (thư mục cục bộ lưu thế nào cũng được); Cloudinary ghi đè bằng loại "raw".
+     */
+    default void putFile(String key, byte[] data, String contentType) {
+        put(key, data, contentType);
+    }
+
+    default byte[] getFile(String key) {
+        return get(key);
+    }
+
+    default void deleteFile(String key) {
+        delete(key);
+    }
+
     default void copy(String sourceKey, String targetKey, String contentType) {
         put(targetKey, get(sourceKey), contentType);
     }

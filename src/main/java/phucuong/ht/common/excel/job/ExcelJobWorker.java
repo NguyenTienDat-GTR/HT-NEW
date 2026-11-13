@@ -330,18 +330,18 @@ public class ExcelJobWorker {
     private void runExport(ExcelJobRepository.Row row, Authentication authentication) {
         Path output = null;
         try {
-            BaseSearchRequest request = requestOf(row.paramsJson());
+            ExcelExportRequest request = requestOf(row.paramsJson());
             JobProgress progress = (processed, total) -> {
                 Boolean cancel = shortTx.execute(status -> repository.touch(row.id(), processed, total, LEASE_SECONDS));
                 if (Boolean.TRUE.equals(cancel)) {
                     throw new JobProgress.JobCancelledException();
                 }
             };
-            byte[] content = handlers.export(row.kind(), request, authentication, progress);
+            ExcelExportFile file = handlers.export(row.kind(), request, authentication, progress);
             Path dir = Files.createDirectories(Path.of(baseDir, "outputs"));
-            output = dir.resolve(row.id() + ".xlsx");
-            Files.write(output, content);
-            String name = handlers.exportFileBase(row.kind(), request) + "-" + LocalDate.now() + ".xlsx";
+            output = dir.resolve(row.id() + "." + file.extension());
+            Files.write(output, file.content());
+            String name = handlers.exportFileBase(row.kind(), request) + "-" + LocalDate.now() + "." + file.extension();
             Path written = output;
             Integer updated = shortTx.execute(status -> repository.markSucceeded(row.id(),
                     json(Map.of("message", "Đã xuất file " + name)), written.toString(), name, null, null, null, null));
@@ -370,7 +370,7 @@ public class ExcelJobWorker {
         }
     }
 
-    private BaseSearchRequest requestOf(String paramsJson) {
+    private ExcelExportRequest requestOf(String paramsJson) {
         try {
             Map<String, Object> params = paramsJson == null ? Map.of() : objectMapper.readValue(paramsJson, new com.fasterxml.jackson.core.type.TypeReference<LinkedHashMap<String, Object>>() {
             });
@@ -390,7 +390,16 @@ public class ExcelJobWorker {
             if (params.get("sortDirection") != null) {
                 request.setSortDirection(String.valueOf(params.get("sortDirection")));
             }
-            return request;
+            List<String> columns = params.get("columns") instanceof List<?> list ? list.stream().map(String::valueOf).toList() : List.of();
+            Map<String, String> options = new LinkedHashMap<>();
+            if (params.get("options") instanceof Map<?, ?> map) {
+                map.forEach((key, value) -> {
+                    if (value != null) {
+                        options.put(String.valueOf(key), String.valueOf(value));
+                    }
+                });
+            }
+            return new ExcelExportRequest(request, columns, options);
         } catch (JsonProcessingException exception) {
             throw new UncheckedIOException(exception);
         }

@@ -12,8 +12,8 @@ public final class OrganizationExcelExports {
     private OrganizationExcelExports() {
     }
 
-    public static byte[] dioceses(List<DioceseResponse> rows) {
-        return ExcelExportWriter.write("Giáo phận", List.of(
+    public static List<ExcelColumn<DioceseResponse>> dioceseColumns() {
+        return List.of(
                 ExcelColumn.<DioceseResponse>of("Tên giáo phận", 32, DioceseResponse::getName),
                 ExcelColumn.<DioceseResponse>of("Đức cha / Cha tuyên úy", 28, DioceseResponse::getChaplain),
                 ExcelColumn.<DioceseResponse>of("Tên liên đoàn", 28, DioceseResponse::getUnionName),
@@ -27,15 +27,15 @@ public final class OrganizationExcelExports {
                 ExcelColumn.<DioceseResponse>of("Trạng thái", 16, row -> ExcelLabels.status(row.getStatus())),
                 ExcelColumn.<DioceseResponse>of("Ngày tạo", 18, DioceseResponse::getCreatedAt),
                 ExcelColumn.<DioceseResponse>of("Người tạo", 22, DioceseResponse::getCreatedByName)
-        ), rows);
+        );
     }
 
-    public static byte[] deaneries(List<DeaneryResponse> rows) {
-        return ExcelExportWriter.write("Giáo hạt", List.of(
+    public static List<ExcelColumn<DeaneryResponse>> deaneryColumns() {
+        return List.of(
                 ExcelColumn.<DeaneryResponse>of("Tên giáo hạt", 32, DeaneryResponse::getName),
                 ExcelColumn.<DeaneryResponse>of("Giáo phận", 28, DeaneryResponse::getDioceseName),
                 ExcelColumn.<DeaneryResponse>of("Cha tuyên úy", 28, DeaneryResponse::getChaplain),
-                ExcelColumn.<DeaneryResponse>of("Tên phân đoàn / hội", 28, DeaneryResponse::getAssociationName),
+                ExcelColumn.<DeaneryResponse>of("Tên hiệp đoàn", 28, DeaneryResponse::getAssociationName),
                 ExcelColumn.<DeaneryResponse>of("Ngày bổn mạng", 16, DeaneryResponse::getPatronSaintDay),
                 ExcelColumn.<DeaneryResponse>of("Ngày thành lập", 16, DeaneryResponse::getEstablishmentDate),
                 ExcelColumn.<DeaneryResponse>of("Số điện thoại", 16, DeaneryResponse::getPhoneNumber),
@@ -46,18 +46,18 @@ public final class OrganizationExcelExports {
                 ExcelColumn.<DeaneryResponse>of("Trạng thái hiệu lực", 18, row -> ExcelLabels.status(row.getEffectiveStatus())),
                 ExcelColumn.<DeaneryResponse>of("Ngày tạo", 18, DeaneryResponse::getCreatedAt),
                 ExcelColumn.<DeaneryResponse>of("Người tạo", 22, DeaneryResponse::getCreatedByName)
-        ), rows);
+        );
     }
 
-    public static byte[] parishes(List<ParishResponse> rows) {
-        return ExcelExportWriter.write("Giáo xứ", List.of(
+    public static List<ExcelColumn<ParishResponse>> parishColumns() {
+        return List.of(
                 ExcelColumn.<ParishResponse>of("Tên đơn vị", 32, ParishResponse::getName),
                 ExcelColumn.<ParishResponse>of("Loại", 14, ParishResponse::getUnitTypeLabel),
                 ExcelColumn.<ParishResponse>of("Thuộc giáo xứ", 28, ParishResponse::getParentParishName),
                 ExcelColumn.<ParishResponse>of("Giáo hạt", 28, ParishResponse::getDeaneryName),
                 ExcelColumn.<ParishResponse>of("Giáo phận", 28, ParishResponse::getDioceseName),
                 ExcelColumn.<ParishResponse>of("Cha chánh xứ", 28, ParishResponse::getChaplain),
-                ExcelColumn.<ParishResponse>of("Tên chi đoàn / chi hội", 28, ParishResponse::getChapterName),
+                ExcelColumn.<ParishResponse>of("Tên xứ đoàn", 28, ParishResponse::getChapterName),
                 ExcelColumn.<ParishResponse>of("Ngày bổn mạng", 16, ParishResponse::getPatronSaintDay),
                 ExcelColumn.<ParishResponse>of("Ngày thành lập", 16, ParishResponse::getEstablishmentDate),
                 ExcelColumn.<ParishResponse>of("Số điện thoại", 16, ParishResponse::getPhoneNumber),
@@ -67,6 +67,6 @@ public final class OrganizationExcelExports {
                 ExcelColumn.<ParishResponse>of("Trạng thái hiệu lực", 18, row -> ExcelLabels.status(row.getEffectiveStatus())),
                 ExcelColumn.<ParishResponse>of("Ngày tạo", 18, ParishResponse::getCreatedAt),
                 ExcelColumn.<ParishResponse>of("Người tạo", 22, ParishResponse::getCreatedByName)
-        ), rows);
+        );
     }
 }
