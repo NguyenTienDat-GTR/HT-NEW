@@ -344,11 +344,6 @@ public class LeaderService {
         request.setHolyName(requiredIfPresent(request.getHolyName(), "Tên thánh"));
         request.setEmail(requiredIfPresent(request.getEmail(), "Email"));
         request.setPhoneNumber(requiredIfPresent(request.getPhoneNumber(), "Số điện thoại"));
-        if (request.getFullName() != null) {
-            LeaderValidationHelper.LeaderNameParts parts = leaderValidationHelper.splitFullName(request.getFullName());
-            request.setFirstName(parts.firstName());
-            request.setLastName(parts.lastName());
-        }
         // Chỉ kiểm tra trùng khi giá trị đổi so với hiện tại.
         leaderValidationHelper.validateUpdateEmailUniqueness(id, request.getEmail(), existing.getEmail());
         leaderValidationHelper.validateUpdatePhoneUniqueness(id, request.getPhoneNumber(), existing.getPhoneNumber());

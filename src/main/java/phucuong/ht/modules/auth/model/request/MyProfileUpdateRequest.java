@@ -13,7 +13,9 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 /**
- * Tự sửa thông tin cá nhân. Trường null = giữ nguyên. Không có giáo xứ / giáo hạt: đơn vị do quản trị viên điều chuyển.
+ * Tự sửa thông tin cá nhân. Trường null = giữ nguyên. Các trường sửa được giống khi quản trị sửa hồ sơ huynh trưởng
+ * (tên thánh, giới tính, email, số điện thoại, ảnh đại diện); không có họ và tên, giáo xứ, giáo hạt: những thứ đó do quản trị viên quản lý.
+ * Ngày sinh chỉ đổi được khi tài khoản có quyền sửa ngày sinh (organization.leader.update_birth_date.*), như nút "Sửa ngày sinh" ở hồ sơ huynh trưởng.
  * Email trùng và số điện thoại trùng chỉ được kiểm tra khi giá trị thật sự thay đổi.
  */
 @Getter
@@ -22,9 +24,6 @@ public class MyProfileUpdateRequest extends SelfConsentRequest {
 
     @Size(max = 50, message = "Tên thánh tối đa 50 ký tự")
     private String holyName;
-
-    @Size(max = 200, message = "Họ và tên tối đa 200 ký tự")
-    private String fullName;
 
     @Past(message = "Ngày sinh phải là một ngày trong quá khứ")
     private LocalDate birthDate;

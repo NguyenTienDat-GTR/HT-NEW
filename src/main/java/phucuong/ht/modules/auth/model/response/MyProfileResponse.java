@@ -18,6 +18,8 @@ public class MyProfileResponse {
     /** Email nhận OTP; null nếu tài khoản chưa có email. */
     private final String email;
     private final boolean hasLeader;
+    /** Tài khoản có quyền sửa ngày sinh trong hồ sơ của chính mình (quyền organization.leader.update_birth_date.* đúng phạm vi); false nếu không gắn huynh trưởng. */
+    private final boolean canEditBirthDate;
     /** Ảnh đại diện của tài khoản không gắn huynh trưởng (URL đã ký); null nếu chưa có hoặc tài khoản gắn huynh trưởng. */
     private final String imageUrl;
     private final String imageThumbUrl;

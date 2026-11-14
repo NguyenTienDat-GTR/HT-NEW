@@ -21,12 +21,15 @@ import phucuong.ht.modules.certificate.config.model.response.CertificatePreviewR
 import phucuong.ht.modules.certificate.config.service.CertificateConfigService;
 import phucuong.ht.modules.certificate.model.response.CertificateResponse;
 import phucuong.ht.modules.certificate.service.CertificateService;
+import phucuong.ht.modules.leader.model.entity.Leader;
 import phucuong.ht.modules.leader.model.response.LeaderResponse;
+import phucuong.ht.modules.leader.security.LeaderAccessEvaluator;
 import phucuong.ht.modules.media.model.enums.MediaCategory;
 import phucuong.ht.modules.leader.service.LeaderService;
 import phucuong.ht.modules.system.model.entity.Account;
 import phucuong.ht.modules.system.model.entity.AccountRole;
 
+import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
@@ -44,6 +47,7 @@ public class MyProfileService {
     private final AccountEmailResolver emailResolver;
     private final PasswordEncoder passwordEncoder;
     private final phucuong.ht.modules.leader.repository.LeaderRepository leaderRepository;
+    private final LeaderAccessEvaluator leaderAccessEvaluator;
     private final PasswordOtpStore otpStore;
     private final phucuong.ht.common.utils.securityUtils securityUtils;
     private final phucuong.ht.modules.media.service.MediaAssetService mediaAssetService;
@@ -60,6 +64,7 @@ public class MyProfileService {
                 .roles(roles(account.getUsername()))
                 .email(emailResolver.resolve(account))
                 .hasLeader(leader != null)
+                .canEditBirthDate(leaderId != null && leaderAccessEvaluator.canUpdateBirthDate(authentication, leaderId))
                 .imageUrl(mediaUrls.display(account.getImageAssetId(), MediaCategory.ACCOUNT_AVATAR))
                 .imageThumbUrl(mediaUrls.small(account.getImageAssetId(), MediaCategory.ACCOUNT_AVATAR))
                 .imageAssetId(account.getImageAssetId())
@@ -70,7 +75,9 @@ public class MyProfileService {
     }
 
     /**
-     * Tự sửa thông tin cá nhân của Huynh Trưởng gắn với tài khoản (không gồm giáo xứ / giáo hạt / cấp độ).
+     * Tự sửa thông tin cá nhân của Huynh Trưởng gắn với tài khoản. Chỉ sửa được các trường như khi quản trị sửa hồ sơ huynh trưởng
+     * (tên thánh, giới tính, email, số điện thoại, ảnh), không gồm họ và tên / giáo xứ / giáo hạt / cấp độ.
+     * Ngày sinh chỉ đổi được khi tài khoản có quyền sửa ngày sinh đối với hồ sơ của mình (cùng điều kiện với PATCH /api/leaders/{id}/birth-date).
      * Đổi email phải nhập đúng mật khẩu hiện tại vì email nhận OTP đổi / quên mật khẩu; sai nhiều lần bị khóa tạm.
      */
     public MyProfileResponse updateProfile(MyProfileUpdateRequest request, Authentication authentication) {
@@ -81,16 +88,22 @@ public class MyProfileService {
         }
         UUID leaderId = account.getLeader().getId();
         String requestedEmail = request.getEmail() == null ? null : request.getEmail().trim();
-        // Đọc email hiện tại bằng truy vấn riêng: quan hệ leader của account là lazy và hàm này không chạy trong giao dịch.
-        String currentEmail = leaderRepository.findById(leaderId).map(phucuong.ht.modules.leader.model.entity.Leader::getEmail).orElse(null);
+        // Đọc giá trị hiện tại bằng truy vấn riêng: quan hệ leader của account là lazy và hàm này không chạy trong giao dịch.
+        Leader current = leaderRepository.findById(leaderId).orElse(null);
+        String currentEmail = current == null ? null : current.getEmail();
+        LocalDate currentBirthDate = current == null ? null : current.getBirthDate();
+        // Gửi lại đúng ngày sinh hiện tại không phải là thay đổi nên không đòi quyền.
+        boolean birthDateChanging = request.getBirthDate() != null && !request.getBirthDate().equals(currentBirthDate);
+        if (birthDateChanging && !leaderAccessEvaluator.canUpdateBirthDate(authentication, leaderId)) {
+            throw new ApiException(HttpStatus.FORBIDDEN, errorCode.ACCESS_DENIED, "Tài khoản của bạn không có quyền sửa ngày sinh");
+        }
         if (StringUtils.hasText(requestedEmail) && !requestedEmail.equals(currentEmail)) {
             requireCurrentPassword(account, request.getCurrentPassword());
         }
 
         LeaderSelfUpdateRequest changes = new LeaderSelfUpdateRequest();
         changes.setHolyName(request.getHolyName());
-        changes.setFullName(request.getFullName());
-        changes.setBirthDate(request.getBirthDate());
+        changes.setBirthDate(birthDateChanging ? request.getBirthDate() : null);
         changes.setGender(request.getGender());
         changes.setEmail(request.getEmail());
         changes.setPhoneNumber(request.getPhoneNumber());
