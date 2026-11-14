@@ -34,8 +34,11 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -104,7 +107,11 @@ class MyProfileUpdateIntegrationTest {
     @Autowired private phucuong.ht.modules.notification.service.NotificationReadRetentionService notificationRetention;
 
     private Authentication me(String username, UUID leaderId) {
-        AuthUserDetails principal = AuthUserDetails.tokenPrincipal(username, leaderId == null ? null : leaderId.toString(), List.of("ADMIN_PARISH"), List.of());
+        return me(username, leaderId, List.of());
+    }
+
+    private Authentication me(String username, UUID leaderId, List<String> permissions) {
+        AuthUserDetails principal = AuthUserDetails.tokenPrincipal(username, leaderId == null ? null : leaderId.toString(), List.of("ADMIN_PARISH"), permissions);
         return new UsernamePasswordAuthenticationToken(principal, "n/a", principal.getAuthorities());
     }
 
@@ -147,7 +154,10 @@ class MyProfileUpdateIntegrationTest {
     @Order(2)
     void editsPersonalInfoWithoutTouchingUnitOrCheckingContactUniqueness() throws Exception {
         MvcResult result = mockMvc.perform(updateRequest(me("me", myLeaderId), Map.of(
-                        "holyName", "Phaolô", "fullName", "Nguyễn Văn Bảo", "gender", "NU", "birthDate", "1996-04-08",
+                        "holyName", "Phaolô", "gender", "NU",
+                        // Họ và tên không sửa được (giống sửa hồ sơ huynh trưởng) và ngày sinh gửi lại đúng giá trị hiện tại:
+                        // cả hai bị bỏ qua / không phải là thay đổi nên không đòi quyền sửa ngày sinh.
+                        "fullName", "Nguyễn Văn Bảo", "birthDate", "1995-03-07",
                         // Gửi lại đúng email / SĐT hiện tại: không phải là thay đổi nên không cần mật khẩu và không bị báo trùng.
                         "email", "me@example.com", "phoneNumber", "0901111111",
                         // Giáo xứ / giáo hạt không được phép sửa: trường lạ bị bỏ qua.
@@ -155,14 +165,14 @@ class MyProfileUpdateIntegrationTest {
                 .andExpect(status().isOk()).andReturn();
         JsonNode leader = objectMapper.readTree(result.getResponse().getContentAsString()).get("data").get("leader");
         assertEquals("Phaolô", leader.get("holyName").asText());
-        assertEquals("Nguyễn Văn Bảo", leader.get("fullName").asText());
+        assertEquals("Nguyễn Văn An", leader.get("fullName").asText());
 
         Map<String, Object> saved = row("select holy_name, first_name, last_name, gender, birth_date::text as birth, parish_id, updated_by from leader where id = ?", myLeaderId);
         assertEquals("Phaolô", saved.get("holy_name"));
-        assertEquals("Bảo", saved.get("first_name"));
-        assertEquals("Nguyễn Văn", saved.get("last_name"));
+        assertEquals("An", saved.get("first_name"), "họ và tên không đổi");
+        assertEquals("Nguyễn Văn", saved.get("last_name"), "họ và tên không đổi");
         assertEquals("NU", saved.get("gender"));
-        assertEquals("1996-04-08", saved.get("birth"));
+        assertEquals("1995-03-07", saved.get("birth"));
         assertEquals(parishId, saved.get("parish_id"), "giáo xứ không đổi");
         assertEquals(myLeaderId.toString(), saved.get("updated_by"), "ghi nhận người thực hiện theo mã huynh trưởng như các luồng khác");
     }
@@ -201,8 +211,6 @@ class MyProfileUpdateIntegrationTest {
         mockMvc.perform(updateRequest(me("me", myLeaderId), Map.of("phoneNumber", "123")))
                 .andExpect(status().isBadRequest());
         mockMvc.perform(updateRequest(me("me", myLeaderId), Map.of("holyName", "   ")))
-                .andExpect(status().isBadRequest());
-        mockMvc.perform(updateRequest(me("me", myLeaderId), Map.of("fullName", "  ")))
                 .andExpect(status().isBadRequest());
         mockMvc.perform(updateRequest(me("no.leader", null), Map.of("holyName", "An")))
                 .andExpect(status().isBadRequest());
@@ -280,6 +288,42 @@ class MyProfileUpdateIntegrationTest {
                         .param("category", "ACCOUNT_AVATAR").with(authentication(auth)))
                 .andExpect(status().isOk()).andReturn();
         return UUID.fromString(objectMapper.readTree(uploaded.getResponse().getContentAsString()).get("data").get("assetId").asText());
+    }
+
+    @Test
+    @Order(9)
+    void birthDateChangesOnlyWithTheBirthDatePermissionOverOwnProfile() throws Exception {
+        String permission = "organization.leader.update_birth_date.parish";
+
+        // Không có quyền sửa ngày sinh: đổi ngày sinh bị từ chối, ngày sinh giữ nguyên và hồ sơ báo không sửa được.
+        mockMvc.perform(updateRequest(me("me", myLeaderId), Map.of("birthDate", "1996-04-08")))
+                .andExpect(status().isForbidden());
+        assertEquals("1995-03-07", row("select birth_date::text as birth from leader where id = ?", myLeaderId).get("birth"));
+        assertFalse(canEditBirthDate(me("me", myLeaderId)));
+
+        // Quyền chỉnh sửa hồ sơ huynh trưởng (update) tách khỏi quyền sửa ngày sinh nên không thay thế được.
+        mockMvc.perform(updateRequest(me("me", myLeaderId, List.of("organization.leader.update.parish")), Map.of("birthDate", "1996-04-08")))
+                .andExpect(status().isForbidden());
+
+        // Có quyền sửa ngày sinh đúng phạm vi: sửa được, các trường khác giữ nguyên.
+        Authentication withPermission = me("me", myLeaderId, List.of(permission));
+        assertTrue(canEditBirthDate(withPermission));
+        mockMvc.perform(updateRequest(withPermission, Map.of("birthDate", "1996-04-08")))
+                .andExpect(status().isOk());
+        Map<String, Object> saved = row("select birth_date::text as birth, first_name, last_name from leader where id = ?", myLeaderId);
+        assertEquals("1996-04-08", saved.get("birth"));
+        assertEquals("An", saved.get("first_name"));
+        assertEquals("Nguyễn Văn", saved.get("last_name"));
+
+        // Ngày sinh trong tương lai vẫn bị từ chối dù có quyền.
+        mockMvc.perform(updateRequest(withPermission, Map.of("birthDate", "2999-01-01")))
+                .andExpect(status().isBadRequest());
+    }
+
+    private boolean canEditBirthDate(Authentication auth) throws Exception {
+        MvcResult result = mockMvc.perform(get("/api/auth/me/profile").with(authentication(auth)))
+                .andExpect(status().isOk()).andReturn();
+        return objectMapper.readTree(result.getResponse().getContentAsString()).get("data").get("canEditBirthDate").asBoolean();
     }
 
     @Test
