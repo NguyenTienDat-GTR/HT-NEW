@@ -95,11 +95,17 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
             return "login";
         }
 
+        // App di động: cùng mức chống dò mật khẩu và làm mới phiên như web.
+        if (path.startsWith("/api/mobile/auth/login")) {
+            return "login";
+        }
+
         if (path.startsWith("/api/auth/forgot-password/")) {
             return "forgot";
         }
 
-        if (path.startsWith("/api/auth/refresh")
+        if (path.startsWith("/api/mobile/auth/refresh")
+                || path.startsWith("/api/auth/refresh")
                 || path.startsWith("/api/auth/password/")) {
             return "auth";
         }
