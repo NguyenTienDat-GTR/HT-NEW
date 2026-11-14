@@ -54,6 +54,10 @@ public class securityConfig {
                 "/api/auth/captcha-config",
                 "/api/auth/refresh",
                 "/api/auth/logout",
+                // App di động: đăng nhập/làm mới/đăng xuất bằng token trong thân JSON (modules/mobile).
+                "/api/mobile/auth/login",
+                "/api/mobile/auth/refresh",
+                "/api/mobile/auth/logout",
                 "/api/auth/forgot-password/**",
                 "/api/privacy/policy",
                 "/actuator/health",
@@ -70,6 +74,10 @@ public class securityConfig {
                 "/api/auth/captcha-config",
                 "/api/auth/refresh",
                 "/api/auth/logout",
+                // App di động: đăng nhập/làm mới/đăng xuất bằng token trong thân JSON (modules/mobile).
+                "/api/mobile/auth/login",
+                "/api/mobile/auth/refresh",
+                "/api/mobile/auth/logout",
                 "/api/auth/forgot-password/**",
                 "/api/privacy/policy",
                 "/actuator/health",

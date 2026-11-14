@@ -331,3 +331,8 @@ GET /api/media/admin/status|200|401|403|N/A: endpoint has no request parameters 
 
 # Internal (chỉ Caddy gọi trong mạng Docker, không qua /api)
 GET /internal/site-hosts/check|200|N/A: internal endpoint called by the reverse proxy without a user session|N/A: internal endpoint called by the reverse proxy without a user session|400|404|N/A: read-only endpoint does not mutate state
+
+# Mobile (app di động)
+POST /api/mobile/auth/login|200|401|N/A: public login endpoint has no permission gate|400|N/A: invalid credentials must not expose account existence|N/A: login does not create a persistent conflict
+POST /api/mobile/auth/refresh|200|401|N/A: public refresh endpoint has no permission gate|400|N/A: invalid refresh tokens are reported as unauthorized|N/A: refresh does not create a persistent conflict
+POST /api/mobile/auth/logout|200|N/A: idempotent logout succeeds even when no valid session remains|N/A: public logout endpoint has no permission gate|400|N/A: missing or invalid tokens are treated as already logged out|N/A: logout is idempotent and does not create a persistent conflict

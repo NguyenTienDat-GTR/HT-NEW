@@ -1755,3 +1755,11 @@ Ma trận endpoint (`endpoint-contract-matrix.psv`) hiện có 124 route.
 
 ## fix/xuat-mau-giu-dinh-dang-tung-doan
 - `RegistrationTemplateRenderer.fillCell`: ô mẫu có định dạng riêng từng đoạn chữ (rich text: một phần chữ đậm / nghiêng / gạch chân) giữ nguyên định dạng khi thay `{{trường}}` bằng giá trị (trước đây `setCellValue(String)` làm mất định dạng từng đoạn). Vị trí các đoạn được tính lại theo độ dài giá trị thay (`mapIndex`, `richWithReplacements`); đoạn có ranh giới nằm giữa một trường thì về đầu giá trị thay. Test `keepsPartialFormattingWhenTokensAreReplaced` (cả dòng dữ liệu nhân bản). Đi cùng FE `fix/dinh-dang-phan-boi-den-trong-o` (trình soạn mẫu lưu rich text).
+
+## feat/mobile-auth
+- App di động (repo `HT-NEW-MOBILE`) đăng nhập qua `/api/mobile/auth/{login,refresh,logout}` (package mới `modules/mobile`). Chỉ thêm mới, `/api/auth/*` của web không đổi.
+- Khác web: token nằm trong thân JSON (`MobileAuthTokenResponse` có cả `accessToken` và `refreshToken`), **không đọc và không ghi cookie**; `refresh` chỉ nhận refresh token từ thân (không có thì 400), nên mã chạy trên web không dùng được endpoint này để lấy token của phiên web (không đọc được cookie HttpOnly). Phản hồi có `Cache-Control: no-store`. Đăng xuất nhận token trong thân, không đọc header `Authorization` (bộ lọc JWT sẽ từ chối token hết hạn trước khi tới controller).
+- Dùng lại nguyên `AuthService.login/refresh/logout`, `TurnstileService.assertHuman`, `LoginRequest` (Turnstile, chặn đăng nhập sai, kiểm tra `X-Site-Host`, xoay vòng và phát hiện dùng lại refresh token y như web). Phiên mobile tính vào giới hạn 2 phiên mỗi tài khoản như web.
+- File hiện có chỉ **thêm dòng cho đường dẫn mới**: `securityConfig` (3 đường dẫn public, cả hai nhánh swagger) và `ApiRateLimitFilter.resolveTier` (login → nhóm `login`, refresh → nhóm `auth`). Nhật ký hệ thống ghi các lời gọi này với phân hệ mặc định `organization` (chưa có nhánh riêng cho `/api/mobile`).
+- Cờ `app.mobile.auth.enabled` (mặc định bật); tắt thì ba endpoint trả 404 (`@ConditionalOnProperty`).
+- Test: `MobileAuthControllerIntegrationTest` (thân có đủ token, không `Set-Cookie`, refresh bỏ qua cookie, refresh chỉ có cookie bị từ chối, đăng xuất, web vẫn chỉ phát refresh qua cookie), `MobileAuthDisabledIntegrationTest`. Test cũ của web không sửa.
