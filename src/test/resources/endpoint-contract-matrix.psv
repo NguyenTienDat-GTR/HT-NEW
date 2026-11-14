@@ -331,3 +331,7 @@ GET /api/media/admin/status|200|401|403|N/A: endpoint has no request parameters 
 
 # Internal (chỉ Caddy gọi trong mạng Docker, không qua /api)
 GET /internal/site-hosts/check|200|N/A: internal endpoint called by the reverse proxy without a user session|N/A: internal endpoint called by the reverse proxy without a user session|400|404|N/A: read-only endpoint does not mutate state
+
+# Mobile (app di động)
+POST /api/mobile/push/devices|200|401|N/A: any authenticated account registers its own device, no permission gate|400|N/A: the device is registered for the caller, no resource lookup|N/A: registering the same device again updates it instead of conflicting
+DELETE /api/mobile/push/devices/{deviceId}|200|401|N/A: any authenticated account unregisters only its own device, no permission gate|N/A: device id is an opaque path value and no body is read|N/A: unregistering an unknown device succeeds idempotently|N/A: unregistering is idempotent and does not conflict
