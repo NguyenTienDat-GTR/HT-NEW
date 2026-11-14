@@ -6,6 +6,9 @@ import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.util.CellRangeAddress;
+import org.apache.poi.xssf.usermodel.XSSFFont;
+import org.apache.poi.xssf.usermodel.XSSFRichTextString;
+import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.Test;
 import phucuong.ht.modules.training.registrationTemplate.service.RegistrationTemplateRenderer;
@@ -73,6 +76,75 @@ class RegistrationTemplateRendererTest {
     }
 
     private static final Map<String, String> COMMON = Map.of("tenKhoa", "Khóa cấp II 2027", "capDonVi", "Liên đoàn", "tenDonVi", "Phêrô");
+
+    /** Ô có phần chữ đậm / nghiêng (rich text): thay {{trường}} xong vẫn giữ đúng định dạng từng đoạn, cả ở dòng dữ liệu được nhân bản. */
+    @Test
+    void keepsPartialFormattingWhenTokensAreReplaced() throws IOException {
+        byte[] template;
+        try (XSSFWorkbook workbook = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            Sheet sheet = workbook.createSheet("Mẫu");
+            XSSFFont bold = workbook.createFont();
+            bold.setBold(true);
+            XSSFFont italic = workbook.createFont();
+            italic.setItalic(true);
+            // "Giáo xứ: " thường, "{{tenGiaoXu}}" đậm, " (ghi chú)" nghiêng.
+            XSSFRichTextString title = new XSSFRichTextString("Giáo xứ: {{tenGiaoXu}} (ghi chú)");
+            title.applyFont(9, 22, bold);
+            title.applyFont(22, 31, italic);
+            sheet.createRow(0).createCell(0).setCellValue(title);
+            Row header = sheet.createRow(2);
+            header.createCell(0).setCellValue("STT");
+            header.createCell(1).setCellValue("Họ và tên");
+            Row data = sheet.createRow(3);
+            data.createCell(0).setCellValue("{{stt}}");
+            XSSFRichTextString name = new XSSFRichTextString("Anh {{hoVaTen}}");
+            name.applyFont(4, 15, bold);
+            data.createCell(1).setCellValue(name);
+            workbook.write(out);
+            template = out.toByteArray();
+        }
+
+        byte[] out = RegistrationTemplateRenderer.renderWorkbook(template, Map.of(), List.of(group("Giáo xứ Phú Hòa", "Phú Hòa", 3)),
+                RegistrationTemplateRenderer.Layout.SINGLE_SHEET, false);
+
+        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(out))) {
+            XSSFSheet sheet = workbook.getSheetAt(0);
+            XSSFRichTextString title = sheet.getRow(0).getCell(0).getRichStringCellValue();
+            assertEquals("Giáo xứ: Phú Hòa (ghi chú)", title.getString());
+            assertEquals(false, runIsBold(title, 0));
+            assertEquals(true, runIsBold(title, 9));
+            assertEquals(true, runIsBold(title, 15));
+            assertEquals(false, runIsBold(title, 16));
+            assertEquals(true, runIsItalic(title, 18));
+            for (int row = 3; row <= 5; row++) {
+                XSSFRichTextString cell = sheet.getRow(row).getCell(1).getRichStringCellValue();
+                assertEquals("Anh Phú Hòa " + (row - 2), cell.getString());
+                assertEquals(false, runIsBold(cell, 0));
+                assertEquals(true, runIsBold(cell, 4));
+                assertEquals(true, runIsBold(cell, cell.length() - 1));
+            }
+        }
+    }
+
+    private static boolean runIsBold(XSSFRichTextString text, int index) {
+        XSSFFont font = fontAt(text, index);
+        return font != null && font.getBold();
+    }
+
+    private static boolean runIsItalic(XSSFRichTextString text, int index) {
+        XSSFFont font = fontAt(text, index);
+        return font != null && font.getItalic();
+    }
+
+    private static XSSFFont fontAt(XSSFRichTextString text, int index) {
+        for (int i = 0; i < text.numFormattingRuns(); i++) {
+            int start = text.getIndexOfFormattingRun(i);
+            if (index >= start && index < start + text.getLengthOfFormattingRun(i)) {
+                return text.getFontOfFormattingRun(i);
+            }
+        }
+        return null;
+    }
 
     @Test
     void multipliesTheTokenRowAndPushesFooterAndItsMergeDown() throws IOException {

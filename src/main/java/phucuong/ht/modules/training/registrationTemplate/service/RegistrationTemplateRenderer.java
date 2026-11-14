@@ -8,6 +8,9 @@ import org.apache.poi.ss.usermodel.Font;
 import org.apache.poi.ss.usermodel.HorizontalAlignment;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.util.CellRangeAddress;
+import org.apache.poi.xssf.usermodel.XSSFCell;
+import org.apache.poi.xssf.usermodel.XSSFFont;
+import org.apache.poi.xssf.usermodel.XSSFRichTextString;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import phucuong.ht.modules.training.registrationTemplate.model.RegistrationTemplateField;
@@ -223,6 +226,8 @@ public final class RegistrationTemplateRenderer {
         }
         Matcher matcher = TOKEN.matcher(text);
         StringBuilder out = new StringBuilder();
+        // Vị trí đổi chữ: mỗi {{trường}} (từ, đến trong chữ gốc) được thay bằng đoạn mới dài `length` (dùng dựng lại các đoạn định dạng).
+        List<int[]> replaced = new ArrayList<>();
         while (matcher.find()) {
             String key = matcher.group(1);
             Object value = rowValues.containsKey(key) ? rowValues.get(key) : cellValues.get(key);
@@ -235,10 +240,47 @@ public final class RegistrationTemplateRenderer {
             } else if ("title".equals(matcher.group(2))) {
                 shown = titleCase(shown);
             }
+            replaced.add(new int[]{matcher.start(), matcher.end(), shown.length()});
             matcher.appendReplacement(out, Matcher.quoteReplacement(shown));
         }
         matcher.appendTail(out);
+        if (cell instanceof XSSFCell xssfCell) {
+            XSSFRichTextString rich = xssfCell.getRichStringCellValue();
+            if (rich != null && rich.numFormattingRuns() > 0) {
+                // Ô có định dạng riêng từng đoạn (đậm / nghiêng / gạch chân một phần chữ): giữ định dạng khi thay trường.
+                cell.setCellValue(richWithReplacements(rich, out.toString(), replaced));
+                return;
+            }
+        }
         cell.setCellValue(out.toString());
+    }
+
+    /** Vị trí mới của một vị trí trong chữ gốc sau khi các {{trường}} được thay bằng giá trị (vị trí nằm trong một trường thì về đầu giá trị thay). */
+    private static int mapIndex(int original, List<int[]> replaced) {
+        int shift = 0;
+        for (int[] item : replaced) {
+            if (original >= item[1]) {
+                shift += item[2] - (item[1] - item[0]);
+            } else if (original > item[0]) {
+                return item[0] + shift;
+            } else {
+                break;
+            }
+        }
+        return original + shift;
+    }
+
+    private static XSSFRichTextString richWithReplacements(XSSFRichTextString source, String newText, List<int[]> replaced) {
+        XSSFRichTextString result = new XSSFRichTextString(newText);
+        for (int i = 0; i < source.numFormattingRuns(); i++) {
+            int from = mapIndex(source.getIndexOfFormattingRun(i), replaced);
+            int to = mapIndex(source.getIndexOfFormattingRun(i) + source.getLengthOfFormattingRun(i), replaced);
+            XSSFFont font = source.getFontOfFormattingRun(i);
+            if (font != null && to > from) {
+                result.applyFont(from, to, font);
+            }
+        }
+        return result;
     }
 
     private static void writeGroupTitle(XSSFSheet sheet, Row row, int minCol, int maxCol, String text, Map<Integer, CellStyle> boldStyles) {
