@@ -1,4 +1,4 @@
--- Hoàn tác thủ công V139 (Flyway không dùng undo). Mất toàn bộ ngoại lệ phân quyền vai trò theo đơn vị.
+-- Hoàn tác thủ công V139, V140, V141 (Flyway không dùng undo). Mất toàn bộ ngoại lệ phân quyền vai trò theo đơn vị.
 -- Chạy trên đúng database, rồi triển khai lại bản BE trước V139.
 BEGIN;
 DROP VIEW IF EXISTS v_role_permission_listing;
@@ -27,5 +27,7 @@ WHERE a.status = TRUE AND apo.status = TRUE AND apo.revoked_at IS NULL AND p.sta
   AND (apo.expires_at IS NULL OR apo.expires_at > CURRENT_TIMESTAMP);
 
 DROP TABLE IF EXISTS role_permission_unit_override;
-DELETE FROM flyway_schema_history WHERE version = '139';
+-- V141 đã khôi phục các bản ghi role_permission mặc định; muốn quay về trạng thái thu hồi toàn hệ thống cũ, đặt lại revoked_at/revoked_by/revocation_reason
+-- cho các dòng tương ứng từ bảng role_permission_unit_override (override_type = 'EXCLUDE') TRƯỚC khi xóa bảng này.
+DELETE FROM flyway_schema_history WHERE version IN ('139', '140', '141');
 COMMIT;
