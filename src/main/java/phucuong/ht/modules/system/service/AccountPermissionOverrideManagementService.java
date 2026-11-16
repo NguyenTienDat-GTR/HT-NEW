@@ -188,10 +188,46 @@ public class AccountPermissionOverrideManagementService {
 
     @Transactional(readOnly = true)
     public Page<AccountPermissionOverrideResponse> findAll(BaseSearchRequest request, Authentication authentication) {
+        String validityFilter = validityFilter(request);
         List<AccountPermissionOverride> manageable = loadAllMatching(request).stream()
                 .filter(override -> canReadOverride(authentication, override))
+                .filter(override -> matchesValidity(override, validityFilter))
                 .toList();
         return page(request, manageable, authentication);
+    }
+
+    /**
+     * Bộ lọc tình trạng quyền (khóa validity): ACTIVE = còn hiệu lực; INACTIVE = hết hiệu lực (đã thu hồi, hết hạn hoặc quyền bị vô hiệu hóa);
+     * hoặc đúng một giá trị của PermissionValidity. Tình trạng được tính ra nên không lọc được ở tầng truy vấn.
+     */
+    private String validityFilter(BaseSearchRequest request) {
+        java.util.Map<String, Object> filters = request == null ? null : request.getFilters();
+        Object value = filters == null ? null : filters.get("validity");
+        if (value == null || String.valueOf(value).isBlank()) {
+            return null;
+        }
+        String text = String.valueOf(value).trim().toUpperCase();
+        if (!text.equals("ACTIVE") && !text.equals("INACTIVE")) {
+            try {
+                phucuong.ht.modules.system.model.enums.PermissionValidity.valueOf(text);
+            } catch (IllegalArgumentException ex) {
+                throw commonValidationHelper.validationError("Tình trạng quyền lọc không hợp lệ");
+            }
+        }
+        return text;
+    }
+
+    private boolean matchesValidity(AccountPermissionOverride override, String filter) {
+        if (filter == null) {
+            return true;
+        }
+        phucuong.ht.modules.system.model.enums.PermissionValidity validity = PermissionValiditySupport.validity(
+                override.getRevokedAt(), override.getRevocationReason(), override.getExpiresAt(), override.getPermission(), OffsetDateTime.now());
+        return switch (filter) {
+            case "ACTIVE" -> validity == phucuong.ht.modules.system.model.enums.PermissionValidity.ACTIVE;
+            case "INACTIVE" -> validity != phucuong.ht.modules.system.model.enums.PermissionValidity.ACTIVE;
+            default -> validity.name().equals(filter);
+        };
     }
 
     @Transactional(readOnly = true)

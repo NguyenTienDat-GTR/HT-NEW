@@ -71,6 +71,33 @@ class AccountPermissionOverrideReadScopeTest {
     }
 
     @Test
+    void shouldFilterByValidity() {
+        AccountPermissionOverride active = override("a", "permission.active");
+        AccountPermissionOverride revoked = override("b", "permission.revoked");
+        revoked.setRevokedAt(java.time.OffsetDateTime.now().minusDays(1));
+        revoked.setRevocationReason(phucuong.ht.modules.system.model.enums.PermissionRevocationReason.MANUAL);
+        AccountPermissionOverride expired = override("c", "permission.expired");
+        expired.setExpiresAt(java.time.OffsetDateTime.now().minusDays(1));
+        for (AccountPermissionOverride item : List.of(active, revoked, expired)) {
+            item.getPermission().setStatus(true);
+        }
+        when(overrideRepository.findAll(any(BaseSearchRequest.class)))
+                .thenReturn(new PageImpl<>(List.of(active, revoked, expired), PageRequest.of(0, BaseSearchRequest.MAX_PAGE_SIZE), 3));
+        when(authorizationHelper.canManageAccountPermission(eq(authentication), any(), any(Permission.class))).thenReturn(true);
+
+        BaseSearchRequest request = new BaseSearchRequest();
+        request.setSize(10);
+        request.setFilters(new java.util.LinkedHashMap<>(java.util.Map.of("validity", "ACTIVE")));
+        assertEquals(1, service().findAll(request, authentication).getTotalElements());
+
+        request.setFilters(new java.util.LinkedHashMap<>(java.util.Map.of("validity", "INACTIVE")));
+        assertEquals(2, service().findAll(request, authentication).getTotalElements());
+
+        request.setFilters(new java.util.LinkedHashMap<>(java.util.Map.of("validity", "EXPIRED")));
+        assertEquals(1, service().findAll(request, authentication).getTotalElements());
+    }
+
+    @Test
     void shouldReturnForbiddenForOutOfScopeDetail() {
         AccountPermissionOverride outside = override("outside", "permission.outside");
         when(overrideRepository.findById("override-1")).thenReturn(Optional.of(outside));
