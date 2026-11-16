@@ -22,8 +22,19 @@ import phucuong.ht.modules.system.model.request.RolePermissionUpdateRequest;
 import phucuong.ht.modules.system.model.response.PermissionResponse;
 import phucuong.ht.modules.system.model.response.RoleResponse;
 import phucuong.ht.modules.system.model.response.RolePermissionResponse;
+import phucuong.ht.modules.system.model.entity.RolePermissionListing;
+import phucuong.ht.modules.system.model.entity.RolePermissionUnitOverride;
+import phucuong.ht.modules.system.model.enums.PermissionValidity;
+import phucuong.ht.modules.system.model.enums.RolePermissionEntryType;
+import phucuong.ht.modules.system.model.enums.RolePermissionOverrideType;
+import phucuong.ht.modules.system.model.enums.RolePermissionScopeLevel;
+import phucuong.ht.modules.system.repository.RolePermissionListingRepository;
 import phucuong.ht.modules.system.repository.RolePermissionRepository;
+import phucuong.ht.modules.system.repository.RolePermissionUnitOverrideRepository;
 import phucuong.ht.modules.system.repository.SystemPermissionRepository;
+import phucuong.ht.modules.system.service.RolePermissionUnitScopeResolver.Actor;
+import phucuong.ht.modules.system.service.RolePermissionUnitScopeResolver.ActorTier;
+import phucuong.ht.modules.system.service.RolePermissionUnitScopeResolver.UnitScope;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -31,6 +42,7 @@ import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 @Service
@@ -53,6 +65,8 @@ public class RolePermissionManagementService {
             "permission.resource.resourceCode",
             "permission.action.actionCode",
             "permission.scope.scopeCode",
+            "entryType",
+            "scopeLevel",
             "conditions",
             "assignedBy",
             "assignedAt",
@@ -70,6 +84,10 @@ public class RolePermissionManagementService {
     private final CommonValidationHelper commonValidationHelper;
     private final SystemAdminAuthorizationHelper authorizationHelper;
     private final phucuong.ht.common.utils.AuditActorNameResolver auditActorNameResolver;
+    private final RolePermissionUnitScopeResolver unitScopeResolver;
+    private final RolePermissionUnitOverrideService unitOverrideService;
+    private final RolePermissionUnitOverrideRepository unitOverrideRepository;
+    private final RolePermissionListingRepository listingRepository;
     @Autowired(required = false)
     private RbacAuthRefreshNotifier authRefreshNotifier;
     @Autowired(required = false)
@@ -86,6 +104,13 @@ public class RolePermissionManagementService {
         }
         if (!Boolean.TRUE.equals(permission.getStatus())) {
             throw commonValidationHelper.conflict("Không thể gán quyền đang ngừng hoạt động");
+        }
+
+        Optional<UnitScope> unit = unitScopeResolver.resolve(authentication, role,
+                request.getDioceseId(), request.getDeaneryId(), request.getParishId(), false);
+        if (unit.isPresent()) {
+            return assignForUnit(role, unit.get(), List.of(request.getPermissionCode()), request.getConditions(),
+                    request.getAssignedAt(), request.getExpiresAt(), authentication, "ROLE_PERMISSION_CREATED").get(0);
         }
 
         authorizationHelper.requireRolePermissionWriteAccess(authentication, role, permission, SystemAdminAuthorizationHelper.ROLE_PERMISSION_ASSIGN_DIOCESE);
@@ -120,6 +145,13 @@ public class RolePermissionManagementService {
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy vai trò: " + request.getRoleCode()));
         if (!Boolean.TRUE.equals(role.getStatus())) {
             throw commonValidationHelper.conflict("Không thể gán quyền cho vai trò đang ngừng hoạt động");
+        }
+
+        Optional<UnitScope> unit = unitScopeResolver.resolve(authentication, role,
+                request.getDioceseId(), request.getDeaneryId(), request.getParishId(), false);
+        if (unit.isPresent()) {
+            return assignForUnit(role, unit.get(), new ArrayList<>(new LinkedHashSet<>(request.getPermissionCodes())),
+                    request.getConditions(), request.getAssignedAt(), request.getExpiresAt(), authentication, "ROLE_PERMISSION_BULK_ASSIGNED");
         }
 
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tạo phân quyền cho vai trò");
@@ -160,6 +192,11 @@ public class RolePermissionManagementService {
     public int bulkRevoke(RolePermissionRevokeRequest request, Authentication authentication) {
         Role role = roleRepository.findById(request.getRoleCode())
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy vai trò: " + request.getRoleCode()));
+        Optional<UnitScope> unit = unitScopeResolver.resolve(authentication, role,
+                request.getDioceseId(), request.getDeaneryId(), request.getParishId(), true);
+        if (unit.isPresent()) {
+            return revokeForUnit(role, unit.get(), new ArrayList<>(new LinkedHashSet<>(request.getPermissionCodes())), authentication);
+        }
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người thu hồi phân quyền của vai trò");
         int revoked = 0;
         List<Permission> revokedPermissions = new java.util.ArrayList<>();
@@ -191,9 +228,21 @@ public class RolePermissionManagementService {
 
     /** Quyền đã gán cho vai trò mà tài khoản hiện tại được phép thu hồi. */
     @Transactional(readOnly = true)
-    public List<PermissionResponse> findRevocablePermissions(String roleCode, Authentication authentication) {
+    public List<PermissionResponse> findRevocablePermissions(String roleCode, java.util.UUID dioceseId, java.util.UUID deaneryId,
+                                                             java.util.UUID parishId, Authentication authentication) {
         Role role = roleRepository.findById(roleCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy vai trò: " + roleCode));
+        Optional<UnitScope> unit = unitScopeResolver.resolve(authentication, role, dioceseId, deaneryId, parishId, true);
+        if (unit.isPresent()) {
+            Actor actor = unitScopeResolver.actor(authentication, true);
+            Set<String> effective = unitOverrideService.effectiveCodes(role, unit.get());
+            return effective.stream()
+                    .map(systemPermissionRepository::findById)
+                    .flatMap(java.util.Optional::stream)
+                    .filter(permission -> unitScopeResolver.permissionAllowed(actor, permission))
+                    .map(this::toPermissionResponse)
+                    .toList();
+        }
         return rolePermissionRepository.findPermissionCodesByRoleCode(roleCode).stream()
                 .map(systemPermissionRepository::findById)
                 .flatMap(java.util.Optional::stream)
@@ -216,11 +265,80 @@ public class RolePermissionManagementService {
 
     @Transactional(readOnly = true)
     public Page<RolePermissionResponse> findAll(BaseSearchRequest request, Authentication authentication) {
-        List<RolePermission> manageable = loadAllMatching(request).stream()
-                .filter(rolePermission -> authorizationHelper.canReadRolePermission(
-                        authentication, rolePermission.getRole(), rolePermission.getPermission()))
+        UnitScope selected = selectedUnit(request);
+        Set<String> excluded = new java.util.HashSet<>();
+        if (selected != null) {
+            for (RolePermissionUnitOverride exclude : unitOverrideRepository.findActiveExcludesInUnits(selected.chain())) {
+                excluded.add(exclude.getRole().getRoleCode() + "|" + exclude.getPermission().getPermissionCode());
+            }
+        }
+        Actor viewer = unitScopeResolver.actor(authentication, false);
+        List<RolePermissionListing> manageable = loadAllMatching(request).stream()
+                .filter(row -> authorizationHelper.canReadRolePermission(authentication, row.getRole(), row.getPermission()))
+                .filter(row -> visibleToViewer(row, viewer))
+                .filter(row -> selected == null || matchesSelectedUnit(row, selected, excluded))
                 .toList();
         return page(request, manageable, authentication);
+    }
+
+    /** Đơn vị người dùng đang lọc trên danh sách (bộ lọc dioceseId / deaneryId / parishId), hoặc null khi không lọc. */
+    private UnitScope selectedUnit(BaseSearchRequest request) {
+        Map<String, Object> filters = request == null ? null : request.getFilters();
+        if (filters == null) {
+            return null;
+        }
+        java.util.UUID diocese = uuidFilter(filters.get("dioceseId"));
+        java.util.UUID deanery = uuidFilter(filters.get("deaneryId"));
+        java.util.UUID parish = uuidFilter(filters.get("parishId"));
+        if (diocese == null && deanery == null && parish == null) {
+            return null;
+        }
+        return unitScopeResolver.load(diocese, deanery, parish);
+    }
+
+    private java.util.UUID uuidFilter(Object value) {
+        if (value == null || String.valueOf(value).isBlank()) {
+            return null;
+        }
+        try {
+            return java.util.UUID.fromString(String.valueOf(value).trim());
+        } catch (IllegalArgumentException ex) {
+            throw commonValidationHelper.validationError("Mã đơn vị lọc không hợp lệ");
+        }
+    }
+
+    /** Dòng ngoại lệ chỉ hiện với superadmin và với admin giáo phận / giáo hạt trong chuỗi đơn vị của họ; dòng mặc định luôn qua. */
+    private boolean visibleToViewer(RolePermissionListing row, Actor viewer) {
+        if (row.getEntryType() == null || row.getEntryType() == RolePermissionEntryType.DEFAULT || viewer.tier() == ActorTier.SUPER_ADMIN) {
+            return true;
+        }
+        return switch (viewer.tier()) {
+            case DIOCESE -> viewer.dioceseId() != null && viewer.dioceseId().equals(row.getDioceseId());
+            case DEANERY -> viewer.deaneryId() != null && (viewer.deaneryId().equals(row.getDeaneryId())
+                    || (row.getScopeLevel() == RolePermissionScopeLevel.DIOCESE && viewer.dioceseId() != null
+                    && viewer.dioceseId().equals(row.getDioceseId())));
+            default -> false;
+        };
+    }
+
+    /**
+     * Khi lọc theo một đơn vị U: dòng mặc định hiện trừ khi bị thu hồi riêng ở U hoặc cấp trên;
+     * dòng ngoại lệ hiện nếu thuộc U, cấp trên của U hoặc đơn vị cấp dưới của U.
+     */
+    private boolean matchesSelectedUnit(RolePermissionListing row, UnitScope selected, Set<String> excluded) {
+        if (row.getEntryType() == null || row.getEntryType() == RolePermissionEntryType.DEFAULT) {
+            return !excluded.contains(row.getRole().getRoleCode() + "|" + row.getPermission().getPermissionCode());
+        }
+        java.util.UUID unitId = selected.unitId();
+        if (unitId.equals(row.getDioceseId()) || unitId.equals(row.getDeaneryId()) || unitId.equals(row.getParishId())) {
+            return true;
+        }
+        java.util.UUID own = switch (row.getScopeLevel()) {
+            case DIOCESE -> row.getDioceseId();
+            case DEANERY -> row.getDeaneryId();
+            case PARISH -> row.getParishId();
+        };
+        return own != null && selected.chain().contains(own);
     }
 
     /** Vai trò mà người dùng hiện tại được phép phân quyền / thu hồi quyền (action = assign | revoke); đã loại vai trò cấp cao hơn. */
@@ -230,9 +348,12 @@ public class RolePermissionManagementService {
                 ? SystemAdminAuthorizationHelper.ROLE_PERMISSION_REVOKE_DIOCESE
                 : SystemAdminAuthorizationHelper.ROLE_PERMISSION_ASSIGN_DIOCESE;
         boolean assign = !"revoke".equalsIgnoreCase(action);
+        Actor unitActor = unitScopeResolver.actor(authentication, !assign);
         return roleRepository.findAll().stream()
                 .filter(role -> !assign || Boolean.TRUE.equals(role.getStatus()))
-                .filter(role -> authorizationHelper.canManageRolePermissionRole(authentication, role, authority))
+                // Admin giáo phận / giáo hạt thêm các vai trò admin cấp dưới mà họ được chỉnh quyền riêng theo đơn vị.
+                .filter(role -> authorizationHelper.canManageRolePermissionRole(authentication, role, authority)
+                        || (unitActor.tier() != ActorTier.SUPER_ADMIN && unitScopeResolver.roleEligible(unitActor, role)))
                 .sorted(java.util.Comparator.comparing(Role::getDisplayOrder, java.util.Comparator.nullsLast(Integer::compareTo))
                         .thenComparing(Role::getRoleCode))
                 .map(role -> RoleResponse.builder()
@@ -253,11 +374,24 @@ public class RolePermissionManagementService {
     }
 
     @Transactional(readOnly = true)
-    public List<PermissionResponse> findAssignablePermissions(String roleCode, Authentication authentication) {
+    public List<PermissionResponse> findAssignablePermissions(String roleCode, java.util.UUID dioceseId, java.util.UUID deaneryId,
+                                                              java.util.UUID parishId, Authentication authentication) {
         Role role = roleRepository.findById(roleCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy vai trò: " + roleCode));
         if (!Boolean.TRUE.equals(role.getStatus())) {
             throw commonValidationHelper.conflict("Không thể gán quyền cho vai trò đang ngừng hoạt động");
+        }
+        Optional<UnitScope> unit = unitScopeResolver.resolve(authentication, role, dioceseId, deaneryId, parishId, false);
+        if (unit.isPresent()) {
+            Actor actor = unitScopeResolver.actor(authentication, false);
+            Set<String> unavailable = new LinkedHashSet<>(unitOverrideService.effectiveCodes(role, unit.get()));
+            // Quyền đã bị thu hồi riêng ở cấp trên thì không cấp lại được ở đơn vị này.
+            unavailable.addAll(unitOverrideService.blockedByAncestors(role, unit.get()));
+            return systemPermissionRepository.findActivePermissions().stream()
+                    .filter(permission -> !unavailable.contains(permission.getPermissionCode()))
+                    .filter(permission -> unitScopeResolver.permissionAllowed(actor, permission))
+                    .map(this::toPermissionResponse)
+                    .toList();
         }
         Set<String> assignedPermissionCodes = Set.copyOf(rolePermissionRepository.findPermissionCodesByRoleCode(roleCode));
         return systemPermissionRepository.findActivePermissions().stream()
@@ -269,16 +403,27 @@ public class RolePermissionManagementService {
 
     @Transactional(readOnly = true)
     public RolePermissionResponse findById(String id, Authentication authentication) {
-        RolePermission rolePermission = rolePermissionRepository.findById(id)
-                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy phân quyền cho vai trò: " + id));
+        RolePermission rolePermission = rolePermissionRepository.findById(id).orElse(null);
+        if (rolePermission == null) {
+            RolePermissionUnitOverride override = unitOverrideRepository.findById(id)
+                    .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy phân quyền cho vai trò: " + id));
+            authorizationHelper.requireRolePermissionReadAccess(authentication, override.getRole(), override.getPermission());
+            RolePermissionListing row = toListingRow(override, scopeOf(override));
+            if (!visibleToViewer(row, unitScopeResolver.actor(authentication, false))) {
+                throw commonValidationHelper.forbidden("Không có quyền xem phân quyền của đơn vị này");
+            }
+            return toResponse(row, authentication, unitScopeResolver.actor(authentication, true), namesOf(List.of(row)));
+        }
         authorizationHelper.requireRolePermissionReadAccess(authentication, rolePermission.getRole(), rolePermission.getPermission());
         return toResponse(rolePermission, authentication);
     }
 
     @Transactional
     public RolePermissionResponse update(String id, RolePermissionUpdateRequest request, Authentication authentication) {
-        RolePermission rolePermission = rolePermissionRepository.findById(id)
-                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy phân quyền cho vai trò: " + id));
+        RolePermission rolePermission = rolePermissionRepository.findById(id).orElse(null);
+        if (rolePermission == null) {
+            return updateOverride(id, request, authentication);
+        }
         authorizationHelper.requireRolePermissionWriteAccess(
                 authentication,
                 rolePermission.getRole(),
@@ -381,14 +526,14 @@ public class RolePermissionManagementService {
         return REPOSITORY_FIELDS.contains(repositoryField) ? repositoryField : null;
     }
 
-    private List<RolePermission> loadAllMatching(BaseSearchRequest request) {
-        List<RolePermission> matches = new java.util.ArrayList<>();
+    private List<RolePermissionListing> loadAllMatching(BaseSearchRequest request) {
+        List<RolePermissionListing> matches = new java.util.ArrayList<>();
         int page = 0;
         while (true) {
             BaseSearchRequest batch = copyRequest(request);
             batch.setPage(page);
             batch.setSize(BaseSearchRequest.MAX_PAGE_SIZE);
-            Page<RolePermission> result = rolePermissionRepository.findAll(batch);
+            Page<RolePermissionListing> result = listingRepository.findAll(batch);
             matches.addAll(result.getContent());
             if (!result.hasNext()) {
                 return matches;
@@ -397,12 +542,231 @@ public class RolePermissionManagementService {
         }
     }
 
-    private Page<RolePermissionResponse> page(BaseSearchRequest request, List<RolePermission> rolePermissions, Authentication authentication) {
+    private Page<RolePermissionResponse> page(BaseSearchRequest request, List<RolePermissionListing> rolePermissions, Authentication authentication) {
         int page = request == null ? 0 : request.getPage();
         int size = request == null ? 10 : request.getSize();
         int start = Math.min(page * size, rolePermissions.size());
         int end = Math.min(start + size, rolePermissions.size());
-        return new PageImpl<>(rolePermissions.subList(start, end).stream().map(item -> toResponse(item, authentication)).toList(), PageRequest.of(page, size), rolePermissions.size());
+        List<RolePermissionListing> slice = rolePermissions.subList(start, end);
+        Map<java.util.UUID, String> names = namesOf(slice);
+        Actor revoker = unitScopeResolver.actor(authentication, true);
+        return new PageImpl<>(slice.stream().map(item -> toResponse(item, authentication, revoker, names)).toList(), PageRequest.of(page, size), rolePermissions.size());
+    }
+
+    /** Tên đơn vị của các dòng ngoại lệ trên trang (một lượt truy vấn cho cả trang). */
+    private Map<java.util.UUID, String> namesOf(List<RolePermissionListing> rows) {
+        Set<java.util.UUID> ids = new LinkedHashSet<>();
+        for (RolePermissionListing row : rows) {
+            if (row.getDioceseId() != null) {
+                ids.add(row.getDioceseId());
+            }
+            if (row.getDeaneryId() != null) {
+                ids.add(row.getDeaneryId());
+            }
+            if (row.getParishId() != null) {
+                ids.add(row.getParishId());
+            }
+        }
+        return unitScopeResolver.unitNames(ids);
+    }
+
+    private RolePermissionResponse toResponse(RolePermissionListing row, Authentication authentication, Actor revoker,
+                                              Map<java.util.UUID, String> names) {
+        OffsetDateTime now = OffsetDateTime.now();
+        RolePermissionEntryType type = row.getEntryType() == null ? RolePermissionEntryType.DEFAULT : row.getEntryType();
+        boolean revoked = row.getRevokedAt() != null;
+        boolean permanentlyRevoked = PermissionValiditySupport.isPermanentlyRevoked(row.getRevokedAt(), row.getExpiresAt(), now);
+        boolean revocable = switch (type) {
+            case DEFAULT -> !permanentlyRevoked && authorizationHelper.canRevokeRolePermission(authentication, row.getRole(),
+                    row.getPermission(), row.getAssignedBy(), row.getCreatedBy());
+            case UNIT_GRANT -> !permanentlyRevoked && unitScopeResolver.canManageRow(revoker, row.getRole(), row.getPermission(),
+                    row.getScopeLevel(), row.getDioceseId(), row.getDeaneryId());
+            case UNIT_EXCLUDE -> false;
+        };
+        PermissionValidity validity = type == RolePermissionEntryType.UNIT_EXCLUDE
+                ? PermissionValidity.REVOKED
+                : PermissionValiditySupport.validity(row.getRevokedAt(), row.getRevocationReason(), row.getExpiresAt(), row.getPermission(), now);
+        // Thu hồi riêng theo đơn vị hiển thị như một dòng đã thu hồi, người thu hồi là người đặt ngoại lệ.
+        OffsetDateTime revokedAt = type == RolePermissionEntryType.UNIT_EXCLUDE ? row.getAssignedAt() : row.getRevokedAt();
+        String revokedBy = type == RolePermissionEntryType.UNIT_EXCLUDE ? row.getAssignedBy() : row.getRevokedBy();
+        phucuong.ht.modules.system.model.enums.PermissionRevocationReason reason = type == RolePermissionEntryType.UNIT_EXCLUDE
+                ? PermissionRevocationReason.MANUAL : row.getRevocationReason();
+        String dioceseName = row.getDioceseId() == null ? null : names.get(row.getDioceseId());
+        String deaneryName = row.getDeaneryId() == null ? null : names.get(row.getDeaneryId());
+        String parishName = row.getParishId() == null ? null : names.get(row.getParishId());
+        return RolePermissionResponse.builder()
+                .id(row.getId())
+                .entryType(type)
+                .scopeLevel(row.getScopeLevel())
+                .dioceseId(row.getDioceseId()).dioceseName(dioceseName)
+                .deaneryId(row.getDeaneryId()).deaneryName(deaneryName)
+                .parishId(row.getParishId()).parishName(parishName)
+                .scopeName(scopeName(row.getScopeLevel(), dioceseName, deaneryName, parishName))
+                .roleCode(row.getRole() == null ? null : row.getRole().getRoleCode())
+                .roleName(row.getRole() == null ? null : row.getRole().getRoleName())
+                .permissionCode(row.getPermission() == null ? null : row.getPermission().getPermissionCode())
+                .permissionName(row.getPermission() == null ? null : row.getPermission().getPermissionName())
+                .conditions(row.getConditions())
+                .assignedBy(row.getAssignedBy())
+                .assignedByName(auditActorNameResolver.resolve(row.getAssignedBy()))
+                .assignedAt(row.getAssignedAt())
+                .expiresAt(row.getExpiresAt())
+                .status(row.getStatus())
+                .validity(validity)
+                .revocable(revocable)
+                .revocationReason(reason)
+                .revokedAt(revokedAt)
+                .revokedBy(revokedBy)
+                .revokedByName(auditActorNameResolver.resolve(revokedBy))
+                .createdAt(row.getCreatedAt())
+                .createdBy(row.getCreatedBy())
+                .createdByName(auditActorNameResolver.resolve(row.getCreatedBy()))
+                .updatedAt(row.getUpdatedAt())
+                .updatedBy(row.getUpdatedBy())
+                .updatedByName(auditActorNameResolver.resolve(row.getUpdatedBy()))
+                .build();
+    }
+
+    private String scopeName(RolePermissionScopeLevel level, String dioceseName, String deaneryName, String parishName) {
+        if (level == null) {
+            return "Tất cả giáo phận";
+        }
+        return switch (level) {
+            case DIOCESE -> "Giáo phận " + dioceseName;
+            case DEANERY -> "Giáo hạt " + deaneryName;
+            case PARISH -> "Giáo xứ " + parishName;
+        };
+    }
+
+    /** Dòng ngoại lệ dưới dạng dòng danh sách (không lưu), để dùng chung bộ dựng phản hồi. */
+    private RolePermissionListing toListingRow(RolePermissionUnitOverride override, UnitScope scope) {
+        RolePermissionListing row = new RolePermissionListing();
+        row.setId(override.getId());
+        row.setRole(override.getRole());
+        row.setPermission(override.getPermission());
+        row.setEntryType(override.getOverrideType() == RolePermissionOverrideType.GRANT
+                ? RolePermissionEntryType.UNIT_GRANT : RolePermissionEntryType.UNIT_EXCLUDE);
+        row.setScopeLevel(override.getScopeLevel());
+        row.setDioceseId(scope.dioceseId());
+        row.setDeaneryId(scope.deaneryId());
+        row.setParishId(scope.parishId());
+        row.setConditions(override.getConditions());
+        row.setAssignedBy(override.getAssignedBy());
+        row.setAssignedAt(override.getAssignedAt());
+        row.setExpiresAt(override.getExpiresAt());
+        row.setRevokedAt(override.getRevokedAt());
+        row.setRevokedBy(override.getRevokedBy());
+        row.setRevocationReason(override.getRevocationReason());
+        row.setStatus(override.getStatus());
+        row.setCreatedAt(override.getCreatedAt());
+        row.setCreatedBy(override.getCreatedBy());
+        row.setUpdatedAt(override.getUpdatedAt());
+        row.setUpdatedBy(override.getUpdatedBy());
+        return row;
+    }
+
+    private UnitScope scopeOf(RolePermissionUnitOverride override) {
+        return switch (override.getScopeLevel()) {
+            case DIOCESE -> unitScopeResolver.load(override.getDioceseId(), null, null);
+            case DEANERY -> unitScopeResolver.load(null, override.getDeaneryId(), null);
+            case PARISH -> unitScopeResolver.load(null, null, override.getParishId());
+        };
+    }
+
+    private Map<java.util.UUID, String> namesOfScope(UnitScope scope) {
+        Map<java.util.UUID, String> names = new LinkedHashMap<>();
+        if (scope.dioceseId() != null) {
+            names.put(scope.dioceseId(), scope.dioceseName());
+        }
+        if (scope.deaneryId() != null) {
+            names.put(scope.deaneryId(), scope.deaneryName());
+        }
+        if (scope.parishId() != null) {
+            names.put(scope.parishId(), scope.parishName());
+        }
+        return names;
+    }
+
+    /** Gán quyền cho vai trò tại một đơn vị (ngoại lệ theo đơn vị); trả về các dòng ngoại lệ vừa thay đổi. */
+    private List<RolePermissionResponse> assignForUnit(Role role, UnitScope unit, List<String> permissionCodes, String conditions,
+                                                       OffsetDateTime assignedAt, OffsetDateTime expiresAt,
+                                                       Authentication authentication, String reason) {
+        String actorName = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tạo phân quyền cho vai trò");
+        Actor actor = unitScopeResolver.actor(authentication, false);
+        Actor revoker = unitScopeResolver.actor(authentication, true);
+        Map<java.util.UUID, String> names = namesOfScope(unit);
+        List<RolePermissionResponse> responses = new ArrayList<>();
+        List<Permission> granted = new ArrayList<>();
+        for (String permissionCode : permissionCodes) {
+            Permission permission = systemPermissionRepository.findById(permissionCode)
+                    .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy quyền: " + permissionCode));
+            if (!Boolean.TRUE.equals(permission.getStatus())) {
+                throw commonValidationHelper.conflict("Không thể gán quyền đang ngừng hoạt động: " + permissionCode);
+            }
+            unitScopeResolver.requirePermissionAllowed(actor, permission);
+            RolePermissionUnitOverrideService.Change change = unitOverrideService.assign(role, permission, unit, conditions, assignedAt, expiresAt, actorName);
+            responses.add(toResponse(toListingRow(change.entity(), unit), authentication, revoker, names));
+            granted.add(permission);
+        }
+        notifyUnitChanged(role, unit, reason);
+        if (permissionGrantNotifier != null) {
+            permissionGrantNotifier.notifyRoleGranted(role, granted, actorName, unit.unitId(), unit.label());
+        }
+        return responses;
+    }
+
+    /** Thu hồi quyền của vai trò tại một đơn vị; trả về số quyền đã xử lý. */
+    private int revokeForUnit(Role role, UnitScope unit, List<String> permissionCodes, Authentication authentication) {
+        String actorName = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người thu hồi phân quyền của vai trò");
+        Actor actor = unitScopeResolver.actor(authentication, true);
+        authorizationHelper.requireNotOwnRole(authentication, role);
+        List<Permission> revoked = new ArrayList<>();
+        for (String permissionCode : permissionCodes) {
+            Permission permission = systemPermissionRepository.findById(permissionCode)
+                    .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy quyền: " + permissionCode));
+            unitScopeResolver.requirePermissionAllowed(actor, permission);
+            unitOverrideService.revoke(role, permission, unit, actorName);
+            revoked.add(permission);
+        }
+        notifyUnitChanged(role, unit, "ROLE_PERMISSION_BULK_REVOKED");
+        if (permissionGrantNotifier != null) {
+            permissionGrantNotifier.notifyRoleRevoked(role, revoked, actorName, unit.unitId(), unit.label());
+        }
+        return revoked.size();
+    }
+
+    private void notifyUnitChanged(Role role, UnitScope unit, String reason) {
+        if (authRefreshNotifier != null) {
+            authRefreshNotifier.notifyRoleChanged(role.getRoleCode(), unit.unitId(), reason);
+        }
+    }
+
+    /** Cập nhật hạn / ghi chú của quyền cấp riêng theo đơn vị; dòng thu hồi riêng không sửa được (muốn đổi thì cấp lại quyền tại đơn vị). */
+    private RolePermissionResponse updateOverride(String id, RolePermissionUpdateRequest request, Authentication authentication) {
+        RolePermissionUnitOverride override = unitOverrideRepository.findById(id)
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy phân quyền cho vai trò: " + id));
+        if (override.getOverrideType() != RolePermissionOverrideType.GRANT) {
+            throw commonValidationHelper.conflict("Quyền đã thu hồi riêng cho đơn vị, không thể chỉnh sửa; hãy cấp lại quyền tại đơn vị");
+        }
+        UnitScope scope = scopeOf(override);
+        Actor actor = unitScopeResolver.actor(authentication, false);
+        if (!unitScopeResolver.canManageRow(actor, override.getRole(), override.getPermission(),
+                override.getScopeLevel(), scope.dioceseId(), scope.deaneryId())) {
+            throw commonValidationHelper.forbidden("Không có quyền cập nhật phân quyền của đơn vị này");
+        }
+        if (PermissionValiditySupport.isPermanentlyRevoked(override.getRevokedAt(), override.getExpiresAt(), OffsetDateTime.now())) {
+            throw commonValidationHelper.conflict("Phân quyền đã bị thu hồi hoặc hết hạn, không thể thay đổi; hãy tạo phân quyền mới");
+        }
+        if (request.getConditions() != null) {
+            override.setConditions(commonValidationHelper.normalizeOptionalText(request.getConditions()));
+        }
+        if (request.getExpiresAt() != null) {
+            override.setExpiresAt(request.getExpiresAt());
+        }
+        override.setUpdatedAt(OffsetDateTime.now());
+        override.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật phân quyền cho vai trò"));
+        notifyUnitChanged(override.getRole(), scope, "ROLE_PERMISSION_UPDATED");
+        return toResponse(toListingRow(override, scope), authentication, unitScopeResolver.actor(authentication, true), namesOfScope(scope));
     }
 
     private RolePermissionResponse toResponse(RolePermission rolePermission) {
@@ -419,6 +783,8 @@ public class RolePermissionManagementService {
     private RolePermissionResponse.RolePermissionResponseBuilder responseBuilder(RolePermission rolePermission) {
         return RolePermissionResponse.builder()
                 .id(rolePermission.getId())
+                .entryType(RolePermissionEntryType.DEFAULT)
+                .scopeName("Tất cả giáo phận")
                 .roleCode(rolePermission.getRole() == null ? null : rolePermission.getRole().getRoleCode())
                 .roleName(rolePermission.getRole() == null ? null : rolePermission.getRole().getRoleName())
                 .permissionCode(rolePermission.getPermission() == null ? null : rolePermission.getPermission().getPermissionCode())

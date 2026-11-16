@@ -105,9 +105,13 @@ public class RolePermissionController {
     )
     public apiResponse<List<PermissionResponse>> findAssignablePermissions(
             @RequestParam String roleCode,
+            @RequestParam(required = false) java.util.UUID dioceseId,
+            @RequestParam(required = false) java.util.UUID deaneryId,
+            @RequestParam(required = false) java.util.UUID parishId,
             Authentication authentication
     ) {
-        return apiResponse.success("Lấy danh sách quyền chưa gán cho vai trò thành công", rolePermissionManagementService.findAssignablePermissions(roleCode, authentication));
+        return apiResponse.success("Lấy danh sách quyền chưa gán cho vai trò thành công",
+                rolePermissionManagementService.findAssignablePermissions(roleCode, dioceseId, deaneryId, parishId, authentication));
     }
 
     @PostMapping("/revoke")
@@ -130,8 +134,15 @@ public class RolePermissionController {
                     + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.deanery')"
                     + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.parish')"
     )
-    public apiResponse<List<PermissionResponse>> findRevocablePermissions(@RequestParam String roleCode, Authentication authentication) {
-        return apiResponse.success("Lấy danh sách quyền có thể thu hồi của vai trò thành công", rolePermissionManagementService.findRevocablePermissions(roleCode, authentication));
+    public apiResponse<List<PermissionResponse>> findRevocablePermissions(
+            @RequestParam String roleCode,
+            @RequestParam(required = false) java.util.UUID dioceseId,
+            @RequestParam(required = false) java.util.UUID deaneryId,
+            @RequestParam(required = false) java.util.UUID parishId,
+            Authentication authentication
+    ) {
+        return apiResponse.success("Lấy danh sách quyền có thể thu hồi của vai trò thành công",
+                rolePermissionManagementService.findRevocablePermissions(roleCode, dioceseId, deaneryId, parishId, authentication));
     }
 
     @GetMapping("/{id}")

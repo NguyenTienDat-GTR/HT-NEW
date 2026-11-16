@@ -11,6 +11,18 @@ import java.time.OffsetDateTime;
 @Builder
 public class RolePermissionResponse {
     private String id;
+    // DEFAULT | UNIT_GRANT | UNIT_EXCLUDE
+    private phucuong.ht.modules.system.model.enums.RolePermissionEntryType entryType;
+    // DIOCESE | DEANERY | PARISH; null với dòng mặc định.
+    private phucuong.ht.modules.system.model.enums.RolePermissionScopeLevel scopeLevel;
+    private java.util.UUID dioceseId;
+    private String dioceseName;
+    private java.util.UUID deaneryId;
+    private String deaneryName;
+    private java.util.UUID parishId;
+    private String parishName;
+    // Chuỗi hiển thị sẵn: "Tất cả giáo phận", "Giáo phận …", "Giáo hạt …", "Giáo xứ …".
+    private String scopeName;
     private String roleCode;
     private String roleName;
     private String permissionCode;

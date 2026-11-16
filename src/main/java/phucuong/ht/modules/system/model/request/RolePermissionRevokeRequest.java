@@ -16,4 +16,10 @@ public class RolePermissionRevokeRequest {
 
     @NotEmpty
     private List<@NotBlank String> permissionCodes;
+
+    private java.util.UUID dioceseId;
+
+    private java.util.UUID deaneryId;
+
+    private java.util.UUID parishId;
 }

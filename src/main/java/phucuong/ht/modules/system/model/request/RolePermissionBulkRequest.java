@@ -25,4 +25,11 @@ public class RolePermissionBulkRequest {
     private OffsetDateTime assignedAt;
 
     private OffsetDateTime expiresAt;
+
+    /** Nơi áp dụng (gửi một đơn vị cụ thể nhất); bỏ trống = mặc định cho vai trò (hoặc cả đơn vị của người thao tác). */
+    private java.util.UUID dioceseId;
+
+    private java.util.UUID deaneryId;
+
+    private java.util.UUID parishId;
 }

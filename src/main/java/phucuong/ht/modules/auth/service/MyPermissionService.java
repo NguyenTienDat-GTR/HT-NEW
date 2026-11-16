@@ -120,9 +120,9 @@ public class MyPermissionService {
                 select p.permission_code, p.permission_name, p.description,
                        pm.module_name, pr.resource_name, pa.action_name, ps.scope_name,
                        v.source_type, v.role_code, r.role_name,
-                       coalesce(rp.conditions, apo.reason) as note,
-                       coalesce(rp.assigned_by, apo.created_by) as assigned_by,
-                       coalesce(rp.assigned_at, apo.created_at) as assigned_at,
+                       v.note,
+                       v.assigned_by,
+                       v.assigned_at,
                        v.permission_expires_at
                 from v_account_effective_permission v
                 join permission p on p.permission_code = v.permission_code
@@ -131,10 +131,6 @@ public class MyPermissionService {
                 left join permission_action pa on pa.action_code = p.action_code
                 left join permission_scope ps on ps.scope_code = p.scope_code
                 left join role r on r.role_code = v.role_code
-                left join role_permission rp on v.source_type = 'ROLE'
-                     and rp.role_code = v.role_code and rp.permission_code = v.permission_code
-                left join account_permission_override apo on v.source_type <> 'ROLE'
-                     and apo.username = v.username and apo.permission_code = v.permission_code
                 where v.username = :username
                 order by pm.module_name, pr.resource_name, p.display_order, p.permission_code
                 """)
