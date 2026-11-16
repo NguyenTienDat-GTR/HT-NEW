@@ -23,8 +23,8 @@ import java.util.Set;
 
 /**
  * Máy trạng thái ngoại lệ phân quyền vai trò theo đơn vị. Quyền hiệu lực của vai trò tại đơn vị U:
- * (mặc định chung + GRANT ở U hoặc cấp trên) - EXCLUDE ở U hoặc cấp trên. Thu hồi riêng ở cấp trên luôn thắng:
- * cấp dưới không cấp lại được cho tới khi cấp đã thu hồi gỡ ra.
+ * ngoại lệ ở cấp hẹp nhất trong chuỗi giáo phận > giáo hạt > giáo xứ quyết định (GRANT = có, EXCLUDE = không), không có thì theo mặc định.
+ * Cấp cụ thể hơn thắng: thu hồi cả giáo phận rồi vẫn phân lại riêng được cho một giáo hạt hoặc một giáo xứ.
  * Việc kiểm tra người thao tác nằm ở {@link RolePermissionUnitScopeResolver}, ở đây chỉ xử lý dữ liệu.
  */
 @Service
@@ -47,13 +47,6 @@ public class RolePermissionUnitOverrideService {
         String code = permission.getPermissionCode();
         OffsetDateTime now = OffsetDateTime.now();
 
-        List<RolePermissionUnitOverride> blockedAbove = overrideRepository
-                .findActiveInChain(roleCode, code, scope.ancestors(), RolePermissionOverrideType.EXCLUDE);
-        if (!blockedAbove.isEmpty()) {
-            throw commonValidationHelper.conflict("Quyền đã bị thu hồi ở cấp " + levelName(blockedAbove.get(0).getScopeLevel())
-                    + ", cần gỡ thu hồi ở cấp đó trước: " + code);
-        }
-
         RolePermissionUnitOverride lifted = null;
         Optional<RolePermissionUnitOverride> ownExclude = overrideRepository.find(roleCode, code, scope.unitId(), RolePermissionOverrideType.EXCLUDE);
         if (ownExclude.isPresent() && isActive(ownExclude.get(), now)) {
@@ -63,9 +56,8 @@ public class RolePermissionUnitOverrideService {
 
         Optional<RolePermissionUnitOverride> ownGrant = overrideRepository.find(roleCode, code, scope.unitId(), RolePermissionOverrideType.GRANT);
         boolean grantHere = ownGrant.isPresent() && isActive(ownGrant.get(), now);
-        boolean inheritedGrant = !overrideRepository
-                .findActiveInChain(roleCode, code, scope.ancestors(), RolePermissionOverrideType.GRANT).isEmpty();
-        if (defaultActive(roleCode, code, now) || inheritedGrant || grantHere) {
+        // Cấp cụ thể hơn thắng: quyền bị thu hồi ở cấp trên vẫn phân lại riêng được cho đơn vị này.
+        if (grantHere || effectiveFromAbove(roleCode, code, scope, now)) {
             if (lifted == null) {
                 throw commonValidationHelper.conflict("Vai trò đã có quyền này tại " + scope.label() + ": " + code);
             }
@@ -96,11 +88,9 @@ public class RolePermissionUnitOverrideService {
             changed = ownGrant.get();
         }
 
-        boolean stillEffective = defaultActive(roleCode, code, now)
-                || !overrideRepository.findActiveInChain(roleCode, code, scope.ancestors(), RolePermissionOverrideType.GRANT).isEmpty();
-        boolean excluded = !overrideRepository.findActiveInChain(roleCode, code, scope.chain(), RolePermissionOverrideType.EXCLUDE).isEmpty();
-        if (stillEffective && !excluded) {
-            Optional<RolePermissionUnitOverride> ownExclude = overrideRepository.find(roleCode, code, scope.unitId(), RolePermissionOverrideType.EXCLUDE);
+        Optional<RolePermissionUnitOverride> ownExclude = overrideRepository.find(roleCode, code, scope.unitId(), RolePermissionOverrideType.EXCLUDE);
+        boolean excludedHere = ownExclude.isPresent() && isActive(ownExclude.get(), now);
+        if (!excludedHere && effectiveFromAbove(roleCode, code, scope, now)) {
             RolePermissionUnitOverride exclude = ownExclude.orElseGet(() -> newRow(role, permission, scope, RolePermissionOverrideType.EXCLUDE, actor));
             reissue(exclude, actor, now, now);
             exclude.setConditions(null);
@@ -120,18 +110,40 @@ public class RolePermissionUnitOverrideService {
     /** Mã quyền hiệu lực của vai trò tại đơn vị (đã tính cả cấp trên). */
     @Transactional(readOnly = true)
     public Set<String> effectiveCodes(Role role, UnitScope scope) {
-        String roleCode = role.getRoleCode();
-        Set<String> codes = new LinkedHashSet<>(rolePermissionRepository.findPermissionCodesByRoleCode(roleCode));
-        codes.addAll(overrideRepository.findActivePermissionCodesInChain(roleCode, scope.chain(), RolePermissionOverrideType.GRANT));
-        codes.removeAll(overrideRepository.findActivePermissionCodesInChain(roleCode, scope.chain(), RolePermissionOverrideType.EXCLUDE));
+        Set<String> codes = new LinkedHashSet<>(rolePermissionRepository.findPermissionCodesByRoleCode(role.getRoleCode()));
+        // Với mỗi quyền, ngoại lệ ở cấp hẹp nhất trong chuỗi quyết định: cấp riêng thì có, thu hồi riêng thì không.
+        java.util.Map<String, RolePermissionUnitOverride> winners = new java.util.HashMap<>();
+        for (RolePermissionUnitOverride override : overrideRepository.findActiveByRoleInChain(role.getRoleCode(), scope.chain())) {
+            winners.merge(override.getPermission().getPermissionCode(), override,
+                    (a, b) -> a.getScopeLevel().ordinal() >= b.getScopeLevel().ordinal() ? a : b);
+        }
+        winners.forEach((code, override) -> {
+            if (override.getOverrideType() == RolePermissionOverrideType.GRANT) {
+                codes.add(code);
+            } else {
+                codes.remove(code);
+            }
+        });
         return codes;
     }
 
-    /** Quyền đã bị thu hồi riêng ở cấp trên của đơn vị: không cấp lại được ở đơn vị này. */
-    @Transactional(readOnly = true)
-    public Set<String> blockedByAncestors(Role role, UnitScope scope) {
-        return new LinkedHashSet<>(overrideRepository.findActivePermissionCodesInChain(
-                role.getRoleCode(), scope.ancestors(), RolePermissionOverrideType.EXCLUDE));
+    /**
+     * Quyền của vai trò tại đơn vị nếu bỏ qua ngoại lệ đặt ngay tại đơn vị đó: ngoại lệ ở cấp hẹp nhất trong các cấp trên quyết định
+     * (cấp riêng thì có, thu hồi riêng thì không), không có thì theo mặc định.
+     */
+    private boolean effectiveFromAbove(String roleCode, String code, UnitScope scope, OffsetDateTime now) {
+        RolePermissionUnitOverride winner = null;
+        for (RolePermissionOverrideType type : RolePermissionOverrideType.values()) {
+            for (RolePermissionUnitOverride candidate : overrideRepository.findActiveInChain(roleCode, code, scope.ancestors(), type)) {
+                if (winner == null || candidate.getScopeLevel().ordinal() > winner.getScopeLevel().ordinal()) {
+                    winner = candidate;
+                }
+            }
+        }
+        if (winner != null) {
+            return winner.getOverrideType() == RolePermissionOverrideType.GRANT;
+        }
+        return defaultActive(roleCode, code, now);
     }
 
     private boolean defaultActive(String roleCode, String permissionCode, OffsetDateTime now) {
@@ -178,13 +190,5 @@ public class RolePermissionUnitOverrideService {
         row.setCreatedBy(actor);
         row.setStatus(true);
         return row;
-    }
-
-    private String levelName(RolePermissionScopeLevel level) {
-        return switch (level) {
-            case DIOCESE -> "giáo phận";
-            case DEANERY -> "giáo hạt";
-            case PARISH -> "giáo xứ";
-        };
     }
 }

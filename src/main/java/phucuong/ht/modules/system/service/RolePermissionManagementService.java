@@ -269,9 +269,17 @@ public class RolePermissionManagementService {
         String validityFilter = validityFilter(request);
         Set<String> excluded = new java.util.HashSet<>();
         if (selected != null) {
-            for (RolePermissionUnitOverride exclude : unitOverrideRepository.findActiveExcludesInUnits(selected.chain())) {
-                excluded.add(exclude.getRole().getRoleCode() + "|" + exclude.getPermission().getPermissionCode());
+            // Quyền mặc định bị ẩn khi ngoại lệ ở cấp hẹp nhất trong chuỗi của đơn vị đang lọc là thu hồi riêng.
+            Map<String, RolePermissionUnitOverride> winners = new java.util.HashMap<>();
+            for (RolePermissionUnitOverride override : unitOverrideRepository.findActiveInUnits(selected.chain())) {
+                winners.merge(override.getRole().getRoleCode() + "|" + override.getPermission().getPermissionCode(), override,
+                        (a, b) -> a.getScopeLevel().ordinal() >= b.getScopeLevel().ordinal() ? a : b);
             }
+            winners.forEach((key, override) -> {
+                if (override.getOverrideType() == RolePermissionOverrideType.EXCLUDE) {
+                    excluded.add(key);
+                }
+            });
         }
         Actor viewer = unitScopeResolver.actor(authentication, false);
         List<RolePermissionListing> manageable = loadAllMatching(request).stream()
@@ -421,9 +429,8 @@ public class RolePermissionManagementService {
         Optional<UnitScope> unit = unitScopeResolver.resolve(authentication, role, dioceseId, deaneryId, parishId, false);
         if (unit.isPresent()) {
             Actor actor = unitScopeResolver.actor(authentication, false);
-            Set<String> unavailable = new LinkedHashSet<>(unitOverrideService.effectiveCodes(role, unit.get()));
-            // Quyền đã bị thu hồi riêng ở cấp trên thì không cấp lại được ở đơn vị này.
-            unavailable.addAll(unitOverrideService.blockedByAncestors(role, unit.get()));
+            // Quyền đã thu hồi riêng ở cấp trên vẫn nằm trong danh sách này để phân lại riêng cho đơn vị đang chọn.
+            Set<String> unavailable = unitOverrideService.effectiveCodes(role, unit.get());
             return systemPermissionRepository.findActivePermissions().stream()
                     .filter(permission -> !unavailable.contains(permission.getPermissionCode()))
                     .filter(permission -> unitScopeResolver.permissionAllowed(actor, permission))

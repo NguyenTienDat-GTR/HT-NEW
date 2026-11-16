@@ -67,7 +67,7 @@ class RolePermissionUnitOverrideMigrationTest {
         List<String> effectiveBefore = effective(jdbc);
         assertFalse(effectiveBefore.isEmpty());
 
-        Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").target("139").load().migrate();
+        Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").target("140").load().migrate();
 
         assertEquals(rolePermissionsBefore, jdbc.queryForList("select id || role_code || permission_code || status from role_permission order by 1", String.class),
                 "role_permission không được đổi");
@@ -86,18 +86,28 @@ class RolePermissionUnitOverrideMigrationTest {
         assertFalse(has(jdbc, "u-z1", defaultPermission));
         assertTrue(has(jdbc, "u-w1", defaultPermission));
 
-        // Thu hồi ở giáo phận A thắng mọi cấp phát riêng ở cấp dưới.
+        // Cấp cụ thể hơn thắng: thu hồi cả giáo phận A, phân lại riêng cho một giáo xứ thì chỉ giáo xứ đó có quyền.
         insert(jdbc, defaultPermission, "DIOCESE", dioceseA, null, null, "EXCLUDE", true);
         insert(jdbc, defaultPermission, "PARISH", null, null, parishX1, "GRANT", true);
-        assertFalse(has(jdbc, "u-x1", defaultPermission), "thu hồi ở cấp trên luôn thắng");
-        assertTrue(has(jdbc, "u-w1", defaultPermission));
+        assertTrue(has(jdbc, "u-x1", defaultPermission), "cấp riêng ở giáo xứ thắng thu hồi ở giáo phận và giáo hạt");
+        assertEquals(1, count(jdbc, "u-x1", defaultPermission));
+        assertFalse(has(jdbc, "u-x2", defaultPermission), "giáo xứ khác cùng giáo hạt vẫn bị thu hồi");
+        assertFalse(has(jdbc, "u-z1", defaultPermission));
+        assertTrue(has(jdbc, "u-w1", defaultPermission), "giáo phận khác không bị ảnh hưởng");
+
+        // Gỡ tạm thu hồi riêng ở giáo xứ Z1 (đặt ở trên) để thử cấp phát ở giáo hạt Z.
+        jdbc.update("update role_permission_unit_override set revoked_at = now() where override_type = 'EXCLUDE' and parish_id = ?", parishZ1);
+        // Thu hồi riêng ở cấp hẹp hơn cấp phát riêng thì thu hồi thắng.
+        insert(jdbc, defaultPermission, "DEANERY", null, deaneryZ, null, "GRANT", true);
+        assertTrue(has(jdbc, "u-z1", defaultPermission), "phân lại riêng cho cả giáo hạt Z");
+        jdbc.update("update role_permission_unit_override set revoked_at = null where override_type = 'EXCLUDE' and parish_id = ?", parishZ1);
+        assertFalse(has(jdbc, "u-z1", defaultPermission), "thu hồi riêng ở giáo xứ Z1 thắng cấp phát ở giáo hạt Z");
 
         // Thu hồi riêng đã gỡ thì không còn hiệu lực.
-        jdbc.update("update role_permission_unit_override set revoked_at = now() where override_type = 'EXCLUDE' and diocese_id is not null");
-        assertFalse(has(jdbc, "u-x1", defaultPermission), "vẫn còn thu hồi riêng ở giáo hạt X");
-        jdbc.update("update role_permission_unit_override set revoked_at = now() where override_type = 'EXCLUDE' and deanery_id = ?", deaneryX);
+        jdbc.update("update role_permission_unit_override set revoked_at = now() where override_type = 'EXCLUDE'");
         assertTrue(has(jdbc, "u-x1", defaultPermission), "gỡ hết thu hồi thì quyền mặc định trở lại");
-        assertEquals(1, count(jdbc, "u-x1", defaultPermission));
+        assertEquals(1, count(jdbc, "u-x1", defaultPermission), "cấp riêng không tạo dòng trùng với mặc định");
+        assertTrue(has(jdbc, "u-x2", defaultPermission));
 
         // Cấp riêng ở giáo phận B: chỉ tài khoản thuộc B có thêm quyền.
         insert(jdbc, extraPermission, "DIOCESE", dioceseB, null, null, "GRANT", true);

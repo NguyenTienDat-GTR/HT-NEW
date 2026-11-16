@@ -112,15 +112,51 @@ class RolePermissionUnitOverrideServiceTest {
     }
 
     @Test
-    void assignIsBlockedWhenAHigherLevelExcludedThePermission() {
+    void assignRegrantsForTheUnitEvenWhenAHigherLevelExcludedThePermission() {
         RolePermissionUnitOverride upper = new RolePermissionUnitOverride();
         upper.setScopeLevel(RolePermissionScopeLevel.DIOCESE);
+        upper.setOverrideType(RolePermissionOverrideType.EXCLUDE);
         when(overrideRepository.findActiveInChain(any(), any(), anyCollection(), eq(RolePermissionOverrideType.EXCLUDE))).thenReturn(List.of(upper));
+        when(overrideRepository.findActiveInChain(any(), any(), anyCollection(), eq(RolePermissionOverrideType.GRANT))).thenReturn(List.of());
+        when(overrideRepository.find(any(), any(), any(), any())).thenReturn(Optional.empty());
 
-        ApiException ex = assertThrows(ApiException.class,
-                () -> service().assign(role("ADMIN_PARISH"), permission("parish"), parishScope(), null, null, null, "admin"));
-        assertTrue(ex.getMessage().contains("giáo phận"));
+        var change = service().assign(role("ADMIN_PARISH"), permission("parish"), parishScope(), null, null, null, "admin");
+
+        assertEquals(RolePermissionOverrideType.GRANT, change.entity().getOverrideType());
+        assertEquals(parish, change.entity().getParishId());
+        verify(overrideRepository).save(change.entity());
+    }
+
+    @Test
+    void revokeAtALowerUnitIsNotFoundWhenAHigherLevelAlreadyExcludedThePermission() {
+        RolePermissionUnitOverride upper = new RolePermissionUnitOverride();
+        upper.setScopeLevel(RolePermissionScopeLevel.DIOCESE);
+        upper.setOverrideType(RolePermissionOverrideType.EXCLUDE);
+        when(overrideRepository.findActiveInChain(any(), any(), anyCollection(), eq(RolePermissionOverrideType.EXCLUDE))).thenReturn(List.of(upper));
+        when(overrideRepository.findActiveInChain(any(), any(), anyCollection(), eq(RolePermissionOverrideType.GRANT))).thenReturn(List.of());
+        when(overrideRepository.find(any(), any(), any(), any())).thenReturn(Optional.empty());
+
+        assertThrows(ApiException.class, () -> service().revoke(role("ADMIN_PARISH"), permission("parish"), parishScope(), "admin"));
         verify(overrideRepository, never()).save(any());
+    }
+
+    @Test
+    void aMoreSpecificGrantBeatsAHigherExcludeWhenComputingEffectiveCodes() {
+        Permission excluded = permission("parish");
+        RolePermissionUnitOverride exclude = new RolePermissionUnitOverride();
+        exclude.setScopeLevel(RolePermissionScopeLevel.DIOCESE);
+        exclude.setOverrideType(RolePermissionOverrideType.EXCLUDE);
+        exclude.setPermission(excluded);
+        RolePermissionUnitOverride grant = new RolePermissionUnitOverride();
+        grant.setScopeLevel(RolePermissionScopeLevel.DEANERY);
+        grant.setOverrideType(RolePermissionOverrideType.GRANT);
+        grant.setPermission(excluded);
+        when(rolePermissionRepository.findPermissionCodesByRoleCode("ADMIN_PARISH")).thenReturn(List.of(PERM));
+        when(overrideRepository.findActiveByRoleInChain(eq("ADMIN_PARISH"), anyCollection())).thenReturn(List.of(exclude, grant));
+        assertTrue(service().effectiveCodes(role("ADMIN_PARISH"), parishScope()).contains(PERM));
+
+        when(overrideRepository.findActiveByRoleInChain(eq("ADMIN_PARISH"), anyCollection())).thenReturn(List.of(exclude));
+        assertFalse(service().effectiveCodes(role("ADMIN_PARISH"), parishScope()).contains(PERM));
     }
 
     @Test

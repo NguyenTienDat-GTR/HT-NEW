@@ -32,27 +32,45 @@ public class LeaderScopeHelper {
 
         String username = requireUsername(authentication);
         UUID targetParishId = request.getParishId();
+        // Tài khoản nhiều vai trò gộp quyền của mọi vai trò: được tạo nếu giáo xứ đích nằm trong phạm vi của BẤT KỲ quyền tạo nào
+        // (không chỉ quyền rộng nhất). Chỉ báo lỗi khi không phạm vi nào khớp, kèm lý do của phạm vi rộng nhất mà tài khoản có.
+        String firstFailure = null;
         if (securityUtils.hasAuthority(authentication, LeaderAccessEvaluator.CREATE_DIOCESE)) {
-            UUID actorScopeId = accountRepository.findActiveDioceseIdByUsername(username)
-                    .orElseThrow(() -> commonValidationHelper.forbidden("Tài khoản không có phạm vi giáo phận hợp lệ"));
+            UUID actorScopeId = accountRepository.findActiveDioceseIdByUsername(username).orElse(null);
             UUID targetScopeId = parishRepository.findDioceseIdByParishId(targetParishId)
                     .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy giáo xứ"));
-            requireSameScope(actorScopeId, targetScopeId, "giáo phận");
-            return;
+            if (actorScopeId != null && actorScopeId.equals(targetScopeId)) {
+                return;
+            }
+            firstFailure = actorScopeId == null ? "Tài khoản không có phạm vi giáo phận hợp lệ" : outOfScope("giáo phận");
         }
         if (securityUtils.hasAuthority(authentication, LeaderAccessEvaluator.CREATE_DEANERY)) {
-            UUID actorScopeId = accountRepository.findActiveDeaneryIdByUsername(username)
-                    .orElseThrow(() -> commonValidationHelper.forbidden("Tài khoản không có phạm vi giáo hạt hợp lệ"));
+            UUID actorScopeId = accountRepository.findActiveDeaneryIdByUsername(username).orElse(null);
             UUID targetScopeId = parishRepository.findDeaneryIdByParishId(targetParishId)
                     .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy giáo xứ"));
-            requireSameScope(actorScopeId, targetScopeId, "giáo hạt");
-            return;
+            if (actorScopeId != null && actorScopeId.equals(targetScopeId)) {
+                return;
+            }
+            if (firstFailure == null) {
+                firstFailure = actorScopeId == null ? "Tài khoản không có phạm vi giáo hạt hợp lệ" : outOfScope("giáo hạt");
+            }
         }
-        requireSameScope(
-                getRequiredActiveParishId(authentication, LeaderAccessEvaluator.CREATE_PARISH),
-                targetParishId,
-                "giáo xứ"
-        );
+        if (securityUtils.hasAuthority(authentication, LeaderAccessEvaluator.CREATE_PARISH)) {
+            UUID actorScopeId = accountRepository.findActiveParishIdByUsername(username).orElse(null);
+            if (actorScopeId != null && actorScopeId.equals(targetParishId)) {
+                return;
+            }
+            if (firstFailure == null) {
+                firstFailure = actorScopeId == null
+                        ? "Tài khoản hiện tại không có phạm vi giáo xứ hợp lệ cho quyền " + LeaderAccessEvaluator.CREATE_PARISH
+                        : outOfScope("giáo xứ");
+            }
+        }
+        throw commonValidationHelper.forbidden(firstFailure == null ? "Tài khoản hiện tại không có quyền tạo Huynh Trưởng" : firstFailure);
+    }
+
+    private String outOfScope(String scopeName) {
+        return "Không thể tạo Huynh Trưởng ngoài phạm vi " + scopeName + " hiện tại";
     }
 
     /**

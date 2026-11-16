@@ -69,32 +69,29 @@ public class RolePermissionUnitOverrideRepository extends BaseRepo<RolePermissio
                 .getResultList();
     }
 
-    /** Mọi dòng EXCLUDE đang hiệu lực tại các đơn vị đã cho (mọi vai trò), để ẩn quyền mặc định bị thu hồi riêng khỏi danh sách. */
-    public List<RolePermissionUnitOverride> findActiveExcludesInUnits(Collection<UUID> unitIds) {
+    /** Mọi dòng ngoại lệ đang hiệu lực (cả cấp riêng và thu hồi riêng, mọi vai trò) tại các đơn vị đã cho. */
+    public List<RolePermissionUnitOverride> findActiveInUnits(Collection<UUID> unitIds) {
         if (unitIds.isEmpty()) {
             return List.of();
         }
         return entityManager.createQuery(
                         "select o from RolePermissionUnitOverride o join fetch o.role join fetch o.permission"
-                                + " where o.overrideType = :type and o.unitId in :unitIds and " + ACTIVE,
+                                + " where o.unitId in :unitIds and " + ACTIVE,
                         RolePermissionUnitOverride.class)
-                .setParameter("type", RolePermissionOverrideType.EXCLUDE)
                 .setParameter("unitIds", unitIds)
                 .getResultList();
     }
 
-    /** Mã quyền có dòng đang hiệu lực loại {@code type} của vai trò trong chuỗi đơn vị. */
-    public List<String> findActivePermissionCodesInChain(String roleCode, Collection<UUID> unitIds, RolePermissionOverrideType type) {
+    /** Mọi dòng ngoại lệ đang hiệu lực của một vai trò trong chuỗi đơn vị (cả cấp riêng và thu hồi riêng). */
+    public List<RolePermissionUnitOverride> findActiveByRoleInChain(String roleCode, Collection<UUID> unitIds) {
         if (unitIds.isEmpty()) {
             return List.of();
         }
         return entityManager.createQuery(
-                        "select distinct o.permission.permissionCode from RolePermissionUnitOverride o"
-                                + " where o.role.roleCode = :roleCode and o.overrideType = :type"
-                                + " and o.unitId in :unitIds and " + ACTIVE,
-                        String.class)
+                        "select o from RolePermissionUnitOverride o join fetch o.permission"
+                                + " where o.role.roleCode = :roleCode and o.unitId in :unitIds and " + ACTIVE,
+                        RolePermissionUnitOverride.class)
                 .setParameter("roleCode", roleCode)
-                .setParameter("type", type)
                 .setParameter("unitIds", unitIds)
                 .getResultList();
     }
