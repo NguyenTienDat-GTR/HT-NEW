@@ -45,6 +45,39 @@ class LeaderScopeHelperTest {
     }
 
     @Test
+    void enforceCreateScopeShouldAllowAnyMatchingScopeForAccountsWithSeveralRoles() {
+        // Admin hiệp đoàn + admin xứ đoàn: quyền tạo cấp giáo hạt không khớp (giáo xứ đích ở giáo hạt khác) nhưng quyền cấp giáo xứ khớp.
+        UUID parishId = UUID.randomUUID();
+        LeaderCreateRequest request = new LeaderCreateRequest();
+        request.setParishId(parishId);
+        Authentication authentication = mock(Authentication.class);
+        when(securityUtils.hasAuthority(authentication, LeaderAccessEvaluator.CREATE_DEANERY)).thenReturn(true);
+        when(securityUtils.hasAuthority(authentication, LeaderAccessEvaluator.CREATE_PARISH)).thenReturn(true);
+        when(securityUtils.currentUsername(authentication)).thenReturn("multi");
+        when(accountRepository.findActiveDeaneryIdByUsername("multi")).thenReturn(Optional.of(UUID.randomUUID()));
+        when(parishRepository.findDeaneryIdByParishId(parishId)).thenReturn(Optional.of(UUID.randomUUID()));
+        when(accountRepository.findActiveParishIdByUsername("multi")).thenReturn(Optional.of(parishId));
+
+        assertDoesNotThrow(() -> helper.enforceCreateScope(request, authentication));
+    }
+
+    @Test
+    void enforceCreateScopeShouldFallBackToParishScopeWhenDeaneryScopeIsMissing() {
+        UUID parishId = UUID.randomUUID();
+        LeaderCreateRequest request = new LeaderCreateRequest();
+        request.setParishId(parishId);
+        Authentication authentication = mock(Authentication.class);
+        when(securityUtils.hasAuthority(authentication, LeaderAccessEvaluator.CREATE_DEANERY)).thenReturn(true);
+        when(securityUtils.hasAuthority(authentication, LeaderAccessEvaluator.CREATE_PARISH)).thenReturn(true);
+        when(securityUtils.currentUsername(authentication)).thenReturn("multi");
+        when(accountRepository.findActiveDeaneryIdByUsername("multi")).thenReturn(Optional.empty());
+        when(parishRepository.findDeaneryIdByParishId(parishId)).thenReturn(Optional.of(UUID.randomUUID()));
+        when(accountRepository.findActiveParishIdByUsername("multi")).thenReturn(Optional.of(parishId));
+
+        assertDoesNotThrow(() -> helper.enforceCreateScope(request, authentication));
+    }
+
+    @Test
     void enforceCreateScopeShouldAllowParishInsideActiveDiocese() {
         UUID dioceseId = UUID.randomUUID();
         UUID parishId = UUID.randomUUID();

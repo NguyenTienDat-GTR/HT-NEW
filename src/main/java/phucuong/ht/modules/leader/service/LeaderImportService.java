@@ -213,6 +213,9 @@ public class LeaderImportService extends AbstractExcelImporter<LeaderImportServi
             if (fullName != null && fullName.length() > 200) {
                 row.error(errors, COL_FULL_NAME, "Họ và tên tối đa 200 ký tự");
             }
+            if (fullName != null && fullName.trim().split("\\s+").length < 2) {
+                row.error(errors, COL_FULL_NAME, "Họ và tên phải gồm cả họ và tên (ví dụ: Nguyễn Văn An)");
+            }
             LocalDate birthDate = row.date(errors, COL_BIRTH_DATE, true);
             if (birthDate != null && birthDate.isAfter(LocalDate.now())) {
                 row.error(errors, COL_BIRTH_DATE, "Ngày sinh không được sau ngày hiện tại");

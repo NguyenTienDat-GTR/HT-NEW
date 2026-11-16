@@ -40,6 +40,9 @@ class RolePermissionManagementServiceTest {
     private RolePermissionRepository rolePermissionRepository;
 
     @Mock
+    private phucuong.ht.modules.system.repository.RolePermissionListingRepository listingRepository;
+
+    @Mock
     private RoleRepository roleRepository;
 
     @Mock
@@ -263,7 +266,11 @@ class RolePermissionManagementServiceTest {
                 systemPermissionRepository,
                 helper,
                 authorizationHelper
-        , org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class));
+        , org.mockito.Mockito.mock(phucuong.ht.common.utils.AuditActorNameResolver.class),
+                new RolePermissionUnitScopeResolver(authorizationHelper, accountRepository, new securityUtils(), helper),
+                org.mockito.Mockito.mock(RolePermissionUnitOverrideService.class),
+                org.mockito.Mockito.mock(phucuong.ht.modules.system.repository.RolePermissionUnitOverrideRepository.class),
+                listingRepository);
     }
 
     private Role role(String roleCode, int displayOrder) {

@@ -53,26 +53,17 @@ public class RolePermissionRepository extends BaseRepo<RolePermission, String> {
     }
 
     public List<String> findActivePermissionCodesByAccountUsername(String username) {
-        TypedQuery<String> query = entityManager.createQuery(
+        // Đọc từ view quyền hiệu lực để tính cả quyền cấp riêng / thu hồi riêng theo đơn vị của vai trò.
+        @SuppressWarnings("unchecked")
+        List<Object> rows = entityManager.createNativeQuery(
                 """
-                select distinct rp.permission.permissionCode
-                from AccountRole ar
-                join ar.role role
-                join RolePermission rp on rp.role = role
-                join rp.permission permission
-                where ar.account.username = :username
-                  and ar.status = true
-                  and role.status = true
-                  and rp.status = true
-                  and rp.revokedAt is null
-                  and permission.status = true
-                  and (ar.expiresAt is null or ar.expiresAt > CURRENT_TIMESTAMP)
-                  and (rp.expiresAt is null or rp.expiresAt > CURRENT_TIMESTAMP)
-                """,
-                String.class
-        );
-        query.setParameter("username", username);
-        return query.getResultList();
+                select distinct permission_code
+                from v_account_effective_permission
+                where username = :username
+                  and source_type = 'ROLE'
+                """
+        ).setParameter("username", username).getResultList();
+        return rows.stream().map(String::valueOf).toList();
     }
 
     /** Các phân quyền sắp bị thu hồi do hết hạn (chưa thu hồi, đã quá hạn), khóa dòng để nhiều node chỉ xử lý / thông báo một lần. */

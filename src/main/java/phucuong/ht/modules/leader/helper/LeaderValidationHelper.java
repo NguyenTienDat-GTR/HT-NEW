@@ -115,8 +115,12 @@ public class LeaderValidationHelper {
             throw commonValidationHelper.validationError("Họ và tên Huynh Trưởng là bắt buộc");
         }
 
+        // Họ lót là bắt buộc ở DB: tên chỉ một từ phải bị từ chối bằng thông báo rõ ràng, không để chạm ràng buộc rồi báo "xung đột".
+        if (parts.length < 2) {
+            throw commonValidationHelper.validationError("Họ và tên Huynh Trưởng phải gồm cả họ và tên (ví dụ: Nguyễn Văn An)");
+        }
         String firstName = parts[parts.length - 1];
-        String lastName = parts.length == 1 ? null : String.join(" ", Arrays.copyOf(parts, parts.length - 1));
+        String lastName = String.join(" ", Arrays.copyOf(parts, parts.length - 1));
         return new LeaderNameParts(firstName, lastName);
     }
 

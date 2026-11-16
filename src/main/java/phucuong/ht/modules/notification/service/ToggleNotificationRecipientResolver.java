@@ -33,6 +33,28 @@ public class ToggleNotificationRecipientResolver {
                 """, roleCode);
     }
 
+    /** Người giữ vai trò thuộc đơn vị {@code unitId} (giáo phận, giáo hạt hoặc giáo xứ) hoặc đơn vị cấp dưới của nó. */
+    public Set<String> byRoleInUnit(String roleCode, UUID unitId) {
+        if (roleCode == null || roleCode.isBlank() || unitId == null) {
+            return Set.of();
+        }
+        @SuppressWarnings("unchecked")
+        List<Object> rows = entityManager.createNativeQuery("""
+                select distinct ar.username
+                from account_role ar
+                join account a on a.username = ar.username
+                join v_account_unit au on au.username = ar.username
+                where ar.role_code = :roleCode
+                  and ar.status = true
+                  and a.status = true
+                  and (au.diocese_id = :unitId or au.deanery_id = :unitId or au.parish_id = :unitId)
+                """)
+                .setParameter("roleCode", roleCode)
+                .setParameter("unitId", unitId)
+                .getResultList();
+        return unitOperationalStatusService.normalize(rows.stream().map(String::valueOf).toList());
+    }
+
     public Set<String> byPermission(String permissionCode) {
         return activeUsernames("""
                 select distinct affected.username
@@ -44,6 +66,15 @@ public class ToggleNotificationRecipientResolver {
                       and ar.status = true
                       and rp.status = true
                       and rp.revoked_at is null
+                    union
+                    select ar.username
+                    from account_role ar
+                    join role_permission_unit_override o on o.role_code = ar.role_code
+                    where o.permission_code = :code
+                      and ar.status = true
+                      and o.override_type = 'GRANT'
+                      and o.status = true
+                      and o.revoked_at is null
                     union
                     select apo.username
                     from account_permission_override apo

@@ -13,6 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 // Mỗi request phân quyền chỉ gửi một thông báo kèm danh sách quyền vừa được phân, và chỉ tới đúng tài khoản/vai trò được phân quyền.
 @Service
@@ -34,14 +35,19 @@ public class PermissionGrantNotifier {
 
     /** Tài khoản đang giữ vai trò nhận thông báo; các tài khoản khác không nhận. */
     public void notifyRoleGranted(Role role, List<Permission> permissions, String actor) {
+        notifyRoleGranted(role, permissions, actor, null, null);
+    }
+
+    /** Như trên nhưng chỉ báo cho người giữ vai trò thuộc đơn vị {@code unitId} (null = mọi nơi); {@code unitLabel} như "giáo xứ X". */
+    public void notifyRoleGranted(Role role, List<Permission> permissions, String actor, UUID unitId, String unitLabel) {
         if (role == null || permissions == null || permissions.isEmpty()) {
             return;
         }
-        Set<String> recipients = recipientResolver.byRole(role.getRoleCode());
+        Set<String> recipients = recipients(role, unitId);
         if (recipients.isEmpty()) {
             return;
         }
-        String roleName = role.getRoleName() == null || role.getRoleName().isBlank() ? role.getRoleCode() : role.getRoleName();
+        String roleName = roleLabel(role, unitLabel);
         send(List.copyOf(recipients), ROLE_EVENT,
                 "Vai trò " + roleName + " của bạn được phân thêm " + permissions.size() + " quyền",
                 "Vai trò " + roleName + " vừa được phân thêm " + permissions.size() + " quyền",
@@ -50,14 +56,18 @@ public class PermissionGrantNotifier {
 
     /** Thu hồi quyền của vai trò: tài khoản đang giữ vai trò nhận một thông báo kèm danh sách quyền vừa bị thu hồi. */
     public void notifyRoleRevoked(Role role, List<Permission> permissions, String actor) {
+        notifyRoleRevoked(role, permissions, actor, null, null);
+    }
+
+    public void notifyRoleRevoked(Role role, List<Permission> permissions, String actor, UUID unitId, String unitLabel) {
         if (role == null || permissions == null || permissions.isEmpty()) {
             return;
         }
-        Set<String> recipients = recipientResolver.byRole(role.getRoleCode());
+        Set<String> recipients = recipients(role, unitId);
         if (recipients.isEmpty()) {
             return;
         }
-        String roleName = role.getRoleName() == null || role.getRoleName().isBlank() ? role.getRoleCode() : role.getRoleName();
+        String roleName = roleLabel(role, unitLabel);
         send(List.copyOf(recipients), ROLE_REVOKED_EVENT,
                 "Vai trò " + roleName + " của bạn bị thu hồi " + permissions.size() + " quyền",
                 "Vai trò " + roleName + " vừa bị thu hồi " + permissions.size() + " quyền",
@@ -66,14 +76,18 @@ public class PermissionGrantNotifier {
 
     /** Quyền của vai trò tự thu hồi do hết hạn: tài khoản đang giữ vai trò nhận một thông báo kèm danh sách quyền hết hạn. */
     public void notifyRoleExpired(Role role, List<Permission> permissions) {
+        notifyRoleExpired(role, permissions, null, null);
+    }
+
+    public void notifyRoleExpired(Role role, List<Permission> permissions, UUID unitId, String unitLabel) {
         if (role == null || permissions == null || permissions.isEmpty()) {
             return;
         }
-        Set<String> recipients = recipientResolver.byRole(role.getRoleCode());
+        Set<String> recipients = recipients(role, unitId);
         if (recipients.isEmpty()) {
             return;
         }
-        String roleName = role.getRoleName() == null || role.getRoleName().isBlank() ? role.getRoleCode() : role.getRoleName();
+        String roleName = roleLabel(role, unitLabel);
         send(List.copyOf(recipients), ROLE_EXPIRED_EVENT,
                 "Vai trò " + roleName + " của bạn có " + permissions.size() + " quyền đã hết hạn",
                 "Vai trò " + roleName + " vừa có " + permissions.size() + " quyền hết hạn và bị thu hồi",
@@ -123,6 +137,15 @@ public class PermissionGrantNotifier {
                 "Bạn được phân thêm " + permissions.size() + " quyền",
                 "Tài khoản của bạn vừa được phân thêm " + permissions.size() + " quyền",
                 permissions, actor, "ACCOUNT", username, GRANT);
+    }
+
+    private Set<String> recipients(Role role, UUID unitId) {
+        return unitId == null ? recipientResolver.byRole(role.getRoleCode()) : recipientResolver.byRoleInUnit(role.getRoleCode(), unitId);
+    }
+
+    private String roleLabel(Role role, String unitLabel) {
+        String roleName = role.getRoleName() == null || role.getRoleName().isBlank() ? role.getRoleCode() : role.getRoleName();
+        return unitLabel == null || unitLabel.isBlank() ? roleName : roleName + " (" + unitLabel + ")";
     }
 
     // Kiểu nội dung: payload.kind để giao diện chọn đúng modal chi tiết, heading là tiêu đề danh sách quyền.

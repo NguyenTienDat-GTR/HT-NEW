@@ -90,6 +90,12 @@ class LeaderValidationHelperTest {
     }
 
     @Test
+    void splitFullNameShouldRejectSingleWordNames() {
+        ApiException ex = org.junit.jupiter.api.Assertions.assertThrows(ApiException.class, () -> helper.splitFullName("dfdf"));
+        assertEquals("Họ và tên Huynh Trưởng phải gồm cả họ và tên (ví dụ: Nguyễn Văn An)", ex.getMessage());
+    }
+
+    @Test
     void splitFullNameShouldUseLastTokenAsFirstName() {
         LeaderValidationHelper.LeaderNameParts result = helper.splitFullName("Nguyễn Văn An");
 

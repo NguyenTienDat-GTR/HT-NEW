@@ -105,9 +105,17 @@ public class RolePermissionController {
     )
     public apiResponse<List<PermissionResponse>> findAssignablePermissions(
             @RequestParam String roleCode,
+            @RequestParam(required = false) java.util.UUID dioceseId,
+            @RequestParam(required = false) java.util.UUID deaneryId,
+            @RequestParam(required = false) java.util.UUID parishId,
+            @RequestParam(required = false) java.util.List<java.util.UUID> dioceseIds,
+            @RequestParam(required = false) java.util.List<java.util.UUID> deaneryIds,
+            @RequestParam(required = false) java.util.List<java.util.UUID> parishIds,
             Authentication authentication
     ) {
-        return apiResponse.success("Lấy danh sách quyền chưa gán cho vai trò thành công", rolePermissionManagementService.findAssignablePermissions(roleCode, authentication));
+        return apiResponse.success("Lấy danh sách quyền chưa gán cho vai trò thành công",
+                rolePermissionManagementService.findAssignablePermissions(roleCode,
+                        merge(dioceseId, dioceseIds), merge(deaneryId, deaneryIds), merge(parishId, parishIds), authentication));
     }
 
     @PostMapping("/revoke")
@@ -130,8 +138,31 @@ public class RolePermissionController {
                     + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.deanery')"
                     + " || @securityUtils.hasAuthority(authentication, 'system.role_permission.revoke.parish')"
     )
-    public apiResponse<List<PermissionResponse>> findRevocablePermissions(@RequestParam String roleCode, Authentication authentication) {
-        return apiResponse.success("Lấy danh sách quyền có thể thu hồi của vai trò thành công", rolePermissionManagementService.findRevocablePermissions(roleCode, authentication));
+    public apiResponse<List<PermissionResponse>> findRevocablePermissions(
+            @RequestParam String roleCode,
+            @RequestParam(required = false) java.util.UUID dioceseId,
+            @RequestParam(required = false) java.util.UUID deaneryId,
+            @RequestParam(required = false) java.util.UUID parishId,
+            @RequestParam(required = false) java.util.List<java.util.UUID> dioceseIds,
+            @RequestParam(required = false) java.util.List<java.util.UUID> deaneryIds,
+            @RequestParam(required = false) java.util.List<java.util.UUID> parishIds,
+            Authentication authentication
+    ) {
+        return apiResponse.success("Lấy danh sách quyền có thể thu hồi của vai trò thành công",
+                rolePermissionManagementService.findRevocablePermissions(roleCode,
+                        merge(dioceseId, dioceseIds), merge(deaneryId, deaneryIds), merge(parishId, parishIds), authentication));
+    }
+
+    /** Gộp id đơn lẻ và danh sách id (tham số lặp hoặc cách nhau bằng dấu phẩy) thành một danh sách. */
+    private static java.util.List<java.util.UUID> merge(java.util.UUID single, java.util.List<java.util.UUID> many) {
+        java.util.List<java.util.UUID> all = new java.util.ArrayList<>();
+        if (single != null) {
+            all.add(single);
+        }
+        if (many != null) {
+            all.addAll(many);
+        }
+        return all;
     }
 
     @GetMapping("/{id}")

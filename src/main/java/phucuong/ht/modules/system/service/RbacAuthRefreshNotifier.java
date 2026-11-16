@@ -35,6 +35,34 @@ public class RbacAuthRefreshNotifier {
         notifyUsers(findUsernamesByRoleCode(roleCode), reason);
     }
 
+    /** Chỉ báo cho người giữ vai trò thuộc đơn vị {@code unitId} (hoặc đơn vị cấp dưới của nó). */
+    public void notifyRoleChanged(String roleCode, java.util.UUID unitId, String reason) {
+        if (unitId == null) {
+            notifyRoleChanged(roleCode, reason);
+            return;
+        }
+        notifyUsers(findUsernamesByRoleCodeInUnit(roleCode, unitId), reason);
+    }
+
+    /** Người giữ vai trò {@code roleCode} thuộc đơn vị {@code unitId} hoặc cấp dưới. */
+    public List<String> findUsernamesByRoleCodeInUnit(String roleCode, java.util.UUID unitId) {
+        if (roleCode == null || roleCode.isBlank() || unitId == null) {
+            return List.of();
+        }
+        @SuppressWarnings("unchecked")
+        List<Object> rows = entityManager.createNativeQuery("""
+                select distinct ar.username
+                from account_role ar
+                join v_account_unit au on au.username = ar.username
+                where ar.role_code = :roleCode
+                  and (au.diocese_id = :unitId or au.deanery_id = :unitId or au.parish_id = :unitId)
+                """)
+                .setParameter("roleCode", roleCode)
+                .setParameter("unitId", unitId)
+                .getResultList();
+        return rows.stream().map(String::valueOf).toList();
+    }
+
     public void notifyPermissionChanged(String permissionCode, String reason) {
         notifyUsers(findUsernamesByPermissionCode(permissionCode), reason);
     }
@@ -83,6 +111,11 @@ public class RbacAuthRefreshNotifier {
                     from account_role ar
                     join role_permission rp on rp.role_code = ar.role_code
                     where rp.permission_code = :permissionCode
+                    union
+                    select ar.username
+                    from account_role ar
+                    join role_permission_unit_override o on o.role_code = ar.role_code
+                    where o.permission_code = :permissionCode
                     union
                     select apo.username
                     from account_permission_override apo
