@@ -106,10 +106,11 @@ public class RolePermissionManagementService {
             throw commonValidationHelper.conflict("Không thể gán quyền đang ngừng hoạt động");
         }
 
-        Optional<UnitScope> unit = unitScopeResolver.resolve(authentication, role,
-                request.getDioceseId(), request.getDeaneryId(), request.getParishId(), false);
-        if (unit.isPresent()) {
-            return assignForUnit(role, unit.get(), List.of(request.getPermissionCode()), request.getConditions(),
+        List<UnitScope> units = unitScopeResolver.resolveAll(authentication, role,
+                ids(request.getDioceseId(), request.getDioceseIds()), ids(request.getDeaneryId(), request.getDeaneryIds()),
+                ids(request.getParishId(), request.getParishIds()), false);
+        if (!units.isEmpty()) {
+            return assignForUnits(role, units, List.of(request.getPermissionCode()), request.getConditions(),
                     request.getAssignedAt(), request.getExpiresAt(), authentication, "ROLE_PERMISSION_CREATED").get(0);
         }
 
@@ -147,10 +148,11 @@ public class RolePermissionManagementService {
             throw commonValidationHelper.conflict("Không thể gán quyền cho vai trò đang ngừng hoạt động");
         }
 
-        Optional<UnitScope> unit = unitScopeResolver.resolve(authentication, role,
-                request.getDioceseId(), request.getDeaneryId(), request.getParishId(), false);
-        if (unit.isPresent()) {
-            return assignForUnit(role, unit.get(), new ArrayList<>(new LinkedHashSet<>(request.getPermissionCodes())),
+        List<UnitScope> units = unitScopeResolver.resolveAll(authentication, role,
+                ids(request.getDioceseId(), request.getDioceseIds()), ids(request.getDeaneryId(), request.getDeaneryIds()),
+                ids(request.getParishId(), request.getParishIds()), false);
+        if (!units.isEmpty()) {
+            return assignForUnits(role, units, new ArrayList<>(new LinkedHashSet<>(request.getPermissionCodes())),
                     request.getConditions(), request.getAssignedAt(), request.getExpiresAt(), authentication, "ROLE_PERMISSION_BULK_ASSIGNED");
         }
 
@@ -192,10 +194,11 @@ public class RolePermissionManagementService {
     public int bulkRevoke(RolePermissionRevokeRequest request, Authentication authentication) {
         Role role = roleRepository.findById(request.getRoleCode())
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy vai trò: " + request.getRoleCode()));
-        Optional<UnitScope> unit = unitScopeResolver.resolve(authentication, role,
-                request.getDioceseId(), request.getDeaneryId(), request.getParishId(), true);
-        if (unit.isPresent()) {
-            return revokeForUnit(role, unit.get(), new ArrayList<>(new LinkedHashSet<>(request.getPermissionCodes())), authentication);
+        List<UnitScope> units = unitScopeResolver.resolveAll(authentication, role,
+                ids(request.getDioceseId(), request.getDioceseIds()), ids(request.getDeaneryId(), request.getDeaneryIds()),
+                ids(request.getParishId(), request.getParishIds()), true);
+        if (!units.isEmpty()) {
+            return revokeForUnits(role, units, new ArrayList<>(new LinkedHashSet<>(request.getPermissionCodes())), authentication);
         }
         String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người thu hồi phân quyền của vai trò");
         int revoked = 0;
@@ -228,14 +231,18 @@ public class RolePermissionManagementService {
 
     /** Quyền đã gán cho vai trò mà tài khoản hiện tại được phép thu hồi. */
     @Transactional(readOnly = true)
-    public List<PermissionResponse> findRevocablePermissions(String roleCode, java.util.UUID dioceseId, java.util.UUID deaneryId,
-                                                             java.util.UUID parishId, Authentication authentication) {
+    public List<PermissionResponse> findRevocablePermissions(String roleCode, List<java.util.UUID> dioceseIds, List<java.util.UUID> deaneryIds,
+                                                             List<java.util.UUID> parishIds, Authentication authentication) {
         Role role = roleRepository.findById(roleCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy vai trò: " + roleCode));
-        Optional<UnitScope> unit = unitScopeResolver.resolve(authentication, role, dioceseId, deaneryId, parishId, true);
-        if (unit.isPresent()) {
+        List<UnitScope> units = unitScopeResolver.resolveAll(authentication, role, dioceseIds, deaneryIds, parishIds, true);
+        if (!units.isEmpty()) {
             Actor actor = unitScopeResolver.actor(authentication, true);
-            Set<String> effective = unitOverrideService.effectiveCodes(role, unit.get());
+            // Chọn nhiều nơi: liệt kê quyền đang có ở ít nhất một nơi (nơi chưa có sẽ được bỏ qua khi thu hồi).
+            Set<String> effective = new LinkedHashSet<>();
+            for (UnitScope unit : units) {
+                effective.addAll(unitOverrideService.effectiveCodes(role, unit));
+            }
             return effective.stream()
                     .map(systemPermissionRepository::findById)
                     .flatMap(java.util.Optional::stream)
@@ -419,20 +426,21 @@ public class RolePermissionManagementService {
     }
 
     @Transactional(readOnly = true)
-    public List<PermissionResponse> findAssignablePermissions(String roleCode, java.util.UUID dioceseId, java.util.UUID deaneryId,
-                                                              java.util.UUID parishId, Authentication authentication) {
+    public List<PermissionResponse> findAssignablePermissions(String roleCode, List<java.util.UUID> dioceseIds, List<java.util.UUID> deaneryIds,
+                                                              List<java.util.UUID> parishIds, Authentication authentication) {
         Role role = roleRepository.findById(roleCode)
                 .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy vai trò: " + roleCode));
         if (!Boolean.TRUE.equals(role.getStatus())) {
             throw commonValidationHelper.conflict("Không thể gán quyền cho vai trò đang ngừng hoạt động");
         }
-        Optional<UnitScope> unit = unitScopeResolver.resolve(authentication, role, dioceseId, deaneryId, parishId, false);
-        if (unit.isPresent()) {
+        List<UnitScope> units = unitScopeResolver.resolveAll(authentication, role, dioceseIds, deaneryIds, parishIds, false);
+        if (!units.isEmpty()) {
             Actor actor = unitScopeResolver.actor(authentication, false);
             // Quyền đã thu hồi riêng ở cấp trên vẫn nằm trong danh sách này để phân lại riêng cho đơn vị đang chọn.
-            Set<String> unavailable = unitOverrideService.effectiveCodes(role, unit.get());
+            // Chọn nhiều nơi: liệt kê quyền còn thiếu ở ít nhất một nơi (nơi đã có sẽ được bỏ qua khi phân quyền).
+            List<Set<String>> effectivePerUnit = units.stream().map(unit -> unitOverrideService.effectiveCodes(role, unit)).toList();
             return systemPermissionRepository.findActivePermissions().stream()
-                    .filter(permission -> !unavailable.contains(permission.getPermissionCode()))
+                    .filter(permission -> effectivePerUnit.stream().anyMatch(codes -> !codes.contains(permission.getPermissionCode())))
                     .filter(permission -> unitScopeResolver.permissionAllowed(actor, permission))
                     .map(this::toPermissionResponse)
                     .toList();
@@ -731,16 +739,29 @@ public class RolePermissionManagementService {
         return names;
     }
 
-    /** Gán quyền cho vai trò tại một đơn vị (ngoại lệ theo đơn vị); trả về các dòng ngoại lệ vừa thay đổi. */
-    private List<RolePermissionResponse> assignForUnit(Role role, UnitScope unit, List<String> permissionCodes, String conditions,
-                                                       OffsetDateTime assignedAt, OffsetDateTime expiresAt,
-                                                       Authentication authentication, String reason) {
+    /** Id đơn lẻ (cách gửi cũ) và danh sách id gộp thành một danh sách. */
+    private static List<java.util.UUID> ids(java.util.UUID single, List<java.util.UUID> many) {
+        List<java.util.UUID> all = new ArrayList<>();
+        if (single != null) {
+            all.add(single);
+        }
+        if (many != null) {
+            all.addAll(many);
+        }
+        return all;
+    }
+
+    /**
+     * Gán quyền cho vai trò tại một hoặc nhiều đơn vị (ngoại lệ theo đơn vị); trả về các dòng ngoại lệ vừa thay đổi.
+     * Chọn nhiều nơi thì nơi đã có sẵn quyền được bỏ qua; chỉ báo lỗi khi không nơi nào thay đổi. Toàn bộ trong một giao dịch.
+     */
+    private List<RolePermissionResponse> assignForUnits(Role role, List<UnitScope> units, List<String> permissionCodes, String conditions,
+                                                        OffsetDateTime assignedAt, OffsetDateTime expiresAt,
+                                                        Authentication authentication, String reason) {
         String actorName = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người tạo phân quyền cho vai trò");
         Actor actor = unitScopeResolver.actor(authentication, false);
         Actor revoker = unitScopeResolver.actor(authentication, true);
-        Map<java.util.UUID, String> names = namesOfScope(unit);
-        List<RolePermissionResponse> responses = new ArrayList<>();
-        List<Permission> granted = new ArrayList<>();
+        List<Permission> permissions = new ArrayList<>();
         for (String permissionCode : permissionCodes) {
             Permission permission = systemPermissionRepository.findById(permissionCode)
                     .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy quyền: " + permissionCode));
@@ -748,35 +769,86 @@ public class RolePermissionManagementService {
                 throw commonValidationHelper.conflict("Không thể gán quyền đang ngừng hoạt động: " + permissionCode);
             }
             unitScopeResolver.requirePermissionAllowed(actor, permission);
-            RolePermissionUnitOverrideService.Change change = unitOverrideService.assign(role, permission, unit, conditions, assignedAt, expiresAt, actorName);
-            responses.add(toResponse(toListingRow(change.entity(), unit), authentication, revoker, names));
-            granted.add(permission);
+            permissions.add(permission);
         }
-        notifyUnitChanged(role, unit, reason);
-        if (permissionGrantNotifier != null) {
-            permissionGrantNotifier.notifyRoleGranted(role, granted, actorName, unit.unitId(), unit.label());
+        List<RolePermissionResponse> responses = new ArrayList<>();
+        phucuong.ht.common.exception.ApiException firstSkipped = null;
+        for (UnitScope unit : units) {
+            Map<java.util.UUID, String> names = namesOfScope(unit);
+            List<Permission> granted = new ArrayList<>();
+            for (Permission permission : permissions) {
+                try {
+                    RolePermissionUnitOverrideService.Change change = unitOverrideService.assign(role, permission, unit, conditions, assignedAt, expiresAt, actorName);
+                    responses.add(toResponse(toListingRow(change.entity(), unit), authentication, revoker, names));
+                    granted.add(permission);
+                } catch (phucuong.ht.common.exception.ApiException ex) {
+                    if (units.size() > 1 && ex.getStatus() == org.springframework.http.HttpStatus.CONFLICT) {
+                        if (firstSkipped == null) {
+                            firstSkipped = ex;
+                        }
+                        continue;
+                    }
+                    throw ex;
+                }
+            }
+            if (!granted.isEmpty()) {
+                notifyUnitChanged(role, unit, reason);
+                if (permissionGrantNotifier != null) {
+                    permissionGrantNotifier.notifyRoleGranted(role, granted, actorName, unit.unitId(), unit.label());
+                }
+            }
+        }
+        if (responses.isEmpty() && firstSkipped != null) {
+            throw firstSkipped;
         }
         return responses;
     }
 
-    /** Thu hồi quyền của vai trò tại một đơn vị; trả về số quyền đã xử lý. */
-    private int revokeForUnit(Role role, UnitScope unit, List<String> permissionCodes, Authentication authentication) {
+    /**
+     * Thu hồi quyền của vai trò tại một hoặc nhiều đơn vị; trả về số lần thu hồi đã thực hiện (quyền x đơn vị).
+     * Chọn nhiều nơi thì nơi chưa có quyền được bỏ qua; chỉ báo lỗi khi không nơi nào thay đổi.
+     */
+    private int revokeForUnits(Role role, List<UnitScope> units, List<String> permissionCodes, Authentication authentication) {
         String actorName = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người thu hồi phân quyền của vai trò");
         Actor actor = unitScopeResolver.actor(authentication, true);
         authorizationHelper.requireNotOwnRole(authentication, role);
-        List<Permission> revoked = new ArrayList<>();
+        List<Permission> permissions = new ArrayList<>();
         for (String permissionCode : permissionCodes) {
             Permission permission = systemPermissionRepository.findById(permissionCode)
                     .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy quyền: " + permissionCode));
             unitScopeResolver.requirePermissionAllowed(actor, permission);
-            unitOverrideService.revoke(role, permission, unit, actorName);
-            revoked.add(permission);
+            permissions.add(permission);
         }
-        notifyUnitChanged(role, unit, "ROLE_PERMISSION_BULK_REVOKED");
-        if (permissionGrantNotifier != null) {
-            permissionGrantNotifier.notifyRoleRevoked(role, revoked, actorName, unit.unitId(), unit.label());
+        int total = 0;
+        phucuong.ht.common.exception.ApiException firstSkipped = null;
+        for (UnitScope unit : units) {
+            List<Permission> revoked = new ArrayList<>();
+            for (Permission permission : permissions) {
+                try {
+                    unitOverrideService.revoke(role, permission, unit, actorName);
+                    revoked.add(permission);
+                } catch (phucuong.ht.common.exception.ApiException ex) {
+                    if (units.size() > 1 && ex.getStatus() == org.springframework.http.HttpStatus.NOT_FOUND) {
+                        if (firstSkipped == null) {
+                            firstSkipped = ex;
+                        }
+                        continue;
+                    }
+                    throw ex;
+                }
+            }
+            if (!revoked.isEmpty()) {
+                total += revoked.size();
+                notifyUnitChanged(role, unit, "ROLE_PERMISSION_BULK_REVOKED");
+                if (permissionGrantNotifier != null) {
+                    permissionGrantNotifier.notifyRoleRevoked(role, revoked, actorName, unit.unitId(), unit.label());
+                }
+            }
         }
-        return revoked.size();
+        if (total == 0 && firstSkipped != null) {
+            throw firstSkipped;
+        }
+        return total;
     }
 
     private void notifyUnitChanged(Role role, UnitScope unit, String reason) {

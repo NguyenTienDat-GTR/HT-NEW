@@ -171,6 +171,39 @@ public class RolePermissionUnitScopeResolver {
         return Optional.of(target);
     }
 
+    /**
+     * Như {@link #resolve} nhưng nhận nhiều nơi áp dụng cùng lúc: dùng danh sách của cấp cụ thể nhất có giá trị
+     * (giáo xứ, rồi giáo hạt, rồi giáo phận); mỗi đơn vị được kiểm tra quyền như khi chọn riêng lẻ.
+     * Rỗng nghĩa là đường xử lý cũ (mặc định chung, hoặc vai trò tự tạo của đơn vị).
+     */
+    public List<UnitScope> resolveAll(Authentication authentication, Role role, List<UUID> dioceseIds, List<UUID> deaneryIds,
+                                      List<UUID> parishIds, boolean revoke) {
+        List<UUID> parishes = distinct(parishIds);
+        List<UUID> deaneries = distinct(deaneryIds);
+        List<UUID> dioceses = distinct(dioceseIds);
+        List<UnitScope> scopes = new ArrayList<>();
+        if (!parishes.isEmpty()) {
+            for (UUID id : parishes) {
+                resolve(authentication, role, null, null, id, revoke).ifPresent(scopes::add);
+            }
+        } else if (!deaneries.isEmpty()) {
+            for (UUID id : deaneries) {
+                resolve(authentication, role, null, id, null, revoke).ifPresent(scopes::add);
+            }
+        } else if (!dioceses.isEmpty()) {
+            for (UUID id : dioceses) {
+                resolve(authentication, role, id, null, null, revoke).ifPresent(scopes::add);
+            }
+        } else {
+            resolve(authentication, role, null, null, null, revoke).ifPresent(scopes::add);
+        }
+        return scopes;
+    }
+
+    private static List<UUID> distinct(List<UUID> ids) {
+        return ids == null ? List.of() : ids.stream().filter(java.util.Objects::nonNull).distinct().toList();
+    }
+
     /** Một dòng ngoại lệ có thuộc quyền thao tác của người này không (dùng khi tính "được thu hồi" trên danh sách). */
     public boolean canManageRow(Actor actor, Role role, Permission permission, RolePermissionScopeLevel level, UUID dioceseId, UUID deaneryId) {
         if (actor.tier() == ActorTier.NONE || level == null || !roleEligible(actor, role)) {
