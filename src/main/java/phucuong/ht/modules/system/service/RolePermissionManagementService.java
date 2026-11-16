@@ -266,6 +266,7 @@ public class RolePermissionManagementService {
     @Transactional(readOnly = true)
     public Page<RolePermissionResponse> findAll(BaseSearchRequest request, Authentication authentication) {
         UnitScope selected = selectedUnit(request);
+        String validityFilter = validityFilter(request);
         Set<String> excluded = new java.util.HashSet<>();
         if (selected != null) {
             for (RolePermissionUnitOverride exclude : unitOverrideRepository.findActiveExcludesInUnits(selected.chain())) {
@@ -277,8 +278,44 @@ public class RolePermissionManagementService {
                 .filter(row -> authorizationHelper.canReadRolePermission(authentication, row.getRole(), row.getPermission()))
                 .filter(row -> visibleToViewer(row, viewer))
                 .filter(row -> selected == null || matchesSelectedUnit(row, selected, excluded))
+                .filter(row -> matchesValidity(row, validityFilter))
                 .toList();
         return page(request, manageable, authentication);
+    }
+
+    /**
+     * Bộ lọc tình trạng quyền (khóa validity): ACTIVE = còn hiệu lực; INACTIVE = hết hiệu lực (đã thu hồi, hết hạn hoặc quyền bị vô hiệu hóa);
+     * hoặc đúng một giá trị của {@link PermissionValidity}. Tình trạng được tính ra nên không lọc được ở tầng truy vấn.
+     */
+    private String validityFilter(BaseSearchRequest request) {
+        Map<String, Object> filters = request == null ? null : request.getFilters();
+        Object value = filters == null ? null : filters.get("validity");
+        if (value == null || String.valueOf(value).isBlank()) {
+            return null;
+        }
+        String text = String.valueOf(value).trim().toUpperCase();
+        if (!text.equals("ACTIVE") && !text.equals("INACTIVE")) {
+            try {
+                PermissionValidity.valueOf(text);
+            } catch (IllegalArgumentException ex) {
+                throw commonValidationHelper.validationError("Tình trạng quyền lọc không hợp lệ");
+            }
+        }
+        return text;
+    }
+
+    private boolean matchesValidity(RolePermissionListing row, String filter) {
+        if (filter == null) {
+            return true;
+        }
+        PermissionValidity validity = row.getEntryType() == RolePermissionEntryType.UNIT_EXCLUDE
+                ? PermissionValidity.REVOKED
+                : PermissionValiditySupport.validity(row.getRevokedAt(), row.getRevocationReason(), row.getExpiresAt(), row.getPermission(), OffsetDateTime.now());
+        return switch (filter) {
+            case "ACTIVE" -> validity == PermissionValidity.ACTIVE;
+            case "INACTIVE" -> validity != PermissionValidity.ACTIVE;
+            default -> validity.name().equals(filter);
+        };
     }
 
     /** Đơn vị người dùng đang lọc trên danh sách (bộ lọc dioceseId / deaneryId / parishId), hoặc null khi không lọc. */

@@ -133,6 +133,38 @@ class ScopedSystemAdministrationReadTest {
                 listingRepository);
     }
 
+    @Test
+    void rolePermissionListCanBeFilteredByValidity() {
+        RolePermission active = rolePermission("r1", "p1");
+        RolePermission revoked = rolePermission("r2", "p2");
+        active.getPermission().setStatus(true);
+        revoked.getPermission().setStatus(true);
+        var revokedRow = listing(revoked);
+        revokedRow.setRevokedAt(java.time.OffsetDateTime.now().minusDays(1));
+        revokedRow.setRevocationReason(phucuong.ht.modules.system.model.enums.PermissionRevocationReason.MANUAL);
+        RolePermission expired = rolePermission("r3", "p3");
+        expired.getPermission().setStatus(true);
+        var expiredRow = listing(expired);
+        expiredRow.setExpiresAt(java.time.OffsetDateTime.now().minusDays(1));
+        when(listingRepository.findAll(any(BaseSearchRequest.class)))
+                .thenReturn(new PageImpl<>(List.of(listing(active), revokedRow, expiredRow), PageRequest.of(0, BaseSearchRequest.MAX_PAGE_SIZE), 3));
+        when(authorizationHelper.canReadRolePermission(eq(authentication), any(), any())).thenReturn(true);
+
+        BaseSearchRequest request = new BaseSearchRequest();
+        request.setSize(10);
+        request.setFilters(new java.util.LinkedHashMap<>(java.util.Map.of("validity", "ACTIVE")));
+        var activeOnly = rolePermissionService().findAll(request, authentication);
+        assertEquals(1, activeOnly.getTotalElements());
+        assertEquals("r1", activeOnly.getContent().getFirst().getRoleCode());
+
+        request.setFilters(new java.util.LinkedHashMap<>(java.util.Map.of("validity", "INACTIVE")));
+        var inactive = rolePermissionService().findAll(request, authentication);
+        assertEquals(2, inactive.getTotalElements());
+
+        request.setFilters(new java.util.LinkedHashMap<>(java.util.Map.of("validity", "EXPIRED")));
+        assertEquals(1, rolePermissionService().findAll(request, authentication).getTotalElements());
+    }
+
     private phucuong.ht.modules.system.model.entity.RolePermissionListing listing(RolePermission source) {
         var row = new phucuong.ht.modules.system.model.entity.RolePermissionListing();
         row.setId(source.getId());
