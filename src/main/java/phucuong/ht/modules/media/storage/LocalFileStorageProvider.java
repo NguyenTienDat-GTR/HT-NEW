@@ -73,6 +73,62 @@ public class LocalFileStorageProvider implements MediaStorageProvider {
         }
     }
 
+    @Override
+    public boolean deleteFolder(String path) {
+        try {
+            Path dir = resolve(path);
+            if (dir.equals(root)) {
+                return false;
+            }
+            return Files.deleteIfExists(dir);
+        } catch (IOException | RuntimeException e) {
+            // Thư mục còn tệp (DirectoryNotEmptyException) hoặc không xóa được: giữ nguyên.
+            return false;
+        }
+    }
+
+    @Override
+    public boolean supportsSweep() {
+        return true;
+    }
+
+    @Override
+    public void forEachFile(String prefix, java.util.function.Predicate<StoredFile> visitor) {
+        Path start = resolve(prefix);
+        if (!Files.isDirectory(start)) {
+            return;
+        }
+        try (java.util.stream.Stream<Path> walk = Files.walk(start)) {
+            for (java.util.Iterator<Path> it = walk.filter(Files::isRegularFile).iterator(); it.hasNext(); ) {
+                Path file = it.next();
+                if (file.getFileName().toString().startsWith(".upload-")) {
+                    continue; // tệp tạm đang ghi dở của put()
+                }
+                String key = root.relativize(file).toString().replace('\\', '/');
+                java.time.OffsetDateTime created = java.time.OffsetDateTime.ofInstant(
+                        Files.getLastModifiedTime(file).toInstant(), java.time.ZoneOffset.UTC);
+                if (!visitor.test(new StoredFile(key, created))) {
+                    return;
+                }
+            }
+        } catch (IOException e) {
+            throw new MediaStorageException("Không liệt kê được tệp trong thư mục cục bộ", e);
+        }
+    }
+
+    @Override
+    public java.util.List<String> listFolders(String path) {
+        Path dir = resolve(path);
+        if (!Files.isDirectory(dir)) {
+            return java.util.List.of();
+        }
+        try (java.util.stream.Stream<Path> children = Files.list(dir)) {
+            return children.filter(Files::isDirectory).map(p -> p.getFileName().toString()).sorted().toList();
+        } catch (IOException e) {
+            throw new MediaStorageException("Không liệt kê được thư mục cục bộ", e);
+        }
+    }
+
     private Path resolve(String key) {
         Path resolved = root.resolve(key).normalize();
         if (!resolved.startsWith(root)) {

@@ -203,6 +203,8 @@ class MediaStorageIntegrationTest {
     @Autowired private MediaProperties properties;
     @Autowired private MediaLegacyMigrationService legacyMigration;
     @Autowired private MediaMaintenanceService maintenance;
+    @Autowired private phucuong.ht.modules.media.job.MediaSweepService sweepService;
+    @Autowired private phucuong.ht.modules.media.service.MediaAssetService mediaAssetService;
     @Autowired private MediaStorageRegistry registry;
     @Autowired private InMemoryProvider memory;
     @Autowired private TransactionTemplate tx;
@@ -578,17 +580,89 @@ class MediaStorageIntegrationTest {
                         .with(authentication(leaderAdmin())))
                 .andExpect(status().isOk()).andReturn();
         UUID stale = UUID.fromString(objectMapper.readTree(result.getResponse().getContentAsString()).get("data").get("assetId").asText());
-        List<String> staleKeys = assetRepository.findById(stale).orElseThrow().getVariants().stream().map(v -> v.key()).toList();
+        MediaAsset staleAsset = assetRepository.findById(stale).orElseThrow();
+        List<String> staleKeys = staleAsset.getVariants().stream().map(v -> v.key()).toList();
+        String staleFolder = staleAsset.getBaseKey();
+        assertTrue(Files.isDirectory(fileOf(staleFolder)));
 
+        // PENDING quá hạn: xóa ngay tệp, thư mục {assetId} và dòng (không phải đợi thời gian lưu của ảnh DELETED).
         jdbc.update("update media_asset set created_at = now() - interval '3 days' where id = ?", stale);
         maintenance.cleanup();
-        assertEquals(MediaStatus.DELETED, assetRepository.findById(stale).orElseThrow().getStatus(), "PENDING quá hạn bị gỡ");
-
-        jdbc.update("update media_asset set deleted_at = now() - interval '30 days' where id = ?", stale);
-        maintenance.cleanup();
-        assertTrue(assetRepository.findById(stale).isEmpty(), "DELETED quá thời gian lưu bị xóa hẳn");
+        assertTrue(assetRepository.findById(stale).isEmpty(), "PENDING quá hạn bị xóa hẳn ngay");
         staleKeys.forEach(key -> assertFalse(Files.exists(fileOf(key)), "tệp trên cloud phải bị xóa: " + key));
+        assertFalse(Files.exists(fileOf(staleFolder)), "thư mục ảnh trống phải bị xóa");
+
+        // Ảnh đã gỡ (DELETED) vẫn giữ theo thời gian lưu, quá hạn mới xóa tệp, thư mục và dòng.
+        MvcResult second = mockMvc.perform(multipart("/api/media").file(file).param("category", "LEADER_AVATAR")
+                        .with(authentication(leaderAdmin())))
+                .andExpect(status().isOk()).andReturn();
+        UUID released = UUID.fromString(objectMapper.readTree(second.getResponse().getContentAsString()).get("data").get("assetId").asText());
+        MediaAsset releasedAsset = assetRepository.findById(released).orElseThrow();
+        List<String> releasedKeys = releasedAsset.getVariants().stream().map(v -> v.key()).toList();
+        mediaAssetService.release(released);
+        maintenance.cleanup();
+        assertEquals(MediaStatus.DELETED, assetRepository.findById(released).orElseThrow().getStatus());
+        releasedKeys.forEach(key -> assertTrue(Files.exists(fileOf(key)), "chưa hết thời gian lưu: " + key));
+
+        jdbc.update("update media_asset set deleted_at = now() - interval '30 days' where id = ?", released);
+        maintenance.cleanup();
+        assertTrue(assetRepository.findById(released).isEmpty(), "DELETED quá thời gian lưu bị xóa hẳn");
+        releasedKeys.forEach(key -> assertFalse(Files.exists(fileOf(key)), "tệp trên cloud phải bị xóa: " + key));
+        assertFalse(Files.exists(fileOf(releasedAsset.getBaseKey())), "thư mục ảnh trống phải bị xóa");
         assertNotEquals(0, assetRepository.count(), "asset đang dùng không bị đụng tới");
+    }
+
+    @Test
+    @Order(15)
+    void sweepRemovesOrphanPendingFilesAndEmptyAssetFolders() throws Exception {
+        UUID orphanId = UUID.randomUUID();
+        String orphanKey = "ht/test/pending/avatars/" + orphanId + "/thumb.jpg";
+        registry.require("local").put(orphanKey, new byte[]{1, 2, 3}, "image/jpeg");
+        Files.setLastModifiedTime(fileOf(orphanKey), java.nio.file.attribute.FileTime.from(java.time.Instant.now().minus(java.time.Duration.ofDays(3))));
+
+        // Tệp mới tải (chưa quá hạn): dòng DB có thể chưa kịp ghi nên không được đụng tới.
+        UUID freshId = UUID.randomUUID();
+        String freshKey = "ht/test/pending/avatars/" + freshId + "/thumb.jpg";
+        registry.require("local").put(freshKey, new byte[]{4, 5, 6}, "image/jpeg");
+
+        // Thư mục ảnh trống, không có dòng nào; và một thư mục cấu trúc trống phải được giữ lại.
+        UUID emptyId = UUID.randomUUID();
+        String emptyFolder = "ht/test/dioceses/" + folderService.dioceseFolder(dioceseId) + "/avatars/" + emptyId;
+        Files.createDirectories(fileOf(emptyFolder));
+        Files.createDirectories(fileOf("ht/test/dioceses/" + folderService.dioceseFolder(dioceseId) + "/badge-backgrounds"));
+
+        // Ảnh PENDING còn dòng trong DB (của người khác tải lên ở test 5) phải còn nguyên.
+        MediaAsset knownPending = assetRepository.findAll().stream()
+                .filter(a -> a.getStatus() == MediaStatus.PENDING && "local".equals(a.getProvider())).findFirst().orElseThrow();
+
+        var dry = sweepService.sweep(true, 300);
+        assertTrue(dry.dryRun());
+        assertEquals(1, dry.orphanFilesFound());
+        assertEquals(0, dry.orphanFilesDeleted());
+        assertTrue(dry.emptyFoldersFound() >= 2);
+        assertEquals(0, dry.emptyFoldersDeleted());
+        assertTrue(Files.exists(fileOf(orphanKey)), "chế độ thống kê không được xóa gì");
+        assertTrue(Files.isDirectory(fileOf(emptyFolder)));
+
+        var real = sweepService.sweep(false, 300);
+        assertFalse(real.dryRun());
+        assertEquals(1, real.orphanFilesDeleted());
+        assertEquals(0, real.fileErrors());
+        assertTrue(real.emptyFoldersDeleted() >= 2);
+        assertFalse(real.truncated());
+
+        assertFalse(Files.exists(fileOf(orphanKey)), "tệp mồ côi quá hạn bị xóa");
+        assertFalse(Files.exists(fileOf("ht/test/pending/avatars/" + orphanId)), "thư mục của tệp mồ côi bị xóa");
+        assertFalse(Files.exists(fileOf(emptyFolder)), "thư mục ảnh trống bị xóa");
+        assertTrue(Files.exists(fileOf(freshKey)), "tệp mới tải chưa quá hạn phải còn");
+        assertTrue(Files.isDirectory(fileOf("ht/test/dioceses/" + folderService.dioceseFolder(dioceseId) + "/badge-backgrounds")),
+                "thư mục cấu trúc (loại ảnh) không bị xóa dù đang trống");
+        knownPending.getVariants().forEach(v -> assertTrue(Files.exists(fileOf(v.key())), "ảnh còn dòng trong DB phải còn: " + v.key()));
+
+        // Chạy lại không còn gì để dọn.
+        var again = sweepService.sweep(false, 300);
+        assertEquals(0, again.orphanFilesFound());
+        assertEquals(0, again.emptyFoldersDeleted());
     }
 
     // ---------------- Album ảnh nền ----------------
