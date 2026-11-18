@@ -110,6 +110,13 @@ public class TrainingCourse extends BaseModel {
     @Column(name = "auto_send_invitation", nullable = false)
     private Boolean autoSendInvitation = Boolean.FALSE;
 
+    // Thu lệ phí: cờ bật thu và lệ phí mỗi người (đồng). Chỉ sửa được khi khóa chưa có hồ sơ nào được duyệt đăng ký.
+    @Column(name = "fee_enabled", nullable = false)
+    private Boolean feeEnabled = Boolean.FALSE;
+
+    @Column(name = "fee_amount")
+    private Long feeAmount;
+
     // Bật thì cấp thấp hơn cấp sở hữu khóa (giáo xứ, chính huynh trưởng) mới thấy điểm trong chứng nhận và kết quả khóa.
     @Column(name = "score_visible", nullable = false)
     private Boolean scoreVisible = Boolean.FALSE;

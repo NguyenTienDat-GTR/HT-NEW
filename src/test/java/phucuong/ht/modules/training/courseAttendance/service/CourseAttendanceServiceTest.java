@@ -577,4 +577,180 @@ class CourseAttendanceServiceTest {
         assertEquals(0, summary.notCheckedIn());
         assertEquals(0, summary.invitationPending());
     }
+
+    // ---------- lệ phí ----------
+
+    private void givenFeeCourse() {
+        course.setFeeEnabled(true);
+        course.setFeeAmount(150_000L);
+    }
+
+    // Mô phỏng câu UPDATE có điều kiện của repository: chỉ đổi khi trạng thái thật sự khác.
+    private void givenRepositoryWritesFeeState() {
+        org.mockito.Mockito.doAnswer(invocation -> {
+            CourseParticipation target = invocation.getArgument(0);
+            boolean paid = invocation.getArgument(1);
+            String actor = invocation.getArgument(2);
+            if (paid && target.getFeePaidAt() == null) {
+                target.setFeePaidAt(OffsetDateTime.now());
+                target.setFeePaidBy(actor);
+                return true;
+            }
+            if (!paid && target.getFeePaidAt() != null) {
+                target.setFeePaidAt(null);
+                target.setFeePaidBy(null);
+                return true;
+            }
+            return false;
+        }).when(repository).setFeePaid(any(), org.mockito.ArgumentMatchers.anyBoolean(), any());
+    }
+
+    @Test
+    void summaryCountsFeeOnlyOverCurrentParticipants() {
+        givenFeeCourse();
+        CourseParticipation bich = participation("p-bich", "Bích", "bich@x.vn", course);
+        bich.setFeePaidAt(OffsetDateTime.now());
+        CourseParticipation chi = participation("p-chi", "Chi", "chi@x.vn", course);
+        when(participantSupport.participantsOf("KH-1")).thenReturn(List.of(ann, bich, chi));
+
+        Summary summary = service.summary("KH-1");
+
+        assertTrue(summary.feeEnabled());
+        assertEquals(150_000L, summary.feeAmount());
+        assertEquals(450_000L, summary.feeTotal());
+        assertEquals(150_000L, summary.feePaidTotal());
+        assertEquals(300_000L, summary.feeRemaining());
+        assertEquals(1, summary.feePaidCount());
+        assertEquals(2, summary.feeUnpaidCount());
+    }
+
+    @Test
+    void summaryHasNoFeeFiguresWhenTheCourseDoesNotCharge() {
+        ann.setFeePaidAt(OffsetDateTime.now());
+        when(participantSupport.participantsOf("KH-1")).thenReturn(List.of(ann));
+
+        Summary summary = service.summary("KH-1");
+
+        assertFalse(summary.feeEnabled());
+        assertNull(summary.feeAmount());
+        assertEquals(0L, summary.feeTotal());
+        assertEquals(0L, summary.feeRemaining());
+        assertEquals(0, summary.feePaidCount());
+        assertEquals(0, summary.feeUnpaidCount());
+    }
+
+    @Test
+    void listCarriesAndFiltersTheFeeState() {
+        givenFeeCourse();
+        List<CourseParticipation> all = givenListedParticipants();
+        all.stream().filter(p -> p.getId().equals("p-bich")).findFirst().orElseThrow().setFeePaidAt(OffsetDateTime.now());
+
+        List<ParticipantRow> rows = list(null, null, null, null, 0, 20).getContent();
+        assertNotNull(rows.stream().filter(r -> r.id().equals("p-bich")).findFirst().orElseThrow().feePaidAt());
+        assertNull(rows.stream().filter(r -> r.id().equals("p-ann")).findFirst().orElseThrow().feePaidAt());
+
+        assertEquals(List.of("p-bich"), ids(service.participants("KH-1", new ParticipantQuery(null, null, null, null, 0, 20, true))));
+        assertEquals(List.of("p-ann", "p-chi", "p-dung"), ids(service.participants("KH-1", new ParticipantQuery(null, null, null, null, 0, 20, false))));
+    }
+
+    @Test
+    void lookupResultCarriesTheFeeAmountAndState() {
+        givenFeeCourse();
+        ScanResult unpaid = service.lookup("KH-1", tokens.tokenFor("KH-1", "p-ann"));
+        assertTrue(unpaid.feeEnabled());
+        assertEquals(150_000L, unpaid.feeAmount());
+        assertNull(unpaid.feePaidAt());
+
+        ann.setFeePaidAt(OffsetDateTime.now());
+        assertNotNull(service.lookup("KH-1", tokens.tokenFor("KH-1", "p-ann")).feePaidAt());
+    }
+
+    @Test
+    void lookupHidesTheFeeWhenTheCourseDoesNotCharge() {
+        ScanResult result = service.lookup("KH-1", tokens.tokenFor("KH-1", "p-ann"));
+        assertFalse(result.feeEnabled());
+        assertNull(result.feeAmount());
+    }
+
+    @Test
+    void markingFeePaidRecordsTheActorAndRepeatingItChangesNothing() {
+        givenFeeCourse();
+        givenRepositoryWritesFeeState();
+
+        var first = service.setFeePaid("KH-1", "p-ann", true, scanner);
+        assertTrue(first.feePaid());
+        assertEquals("scanner1", first.feePaidBy());
+        OffsetDateTime paidAt = first.feePaidAt();
+
+        // Gửi lặp (retry hoặc bấm đúp) cùng trạng thái đích: vẫn đã đóng, giữ nguyên thời điểm và người ghi nhận đầu tiên.
+        var again = service.setFeePaid("KH-1", "p-ann", true, new UsernamePasswordAuthenticationToken("other", null, List.of()));
+        assertTrue(again.feePaid());
+        assertEquals(paidAt, again.feePaidAt());
+        assertEquals("scanner1", again.feePaidBy());
+    }
+
+    @Test
+    void unmarkingFeePaidIsIdempotentToo() {
+        givenFeeCourse();
+        givenRepositoryWritesFeeState();
+        ann.setFeePaidAt(OffsetDateTime.now());
+        ann.setFeePaidBy("scanner1");
+
+        assertFalse(service.setFeePaid("KH-1", "p-ann", false, scanner).feePaid());
+        var again = service.setFeePaid("KH-1", "p-ann", false, scanner);
+        assertFalse(again.feePaid());
+        assertNull(again.feePaidAt());
+        assertNull(again.feePaidBy());
+    }
+
+    @Test
+    void feeCanBeMarkedBeforeTheCourseStartsAndWithoutAttendance() {
+        givenFeeCourse();
+        givenRepositoryWritesFeeState();
+        course.setAttendanceEnabled(false);
+        course.setStartDate(TrainingCourseStatusSupport.today().plusDays(5));
+        course.setEndDate(TrainingCourseStatusSupport.today().plusDays(7));
+        course.setScoreLocked(Boolean.TRUE);
+
+        assertTrue(service.setFeePaid("KH-1", "p-ann", true, scanner).feePaid());
+    }
+
+    @Test
+    void feeIsRefusedWhenTheCourseDoesNotCharge() {
+        ApiException error = failure(() -> service.setFeePaid("KH-1", "p-ann", true, scanner));
+        assertEquals(409, error.getStatus().value());
+        assertTrue(error.getMessage().contains("không thu lệ phí"));
+        verify(repository, never()).setFeePaid(any(), org.mockito.ArgumentMatchers.anyBoolean(), any());
+    }
+
+    @Test
+    void feeIsRefusedOnDisabledAndEndedCourses() {
+        givenFeeCourse();
+        course.setStatus(Boolean.FALSE);
+        assertTrue(failure(() -> service.setFeePaid("KH-1", "p-ann", true, scanner)).getMessage().contains("vô hiệu hóa"));
+
+        course.setStatus(Boolean.TRUE);
+        course.setStartDate(TrainingCourseStatusSupport.today().minusDays(5));
+        course.setEndDate(TrainingCourseStatusSupport.today().minusDays(1));
+        assertTrue(failure(() -> service.setFeePaid("KH-1", "p-ann", true, scanner)).getMessage().contains("đã kết thúc"));
+
+        course.setEndDate(TrainingCourseStatusSupport.today().plusDays(3));
+        course.setFinishedAt(OffsetDateTime.now());
+        assertEquals(409, failure(() -> service.setFeePaid("KH-1", "p-ann", false, scanner)).getStatus().value());
+        verify(repository, never()).setFeePaid(any(), org.mockito.ArgumentMatchers.anyBoolean(), any());
+    }
+
+    @Test
+    void feeIsRefusedForUnknownOtherCourseAndRemovedParticipants() {
+        givenFeeCourse();
+        assertEquals(404, failure(() -> service.setFeePaid("KH-1", "nope", true, scanner)).getStatus().value());
+
+        TrainingCourse other = TrainingTestFixtures.course("KH-2", "Khóa 2", null);
+        when(repository.findByIdWithLeaderAndCourse("p-other")).thenReturn(Optional.of(participation("p-other", "C", "c@x.vn", other)));
+        assertEquals(400, failure(() -> service.setFeePaid("KH-1", "p-other", true, scanner)).getStatus().value());
+
+        ann.setApprovalStatus(WorkflowApprovalStatus.REJECTED);
+        assertEquals(409, failure(() -> service.setFeePaid("KH-1", "p-ann", true, scanner)).getStatus().value());
+        verify(repository, never()).setFeePaid(any(), org.mockito.ArgumentMatchers.anyBoolean(), any());
+    }
 }

@@ -229,6 +229,47 @@ public class CourseParticipationRepository extends BaseRepo<CourseParticipation,
         return count != null && count > 0;
     }
 
+    // Khóa đã có hồ sơ được duyệt đăng ký hoặc đã có người đóng lệ phí (kể cả hồ sơ đã rời danh sách): không còn sửa được lệ phí.
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public boolean existsApprovedOrFeePaidByCourseCode(String courseCode) {
+        Long count = entityManager.createQuery(
+                        """
+                                select count(cp) from CourseParticipation cp
+                                where cp.course.courseCode = :courseCode
+                                  and (cp.approvalStatus = phucuong.ht.modules.training.enums.WorkflowApprovalStatus.APPROVED
+                                       or cp.feePaidAt is not null)
+                                """, Long.class)
+                .setParameter("courseCode", courseCode).getSingleResult();
+        return count != null && count > 0;
+    }
+
+    /**
+     * Ghi trạng thái ĐÍCH của lệ phí (đã đóng / chưa đóng) bằng một câu UPDATE có điều kiện: gửi lặp cùng trạng thái không đổi gì
+     * (giữ nguyên thời điểm và người ghi nhận đầu tiên) nên retry không thể đảo ngược kết quả. Trả true nếu dòng thật sự đổi.
+     * Hồ sơ phải đang được quản lý trong transaction; sau khi ghi, hồ sơ được tải lại để phản ánh trạng thái mới.
+     */
+    @org.springframework.transaction.annotation.Transactional
+    public boolean setFeePaid(CourseParticipation participation, boolean paid, String actor) {
+        java.time.OffsetDateTime now = java.time.OffsetDateTime.now();
+        int changed = (paid
+                ? entityManager.createQuery("""
+                        update CourseParticipation cp
+                        set cp.feePaidAt = :now, cp.feePaidBy = :actor, cp.updatedAt = :now, cp.updatedBy = :actor
+                        where cp.id = :id and cp.feePaidAt is null
+                        """)
+                : entityManager.createQuery("""
+                        update CourseParticipation cp
+                        set cp.feePaidAt = null, cp.feePaidBy = null, cp.updatedAt = :now, cp.updatedBy = :actor
+                        where cp.id = :id and cp.feePaidAt is not null
+                        """))
+                .setParameter("now", now)
+                .setParameter("actor", actor)
+                .setParameter("id", participation.getId())
+                .executeUpdate();
+        entityManager.refresh(participation);
+        return changed > 0;
+    }
+
     // Số hồ sơ trong danh sách tham dự (đã duyệt, chưa hủy) và số hồ sơ đạt của từng khóa: [tổng, đạt].
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public java.util.Map<String, long[]> countAttendeesAndPassedByCourseCodes(java.util.Collection<String> courseCodes) {

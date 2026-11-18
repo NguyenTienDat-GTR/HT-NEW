@@ -11,6 +11,7 @@ import phucuong.ht.common.validation.CommonValidationHelper;
 import phucuong.ht.config.EvictCaches;
 import phucuong.ht.modules.leader.model.entity.Leader;
 import phucuong.ht.modules.training.CourseActivityGuard;
+import phucuong.ht.modules.training.courseAttendance.model.AttendanceModels.FeeResult;
 import phucuong.ht.modules.training.courseAttendance.model.AttendanceModels.InvitationFilter;
 import phucuong.ht.modules.training.courseAttendance.model.AttendanceModels.ParticipantDetail;
 import phucuong.ht.modules.training.courseAttendance.model.AttendanceModels.ParticipantQuery;
@@ -56,9 +57,13 @@ public class CourseAttendanceService {
         int sent = 0;
         int failed = 0;
         int withoutEmail = 0;
+        int feePaid = 0;
         for (CourseParticipation participant : participants) {
             if (participant.getCheckedInAt() != null) {
                 checkedIn++;
+            }
+            if (participant.getFeePaidAt() != null) {
+                feePaid++;
             }
             if (participant.getInvitationSentAt() != null) {
                 sent++;
@@ -70,9 +75,16 @@ public class CourseAttendanceService {
                 withoutEmail++;
             }
         }
+        // Lệ phí chỉ tính trên danh sách tham dự hiện tại; người đã đóng rồi rời danh sách không nằm trong các con số.
+        boolean feeEnabled = Boolean.TRUE.equals(course.getFeeEnabled());
+        long amount = feeEnabled && course.getFeeAmount() != null ? course.getFeeAmount() : 0L;
+        long feeTotal = amount * participants.size();
+        long feePaidTotal = feeEnabled ? amount * feePaid : 0L;
         return new Summary(courseCode, Boolean.TRUE.equals(course.getAttendanceEnabled()),
                 Boolean.TRUE.equals(course.getAutoSendInvitation()), participants.size(), checkedIn,
-                participants.size() - checkedIn, sent, participants.size() - sent, failed, withoutEmail);
+                participants.size() - checkedIn, sent, participants.size() - sent, failed, withoutEmail,
+                feeEnabled, feeEnabled ? course.getFeeAmount() : null, feeTotal, feePaidTotal, feeTotal - feePaidTotal,
+                feeEnabled ? feePaid : 0, feeEnabled ? participants.size() - feePaid : 0);
     }
 
     // Danh sách hồ sơ trong danh sách tham dự kèm tình trạng email / điểm danh, lọc và phân trang phía server.
@@ -85,6 +97,7 @@ public class CourseAttendanceService {
                 .sorted(CourseParticipantSupport.byTeamThenName())
                 .filter(p -> team.isEmpty() || fold(p.getTeamName()).equals(team))
                 .filter(p -> query.checkedIn() == null || query.checkedIn() == (p.getCheckedInAt() != null))
+                .filter(p -> query.feePaid() == null || query.feePaid() == (p.getFeePaidAt() != null))
                 .filter(p -> matchesInvitation(p, query.invitation()))
                 .map(this::toRow)
                 .filter(row -> keyword.isEmpty() || fold(String.join(" ", nullToEmpty(row.holyName()), nullToEmpty(row.fullName()),
@@ -144,7 +157,7 @@ public class CourseAttendanceService {
         return new ParticipantRow(participation.getId(), leader.getHolyName(), CourseParticipantSupport.plainName(leader),
                 parish == null ? null : parish.getName(), deanery == null ? null : deanery.getName(), participation.getTeamName(),
                 leader.getEmail(), CourseInvitationService.emailProblem(leader.getEmail()), participation.getInvitationSentAt(),
-                participation.getInvitationError(), participation.getCheckedInAt(), participation.getCheckedInBy());
+                participation.getInvitationError(), participation.getCheckedInAt(), participation.getCheckedInBy(), participation.getFeePaidAt());
     }
 
     private static String nullToEmpty(String value) {
@@ -253,6 +266,41 @@ public class CourseAttendanceService {
         return result(ScanStatus.CHECK_IN_CANCELLED, participation);
     }
 
+    /**
+     * Ghi nhận đã đóng / chưa đóng lệ phí của một hồ sơ trong danh sách tham dự. Nhận trạng thái ĐÍCH (không phải "đảo"), ghi bằng
+     * một câu UPDATE có điều kiện nên gửi lặp hay retry cho cùng kết quả. Mở từ khi hồ sơ vào danh sách tham dự đến khi khóa kết thúc
+     * (không phụ thuộc điểm danh); khóa bị tắt, đơn vị tổ chức bị khóa hoặc khóa đã kết thúc thì chặn như các thao tác khác.
+     */
+    @Transactional
+    public FeeResult setFeePaid(String courseCode, String participationId, boolean paid, Authentication authentication) {
+        TrainingCourse course = requireFeeOpen(courseCode);
+        CourseParticipation participation = courseParticipationRepository.findByIdWithLeaderAndCourse(participationId)
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy hồ sơ " + participationId));
+        if (participation.getCourse() == null || !course.getCourseCode().equals(participation.getCourse().getCourseCode())) {
+            throw commonValidationHelper.validationError("Hồ sơ không thuộc khóa huấn luyện này");
+        }
+        requireParticipant(participation);
+        String actor = commonValidationHelper.requireAuditActor(authentication, "Không xác định được người thu lệ phí");
+        courseParticipationRepository.setFeePaid(participation, paid, actor);
+        return new FeeResult(participation.getId(), participation.getFeePaidAt() != null, participation.getFeePaidAt(), participation.getFeePaidBy());
+    }
+
+    private TrainingCourse requireFeeOpen(String courseCode) {
+        TrainingCourse course = participantSupport.requireRegularCourse(courseCode, "thu lệ phí");
+        String label = "Khóa huấn luyện \"" + course.getCourseName() + "\"";
+        if (Boolean.FALSE.equals(course.getStatus())) {
+            throw commonValidationHelper.conflict(label + " đã bị vô hiệu hóa nên không thể cập nhật lệ phí");
+        }
+        courseActivityGuard.requireActive(course);
+        if (courseActivityGuard.isEnded(course)) {
+            throw commonValidationHelper.conflict(label + " đã kết thúc nên không thể cập nhật lệ phí");
+        }
+        if (!Boolean.TRUE.equals(course.getFeeEnabled())) {
+            throw commonValidationHelper.conflict(label + " không thu lệ phí");
+        }
+        return course;
+    }
+
     private TrainingCourse requireAttendanceOpen(String courseCode) {
         TrainingCourse course = participantSupport.requireRegularCourse(courseCode, "điểm danh");
         String label = "Khóa huấn luyện \"" + course.getCourseName() + "\"";
@@ -303,6 +351,9 @@ public class CourseAttendanceService {
                 course == null ? null : course.getCourseCode(), course == null ? null : course.getCourseName(),
                 leader.getHolyName(), CourseParticipantSupport.plainName(leader),
                 parish == null ? null : parish.getName(), deanery == null ? null : deanery.getName(),
-                participation.getTeamName(), participation.getCheckedInAt());
+                participation.getTeamName(), participation.getCheckedInAt(),
+                course != null && Boolean.TRUE.equals(course.getFeeEnabled()),
+                course != null && Boolean.TRUE.equals(course.getFeeEnabled()) ? course.getFeeAmount() : null,
+                participation.getFeePaidAt());
     }
 }

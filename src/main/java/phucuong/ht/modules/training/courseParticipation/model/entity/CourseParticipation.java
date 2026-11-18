@@ -79,6 +79,13 @@ public class CourseParticipation extends BaseModel {
     @Column(name = "checked_in_by", length = 100)
     private String checkedInBy;
 
+    // Đã đóng lệ phí khóa: thời điểm và người ghi nhận; null = chưa đóng. Giữ nguyên khi hồ sơ rời danh sách tham dự rồi được duyệt lại.
+    @Column(name = "fee_paid_at")
+    private OffsetDateTime feePaidAt;
+
+    @Column(name = "fee_paid_by", length = 100)
+    private String feePaidBy;
+
     // Thời điểm gửi email thông tin tham dự thành công gần nhất; null = chưa gửi.
     @Column(name = "invitation_sent_at")
     private OffsetDateTime invitationSentAt;
