@@ -30,6 +30,7 @@ public class ParishController {
     private final PrivacyConsentService privacyConsent;
 
     private final ParishService parishService;
+    private final phucuong.ht.modules.leaderLevel.service.UnitLeaderLevelStatsService leaderLevelStatsService;
     private final phucuong.ht.common.excel.job.ExcelJobService excelJobService;
     private final phucuong.ht.modules.parish.service.ParishImportService parishImportService;
 
@@ -131,6 +132,12 @@ public class ParishController {
     @PreAuthorize("@parishAccessEvaluator.canToggle(authentication, #id)")
     public apiResponse<UnitToggleImpactResponse> toggleImpact(@PathVariable UUID id) {
         return apiResponse.success("Lấy tác động khi đổi trạng thái giáo xứ thành công", parishService.toggleImpact(id));
+    }
+
+    @GetMapping("/{id}/leader-level-stats")
+    @PreAuthorize("@parishAccessEvaluator.canRead(authentication, #id)")
+    public apiResponse<phucuong.ht.common.dto.UnitLeaderLevelStatsResponse> leaderLevelStats(@PathVariable UUID id) {
+        return apiResponse.success("Lấy thống kê huynh trưởng theo cấp độ của giáo xứ thành công", leaderLevelStatsService.forParish(id));
     }
 
     @GetMapping("/{id}/status-history")

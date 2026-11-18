@@ -29,6 +29,7 @@ public class DeaneryController {
     private final PrivacyConsentService privacyConsent;
 
     private final DeaneryService deaneryService;
+    private final phucuong.ht.modules.leaderLevel.service.UnitLeaderLevelStatsService leaderLevelStatsService;
     private final phucuong.ht.common.excel.job.ExcelJobService excelJobService;
 
     @PostMapping
@@ -111,6 +112,12 @@ public class DeaneryController {
     @PreAuthorize("@deaneryAccessEvaluator.canToggle(authentication, #id)")
     public apiResponse<UnitToggleImpactResponse> toggleImpact(@PathVariable UUID id) {
         return apiResponse.success("Lấy tác động khi đổi trạng thái giáo hạt thành công", deaneryService.toggleImpact(id));
+    }
+
+    @GetMapping("/{id}/leader-level-stats")
+    @PreAuthorize("@deaneryAccessEvaluator.canRead(authentication, #id)")
+    public apiResponse<phucuong.ht.common.dto.UnitLeaderLevelStatsResponse> leaderLevelStats(@PathVariable UUID id) {
+        return apiResponse.success("Lấy thống kê huynh trưởng theo cấp độ của giáo hạt thành công", leaderLevelStatsService.forDeanery(id));
     }
 
     @GetMapping("/{id}/status-history")

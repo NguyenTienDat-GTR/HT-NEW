@@ -1796,3 +1796,5 @@ Ma trận endpoint (`endpoint-contract-matrix.psv`) hiện có 124 route.
 
 ## fix/nhat-ky-he-thong-viet-hoa
 - Thông báo của nhật ký hệ thống (`SystemLogController`, `SystemLogService`, log cảnh báo của `ApiAuditLoggingFilter`) đổi "audit log" thành "nhật ký hệ thống". Dữ liệu và API không đổi; trường `message` vẫn lưu dòng kỹ thuật `METHOD /api/...`, FE và mobile tự dựng nội dung tiếng Việt từ `operation` + `resource` + `resourceName`.
+## feat/thong-ke-cap-do-huynh-truong
+- Thống kê huynh trưởng theo cấp độ cho trang chi tiết đơn vị: `GET /api/{dioceses|deaneries|parishes}/{id}/leader-level-stats` (cùng quyền `canRead` với chi tiết đơn vị) trả `UnitLeaderLevelStatsResponse { total, levels[{levelCode, levelName, displayOrder, leaderCount}] }`. Liệt kê đủ các cấp trong danh mục `leader_level` của giáo phận chứa đơn vị (kể cả cấp chưa có ai), theo `display_order`; đếm mọi huynh trưởng thuộc đơn vị, không lọc trạng thái (cùng cách với `leaderCount` ở danh sách nên tổng khớp). Code: `UnitLeaderLevelStatsService` + `LeaderLevelRepository.countLeadersByLevel(StatsScope, id)`. Test: `UnitLeaderLevelStatsServiceIntegrationTest`. Không có migration.
