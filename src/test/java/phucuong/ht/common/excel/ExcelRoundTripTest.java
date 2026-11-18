@@ -32,6 +32,39 @@ class ExcelRoundTripTest {
     }
 
     @Test
+    void numberedWriterAddsSttAsFirstColumnAndShiftsTheRest() throws Exception {
+        List<ExcelColumn<Person>> columns = List.of(
+                ExcelColumn.of("Họ và tên", Person::name),
+                ExcelColumn.of("Số điện thoại", Person::phone));
+        ExcelReportHeader header = new ExcelReportHeader(List.of("GIÁO PHẬN A"), "DANH SÁCH");
+        byte[] content = ExcelExportWriter.writeNumbered("Sheet", header, columns, List.of(
+                new Person("An", null, null, "0901"), new Person("Bình", null, null, "0902")));
+        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(content))) {
+            var sheet = workbook.getSheetAt(0);
+            // Dòng 0: đơn vị, dòng 2: tiêu đề, dòng 4: tiêu đề cột.
+            var head = sheet.getRow(4);
+            assertEquals("STT", head.getCell(0).getStringCellValue());
+            assertEquals("Họ và tên", head.getCell(1).getStringCellValue());
+            assertEquals("Số điện thoại", head.getCell(2).getStringCellValue());
+            assertEquals(1, (int) sheet.getRow(5).getCell(0).getNumericCellValue());
+            assertEquals("An", sheet.getRow(5).getCell(1).getStringCellValue());
+            assertEquals(2, (int) sheet.getRow(6).getCell(0).getNumericCellValue());
+            assertEquals("0902", sheet.getRow(6).getCell(2).getStringCellValue());
+            // Dòng đơn vị gộp theo cả cột STT.
+            assertEquals(2, sheet.getMergedRegion(0).getLastColumn());
+        }
+    }
+
+    @Test
+    void plainWriterHasNoSttColumn() throws Exception {
+        byte[] content = ExcelExportWriter.write("Sheet", List.of(ExcelColumn.<Person>of("Họ và tên", Person::name)),
+                List.of(new Person("An", null, null, null)));
+        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(content))) {
+            assertEquals("Họ và tên", workbook.getSheetAt(0).getRow(0).getCell(0).getStringCellValue());
+        }
+    }
+
+    @Test
     void writerOutputCanBeReadBackByColumnNameRegardlessOfOrderAndDiacritics() {
         List<ExcelColumn<Person>> columns = List.of(
                 ExcelColumn.of("Họ và tên *", Person::name),

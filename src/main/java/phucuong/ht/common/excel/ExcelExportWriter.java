@@ -23,10 +23,15 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.List;
 
-/** Ghi danh sách dữ liệu ra file .xlsx (phần đầu đơn vị + tiêu đề, dòng tiêu đề cột đậm, cố định tới dòng tiêu đề cột, có bộ lọc). */
+/**
+ * Ghi danh sách dữ liệu ra file .xlsx (phần đầu đơn vị + tiêu đề, dòng tiêu đề cột đậm, cố định tới dòng tiêu đề cột, có bộ lọc).
+ * {@link #writeNumbered} thêm cột đầu tiên là số thứ tự (STT), không nằm trong danh sách cột người dùng chọn; {@link #write} thì không
+ * (dùng khi dựng file nhập / file mà thứ tự cột phải đúng như danh sách cột).
+ */
 public final class ExcelExportWriter {
 
     private static final ZoneId ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+    private static final String ORDER_HEADER = "STT";
 
     private ExcelExportWriter() {
     }
@@ -40,6 +45,15 @@ public final class ExcelExportWriter {
      * sau đó mới tới dòng tiêu đề cột.
      */
     public static <T> byte[] write(String sheetName, ExcelReportHeader header, List<ExcelColumn<T>> columns, List<T> rows) {
+        return write(sheetName, header, columns, rows, false);
+    }
+
+    /** Như {@link #write(String, ExcelReportHeader, List, List)} nhưng thêm cột STT (1, 2, 3, …) ở đầu mỗi dòng. */
+    public static <T> byte[] writeNumbered(String sheetName, ExcelReportHeader header, List<ExcelColumn<T>> columns, List<T> rows) {
+        return write(sheetName, header, columns, rows, true);
+    }
+
+    private static <T> byte[] write(String sheetName, ExcelReportHeader header, List<ExcelColumn<T>> columns, List<T> rows, boolean numbered) {
         SXSSFWorkbook workbook = new SXSSFWorkbook(200);
         try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             Sheet sheet = workbook.createSheet(safeSheetName(sheetName));
@@ -57,38 +71,51 @@ public final class ExcelExportWriter {
             CellStyle dateTimeStyle = workbook.createCellStyle();
             dateTimeStyle.setDataFormat(workbook.getCreationHelper().createDataFormat().getFormat("dd/MM/yyyy HH:mm"));
 
+            // Có cột STT đứng đầu thì mọi cột dữ liệu lùi một ô.
+            int shift = numbered ? 1 : 0;
+            int totalColumns = columns.size() + shift;
             int headerIndex = 0;
             if (header != null && !header.isEmpty() && !columns.isEmpty()) {
                 CellStyle unitStyle = centered(workbook, 12);
                 for (String line : header.unitLines()) {
-                    mergedLine(sheet, headerIndex++, line, unitStyle, columns.size());
+                    mergedLine(sheet, headerIndex++, line, unitStyle, totalColumns);
                 }
                 if (header.title() != null && !header.title().isBlank()) {
                     if (headerIndex > 0) {
                         headerIndex++;
                     }
-                    mergedLine(sheet, headerIndex++, header.title(), centered(workbook, 14), columns.size());
+                    mergedLine(sheet, headerIndex++, header.title(), centered(workbook, 14), totalColumns);
                 }
                 headerIndex++;
             }
             Row headerRow = sheet.createRow(headerIndex);
+            if (numbered) {
+                Cell orderHeader = headerRow.createCell(0);
+                orderHeader.setCellValue(ORDER_HEADER);
+                orderHeader.setCellStyle(headerStyle);
+                sheet.setColumnWidth(0, 7 * 256);
+            }
             for (int c = 0; c < columns.size(); c++) {
-                Cell cell = headerRow.createCell(c);
+                Cell cell = headerRow.createCell(c + shift);
                 cell.setCellValue(columns.get(c).header());
                 cell.setCellStyle(headerStyle);
-                sheet.setColumnWidth(c, Math.min(Math.max(columns.get(c).width(), 8), 80) * 256);
+                sheet.setColumnWidth(c + shift, Math.min(Math.max(columns.get(c).width(), 8), 80) * 256);
             }
             sheet.createFreezePane(0, headerIndex + 1);
 
             int rowIndex = headerIndex + 1;
+            int order = 1;
             for (T item : rows) {
                 Row row = sheet.createRow(rowIndex++);
+                if (numbered) {
+                    row.createCell(0).setCellValue(order++);
+                }
                 for (int c = 0; c < columns.size(); c++) {
-                    writeCell(row.createCell(c), columns.get(c).value().apply(item), dateStyle, dateTimeStyle);
+                    writeCell(row.createCell(c + shift), columns.get(c).value().apply(item), dateStyle, dateTimeStyle);
                 }
             }
             if (!columns.isEmpty()) {
-                sheet.setAutoFilter(new CellRangeAddress(headerIndex, headerIndex, 0, columns.size() - 1));
+                sheet.setAutoFilter(new CellRangeAddress(headerIndex, headerIndex, 0, totalColumns - 1));
             }
             workbook.write(out);
             return out.toByteArray();
