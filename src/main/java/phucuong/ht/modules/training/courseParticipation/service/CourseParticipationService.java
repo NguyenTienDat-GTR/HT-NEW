@@ -1027,7 +1027,7 @@ public class CourseParticipationService {
                 .courseCode(participation.getCourse() == null ? null : participation.getCourse().getCourseCode())
                 .courseName(participation.getCourse() == null ? null : participation.getCourse().getCourseName())
                 .coursePast(participation.getCourse() != null && participation.getCourse().isPast())
-                .courseFinished(participation.getCourse() != null && TrainingCourseStatusSupport.organizingStatus(participation.getCourse(), TrainingCourseStatusSupport.today())
+                .courseFinished(participation.getCourse() != null && TrainingCourseStatusSupport.organizingStatus(participation.getCourse(), OffsetDateTime.now())
                         == phucuong.ht.modules.training.enums.CourseOrganizingStatus.ENDED)
                 .courseTypeCode(participation.getCourse() == null || participation.getCourse().getCourseType() == null ? null : participation.getCourse().getCourseType().getTypeCode())
                 .registrationDate(participation.getRegistrationDate())
@@ -1345,9 +1345,9 @@ public class CourseParticipationService {
         participation.setCertificateApprovedAt(null);
     }
 
-    // Chỉ được chấm điểm khi khóa đang trong thời gian diễn ra (từ ngày bắt đầu đến hết ngày kết thúc, múi giờ Việt Nam).
+    // Chỉ được chấm điểm khi khóa đang trong thời gian diễn ra (từ giờ bắt đầu đến hết giờ kết thúc, múi giờ Việt Nam).
     private void requireCourseOngoingForScoring(TrainingCourse course) {
-        if (TrainingCourseStatusSupport.organizingStatus(course, TrainingCourseStatusSupport.today()) != CourseOrganizingStatus.ONGOING) {
+        if (TrainingCourseStatusSupport.organizingStatus(course, OffsetDateTime.now()) != CourseOrganizingStatus.ONGOING) {
             throw commonValidationHelper.conflict("Chỉ được chấm điểm khi khóa huấn luyện đang trong thời gian diễn ra");
         }
     }

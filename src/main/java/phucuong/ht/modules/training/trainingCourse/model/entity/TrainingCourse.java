@@ -13,6 +13,7 @@ import java.math.BigDecimal;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.OffsetDateTime;
 
 @Entity
@@ -42,6 +43,13 @@ public class TrainingCourse extends BaseModel {
     private LocalDate startDate;
 
     private LocalDate endDate;
+
+    // Giờ bắt đầu / kết thúc trong ngày (giờ Việt Nam). Khóa chưa chọn giờ: 00:00 và 23:59.
+    @Column(name = "start_time", nullable = false)
+    private LocalTime startTime = LocalTime.MIN;
+
+    @Column(name = "end_time", nullable = false)
+    private LocalTime endTime = LocalTime.of(23, 59);
 
     private OffsetDateTime registrationStartAt;
 

@@ -87,7 +87,8 @@ public class RegistrationTemplateExportHandler implements ExcelExportHandler {
         }
 
         List<CourseParticipationResponse> rows = ExcelExportSupport.collectAll(
-                request.search(), page -> participationService.findAll(page, authentication), progress);
+                request.search(), page -> participationService.findAll(page, authentication), progress,
+                phucuong.ht.common.excel.job.handler.ExcelExportHandlerConfig.PARTICIPATION_ORDER);
         Map<String, String> levelNames = leaderLevelService.levelNamesFor(authentication);
         Context context = Objects.requireNonNull(transactionTemplate.execute(status -> load(rows)));
 

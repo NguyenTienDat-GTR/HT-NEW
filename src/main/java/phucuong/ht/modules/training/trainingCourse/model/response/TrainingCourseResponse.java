@@ -68,6 +68,10 @@ public class TrainingCourseResponse {
     private String location;
     private LocalDate startDate;
     private LocalDate endDate;
+    @com.fasterxml.jackson.annotation.JsonFormat(pattern = "HH:mm")
+    private java.time.LocalTime startTime;
+    @com.fasterxml.jackson.annotation.JsonFormat(pattern = "HH:mm")
+    private java.time.LocalTime endTime;
     private Boolean registrationEnabled;
     private OffsetDateTime registrationStartAt;
     private OffsetDateTime registrationEndAt;

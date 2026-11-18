@@ -216,10 +216,15 @@ public class CourseInvitationService {
     }
 
     private CourseInfo courseInfo(TrainingCourse course) {
-        String start = course.getStartDate() == null ? "" : course.getStartDate().format(DATE_FORMAT);
-        String end = course.getEndDate() == null ? "" : course.getEndDate().format(DATE_FORMAT);
+        String start = course.getStartDate() == null ? "" : timeText(course.getStartTime()) + course.getStartDate().format(DATE_FORMAT);
+        String end = course.getEndDate() == null ? "" : timeText(course.getEndTime()) + course.getEndDate().format(DATE_FORMAT);
         String period = !start.isEmpty() && !end.isEmpty() ? ("từ " + start + " đến " + end) : (start + end);
         return new CourseInfo(course.getCourseCode(), course.getCourseName(), period, course.getLocation());
+    }
+
+    // "07:00 " đứng trước ngày; thiếu giờ thì chỉ hiện ngày.
+    private static String timeText(java.time.LocalTime time) {
+        return time == null ? "" : time.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")) + " ";
     }
 
     private static String rootMessage(Throwable throwable) {

@@ -66,4 +66,55 @@ class TrainingCourseStatusSupportTest {
         TrainingCourseStatusSupport.refresh(course, now);
         assertEquals(CourseRegistrationStatus.ENDED, course.getRegistrationStatus());
     }
+
+    private static final java.time.ZoneId VN = TrainingCourseStatusSupport.ZONE;
+
+    private TrainingCourse timedCourse() {
+        TrainingCourse course = new TrainingCourse();
+        course.setStartDate(LocalDate.of(2026, 12, 10));
+        course.setEndDate(LocalDate.of(2026, 12, 12));
+        course.setStartTime(java.time.LocalTime.of(8, 0));
+        course.setEndTime(java.time.LocalTime.of(17, 30));
+        return course;
+    }
+
+    private static OffsetDateTime at(int day, int hour, int minute) {
+        return java.time.ZonedDateTime.of(2026, 12, day, hour, minute, 0, 0, VN).toOffsetDateTime();
+    }
+
+    @Test
+    void courseStartsAndEndsAtTheGivenTimeOfDay() {
+        TrainingCourse course = timedCourse();
+        assertEquals(phucuong.ht.modules.training.enums.CourseOrganizingStatus.UPCOMING, TrainingCourseStatusSupport.organizingStatus(course, at(10, 7, 59)));
+        assertEquals(phucuong.ht.modules.training.enums.CourseOrganizingStatus.ONGOING, TrainingCourseStatusSupport.organizingStatus(course, at(10, 8, 0)));
+        assertEquals(phucuong.ht.modules.training.enums.CourseOrganizingStatus.ONGOING, TrainingCourseStatusSupport.organizingStatus(course, at(12, 17, 30)));
+        assertEquals(phucuong.ht.modules.training.enums.CourseOrganizingStatus.ENDED, TrainingCourseStatusSupport.organizingStatus(course, at(12, 17, 31)));
+    }
+
+    @Test
+    void defaultTimesKeepWholeDaysAsBefore() {
+        TrainingCourse course = new TrainingCourse();
+        course.setStartDate(LocalDate.of(2026, 12, 10));
+        course.setEndDate(LocalDate.of(2026, 12, 12));
+        assertEquals(phucuong.ht.modules.training.enums.CourseOrganizingStatus.ONGOING, TrainingCourseStatusSupport.organizingStatus(course, at(10, 0, 0)));
+        assertEquals(phucuong.ht.modules.training.enums.CourseOrganizingStatus.ONGOING, TrainingCourseStatusSupport.organizingStatus(course, at(12, 23, 59)));
+        assertEquals(phucuong.ht.modules.training.enums.CourseOrganizingStatus.ENDED, TrainingCourseStatusSupport.organizingStatus(course, at(13, 0, 0)));
+    }
+
+    @Test
+    void attendanceOpensTwoHoursBeforeStart() {
+        TrainingCourse course = timedCourse();
+        assertEquals(at(10, 6, 0), TrainingCourseStatusSupport.attendanceOpensAt(course));
+        assertNull(TrainingCourseStatusSupport.attendanceOpensAt(new TrainingCourse()));
+    }
+
+    @Test
+    void registrationClosesAtStartTimeNotAtMidnight() {
+        TrainingCourse course = timedCourse();
+        course.setRegistrationStartAt(at(1, 0, 0));
+        course.setRegistrationEndAt(at(10, 7, 0));
+        course.setRegistrationStatus(CourseRegistrationStatus.OPEN);
+        assertEquals(CourseRegistrationStatus.OPEN, TrainingCourseStatusSupport.registrationStatus(course, at(10, 7, 0)));
+        assertEquals(CourseRegistrationStatus.ENDED, TrainingCourseStatusSupport.registrationStatus(course, at(10, 8, 0)));
+    }
 }
