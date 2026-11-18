@@ -131,7 +131,7 @@ public class ExcelExportHandlerConfig {
         return ExcelExportHandler.of(kind, ExcelColumns.headers(columns.apply(null)), (request, auth, progress) -> {
             List<R> rows = ExcelExportSupport.collectAll(request.search(), page -> fetch.apply(page, auth), progress, order);
             List<ExcelColumn<R>> selected = expand.apply(ExcelColumns.select(columns.apply(auth), request.columns()), rows);
-            return ExcelExportWriter.write(sheetName, headers.resolve(request.search(), auth, title, withCourse), selected, rows);
+            return ExcelExportWriter.writeNumbered(sheetName, headers.resolve(request.search(), auth, title, withCourse), selected, rows);
         });
     }
 }
