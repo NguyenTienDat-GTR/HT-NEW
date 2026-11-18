@@ -23,12 +23,12 @@ public class SystemLogController {
     @GetMapping
     @PreAuthorize("@systemLogAccessEvaluator.canList(authentication)")
     public apiResponse<Page<SystemLogResponse>> findAll(BaseSearchRequest request, Authentication authentication) {
-        return apiResponse.success("Lấy danh sách audit log thành công", systemLogService.findAll(request, authentication));
+        return apiResponse.success("Lấy danh sách nhật ký hệ thống thành công", systemLogService.findAll(request, authentication));
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("@systemLogAccessEvaluator.canRead(authentication, #id)")
     public apiResponse<SystemLogResponse> findById(@PathVariable String id) {
-        return apiResponse.success("Lấy audit log thành công", systemLogService.findById(id));
+        return apiResponse.success("Lấy nhật ký hệ thống thành công", systemLogService.findById(id));
     }
 }

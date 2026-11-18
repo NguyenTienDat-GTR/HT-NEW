@@ -86,7 +86,7 @@ public class ApiAuditLoggingFilter extends OncePerRequestFilter {
         try {
             entry = snapshot(request, response, resource, resourceId, resourceName, read, (System.nanoTime() - started) / 1_000_000);
         } catch (RuntimeException exception) {
-            log.warn("Không thể ghi nhận audit log cho {} {}", request.getMethod(), request.getRequestURI(), exception);
+            log.warn("Không thể ghi nhận nhật ký hệ thống cho {} {}", request.getMethod(), request.getRequestURI(), exception);
             return;
         }
         try {
@@ -118,7 +118,7 @@ public class ApiAuditLoggingFilter extends OncePerRequestFilter {
         try {
             persistAuditLog(entry);
         } catch (RuntimeException exception) {
-            log.warn("Không thể lưu audit log cho {} {}", entry.method(), entry.uri(), exception);
+            log.warn("Không thể lưu nhật ký hệ thống cho {} {}", entry.method(), entry.uri(), exception);
         }
     }
 

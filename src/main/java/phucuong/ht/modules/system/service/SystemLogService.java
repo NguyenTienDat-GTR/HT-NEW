@@ -57,12 +57,12 @@ public class SystemLogService {
             return map(systemLogRepository.findAll(scopedRequest));
         }
 
-        throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền xem audit log");
+        throw commonValidationHelper.forbidden("Tài khoản hiện tại không có quyền xem nhật ký hệ thống");
     }
 
     public SystemLogResponse findById(String id) {
         return toResponse(systemLogRepository.findById(id)
-                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy audit log " + id)));
+                .orElseThrow(() -> commonValidationHelper.notFound("Không tìm thấy nhật ký hệ thống " + id)));
     }
 
     private Page<SystemLogResponse> map(Page<SystemLog> page) {
