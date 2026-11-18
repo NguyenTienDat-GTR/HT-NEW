@@ -31,6 +31,11 @@ public class SystemLogAccessEvaluator {
                 || securityUtils.hasAuthority(authentication, READ_PARISH);
     }
 
+    /** Số liệu giám sát gom mọi đơn vị nên chỉ dành cho người xem được nhật ký toàn hệ thống. */
+    public boolean canReadAll(Authentication authentication) {
+        return securityUtils.hasAuthority(authentication, READ_ALL);
+    }
+
     public boolean canRead(Authentication authentication, String id) {
         if (securityUtils.hasAuthority(authentication, READ_ALL)) {
             return true;

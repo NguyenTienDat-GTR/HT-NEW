@@ -18,6 +18,7 @@ import phucuong.ht.modules.auth.model.AuthUserDetails;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 
 @Component
 @RequiredArgsConstructor
@@ -59,6 +60,7 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
                 : redisRateLimitService.evaluate(key, tierConfig.getLimit(), tierConfig.getWindowSeconds());
 
         if (!decision.allowed()) {
+            recordRejectedQuietly();
             response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
             response.setCharacterEncoding(StandardCharsets.UTF_8.name());
@@ -73,6 +75,15 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
         if (login && response.getStatus() >= 400) {
             redisRateLimitService.record(key, tierConfig.getWindowSeconds());
+        }
+    }
+
+    // Chỉ phục vụ thống kê: lỗi ghi bộ đếm không được làm đổi phản hồi 429.
+    private void recordRejectedQuietly() {
+        try {
+            redisRateLimitService.recordRejected(Instant.now());
+        } catch (RuntimeException exception) {
+            logger.warn("Không ghi được bộ đếm request bị giới hạn tần suất", exception);
         }
     }
 

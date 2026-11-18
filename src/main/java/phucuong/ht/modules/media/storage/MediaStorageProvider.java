@@ -51,4 +51,33 @@ public interface MediaStorageProvider {
     /** Tạo sẵn thư mục (nơi nào không có khái niệm thư mục thì bỏ qua). */
     default void ensureFolder(String prefix) {
     }
+
+    /**
+     * Xóa một thư mục nếu nó đang trống. Không bao giờ ném lỗi: thư mục còn tệp, không tồn tại hoặc nhà cung cấp
+     * từ chối đều chỉ trả về false (thư mục trống còn sót sẽ được lệnh quét dọn xử lý sau).
+     *
+     * @return true nếu thư mục đã bị xóa
+     */
+    default boolean deleteFolder(String path) {
+        return false;
+    }
+
+    /** Một tệp ảnh đang nằm trên nhà cung cấp (khóa logic + thời điểm tạo). */
+    record StoredFile(String key, java.time.OffsetDateTime createdAt) {
+    }
+
+    /** Nhà cung cấp có liệt kê được tệp / thư mục để quét dọn hay không. */
+    default boolean supportsSweep() {
+        return false;
+    }
+
+    /** Duyệt các tệp ảnh có khóa bắt đầu bằng {@code prefix}; {@code visitor} trả false để dừng sớm. */
+    default void forEachFile(String prefix, java.util.function.Predicate<StoredFile> visitor) {
+        throw new MediaStorageException("Nhà cung cấp " + name() + " không hỗ trợ liệt kê tệp", false);
+    }
+
+    /** Tên các thư mục con trực tiếp của {@code path}. */
+    default java.util.List<String> listFolders(String path) {
+        throw new MediaStorageException("Nhà cung cấp " + name() + " không hỗ trợ liệt kê thư mục", false);
+    }
 }
