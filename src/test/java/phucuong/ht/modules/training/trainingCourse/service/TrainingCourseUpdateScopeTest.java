@@ -168,6 +168,7 @@ class TrainingCourseUpdateScopeTest {
         TrainingCourse course = deaneryCourse("DT-R1", deaneryId);
         course.setStartDate(TrainingCourseStatusSupport.today().plusDays(10));
         course.setEndDate(TrainingCourseStatusSupport.today().plusDays(12));
+        course.setStartTime(java.time.LocalTime.of(9, 0));
         var authentication = authentication("admin-deanery", "training.course.update.deanery");
         when(trainingCourseRepository.findByCodeWithType("DT-R1")).thenReturn(Optional.of(course));
         when(accountScopeValidationHelper.requireActiveDeaneryId(eq(authentication), anyString())).thenReturn(deaneryId);
@@ -180,7 +181,13 @@ class TrainingCourseUpdateScopeTest {
         tooLate.setRegistrationEndAt(afterStart);
         assertThrows(RuntimeException.class, () -> service().update("DT-R1", tooLate, authentication));
 
-        // Đóng đăng ký đúng ngày bắt đầu thì hợp lệ.
+        // Cùng ngày bắt đầu nhưng sau giờ bắt đầu (09:00) thì không hợp lệ.
+        TrainingCourseUpdateRequest afterStartTime = new TrainingCourseUpdateRequest();
+        afterStartTime.setRegistrationStartAt(java.time.OffsetDateTime.now().minusDays(1));
+        afterStartTime.setRegistrationEndAt(TrainingCourseStatusSupport.today().plusDays(10).atTime(9, 30).atZone(TrainingCourseStatusSupport.ZONE).toOffsetDateTime());
+        assertThrows(RuntimeException.class, () -> service().update("DT-R1", afterStartTime, authentication));
+
+        // Đóng đăng ký trước giờ bắt đầu của ngày bắt đầu thì hợp lệ.
         TrainingCourseUpdateRequest onStartDate = new TrainingCourseUpdateRequest();
         onStartDate.setRegistrationStartAt(java.time.OffsetDateTime.now().minusDays(1));
         onStartDate.setRegistrationEndAt(TrainingCourseStatusSupport.today().plusDays(10).atTime(8, 0).atZone(TrainingCourseStatusSupport.ZONE).toOffsetDateTime());

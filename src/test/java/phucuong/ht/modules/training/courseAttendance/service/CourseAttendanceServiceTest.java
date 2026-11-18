@@ -288,11 +288,31 @@ class CourseAttendanceServiceTest {
         String token = tokens.tokenFor("KH-1", "p-ann");
         ApiException early = failure(() -> service.lookup(token));
         assertEquals(409, early.getStatus().value());
-        assertTrue(early.getMessage().contains("chưa diễn ra"));
-        assertTrue(early.getMessage().contains(TrainingCourseStatusSupport.today().plusDays(2).format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"))));
+        assertTrue(early.getMessage().contains("chưa tới giờ điểm danh"));
+        // Mở từ 2 tiếng trước giờ bắt đầu (00:00 ngày bắt đầu) = 22:00 hôm trước.
+        assertTrue(early.getMessage().contains("22:00 " + TrainingCourseStatusSupport.today().plusDays(1).format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"))));
         assertEquals(409, failure(() -> service.scan(token, scanner)).getStatus().value());
         assertEquals(409, failure(() -> service.setCheckedIn("KH-1", "p-ann", true, scanner)).getStatus().value());
         assertNull(ann.getCheckedInAt());
+    }
+
+    @Test
+    void scanIsAllowedFromTwoHoursBeforeTheStartTime() {
+        java.time.LocalDateTime now = java.time.LocalDateTime.now(TrainingCourseStatusSupport.ZONE);
+        // Còn 90 phút nữa mới bắt đầu: đã trong khung 2 tiếng nên điểm danh được.
+        java.time.LocalDateTime soon = now.plusMinutes(90);
+        course.setStartDate(soon.toLocalDate());
+        course.setStartTime(soon.toLocalTime().withSecond(0).withNano(0));
+        course.setEndDate(soon.toLocalDate().plusDays(1));
+        String token = tokens.tokenFor("KH-1", "p-ann");
+        assertEquals(ScanStatus.CHECKED_IN, service.scan("KH-1", token, scanner).status());
+
+        // Còn 3 tiếng nữa mới bắt đầu: chưa tới giờ điểm danh.
+        java.time.LocalDateTime later = now.plusHours(3);
+        course.setStartDate(later.toLocalDate());
+        course.setStartTime(later.toLocalTime().withSecond(0).withNano(0));
+        course.setEndDate(later.toLocalDate().plusDays(1));
+        assertEquals(409, failure(() -> service.lookup("KH-1", token)).getStatus().value());
     }
 
     @Test
