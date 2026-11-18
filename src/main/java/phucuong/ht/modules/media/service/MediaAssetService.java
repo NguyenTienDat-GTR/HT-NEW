@@ -55,7 +55,7 @@ public class MediaAssetService {
                 infos.add(new MediaVariantInfo(p.name(), key, MediaImageProcessor.CONTENT_TYPE, p.data().length, p.width(), p.height(), p.sha256()));
             }
         } catch (MediaStorageException e) {
-            infos.forEach(info -> quietDelete(provider, info.key()));
+            quietCleanup(provider, infos, base);
             log.error("Tải ảnh lên nhà cung cấp {} thất bại", provider.name(), e);
             throw new ApiException(HttpStatus.BAD_GATEWAY, errorCode.INTERNAL_ERROR, "Không lưu được ảnh, vui lòng thử lại sau");
         }
@@ -74,7 +74,7 @@ public class MediaAssetService {
         try {
             return repository.saveAndFlush(asset);
         } catch (RuntimeException e) {
-            infos.forEach(info -> quietDelete(provider, info.key()));
+            quietCleanup(provider, infos, base);
             throw e;
         }
     }
@@ -104,6 +104,7 @@ public class MediaAssetService {
         }
 
         MediaStorageProvider provider = registry.require(asset.getProvider());
+        String oldBase = asset.getBaseKey();
         String base = folders.baseKey(dioceseId, asset.getCategory(), asset.getId());
         List<MediaVariantInfo> moved = new ArrayList<>();
         try {
@@ -122,6 +123,8 @@ public class MediaAssetService {
         asset.setStatus(MediaStatus.ACTIVE);
         asset.setUpdatedAt(OffsetDateTime.now());
         repository.save(asset);
+        // Các biến thể đã rời thư mục tạm: bỏ thư mục {assetId} trống ở đó (lỗi chỉ bỏ qua, lệnh quét dọn sẽ xử lý sau).
+        provider.deleteFolder(oldBase);
         return asset.getId();
     }
 
@@ -140,7 +143,7 @@ public class MediaAssetService {
                 infos.add(info.withKey(key));
             }
         } catch (MediaStorageException e) {
-            infos.forEach(info -> quietDelete(to, info.key()));
+            quietCleanup(to, infos, base);
             log.error("Sao chép ảnh {} thất bại", source.getId(), e);
             throw new ApiException(HttpStatus.BAD_GATEWAY, errorCode.INTERNAL_ERROR, "Không lưu được ảnh, vui lòng thử lại sau");
         }
@@ -175,7 +178,7 @@ public class MediaAssetService {
                 infos.add(new MediaVariantInfo(p.name(), key, MediaImageProcessor.CONTENT_TYPE, p.data().length, p.width(), p.height(), p.sha256()));
             }
         } catch (MediaStorageException e) {
-            infos.forEach(info -> quietDelete(provider, info.key()));
+            quietCleanup(provider, infos, base);
             throw e;
         }
         OffsetDateTime now = OffsetDateTime.now();
@@ -193,7 +196,7 @@ public class MediaAssetService {
         try {
             return repository.saveAndFlush(asset);
         } catch (RuntimeException e) {
-            infos.forEach(info -> quietDelete(provider, info.key()));
+            quietCleanup(provider, infos, base);
             throw e;
         }
     }
@@ -206,6 +209,7 @@ public class MediaAssetService {
             return;
         }
         MediaStorageProvider provider = registry.require(asset.getProvider());
+        String oldBase = asset.getBaseKey();
         String base = folders.baseKey(newDioceseId, asset.getCategory(), asset.getId());
         List<MediaVariantInfo> moved = new ArrayList<>();
         for (MediaVariantInfo info : asset.getVariants()) {
@@ -219,6 +223,9 @@ public class MediaAssetService {
         asset.setDioceseId(newDioceseId);
         asset.setUpdatedAt(OffsetDateTime.now());
         repository.save(asset);
+        if (!Objects.equals(oldBase, base)) {
+            provider.deleteFolder(oldBase);
+        }
     }
 
     /** Xóa thật các tệp của asset trên nhà cung cấp (job dọn gọi). */
@@ -228,6 +235,8 @@ public class MediaAssetService {
             provider.delete(info.key());
             cache.evict(asset.getId() + "/" + info.name());
         }
+        // Cloudinary không tự bỏ thư mục khi tệp bị xóa; thư mục {assetId} giờ đã trống nên xóa luôn.
+        provider.deleteFolder(asset.getBaseKey());
     }
 
     /** Gỡ ảnh khỏi bản ghi nghiệp vụ: đánh dấu DELETED, job dọn sẽ xóa thật trên cloud sau thời gian lưu. */
@@ -309,6 +318,12 @@ public class MediaAssetService {
 
     static String variantKey(String base, String variant) {
         return base + "/" + variant + "." + MediaImageProcessor.EXTENSION;
+    }
+
+    /** Dọn tệp đã ghi dở sau lỗi rồi bỏ luôn thư mục {assetId} (không để lại thư mục trống). */
+    private void quietCleanup(MediaStorageProvider provider, List<MediaVariantInfo> infos, String base) {
+        infos.forEach(info -> quietDelete(provider, info.key()));
+        provider.deleteFolder(base);
     }
 
     private void quietDelete(MediaStorageProvider provider, String key) {
