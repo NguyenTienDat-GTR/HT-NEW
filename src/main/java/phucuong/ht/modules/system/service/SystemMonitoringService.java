@@ -9,6 +9,7 @@ import phucuong.ht.common.exception.ApiException;
 import phucuong.ht.common.exception.errorCode;
 import phucuong.ht.config.RedisRateLimitService;
 import phucuong.ht.modules.system.model.response.SystemMonitoringResponse;
+import phucuong.ht.modules.system.model.response.SystemMonitoringResponse.Alert;
 import phucuong.ht.modules.system.model.response.SystemMonitoringResponse.IpActivity;
 import phucuong.ht.modules.system.model.response.SystemMonitoringResponse.Summary;
 import phucuong.ht.modules.system.repository.SystemMonitoringRepository;
@@ -47,13 +48,6 @@ public class SystemMonitoringService {
                 ? repository.summary(from.minusHours(hours), from)
                 : null;
 
-        OffsetDateTime lastHourStart = now.minusHours(1);
-        Summary lastHour = repository.summary(lastHourStart, now);
-        double averagePerHour = repository.averageRequestsPerActiveHour(lastHourStart.minusDays(7), lastHourStart);
-        List<IpActivity> suspiciousIps = repository.suspiciousIps(lastHourStart, now,
-                SystemMonitoringAlerts.FAILED_LOGIN_THRESHOLD, SystemMonitoringAlerts.DENIED_THRESHOLD,
-                SystemMonitoringAlerts.IP_REQUEST_THRESHOLD, SUSPICIOUS_IP_LIMIT);
-
         return new SystemMonitoringResponse(
                 hours,
                 bucketMinutes,
@@ -68,8 +62,24 @@ public class SystemMonitoringService {
                 repository.topAccounts(from, now, TOP_LIMIT),
                 repository.busiestEndpoints(from, now, TOP_LIMIT),
                 repository.slowestEndpoints(from, now, MIN_ENDPOINT_SAMPLE, TOP_LIMIT),
-                SystemMonitoringAlerts.evaluate(lastHour, averagePerHour, rateLimited(lastHourStart, now), suspiciousIps)
+                alertsAt(now)
         );
+    }
+
+    /** Cảnh báo bất thường trong 60 phút gần nhất; dùng cho cả trang giám sát và email gửi superadmin. */
+    @Transactional(readOnly = true, timeout = 20)
+    public List<Alert> recentAlerts() {
+        return alertsAt(OffsetDateTime.now());
+    }
+
+    private List<Alert> alertsAt(OffsetDateTime now) {
+        OffsetDateTime lastHourStart = now.minusHours(1);
+        Summary lastHour = repository.summary(lastHourStart, now);
+        double averagePerHour = repository.averageRequestsPerActiveHour(lastHourStart.minusDays(7), lastHourStart);
+        List<IpActivity> suspiciousIps = repository.suspiciousIps(lastHourStart, now,
+                SystemMonitoringAlerts.FAILED_LOGIN_THRESHOLD, SystemMonitoringAlerts.DENIED_THRESHOLD,
+                SystemMonitoringAlerts.IP_REQUEST_THRESHOLD, SUSPICIOUS_IP_LIMIT);
+        return SystemMonitoringAlerts.evaluate(lastHour, averagePerHour, rateLimited(lastHourStart, now), suspiciousIps);
     }
 
     /** Bộ đếm 429 chỉ là số liệu phụ: Redis lỗi thì trang vẫn hiển thị phần còn lại. Đếm theo giờ tròn. */
