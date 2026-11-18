@@ -165,6 +165,7 @@ GET /api/system/role-permissions/{id}|200|401|403|N/A: identifier is an opaque s
 PUT /api/system/role-permissions/{id}|200|401|403|400|404|409
 
 # Audit log
+GET /api/system/monitoring/overview|200|401|403|400|N/A: aggregate endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
 GET /api/system/audit-logs|200|401|403|400|N/A: collection endpoint does not resolve an individual resource|N/A: read-only endpoint does not mutate state
 GET /api/system/audit-logs/{id}|200|401|403|N/A: log identifier is an opaque string|404|N/A: read-only endpoint does not mutate state
 
