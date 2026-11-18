@@ -81,5 +81,25 @@ Huynh trưởng chuyển sang giáo phận khác thì job dọn dẹp tự chuy�
 
 ## Dọn dẹp tự động
 
-Mỗi giờ: ảnh `PENDING` quá 24 giờ và ảnh `ACTIVE` không còn bản ghi tham chiếu bị đánh dấu `DELETED`;
-ảnh `DELETED` quá 7 ngày bị xóa tệp trên cloud rồi xóa dòng.
+Mỗi giờ (`MediaMaintenanceService.cleanup`, mỗi bước xử lý tối đa 20 lượt × `batchSize` ảnh):
+
+- Ảnh `PENDING` quá 24 giờ (tải lên mà không lưu): **xóa ngay** tệp, thư mục `{assetId}` và dòng `media_asset`.
+  Ảnh này chưa từng gắn vào bản ghi nào nên không cần thời gian lưu. Nếu không xóa được tệp thì chuyển sang `DELETED` để vòng sau thử lại.
+- Ảnh `ACTIVE` không còn bản ghi tham chiếu: đánh dấu `DELETED`.
+- Ảnh `DELETED` quá 7 ngày: xóa tệp, thư mục `{assetId}` rồi xóa dòng.
+
+Cloudinary không tự bỏ thư mục khi tệp bên trong bị xóa hoặc chuyển đi, nên `MediaStorageProvider.deleteFolder` được gọi sau khi
+xóa ảnh (`purgeFiles`), sau khi chuyển ảnh khỏi thư mục tạm (`attach`) hoặc sang giáo phận khác (`relocate`), và khi tải ảnh lỗi giữa chừng.
+Cloudinary chỉ xóa được thư mục trống; thư mục còn tệp bị từ chối và bỏ qua (chỉ ghi log mức debug).
+
+### Quét dọn một lần: `POST /api/media/admin/sweep`
+
+Job hằng giờ chỉ duyệt các dòng trong `media_asset`, nên không thấy tệp / thư mục đã mất dòng (ví dụ ảnh tạm của DB cũ, ảnh để lại trước khi có
+các bước xóa thư mục ở trên). Endpoint này (chỉ `SUPER_ADMIN`) xử lý nhà cung cấp đang dùng:
+
+- Tệp dưới `{root-prefix}/pending/` không còn dòng nào và đã quá `pending-ttl` → xóa.
+- Thư mục tên UUID (cấp `{assetId}`) không còn dòng `media_asset` → xóa nếu trống. Thư mục cấu trúc (giáo phận, loại ảnh) luôn được giữ.
+
+Tham số: `dryRun` (mặc định `true`, chỉ thống kê), `maxFolderCalls` (mặc định 300, tối đa 2000: số lượt gọi Admin API thư mục của
+Cloudinary, vốn có hạn mức theo giờ). Kết quả có `truncated=true` khi hết ngân sách: chờ rồi chạy lại. Chạy lại nhiều lần vẫn an toàn.
+Nên chạy `dryRun=true` xem kết quả trước, rồi `dryRun=false`.

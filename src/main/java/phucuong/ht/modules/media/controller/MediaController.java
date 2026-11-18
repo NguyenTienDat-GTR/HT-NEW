@@ -15,6 +15,7 @@ import phucuong.ht.common.exception.errorCode;
 import phucuong.ht.common.utils.securityUtils;
 import phucuong.ht.common.exception.ApiException;
 import phucuong.ht.modules.media.config.MediaProperties;
+import phucuong.ht.modules.media.job.MediaSweepService;
 import phucuong.ht.modules.media.model.entity.MediaAsset;
 import phucuong.ht.modules.media.model.entity.MediaVariantInfo;
 import phucuong.ht.modules.media.model.enums.MediaCategory;
@@ -45,6 +46,7 @@ public class MediaController {
     private final MediaUrls mediaUrls;
     private final MediaProperties properties;
     private final securityUtils securityUtils;
+    private final MediaSweepService sweepService;
 
     /** Tải ảnh lên (đã được frontend nén sơ bộ). Ảnh ở trạng thái PENDING cho tới khi gắn vào bản ghi. */
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -116,6 +118,26 @@ public class MediaController {
                 .map(r -> new StatusRow(r.getProvider(), r.getStatus().name(), r.getTotal()))
                 .toList();
         return apiResponse.success("Thống kê ảnh", rows);
+    }
+
+    /**
+     * Quét dọn một lần: tệp ảnh tạm mồ côi (không còn dòng trong DB) và thư mục ảnh trống trên nhà cung cấp đang dùng.
+     * Mặc định chỉ thống kê (dryRun=true); đặt dryRun=false để xóa thật. Chạy lại được nhiều lần; hết ngân sách gọi API
+     * thư mục ({@code maxFolderCalls}) thì kết quả có {@code truncated=true} và nên chạy lại sau.
+     */
+    @PostMapping("/admin/sweep")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public apiResponse<MediaSweepService.SweepReport> sweep(
+            @RequestParam(value = "dryRun", defaultValue = "true") boolean dryRun,
+            @RequestParam(value = "maxFolderCalls", defaultValue = "" + MediaSweepService.DEFAULT_MAX_FOLDER_CALLS) int maxFolderCalls) {
+        try {
+            MediaSweepService.SweepReport report = sweepService.sweep(dryRun, maxFolderCalls);
+            return apiResponse.success(dryRun ? "Thống kê ảnh cần quét dọn" : "Đã quét dọn ảnh", report);
+        } catch (IllegalStateException e) {
+            throw new ApiException(HttpStatus.CONFLICT, errorCode.VALIDATION_ERROR, e.getMessage());
+        } catch (MediaStorageException e) {
+            throw new ApiException(HttpStatus.BAD_GATEWAY, errorCode.INTERNAL_ERROR, "Không quét dọn được ảnh: " + e.getMessage());
+        }
     }
 
     public record StatusRow(String provider, String status, long total) {

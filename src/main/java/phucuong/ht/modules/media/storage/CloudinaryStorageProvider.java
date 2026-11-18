@@ -219,6 +219,97 @@ public class CloudinaryStorageProvider implements MediaStorageProvider {
         }
     }
 
+    /**
+     * Cloudinary không tự xóa thư mục khi tệp bên trong bị xóa hoặc chuyển đi. API chỉ xóa được thư mục trống
+     * (thư mục chỉ chứa thư mục con trống cũng được), nên thư mục còn tệp bị từ chối và ta chỉ ghi log mức debug.
+     */
+    @Override
+    public boolean deleteFolder(String path) {
+        if (path == null || path.isBlank()) {
+            return false;
+        }
+        try {
+            cloudinary.api().deleteFolder(path, Map.of());
+            return true;
+        } catch (Exception e) {
+            log.debug("Chưa xóa được thư mục Cloudinary {}: {}", path, e.getMessage());
+            return false;
+        }
+    }
+
+    @Override
+    public boolean supportsSweep() {
+        return true;
+    }
+
+    @Override
+    public void forEachFile(String prefix, java.util.function.Predicate<StoredFile> visitor) {
+        String cursor = null;
+        try {
+            do {
+                Map<String, Object> options = new HashMap<>(ObjectUtils.asMap(
+                        "resource_type", "image",
+                        "type", DELIVERY_TYPE,
+                        "prefix", prefix,
+                        "max_results", 500));
+                if (cursor != null) {
+                    options.put("next_cursor", cursor);
+                }
+                Map<?, ?> response = cloudinary.api().resources(options);
+                Object resources = response.get("resources");
+                if (resources instanceof java.util.List<?> list) {
+                    for (Object item : list) {
+                        Map<?, ?> resource = (Map<?, ?>) item;
+                        String publicId = String.valueOf(resource.get("public_id"));
+                        Object format = resource.get("format");
+                        String key = publicId + "." + (format == null ? "jpg" : format);
+                        Object created = resource.get("created_at");
+                        java.time.OffsetDateTime createdAt = created == null
+                                ? java.time.OffsetDateTime.now()
+                                : java.time.OffsetDateTime.parse(String.valueOf(created));
+                        if (!visitor.test(new StoredFile(key, createdAt))) {
+                            return;
+                        }
+                    }
+                }
+                Object next = response.get("next_cursor");
+                cursor = next == null ? null : String.valueOf(next);
+            } while (cursor != null);
+        } catch (MediaStorageException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new MediaStorageException("Không liệt kê được ảnh trên Cloudinary", e);
+        }
+    }
+
+    @Override
+    public java.util.List<String> listFolders(String path) {
+        java.util.List<String> names = new java.util.ArrayList<>();
+        String cursor = null;
+        try {
+            do {
+                Map<String, Object> options = new HashMap<>(ObjectUtils.asMap("max_results", 500));
+                if (cursor != null) {
+                    options.put("next_cursor", cursor);
+                }
+                Map<?, ?> response = cloudinary.api().subFolders(path, options);
+                if (response.get("folders") instanceof java.util.List<?> folders) {
+                    for (Object folder : folders) {
+                        Object name = ((Map<?, ?>) folder).get("name");
+                        if (name != null) {
+                            names.add(String.valueOf(name));
+                        }
+                    }
+                }
+                Object next = response.get("next_cursor");
+                cursor = next == null ? null : String.valueOf(next);
+            } while (cursor != null);
+        } catch (Exception e) {
+            throw new MediaStorageException("Không liệt kê được thư mục trên Cloudinary", e);
+        }
+        return names;
+    }
+
     /** Thư mục chứa khóa: "a/b/c.jpg" → "a/b"; null nếu khóa không có thư mục. */
     static String folderOf(String key) {
         int slash = key.lastIndexOf('/');
