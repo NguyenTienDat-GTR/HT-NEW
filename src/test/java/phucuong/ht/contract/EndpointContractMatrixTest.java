@@ -37,8 +37,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class EndpointContractMatrixTest {
 
     private static final String CONTROLLER_BASE_PACKAGE = "phucuong.ht.modules";
-    private static final int EXPECTED_CONTROLLER_COUNT = 43;
-    private static final int EXPECTED_ROUTE_COUNT = 290;
+    private static final int EXPECTED_CONTROLLER_COUNT = 44;
+    private static final int EXPECTED_ROUTE_COUNT = 291;
     private static final String MATRIX_RESOURCE = "endpoint-contract-matrix.psv";
     private static final Pattern ROUTE_KEY = Pattern.compile("^(GET|POST|PUT|PATCH|DELETE) /\\S+$");
 
