@@ -68,6 +68,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class TrainingCourseService {
 
+    // Lệ phí mỗi người tối đa (đồng), khớp ràng buộc chk_training_course_fee.
+    private static final long MAX_FEE_AMOUNT = 999_999_999L;
     private static final String DIOCESE_FILTER_FIELD = "diocese.id";
     private static final String DEANERY_FILTER_FIELD = "deanery.id";
     public static final String EVENT_REGISTRATION_OPENED = "training.course.registration_opened";
@@ -139,6 +141,7 @@ public class TrainingCourseService {
         course.setScoreVisible(Boolean.TRUE.equals(request.getScoreVisible()));
         course.setAttendanceEnabled(Boolean.TRUE.equals(request.getAttendanceEnabled()));
         course.setAutoSendInvitation(Boolean.TRUE.equals(request.getAutoSendInvitation()));
+        applyFee(course, request.getFeeEnabled(), request.getFeeAmount(), true);
         course.setStatus(Boolean.TRUE);
         course.setCreatedAt(now);
         course.setUpdatedAt(now);
@@ -417,6 +420,9 @@ public class TrainingCourseService {
         if (request.getAutoSendInvitation() != null) {
             existing.setAutoSendInvitation(request.getAutoSendInvitation());
         }
+        if (request.getFeeEnabled() != null || request.getFeeAmount() != null) {
+            applyFee(existing, request.getFeeEnabled(), request.getFeeAmount(), false);
+        }
         existing.setUpdatedAt(OffsetDateTime.now());
         existing.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật khóa huấn luyện"));
         validateRegistrationWindow(existing.getRegistrationStartAt(), existing.getRegistrationEndAt(), existing.getStartDate());
@@ -441,6 +447,29 @@ public class TrainingCourseService {
         }
         CopyResult copied = copyParticipants(existing, request.getCopySourceCourseCodes(), request.getCopyMode(), request.getCopyLeaderIds(), authentication);
         return withCopyResult(toResponse(existing, courseParticipationRepository.existsByCourseCode(courseCode)), copied);
+    }
+
+    // Lệ phí mỗi người (đồng): bật thì phải có số tiền lớn hơn 0, tắt thì không giữ số tiền. Đổi cờ hoặc số tiền chỉ được khi
+    // khóa chưa có hồ sơ nào được duyệt đăng ký (gửi lại đúng giá trị cũ vẫn hợp lệ). requestedEnabled / requestedAmount null = giữ nguyên.
+    private void applyFee(TrainingCourse course, Boolean requestedEnabled, Long requestedAmount, boolean creating) {
+        boolean wasEnabled = Boolean.TRUE.equals(course.getFeeEnabled());
+        boolean enabled = requestedEnabled != null ? requestedEnabled : wasEnabled;
+        Long amount = null;
+        if (enabled) {
+            amount = requestedAmount != null ? requestedAmount : course.getFeeAmount();
+            if (amount == null || amount <= 0) {
+                throw commonValidationHelper.validationError("Lệ phí mỗi người phải lớn hơn 0 đồng");
+            }
+            if (amount > MAX_FEE_AMOUNT) {
+                throw commonValidationHelper.validationError("Lệ phí mỗi người không được vượt quá 999.999.999 đồng");
+            }
+        }
+        boolean changed = enabled != wasEnabled || !java.util.Objects.equals(amount, course.getFeeAmount());
+        if (changed && !creating && courseParticipationRepository.existsApprovedOrFeePaidByCourseCode(course.getCourseCode())) {
+            throw commonValidationHelper.conflict("Khóa đã có hồ sơ được duyệt đăng ký nên không thể sửa lệ phí");
+        }
+        course.setFeeEnabled(enabled);
+        course.setFeeAmount(amount);
     }
 
     // Sao chép danh sách tham dự từ khóa nguồn khi lưu khóa (null nếu không yêu cầu).
@@ -935,6 +964,9 @@ public class TrainingCourseService {
 
     private TrainingCourseResponse toResponse(TrainingCourse course, Boolean hasParticipations, long approvedParticipantCount) {
         TrainingCourseType courseType = course.getCourseType();
+        // Chỉ chi tiết khóa (hasParticipations khác null) mới cần biết lệ phí còn sửa được không; khóa chưa có hồ sơ nào thì không khóa.
+        Boolean feeLocked = hasParticipations == null ? null
+                : Boolean.TRUE.equals(hasParticipations) && courseParticipationRepository.existsApprovedOrFeePaidByCourseCode(course.getCourseCode());
         return TrainingCourseResponse.builder()
                 .courseCode(course.getCourseCode())
                 .courseName(course.getCourseName())
@@ -962,6 +994,9 @@ public class TrainingCourseService {
                 .scoreVisible(Boolean.TRUE.equals(course.getScoreVisible()))
                 .attendanceEnabled(Boolean.TRUE.equals(course.getAttendanceEnabled()))
                 .autoSendInvitation(Boolean.TRUE.equals(course.getAutoSendInvitation()))
+                .feeEnabled(Boolean.TRUE.equals(course.getFeeEnabled()))
+                .feeAmount(Boolean.TRUE.equals(course.getFeeEnabled()) ? course.getFeeAmount() : null)
+                .feeLocked(feeLocked)
                 .certificateRequired(trainingWorkflowSupport.requiresCertificate(course))
                 .pastCourse(course.isPast())
                 .resultingLevel(course.isPast() ? course.getResultingLevel() : null)

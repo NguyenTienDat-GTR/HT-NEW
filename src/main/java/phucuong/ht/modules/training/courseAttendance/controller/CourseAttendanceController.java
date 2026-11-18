@@ -18,6 +18,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import phucuong.ht.common.dto.apiResponse;
 import phucuong.ht.modules.training.courseAttendance.model.AttendanceModels.CheckInRequest;
+import phucuong.ht.modules.training.courseAttendance.model.AttendanceModels.FeeRequest;
+import phucuong.ht.modules.training.courseAttendance.model.AttendanceModels.FeeResult;
 import phucuong.ht.modules.training.courseAttendance.model.AttendanceModels.ScanRequest;
 import phucuong.ht.modules.training.courseAttendance.model.AttendanceModels.ScanResult;
 import phucuong.ht.modules.training.courseAttendance.model.AttendanceModels.Summary;
@@ -44,10 +46,11 @@ public class CourseAttendanceController {
                                                           @RequestParam(required = false) String team,
                                                           @RequestParam(required = false) Boolean checkedIn,
                                                           @RequestParam(required = false) InvitationFilter invitation,
+                                                          @RequestParam(required = false) Boolean feePaid,
                                                           @RequestParam(defaultValue = "0") int page,
                                                           @RequestParam(defaultValue = "20") int size) {
         return apiResponse.success("Lấy danh sách điểm danh thành công",
-                attendanceService.participants(courseCode, new ParticipantQuery(search, team, checkedIn, invitation, page, size)));
+                attendanceService.participants(courseCode, new ParticipantQuery(search, team, checkedIn, invitation, page, size, feePaid)));
     }
 
     // Tra cứu mã QR (không điểm danh) để người dùng xác nhận.
@@ -78,5 +81,14 @@ public class CourseAttendanceController {
                                                 @Valid @RequestBody CheckInRequest request, Authentication authentication) {
         return apiResponse.success("Đã cập nhật điểm danh",
                 attendanceService.setCheckedIn(courseCode, participationId, request.checkedIn(), authentication));
+    }
+
+    // Ghi nhận đã đóng / chưa đóng lệ phí (trạng thái đích, gửi lặp cho cùng kết quả). Dùng quyền quét điểm danh của đúng đơn vị sở hữu khóa.
+    @PutMapping("/participants/{participationId}/fee")
+    @PreAuthorize("@courseParticipationAccessEvaluator.canScanAttendance(authentication, #courseCode)")
+    public apiResponse<FeeResult> setFeePaid(@PathVariable String courseCode, @PathVariable String participationId,
+                                             @Valid @RequestBody FeeRequest request, Authentication authentication) {
+        return apiResponse.success("Đã cập nhật lệ phí",
+                attendanceService.setFeePaid(courseCode, participationId, request.paid(), authentication));
     }
 }

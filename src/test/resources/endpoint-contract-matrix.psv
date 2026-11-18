@@ -290,6 +290,7 @@ GET /api/training/courses/{courseCode}/badges/export/jobs/{jobId}/file|200|401|4
 GET /api/training/courses/{courseCode}/attendance/summary|200|401|403|N/A: course code is an opaque string|404|N/A: read-only endpoint does not mutate state
 POST /api/training/courses/{courseCode}/attendance/scan|200|401|403|400|404|409
 PUT /api/training/courses/{courseCode}/attendance/participants/{participationId}|200|401|403|400|404|409
+PUT /api/training/courses/{courseCode}/attendance/participants/{participationId}/fee|200|401|403|400|404|409
 POST /api/training/courses/{courseCode}/invitations/send|200|401|403|400|404|409
 GET /api/training/courses/{courseCode}/invitations/jobs/{jobId}|200|401|403|N/A: job id is an opaque string reported as FAILED when unknown|N/A: unknown jobs are reported as FAILED in the response body|N/A: read-only endpoint does not mutate state
 GET /api/training/courses/{courseCode}/teams/overview|200|401|403|N/A: course code is an opaque string|404|N/A: read-only endpoint does not mutate state

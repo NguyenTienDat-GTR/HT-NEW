@@ -53,6 +53,10 @@ public class TrainingCourseResponse {
     private Integer copySkippedCount;
     private Boolean attendanceEnabled;
     private Boolean autoSendInvitation;
+    // Thu lệ phí: cờ và lệ phí mỗi người (đồng). feeLocked chỉ có ở chi tiết khóa: đã có hồ sơ được duyệt đăng ký thì không sửa được lệ phí.
+    private Boolean feeEnabled;
+    private Long feeAmount;
+    private Boolean feeLocked;
     // Khóa có cấp độ đạt được thì mới có chứng nhận và tab duyệt chứng nhận.
     private Boolean certificateRequired;
     // Khóa quá khứ: tạo thủ công, không loại khóa/thời gian đăng ký; resultingLevel là cấp độ đạt được của khóa.

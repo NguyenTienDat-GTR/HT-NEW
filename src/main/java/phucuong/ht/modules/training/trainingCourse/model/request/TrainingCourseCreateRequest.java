@@ -75,6 +75,14 @@ public class TrainingCourseCreateRequest {
     // Tự gửi email thông tin tham dự khi hồ sơ được duyệt; null = tắt.
     private Boolean autoSendInvitation;
 
+    // Thu lệ phí; null = không thu. Bật thì bắt buộc nhập lệ phí mỗi người.
+    private Boolean feeEnabled;
+
+    // Lệ phí mỗi người (đồng), lớn hơn 0.
+    @Min(value = 1, message = "Lệ phí mỗi người phải lớn hơn 0 đồng")
+    @Max(value = 999_999_999L, message = "Lệ phí mỗi người không được vượt quá 999.999.999 đồng")
+    private Long feeAmount;
+
     // Sao chép danh sách tham dự từ các khóa nguồn (khóa đã kết thúc / khóa quá khứ cùng phạm vi) ngay khi lưu khóa. null hoặc rỗng = không sao chép.
     private List<String> copySourceCourseCodes;
 
