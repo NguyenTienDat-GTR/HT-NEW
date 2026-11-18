@@ -102,6 +102,39 @@ public class LeaderLevelRepository {
         return result;
     }
 
+    // Phạm vi đếm huynh trưởng theo cấp độ: cả giáo phận, một giáo hạt hoặc một giáo xứ.
+    public enum StatsScope {
+        DIOCESE(":id", "true"),
+        DEANERY("(select d.diocese_id from deanery d where d.id = :id)", "de.id = :id"),
+        PARISH("(select d.diocese_id from parish q join deanery d on d.id = q.deanery_id where q.id = :id)", "p.id = :id");
+
+        private final String dioceseSql;
+        private final String filterSql;
+
+        StatsScope(String dioceseSql, String filterSql) {
+            this.dioceseSql = dioceseSql;
+            this.filterSql = filterSql;
+        }
+    }
+
+    // Số huynh trưởng của đơn vị theo từng cấp trong danh mục của giáo phận chứa đơn vị đó.
+    // Đếm cùng cách với số "Huynh trưởng" ở danh sách đơn vị (mọi huynh trưởng thuộc đơn vị, không lọc trạng thái).
+    @Transactional(readOnly = true)
+    @SuppressWarnings("unchecked")
+    public List<Object[]> countLeadersByLevel(StatsScope scope, UUID unitId) {
+        return entityManager.createNativeQuery("""
+                select lv.level_code, lv.level_name, lv.display_order,
+                       (select count(*) from leader x
+                          join parish p on p.id = x.parish_id join deanery de on de.id = p.deanery_id
+                         where de.diocese_id = lv.diocese_id and x.leader_level = lv.level_code and %s)
+                from leader_level lv
+                where lv.diocese_id = %s
+                order by lv.display_order
+                """.formatted(scope.filterSql, scope.dioceseSql))
+                .setParameter("id", unitId)
+                .getResultList();
+    }
+
     @Transactional
     public LeaderLevel persist(LeaderLevel level) {
         entityManager.persist(level);

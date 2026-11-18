@@ -30,6 +30,7 @@ public class DioceseController {
     private final PrivacyConsentService privacyConsent;
 
     private final DioceseService dioceseService;
+    private final phucuong.ht.modules.leaderLevel.service.UnitLeaderLevelStatsService leaderLevelStatsService;
     private final phucuong.ht.common.excel.job.ExcelJobService excelJobService;
 
     @PostMapping
@@ -104,6 +105,12 @@ public class DioceseController {
     @PreAuthorize("@dioceseAccessEvaluator.canToggle(authentication, #id)")
     public apiResponse<UnitToggleImpactResponse> toggleImpact(@PathVariable UUID id) {
         return apiResponse.success("Lấy tác động khi đổi trạng thái giáo phận thành công", dioceseService.toggleImpact(id));
+    }
+
+    @GetMapping("/{id}/leader-level-stats")
+    @PreAuthorize("@dioceseAccessEvaluator.canRead(authentication, #id)")
+    public apiResponse<phucuong.ht.common.dto.UnitLeaderLevelStatsResponse> leaderLevelStats(@PathVariable UUID id) {
+        return apiResponse.success("Lấy thống kê huynh trưởng theo cấp độ của giáo phận thành công", leaderLevelStatsService.forDiocese(id));
     }
 
     @GetMapping("/{id}/status-history")
