@@ -132,6 +132,9 @@ public class TrainingCourseService {
         course.setLocation(request.getLocation());
         course.setStartDate(request.getStartDate());
         course.setEndDate(request.getEndDate());
+        course.setStartTime(request.getStartTime() == null ? java.time.LocalTime.MIN : request.getStartTime());
+        course.setEndTime(request.getEndTime() == null ? TrainingCourseStatusSupport.END_OF_DAY : request.getEndTime());
+        requireEndAfterStart(course);
         course.setRegistrationEnabled(!Boolean.FALSE.equals(request.getRegistrationEnabled()));
         // Không mở đăng ký thì không có thời gian đăng ký.
         course.setRegistrationStartAt(course.getRegistrationEnabled() ? request.getRegistrationStartAt() : null);
@@ -147,7 +150,7 @@ public class TrainingCourseService {
         course.setUpdatedAt(now);
         course.setCreatedBy(auditActor);
         course.setUpdatedBy(auditActor);
-        validateRegistrationWindow(course.getRegistrationStartAt(), course.getRegistrationEndAt(), course.getStartDate());
+        validateRegistrationWindow(course.getRegistrationStartAt(), course.getRegistrationEndAt(), TrainingCourseStatusSupport.startAt(course));
         applyOwnerScope(course, courseType, authentication);
         course.setPassingScore(request.getPassingScore());
         courseScoreComponentService.validateInputs(request.getScoreComponents());
@@ -337,6 +340,10 @@ public class TrainingCourseService {
         if (TrainingCourseStatusSupport.isCourseEnded(existing, OffsetDateTime.now())) {
             throw commonValidationHelper.conflict("Khóa huấn luyện đã kết thúc nên không thể sửa");
         }
+        // Chỉ kiểm tra lại thời gian đăng ký so với giờ bắt đầu khi người dùng đổi một trong các mốc này (khóa cũ không bị chặn khi sửa trường khác).
+        OffsetDateTime startAtBefore = TrainingCourseStatusSupport.startAt(existing);
+        OffsetDateTime registrationStartBefore = existing.getRegistrationStartAt();
+        OffsetDateTime registrationEndBefore = existing.getRegistrationEndAt();
         TrainingCourseType currentType = existing.getCourseType();
         boolean typeChanging = request.getCourseTypeCode() != null
                 && !request.getCourseTypeCode().isBlank()
@@ -379,6 +386,13 @@ public class TrainingCourseService {
         if (request.getEndDate() != null) {
             existing.setEndDate(request.getEndDate());
         }
+        if (request.getStartTime() != null) {
+            existing.setStartTime(request.getStartTime());
+        }
+        if (request.getEndTime() != null) {
+            existing.setEndTime(request.getEndTime());
+        }
+        requireEndAfterStart(existing);
         CourseRegistrationStatus registrationBefore = existing.getRegistrationStatus();
         if (request.getRegistrationEnabled() != null) {
             boolean wasEnabled = !Boolean.FALSE.equals(existing.getRegistrationEnabled());
@@ -425,7 +439,11 @@ public class TrainingCourseService {
         }
         existing.setUpdatedAt(OffsetDateTime.now());
         existing.setUpdatedBy(commonValidationHelper.requireAuditActor(authentication, "Không xác định được người cập nhật khóa huấn luyện"));
-        validateRegistrationWindow(existing.getRegistrationStartAt(), existing.getRegistrationEndAt(), existing.getStartDate());
+        if (!java.util.Objects.equals(startAtBefore, TrainingCourseStatusSupport.startAt(existing))
+                || !java.util.Objects.equals(registrationStartBefore, existing.getRegistrationStartAt())
+                || !java.util.Objects.equals(registrationEndBefore, existing.getRegistrationEndAt())) {
+            validateRegistrationWindow(existing.getRegistrationStartAt(), existing.getRegistrationEndAt(), TrainingCourseStatusSupport.startAt(existing));
+        }
         applyOwnerScope(existing, targetType, authentication);
         if (request.getScoreComponents() != null) {
             courseScoreComponentService.sync(existing, request.getScoreComponents(), existing.getUpdatedBy());
@@ -878,16 +896,26 @@ public class TrainingCourseService {
 
 
     // Thời gian đăng ký (khi khóa mở đăng ký): đóng sau mở và không được sau ngày bắt đầu diễn ra của khóa (khóa tới ngày bắt đầu thì đăng ký tự đóng).
-    private void validateRegistrationWindow(OffsetDateTime registrationStartAt, OffsetDateTime registrationEndAt, java.time.LocalDate courseStartDate) {
+    // Thời điểm kết thúc không được trước thời điểm bắt đầu (cùng ngày thì giờ kết thúc phải sau giờ bắt đầu).
+    private void requireEndAfterStart(TrainingCourse course) {
+        OffsetDateTime start = TrainingCourseStatusSupport.startAt(course);
+        OffsetDateTime end = TrainingCourseStatusSupport.endAt(course);
+        if (start != null && end != null && !end.isAfter(start)) {
+            throw commonValidationHelper.validationError("Thời gian kết thúc phải sau thời gian bắt đầu của khóa");
+        }
+    }
+
+    private void validateRegistrationWindow(OffsetDateTime registrationStartAt, OffsetDateTime registrationEndAt, OffsetDateTime courseStartAt) {
         if (registrationStartAt != null && registrationEndAt != null && registrationEndAt.isBefore(registrationStartAt)) {
             throw commonValidationHelper.validationError("registrationEndAt không được nhỏ hơn registrationStartAt");
         }
-        if (courseStartDate == null) {
+        if (courseStartAt == null) {
             return;
         }
         for (OffsetDateTime moment : new OffsetDateTime[]{registrationStartAt, registrationEndAt}) {
-            if (moment != null && moment.atZoneSameInstant(TrainingCourseStatusSupport.ZONE).toLocalDate().isAfter(courseStartDate)) {
-                throw commonValidationHelper.validationError("Thời gian đăng ký không được sau ngày bắt đầu của khóa (" + courseStartDate + ")");
+            if (moment != null && moment.isAfter(courseStartAt)) {
+                throw commonValidationHelper.validationError("Thời gian đăng ký không được sau thời gian bắt đầu của khóa ("
+                        + courseStartAt.atZoneSameInstant(TrainingCourseStatusSupport.ZONE).format(java.time.format.DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy")) + ")");
             }
         }
     }
@@ -910,7 +938,7 @@ public class TrainingCourseService {
         if (course.getFinishedAt() != null) {
             throw commonValidationHelper.conflict("Khóa huấn luyện đã được kết thúc");
         }
-        if (course.getStartDate() == null || TrainingCourseStatusSupport.today().isBefore(course.getStartDate())) {
+        if (!TrainingCourseStatusSupport.isCourseStarted(course, OffsetDateTime.now())) {
             throw commonValidationHelper.conflict("Khóa huấn luyện chưa diễn ra nên chưa thể kết thúc");
         }
         boolean registrationWasOpen = course.getRegistrationStatus() == CourseRegistrationStatus.OPEN;
@@ -1008,6 +1036,8 @@ public class TrainingCourseService {
                 .location(course.getLocation())
                 .startDate(course.getStartDate())
                 .endDate(course.getEndDate())
+                .startTime(course.getStartTime())
+                .endTime(course.getEndTime())
                 .registrationEnabled(!Boolean.FALSE.equals(course.getRegistrationEnabled()))
                 .registrationStartAt(course.getRegistrationStartAt())
                 .registrationEndAt(course.getRegistrationEndAt())

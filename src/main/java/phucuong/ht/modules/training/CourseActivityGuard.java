@@ -27,7 +27,7 @@ public class CourseActivityGuard {
 
     // Khóa đã kết thúc (thủ công hoặc quá ngày kết thúc) thì chỉ xem, không thao tác hồ sơ nữa.
     public boolean isEnded(TrainingCourse course) {
-        return course != null && TrainingCourseStatusSupport.organizingStatus(course, TrainingCourseStatusSupport.today())
+        return course != null && TrainingCourseStatusSupport.organizingStatus(course, java.time.OffsetDateTime.now())
                 == phucuong.ht.modules.training.enums.CourseOrganizingStatus.ENDED;
     }
 

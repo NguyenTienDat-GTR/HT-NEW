@@ -7,6 +7,7 @@ import phucuong.ht.common.repository.BaseSearchRequest;
 import phucuong.ht.common.exception.ApiException;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.function.Function;
@@ -29,6 +30,24 @@ public final class ExcelExportSupport {
     /** Như trên, báo tiến độ (đã lấy / tổng) sau mỗi trang; tác vụ nền có thể bị hủy ở các điểm này. */
     public static <R> List<R> collectAll(BaseSearchRequest request, Function<BaseSearchRequest, Page<R>> fetch,
                                          phucuong.ht.common.excel.job.JobProgress progress) {
+        return collectAll(request, fetch, progress, null);
+    }
+
+    /**
+     * Như trên; nếu người dùng không chọn cách sắp xếp (request không có sortBy) thì sắp xếp lại toàn bộ kết quả theo
+     * defaultOrder (giáo hạt, giáo xứ, tên). Có sortBy thì giữ đúng thứ tự danh sách đang hiển thị.
+     */
+    public static <R> List<R> collectAll(BaseSearchRequest request, Function<BaseSearchRequest, Page<R>> fetch,
+                                         phucuong.ht.common.excel.job.JobProgress progress, Comparator<R> defaultOrder) {
+        List<R> all = collectPages(request, fetch, progress);
+        if (defaultOrder != null && (request == null || request.getSortBy() == null || request.getSortBy().isBlank())) {
+            all.sort(defaultOrder);
+        }
+        return all;
+    }
+
+    private static <R> List<R> collectPages(BaseSearchRequest request, Function<BaseSearchRequest, Page<R>> fetch,
+                                            phucuong.ht.common.excel.job.JobProgress progress) {
         List<R> all = new ArrayList<>();
         int page = 0;
         while (true) {

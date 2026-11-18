@@ -38,7 +38,8 @@ public class TeamsExcelExportHandler implements ExcelExportHandler {
     @Override
     public ExcelExportFile export(ExcelExportRequest request, Authentication authentication, JobProgress progress) {
         List<CourseParticipationResponse> rows = ExcelExportSupport.collectAll(
-                request.search(), page -> courseParticipationService.findParticipants(page, authentication), progress);
+                request.search(), page -> courseParticipationService.findParticipants(page, authentication), progress,
+                ExcelExportHandlerConfig.PARTICIPATION_ORDER);
         return ExcelExportFile.xlsx(ExcelExportWriter.write("Chia đội",
                 headerResolver.resolve(request.search(), authentication, "Danh sách chia đội", true),
                 ExcelColumns.select(TrainingExcelExports.teamColumns(), request.columns()), rows));

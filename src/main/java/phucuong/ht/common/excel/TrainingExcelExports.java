@@ -50,8 +50,8 @@ public final class TrainingExcelExports {
                 ExcelColumn.<TrainingCourseResponse>of("Đơn vị tổ chức", 28, row -> row.getDeaneryName() != null ? row.getDeaneryName() : row.getDioceseName()),
                 ExcelColumn.<TrainingCourseResponse>of("Giáo phận", 24, TrainingCourseResponse::getDioceseName),
                 ExcelColumn.<TrainingCourseResponse>of("Địa điểm", 28, TrainingCourseResponse::getLocation),
-                ExcelColumn.<TrainingCourseResponse>of("Ngày bắt đầu", 14, TrainingCourseResponse::getStartDate),
-                ExcelColumn.<TrainingCourseResponse>of("Ngày kết thúc", 14, TrainingCourseResponse::getEndDate),
+                ExcelColumn.<TrainingCourseResponse>of("Thời gian bắt đầu", 18, row -> dateTime(row.getStartDate(), row.getStartTime())),
+                ExcelColumn.<TrainingCourseResponse>of("Thời gian kết thúc", 18, row -> dateTime(row.getEndDate(), row.getEndTime())),
                 ExcelColumn.<TrainingCourseResponse>of("Bắt đầu đăng ký", 18, TrainingCourseResponse::getRegistrationStartAt),
                 ExcelColumn.<TrainingCourseResponse>of("Kết thúc đăng ký", 18, TrainingCourseResponse::getRegistrationEndAt),
                 ExcelColumn.<TrainingCourseResponse>of("Điểm đạt", 10, TrainingCourseResponse::getPassingScore),
@@ -210,5 +210,9 @@ public final class TrainingExcelExports {
                 .filter(java.util.Objects::nonNull)
                 .findFirst()
                 .orElse(null);
+    }
+
+    private static java.time.LocalDateTime dateTime(java.time.LocalDate date, java.time.LocalTime time) {
+        return date == null ? null : date.atTime(time == null ? java.time.LocalTime.MIN : time);
     }
 }

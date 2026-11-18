@@ -33,6 +33,13 @@ public class TrainingCourseUpdateRequest {
 
     private LocalDate endDate;
 
+    // Giờ bắt đầu / kết thúc (HH:mm, giờ Việt Nam). Bỏ trống: bắt đầu 00:00, kết thúc 23:59.
+    @com.fasterxml.jackson.annotation.JsonFormat(pattern = "HH:mm")
+    private java.time.LocalTime startTime;
+
+    @com.fasterxml.jackson.annotation.JsonFormat(pattern = "HH:mm")
+    private java.time.LocalTime endTime;
+
     // Khóa có mở đăng ký hay không; tắt thì bỏ qua thời gian đăng ký. null = giữ nguyên.
     private Boolean registrationEnabled;
 
