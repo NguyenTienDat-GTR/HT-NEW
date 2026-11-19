@@ -12,12 +12,15 @@
 |---|---|
 | `PROD_DB_PASSWORD` | Mật khẩu user `qlht` của DB `ht_management` |
 | `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` | Đã có. Service token này phải được chính sách Cloudflare Access của `db.clead.io.vn` cho phép |
+| `GDRIVE_CLIENT_ID`, `GDRIVE_CLIENT_SECRET` | OAuth client riêng tạo trên Google Cloud (client mặc định của rclone đã bị Google chặn, lỗi 401 invalid_client) |
 | `GDRIVE_RCLONE_TOKEN` | Token OAuth của rclone (JSON một dòng), tạo như bên dưới |
 
-Tạo `GDRIVE_RCLONE_TOKEN` (làm một lần, trên máy có trình duyệt, đăng nhập đúng tài khoản Google sở hữu thư mục):
+Tạo OAuth client (một lần): console.cloud.google.com > tạo project > APIs & Services > Library > bật **Google Drive API** > OAuth consent screen (External, điền tên app và email) > **Publish app** (chuyển sang In production, nếu để Testing thì token hết hạn sau 7 ngày) > Credentials > Create credentials > OAuth client ID > loại **Desktop app**. Lấy Client ID và Client secret.
+
+Tạo `GDRIVE_RCLONE_TOKEN` (một lần, trên máy có trình duyệt, đăng nhập đúng tài khoản Google sở hữu thư mục):
 
 ```bash
-rclone authorize "drive" "{\"scope\":\"drive\"}"
+rclone authorize "drive" "<CLIENT_ID>" "<CLIENT_SECRET>" --drive-scope drive
 ```
 
 Dán toàn bộ chuỗi JSON in ra (từ `{"access_token":...` đến `}`) vào secret. Quyền `drive` (toàn bộ) là cần thiết vì thư mục đã tồn tại; script chỉ đụng file đúng mẫu `ht_management_YYYY-MM-DD.dump` trong thư mục đó. Nếu app OAuth ở trạng thái "Testing", refresh token hết hạn sau 7 ngày: chuyển app sang "In production" hoặc dùng client_id/secret riêng đã publish.
