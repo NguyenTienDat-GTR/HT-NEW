@@ -2,7 +2,7 @@
 
 - Workflow: `.github/workflows/db-backup.yml`; script: `deploy/db-backup.sh`.
 - Lịch: chạy mỗi đêm lúc 01:00 giờ VN (cron `0 18 * * *` UTC). Script chỉ sao lưu khi bản gần nhất trên Drive đã cách từ 3 ngày trở lên (so theo ngày trong tên file), nên thực tế là 3 ngày/lần: 19/11, 22/11, 25/11, 28/11, … Lỡ một lần thì đêm sau tự bù.
-- File: `ht_management_YYYY-MM-DD.dump` (định dạng custom của `pg_dump`, khôi phục bằng `pg_restore`). Thư mục Drive đích: ID `1Dkjy4k4mOMjyEqNxPiDlhinAQhtQGtdf`.
+- File: `ht_management_YYYY-MM-DD.dump` (định dạng custom của `pg_dump`, khôi phục bằng `pg_restore`). Thư mục Drive đích lấy từ secret `GDRIVE_FOLDER_ID`.
 - Cuốn chiếu: tải bản mới lên, xác nhận có trên Drive rồi mới xóa các bản cũ (xóa vĩnh viễn, không vào thùng rác), chỉ giữ 3 file mới nhất. Dump lỗi hoặc quá nhỏ thì dừng, không xóa gì.
 - Kết nối DB: `cloudflared access tcp` tới `db.clead.io.vn` bằng service token Cloudflare Access, rồi `pg_dump` 18 (client 17 bị server từ chối).
 
@@ -13,6 +13,7 @@
 | `PROD_DB_PASSWORD` | Mật khẩu user `qlht` của DB `ht_management` |
 | `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` | Đã có. Service token này phải được chính sách Cloudflare Access của `db.clead.io.vn` cho phép |
 | `GDRIVE_CLIENT_ID`, `GDRIVE_CLIENT_SECRET` | OAuth client riêng tạo trên Google Cloud (client mặc định của rclone đã bị Google chặn, lỗi 401 invalid_client) |
+| `GDRIVE_FOLDER_ID` | ID thư mục Drive đích (phần sau `/folders/` trong link thư mục) |
 | `GDRIVE_RCLONE_TOKEN` | Token OAuth của rclone (JSON một dòng), tạo như bên dưới |
 
 Tạo OAuth client (một lần): console.cloud.google.com > tạo project > APIs & Services > Library > bật **Google Drive API** > OAuth consent screen (External, điền tên app và email) > **Publish app** (chuyển sang In production, nếu để Testing thì token hết hạn sau 7 ngày) > Credentials > Create credentials > OAuth client ID > loại **Desktop app**. Lấy Client ID và Client secret.
