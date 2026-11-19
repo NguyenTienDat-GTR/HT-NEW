@@ -1,0 +1,77 @@
+name: DB Backup
+
+# 01:00 giờ VN = 18:00 UTC. Chạy mỗi đêm; script tự bỏ qua nếu bản gần nhất trên Drive chưa đủ 3 ngày
+# (nên lịch thực tế là 3 ngày/lần và tự bù nếu GitHub trễ hoặc lỡ một lần chạy).
+on:
+  schedule:
+    - cron: "0 18 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Sao lưu ngay, bỏ qua kiểm tra khoảng cách 3 ngày"
+        type: boolean
+        default: false
+      dry_run:
+        description: "Chỉ dump và kiểm tra, không tải lên / không xóa trên Drive"
+        type: boolean
+        default: false
+
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CLOUDFLARED_VERSION: "2025.11.1"
+      PGHOST: 127.0.0.1
+      PGPORT: "15432"
+      PGUSER: qlht
+      PGDATABASE: ht_management
+      PGPASSWORD: ${{ secrets.PROD_DB_PASSWORD }}
+      # Remote rclone "gdrive" dựng hoàn toàn từ biến môi trường, không cần file cấu hình.
+      RCLONE_CONFIG_GDRIVE_TYPE: drive
+      RCLONE_CONFIG_GDRIVE_SCOPE: drive
+      RCLONE_CONFIG_GDRIVE_ROOT_FOLDER_ID: 1Dkjy4k4mOMjyEqNxPiDlhinAQhtQGtdf
+      RCLONE_CONFIG_GDRIVE_TOKEN: ${{ secrets.GDRIVE_RCLONE_TOKEN }}
+      FORCE: ${{ inputs.force && '1' || '0' }}
+      DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cài pg_dump 18 và rclone
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo "$VERSION_CODENAME")-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-18 rclone
+          pg_dump --version
+          rclone version | head -n 1
+
+      - name: Cài cloudflared
+        run: |
+          curl -fsSL -o /tmp/cloudflared.deb "https://github.com/cloudflare/cloudflared/releases/download/${CLOUDFLARED_VERSION}/cloudflared-linux-amd64.deb"
+          sudo dpkg -i /tmp/cloudflared.deb
+
+      - name: Mở cầu tới DB production qua Cloudflare Tunnel
+        env:
+          TUNNEL_SERVICE_TOKEN_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          TUNNEL_SERVICE_TOKEN_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          nohup cloudflared access tcp --hostname db.clead.io.vn --url "127.0.0.1:${PGPORT}" > /tmp/cloudflared.log 2>&1 &
+          for i in $(seq 1 30); do
+            if pg_isready -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -q; then echo "DB sẵn sàng"; exit 0; fi
+            sleep 2
+          done
+          echo "Không nối được DB qua tunnel. Log cloudflared:" >&2
+          sed -E 's/(token|secret)[^ ]*/\1=***/Ig' /tmp/cloudflared.log >&2 || true
+          exit 1
+
+      - name: Sao lưu lên Google Drive (giữ 3 file mới nhất)
+        run: bash deploy/db-backup.sh
